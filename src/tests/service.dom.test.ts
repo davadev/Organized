@@ -128,6 +128,18 @@ describe("repository and explicit task actions", () => {
     await h.service.projects(task.id, []); expect(h.texts.get('Project.md')).not.toContain(task.id);
     await h.service.projects(task.id, ['Project.md']); h.texts.set('Project.md', h.texts.get('Project.md')! + h.texts.get('Project.md')!); await h.service.projects(task.id, []); expect(h.texts.get('Project.md')).toContain(task.id);
   });
+  it("deletes a task only after confirmation, removing every occurrence and trashing its note", async () => {
+    const h = harness(); const task = await h.repo.create('Delete me'); const line = `- [ ] Delete me <!--organized:${task.id}-->`;
+    await h.add('Daily/2020-01-01.md', `${line}\n- [ ] Keep this`); await h.add('Project.md', line);
+    h.confirm.mockResolvedValue(false); expect(await h.service.deleteTask(task.id)).toBe(false); expect(h.repo.file(h.repo.taskPath(task.id))).toBeTruthy(); expect(h.texts.get('Project.md')).toContain(task.id);
+    await h.service.refs(task.id); h.confirm.mockResolvedValue(true); expect(await h.service.deleteTask(task.id)).toBe(true);
+    expect(h.confirm).toHaveBeenLastCalledWith(expect.stringContaining('Delete me'), 'Delete task', 'Delete');
+    expect(h.texts.get('Daily/2020-01-01.md')).not.toContain(task.id); expect(h.texts.get('Daily/2020-01-01.md')).toContain('Keep this'); expect(h.texts.get('Project.md')).toBe('');
+    expect(h.raw.fileManager.trashFile).toHaveBeenCalledOnce(); expect(await h.repo.list()).toEqual([]); expect((h.service as any).references).toBeNull();
+    const missing = await h.repo.create('Missing note');
+    h.confirm.mockImplementationOnce(async () => { h.files.delete(h.repo.taskPath(missing.id)); h.texts.delete(h.repo.taskPath(missing.id)); return true; });
+    await expect(h.service.deleteTask(missing.id)).rejects.toThrow('missing');
+  });
   it("renames all safe occurrences including history and reports duplicate repair", async () => {
     const h = harness(); const task = await h.repo.create('Old'); const line = `- [>] Old <!--organized:${task.id}-->`;
     await h.add('Daily/2020-01-01.md', line); await h.add('Duplicate.md', `${line}\n${line}`);

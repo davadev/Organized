@@ -5,26 +5,29 @@ import { DEFAULT_SETTINGS, newTask } from '../src/model';
 import { editorExtension } from '../src/render';
 import { Setting, editorLivePreviewField } from '../src/tests/__mocks__/obsidian';
 import { OrganizedSettingsTab } from '../src/settings';
+import { TextModal } from '../src/modals';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 
 installObsidianDom();
 const task = newTask('A task title that stays readable at phone widths', 'task1234');
-const browseTask = { ...task, starred: true, projects: ['Research and project notes.md'] };
+const browseTask = { ...task, starred: true, projects: ['Research and project notes.md', 'Reading list.md'], priority: 'high' };
+const canceledTask = { ...newTask('A canceled task', 'task5678'), status: 'canceled' };
 const app: any = { workspace: { getLeaf: () => ({ openFile: async () => undefined }) } };
 const owner: any = {
   app, selectedTaskId: task.id, context: null, settings: { ...DEFAULT_SETTINGS, displayProperties: [] }, revision: 0,
-  saveSettings() {}, onEditorUpdate() {},
+  saveSettings() {}, onEditorUpdate() {}, deleteTask: async () => undefined,
   assertWritable() {}, run: async (fn: () => unknown) => fn(), contextFor: () => null,
   pickProjects() {}, editModule: async () => undefined, refresh() {},
-  repo: { list: async () => [browseTask], file: (path: string) => path.startsWith('Tasks/') ? { path } : null, read: async () => task, taskPath: () => 'Tasks/task1234.md', readText: async () => '' },
+  repo: { list: async () => [browseTask, canceledTask], file: (path: string) => path.startsWith('Tasks/') ? { path } : null, read: async () => task, taskPath: () => 'Tasks/task1234.md', readText: async () => '' },
   service: { daily: { path: (d: string) => `Daily/${d}.md`, open: async () => null }, refs: async () => [], reconcile: async () => undefined },
 };
 const view = new OrganizedInspectorView({ app } as any, owner);
 const root = document.querySelector('#app')!; root.appendChild(view.contentEl);
 let editor: EditorView | null = null;
+let modal: TextModal | null = null;
 (window as any).scene = async (tab: string) => {
-  editor?.destroy(); editor = null; root.replaceChildren();
+  editor?.destroy(); editor = null; modal?.close(); modal = null; root.replaceChildren();
   if (tab === 'Settings' || tab === 'LegacySettings') {
     const settings = new OrganizedSettingsTab(app, owner);
     if (tab === 'LegacySettings') { root.appendChild(settings.containerEl); settings.display(); }
@@ -37,6 +40,9 @@ let editor: EditorView | null = null;
     }
   } else if (tab === 'LivePreview' || tab === 'Source') {
     editor = new EditorView({ state: EditorState.create({ doc: '- [ ] Test task <!--organized:task1234--> <!--organized:repeat-->', selection: { anchor: 8 }, extensions: [EditorView.lineWrapping, ...(tab === 'LivePreview' ? [editorLivePreviewField] : []), editorExtension(owner)] }), parent: root });
+  } else if (tab === 'InformationModal') {
+    modal = new TextModal(app, 'Information', 'A note that explains the task in enough detail to wrap cleanly on a narrow phone sidebar without clipping.', async () => undefined);
+    modal.open();
   } else {
     root.appendChild(view.contentEl); view.module = 'Information'; view.tab = tab as typeof view.tab; await view.render();
   }

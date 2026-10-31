@@ -58,6 +58,29 @@ export class OrganizedInspectorView extends ItemView {
     setIcon(head.createSpan({ cls: "organized-card-icon", attr: { "aria-hidden": "true" } }), icon); head.createEl("h4", { cls: "organized-card-title", text: title });
     if (this.module === title) card.addClass("organized-selected-module"); return card;
   }
+  section(host: HTMLElement, title: string, count: number): HTMLElement {
+    const section = host.createDiv({ cls: "organized-section" }); const head = section.createDiv({ cls: "organized-section-head" });
+    head.createEl("h3", { cls: "organized-section-title", text: title }); head.createSpan({ cls: "organized-count", text: String(count) });
+    return section;
+  }
+  private statusDot(host: HTMLElement, task: Task): HTMLElement {
+    return host.createSpan({ cls: "organized-status-dot", attr: { "data-status": task.status, "aria-hidden": "true" } });
+  }
+  private taskRow(host: HTMLElement, task: Task, action: () => Promise<unknown> | void): HTMLElement {
+    const row = host.createDiv({ cls: "organized-list-card" }); const open = this.button(row, "", action); open.addClass("organized-list-open");
+    open.createDiv({ cls: "organized-list-title", text: task.title });
+    const meta = open.createDiv({ cls: "organized-list-meta" }); this.statusDot(meta, task);
+    meta.createSpan({ cls: "organized-list-status", text: task.status.replace(/_/g, " ") });
+    if (task.priority !== "none") meta.createSpan({ cls: `organized-list-priority priority-${task.priority}`, text: task.priority });
+    if (task.scheduled) meta.createSpan({ cls: "organized-list-date", text: task.scheduled });
+    if (task.starred) { const star = meta.createSpan({ cls: "organized-list-star", attr: { "aria-label": "Favorite" } }); setIcon(star, "star"); }
+    if (task.projects.length) {
+      const chips = open.createDiv({ cls: "organized-chips" });
+      for (const project of task.projects.slice(0, 2)) chips.createSpan({ cls: "organized-chip", text: project.replace(/\.md$/, "") });
+      if (task.projects.length > 2) chips.createSpan({ cls: "organized-chip", text: `+${task.projects.length - 2}` });
+    }
+    return row;
+  }
   calendar(host: HTMLElement): void {
     const nav = host.createDiv({ cls: "organized-calendar-nav" });
     this.iconButton(nav, "Previous month", "chevron-left", () => { this.month.subtract(1, "month"); return this.render(); });
@@ -100,14 +123,17 @@ export class OrganizedInspectorView extends ItemView {
     if (!id) { host.createEl("p", { text: "Place the cursor on a linked task, or choose one in the projects tab." }); return; }
     const task = await this.owner.repo.read(id);
     if (generation !== this.renderId) return;
-    host.createDiv({ cls: "organized-eyebrow", text: this.origin === "Editor cursor" ? "From editor" : "From projects" });
-    if (this.origin !== "Editor cursor") this.button(host, "Back to projects", () => { this.tab = "Projects"; return this.render(); });
-    const header = host.createDiv({ cls: "organized-task-header" }); header.createEl("h2", { cls: "organized-task-title", text: task.title });
+    const hero = host.createDiv({ cls: "organized-task-hero" });
+    const eyebrow = hero.createDiv({ cls: "organized-eyebrow" });
+    this.statusDot(eyebrow, task); eyebrow.createSpan({ text: this.origin === "Editor cursor" ? "From editor" : "From projects" });
+    if (this.origin !== "Editor cursor") this.button(hero, "Back to projects", () => { this.tab = "Projects"; return this.render(); }).addClass("organized-back");
+    const header = hero.createDiv({ cls: "organized-task-header" }); header.createEl("h2", { cls: "organized-task-title", text: task.title });
     this.iconButton(header, "Edit title", "pencil", () => { new TextModal(this.app, "Edit title", task.title, title => this.owner.run(() => this.owner.service.title(id, title)), false).open(); });
     const star = this.iconButton(header, "Favorite", "star", () => this.owner.run(async () => { await this.owner.repo.update(id, t => ({ ...t, starred: !t.starred })); this.owner.refresh(); })); star.setAttribute("aria-pressed", String(task.starred));
-    const toolbar = host.createDiv({ cls: "organized-task-toolbar" });
-    this.select(toolbar, "Status", task.status, STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(() => this.owner.service.status(id, value as Task["status"], this.owner.context ?? undefined)); });
-    const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Information", "Idea", "Question", "Sources", "Notes"], value => { this.module = value; void this.render().catch(report); }); add.options[0].text = "Add details…";
+    const toolbar = hero.createDiv({ cls: "organized-task-toolbar" });
+    const status = toolbar.createDiv({ cls: "organized-status-field" }); this.statusDot(status, task);
+    this.select(status, "Status", task.status, STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(() => this.owner.service.status(id, value as Task["status"], this.owner.context ?? undefined)); });
+    const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Information", "Idea", "Question", "Sources", "Notes"], value => { this.module = value; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
     if (task.priority !== "none" || this.module === "Priority") this.select(this.card(host, "Priority", "flag"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.repo.update(id, t => ({ ...t, priority: value as Task["priority"] })); this.owner.refresh(); }); });
     if (task.scheduled || this.module === "Schedule") this.button(this.card(host, "Schedule", "calendar"), task.scheduled ?? "Choose date", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined))).open(); });
     if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || this.module === "Timer") {
@@ -150,24 +176,36 @@ export class OrganizedInspectorView extends ItemView {
     };
     references.addEventListener("toggle", () => { this.referencesOpen = references.open; if (references.open) void load().catch(report); });
     if (this.referencesOpen) await load();
-    this.button(host, "Open task note", () => this.app.workspace.getLeaf(false).openFile(file)).addClass("organized-note-link");
+    const actions = host.createDiv({ cls: "organized-task-actions" });
+    this.button(actions, "Open task note", () => this.app.workspace.getLeaf(false).openFile(file)).addClass("organized-note-link");
+    this.button(actions, "Delete task", () => this.owner.deleteTask(id)).addClass("organized-danger");
   }
   async projects(host: HTMLElement, generation: number): Promise<void> {
-    host.createEl("h3", { text: "Favorites" }); const tasks = byPriority(await this.owner.repo.list());
+    const tasks = byPriority(await this.owner.repo.list());
     if (generation !== this.renderId) return;
-    const select = (task: Task) => { this.owner.selectedTaskId = task.id; this.origin = "Projects / favorites"; this.tab = "Task"; this.module = ""; return this.render(); };
-    for (const task of tasks.filter(t => t.starred && t.status !== "canceled")) this.button(host, `${task.title} · ${task.priority}`, () => select(task));
-    host.createEl("h3", { text: "Projects" });
+    const choose = (task: Task) => { this.owner.selectedTaskId = task.id; this.origin = "Projects / favorites"; this.tab = "Task"; this.module = ""; return this.render(); };
+    const favorites = tasks.filter(t => t.starred && t.status !== "canceled");
+    const favoriteSection = this.section(host, "Favorites", favorites.length);
+    if (!favorites.length) favoriteSection.createDiv({ cls: "organized-empty", text: "No favorites yet. Use [*] on a task or star it in the Task tab." });
+    for (const task of favorites) this.taskRow(favoriteSection, task, () => choose(task));
     const projects = [...new Set(tasks.flatMap(t => t.projects))];
-    const picker = host.createEl("select", { attr: { "aria-label": "Choose project" } });
+    const projectSection = this.section(host, "Projects", projects.length);
+    const field = projectSection.createDiv({ cls: "organized-field" });
+    field.createEl("label", { cls: "organized-field-label", text: "Filter by project", attr: { for: "organized-project-filter" } });
+    const picker = field.createEl("select", { cls: "organized-control", attr: { id: "organized-project-filter", "aria-label": "Choose project" } });
     picker.createEl("option", { text: "All projects", value: "" });
-    for (const p of projects) picker.createEl("option", { text: p, value: p }); picker.value = this.selectedProject;
+    for (const project of projects) picker.createEl("option", { text: project, value: project }); picker.value = this.selectedProject;
     picker.addEventListener("change", () => { this.selectedProject = picker.value; picker.blur(); void this.render().catch(report); });
-    for (const task of tasks.filter(t => t.status !== "canceled" && t.projects.length && (!this.selectedProject || t.projects.includes(this.selectedProject)))) this.button(host, `${task.title} · ${task.priority}`, () => select(task));
-    host.createEl("h3", { text: "Canceled tasks" });
-    for (const task of tasks.filter(t => t.status === "canceled")) {
-      const row = host.createDiv(); this.button(row, task.title, () => select(task));
-      this.button(row, "Restore", () => this.owner.run(() => this.owner.service.status(task.id, "open")));
+    const shown = tasks.filter(t => t.status !== "canceled" && t.projects.length && (!this.selectedProject || t.projects.includes(this.selectedProject)));
+    if (!shown.length) projectSection.createDiv({ cls: "organized-empty", text: this.selectedProject ? `No tasks linked to ${this.selectedProject}.` : "No project links yet. Use [b] on a task to link its project or topic note." });
+    for (const task of shown) this.taskRow(projectSection, task, () => choose(task));
+    const canceled = tasks.filter(t => t.status === "canceled");
+    const canceledSection = this.section(host, "Canceled", canceled.length);
+    if (!canceled.length) canceledSection.createDiv({ cls: "organized-empty", text: "No canceled tasks." });
+    for (const task of canceled) {
+      const row = this.taskRow(canceledSection, task, () => choose(task));
+      const actions = row.createDiv({ cls: "organized-list-actions" });
+      this.button(actions, "Restore", () => this.owner.run(() => this.owner.service.status(task.id, "open")));
     }
   }
 }

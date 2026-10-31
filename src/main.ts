@@ -37,7 +37,7 @@ export default class Organized extends Plugin {
       await this.safety.prepare();
       this.settingsRaw = object(await this.loadData()); this.settings = settingsFrom(this.settingsRaw.settings ?? this.settingsRaw);
       this.repo = new Repository(this.app, () => this.settings, () => this.activeEditor());
-      this.service = new TaskService(this.repo, () => this.refresh(), message => this.confirm(message));
+      this.service = new TaskService(this.repo, () => this.refresh(), (message, heading, confirmLabel) => this.confirm(message, heading, confirmLabel));
       this.registerView(VIEW_TYPE, leaf => new OrganizedInspectorView(leaf, this));
       this.addSettingTab(new OrganizedSettingsTab(this.app, this));
       this.addRibbonIcon("calendar-check", "Open Organized", () => { void this.openInspector().catch(report); });
@@ -128,7 +128,19 @@ export default class Organized extends Plugin {
     await this.app.workspace.revealLeaf(leaf);
     if (leaf.view instanceof OrganizedInspectorView) { if (tab) leaf.view.tab = tab; leaf.view.module = module; await leaf.view.render(); }
   }
-  confirm(message: string): Promise<boolean> { return new Promise(resolve => new ConfirmModal(this.app, message, resolve).open()); }
+  confirm(message: string, heading = "Confirm task action", confirmLabel = "Confirm"): Promise<boolean> { return new Promise(resolve => new ConfirmModal(this.app, message, resolve, heading, confirmLabel).open()); }
+  async deleteTask(id: string): Promise<void> {
+    let removed = false;
+    await this.run(async () => {
+      removed = await this.service.deleteTask(id, () => {
+        if (this.selectedTaskId === id) this.selectedTaskId = null;
+        if (this.context?.line.id === id) this.context = null;
+      });
+    });
+    if (!removed) return;
+    this.eachView(view => { view.tab = "Projects"; view.module = ""; });
+    this.refresh();
+  }
   async pickTask(editor: Editor, file: TFile, duplicate = false): Promise<void> {
     this.assertWritable(); const context = this.current(editor, file); if (!context) throw new Error("Place the cursor on a Markdown task-list item.");
     if (context.line.id && !duplicate && this.repo.file(this.repo.taskPath(context.line.id))) throw new Error("Task already linked. Use duplicate as new task for a fresh identity.");

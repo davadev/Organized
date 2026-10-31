@@ -12,7 +12,7 @@ export class TaskService {
   private referenceBuild: Promise<void> | null = null;
   private reconciled = "";
   undoChanges: Change[] = [];
-  constructor(readonly repo: Repository, readonly changed: () => void, readonly confirm: (message: string) => Promise<boolean>) { this.daily = new DailyNotes(repo, repo.settings); }
+  constructor(readonly repo: Repository, readonly changed: () => void, readonly confirm: (message: string, heading?: string, confirmLabel?: string) => Promise<boolean>) { this.daily = new DailyNotes(repo, repo.settings); }
   async edit(file: TFile, before: string, after: string, changes?: Change[]): Promise<void> {
     await this.repo.write(file, before, after); if (before !== after) changes?.push({ file, before, after });
   }
@@ -212,6 +212,21 @@ export class TaskService {
   }
   hasReference(id: string | null, notePath: string): boolean { return id !== null && this.references?.get(id)?.has(notePath) === true; }
   forget(notePath: string): void { if (this.references) for (const refs of this.references.values()) refs.delete(notePath); }
+  async deleteTask(id: string, onConfirmed?: () => void): Promise<boolean> {
+    // The inspector must clear its now-invalid selection before occurrence or
+    // trash events can trigger a refresh, so the confirmed hook runs first.
+    const task = await this.repo.read(id);
+    if (!(await this.confirm(`Delete “${task.title}”? Its task note moves to Obsidian's trash and every linked occurrence is removed. This cannot be undone from Organized.`, "Delete task", "Delete"))) return false;
+    onConfirmed?.();
+    for (const occurrence of await this.repo.occurrences(id)) {
+      const removed = new Set(occurrence.tasks.map(line => line.line));
+      const text = occurrence.text.split("\n").filter((_, index) => !removed.has(index)).join("\n");
+      await this.edit(occurrence.file, occurrence.text, text);
+    }
+    const file = this.repo.file(this.repo.taskPath(id)); if (!file) throw new Error("Task note is missing; relink or repair before deleting.");
+    await this.repo.app.fileManager.trashFile(file);
+    this.references = null; return true;
+  }
   async marker(context: Context, marker: string): Promise<void> {
     const id = context.line.id; if (!id) return;
     if (marker === ">") await this.schedule(context, nextDate(localDate()), "forward");

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-beta.3
+
+- Redesign the Projects tab into Favorites, Projects and Canceled sections with counts, a labeled project filter, task cards, status/priority/date/favorite metadata, project chips and clear empty states.
+- Polish the Task tab with an accent-edged hero, semantic status dots, restrained accent icons and hover/focus states, and a bottom actions row.
+- Add explicit task deletion on the Task tab: after confirmation, the canonical task note moves to Obsidian’s trash, every linked occurrence line is removed, and the inspector clears the deleted selection and returns to Projects.
+- Bring all native modals onto the same compact accent-edged surface, give destructive confirmation its own heading and action label, and remove task IDs from picker suggestions.
+
+Verified with 118 tests at 100% coverage and Chromium/WebKit layout checks, including the information modal. Live Obsidian and physical-device acceptance remain manual beta checks.
+
 ## 0.1.0-beta.2
 
 - Keep the selected task while scrolling or editing the sidebar instead of reverting to “Place the cursor”. Requested sections scroll into view once, not on every refresh.
