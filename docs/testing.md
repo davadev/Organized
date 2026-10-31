@@ -22,7 +22,7 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 
 ## First-beta verification (2026-10-31)
 
-- 111 behavioral/policy tests; all 13 shipped TypeScript files at 100% statements, branches, functions and lines. No coverage exclusions beyond tests/declarations.
+- 112 behavioral/policy tests; all 13 shipped TypeScript files at 100% statements, branches, functions and lines. No coverage exclusions beyond tests/declarations.
 - Typecheck/build, review-parity lint (zero warnings), CSS lint, production dead-code/dependency checks, identity/privacy check and strict release guard passed locally.
 - Type-blind cloud-review reproduction: zero errors; unresolved-host-type warnings are reported separately, not suppressed in real typed lint.
 - Real Chromium and WebKit: Calendar/Task/Projects at 240, 320, 390 and 768 pixels, light/dark and LTR/RTL; overflow canary detected. Internal screenshots inspected. These use actual plugin components with a host shim, not the Obsidian application.

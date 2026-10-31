@@ -74,13 +74,7 @@ export class TaskService {
       await this.edit(context.file, current.text, replaceTask(current.text, current.line, { marker: kind === "forward" ? (this.daily.date(context.file.path) ? ">" : " ") : "<" }), changes);
     }
     if (oldDate && oldDate !== date && kind !== "forward") {
-      const old = this.repo.file(this.daily.path(oldDate));
-      if (old && old.path !== context.file.path) {
-        const text = await this.repo.readText(old); const matches = parseTasks(text).filter(t => t.id === task.id && t.marker === " ");
-        const all = parseTasks(text).filter(t => t.id === task.id);
-        if (matches.length === 1 && all.length === 1) await this.edit(old, text, removeUnique(text, task.id), changes);
-        else new Notice("The previous scheduled occurrence is missing or ambiguous. Preserved it; use the references list to repair.");
-      }
+      await this.cleanupSchedule(task.id, oldDate, context.file.path, changes);
     }
     this.changed();
   }
@@ -91,10 +85,19 @@ export class TaskService {
     const next = await this.repo.update(id, t => ({ ...t, scheduled: date, movement_history: t.scheduled === date ? t.movement_history : [...t.movement_history, event] }));
     await this.insert(target, next, " ", false);
     if (task.scheduled && task.scheduled !== date) {
-      const old = this.repo.file(this.daily.path(task.scheduled));
-      if (old) { const before = await this.repo.readText(old); try { await this.edit(old, before, removeUnique(before, id)); } catch { new Notice("Previous scheduled occurrence preserved for repair: missing, ambiguous or concurrently changed."); } }
+      await this.cleanupSchedule(id, task.scheduled);
     }
     this.changed();
+  }
+  private async cleanupSchedule(id: string, oldDate: string, originPath?: string, changes?: Change[]): Promise<void> {
+    if (this.daily.path(oldDate) === originPath) return;
+    try {
+      // Explicit rescheduling is allowed to search by stable ID. Configuration
+      // changes never turn undated references into guessed old destinations.
+      const candidates = (await this.repo.occurrences(id)).filter(o => o.file.path !== originPath && this.daily.date(o.file.path) === oldDate);
+      if (candidates.length !== 1 || candidates[0].tasks.length !== 1 || candidates[0].tasks[0].marker !== " " || candidates[0].tasks[0].repeat) throw new Error("Missing or ambiguous previous destination.");
+      const old = candidates[0]; await this.edit(old.file, old.text, removeUnique(old.text, id), changes);
+    } catch { new Notice("Previous scheduled occurrence is missing, ambiguous or changed. Preserved existing lines; use the references list to repair."); }
   }
   async status(id: string, status: Status, context?: Context): Promise<void> {
     const task = await this.repo.update(id, t => setStatus(t, status));

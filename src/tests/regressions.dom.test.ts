@@ -47,6 +47,14 @@ describe('conflict and structural regression cases', () => {
     await h.add('Daily/2020-01-01.md', `- [ ] Task <!--organized:${task.id}-->\n- [ ] ordinary`); const today: any = await h.add(`Daily/${localDate()}.md`, `- [ ] Task <!--organized:${task.id}-->`);
     await h.service.reconcile(today); expect(parseTasks(h.texts.get(today.path)!)).toHaveLength(1); expect(h.texts.get('Daily/2020-01-01.md')).toContain('[ ] Task');
   });
+  it('rescheduling searches stable IDs, preserves origin/history/generated lines and reports changed daily configuration', async () => {
+    const h = harness(); const task = await h.repo.create('Schedule'); const origin: any = await h.add('Daily/2026-01-01.md', `- [<] Schedule <!--organized:${task.id}-->`);
+    await h.repo.update(task.id, t => ({ ...t, scheduled: '2026-01-01' }));
+    await h.service.schedule({ file: origin, line: parseTasks(h.texts.get(origin.path)!)[0] }, '2026-01-02'); expect(h.texts.get(origin.path)).toContain('[<]');
+    h.texts.set('Daily/2026-01-02.md', `- [x] Schedule <!--organized:${task.id}-->`); await h.service.scheduleTask(task.id, '2026-01-03'); expect(h.texts.get('Daily/2026-01-02.md')).toContain('[x]');
+    h.texts.set('Daily/2026-01-03.md', `- [ ] Schedule <!--organized:${task.id}--> <!--organized:repeat-->`); await h.service.scheduleTask(task.id, '2026-01-04'); expect(h.texts.get('Daily/2026-01-03.md')).toContain('organized:repeat');
+    h.setSettings({ dailyFolder: 'New daily folder' }); await h.service.scheduleTask(task.id, '2026-01-05'); expect(h.texts.get('Daily/2026-01-04.md')).toContain(task.id); expect(h.texts.get('New daily folder/2026-01-05.md')).toContain(task.id); expect(Notice.instances.at(-1)?.message).toContain('references list to repair');
+  });
   it('keeps independent recurring dates and malformed stopped periods safe', async () => {
     const h = harness(); const task = await h.repo.create('Repeat'); await h.repo.update(task.id, t => ({ ...t, recurring: true, recurrence_periods: [] }));
     const today: any = await h.add(`Daily/${localDate()}.md`, `- [ ] Repeat <!--organized:${task.id}-->`); const tomorrow = `Daily/${nextDate(localDate())}.md`; const line = `- [ ] Repeat <!--organized:${task.id}--> <!--organized:repeat-->`;
