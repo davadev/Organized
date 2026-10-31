@@ -20,7 +20,7 @@ export async function projection(owner: Organized, host: HTMLElement, task: Task
   if (task.scheduled) {
     const scheduled = task.scheduled;
     const link = host.createEl("a", { text: scheduled, cls: "organized-date", href: "#", attr: { "aria-label": `Open daily note for ${scheduled}` } });
-    link.addEventListener("click", event => { event.preventDefault(); void owner.service.daily.open(scheduled).catch(report); });
+    link.addEventListener("click", event => { event.preventDefault(); void owner.run(() => owner.service.daily.open(scheduled)); });
   }
   for (const property of selected) {
     if (property === "scheduled") continue;

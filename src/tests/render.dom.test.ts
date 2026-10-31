@@ -27,6 +27,7 @@ describe('read-only projections and bundled visual markers', () => {
     raw.vault.process.mockClear(); raw.fileManager.processFrontMatter.mockClear(); await projection(owner, host, record, new Component() as any);
     expect(host.textContent).toContain('2026-01-01'); expect(host.textContent).toContain('https://example.com'); expect(host.textContent).toContain('priority: none'); expect(host.textContent).toContain('starred: true'); expect(raw.vault.process).not.toHaveBeenCalled(); expect(raw.fileManager.processFrontMatter).not.toHaveBeenCalled();
     const open = vi.spyOn(owner.service.daily, 'open').mockResolvedValue(file); host.querySelector<HTMLAnchorElement>('a')!.click(); await flush(); expect(open).toHaveBeenCalledWith('2026-01-01');
+    owner.safety.writable = false; host.querySelector<HTMLAnchorElement>('a')!.click(); await flush(); expect(open).toHaveBeenCalledOnce(); owner.safety.writable = true;
     owner.settings.displayProperties = ['sources']; const noSources = await repo.create('Without sources'); const noSourcesHost = createDiv(); await projection(owner, noSourcesHost, noSources, new Component() as any); expect(noSourcesHost.textContent).toBe('');
     owner.settings.displayProperties = ['notes', 'sources']; const missing = { ...task, id: 'missing1' }; const empty = createDiv(); await projection(owner, empty, missing, new Component() as any); expect(empty.childElementCount).toBe(0);
   });
