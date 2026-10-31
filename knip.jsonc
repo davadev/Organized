@@ -1,0 +1,13 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // TEMPLATE: knip.jsonc (repo root)
+  // WHAT: dead-code gate (`npm run check:dead-code`). The `!` suffix marks what ships: knip --production walks from
+  //       src/main.ts and does NOT count tests as users, so code that only a test still calls is reported.
+  // CHANGE: the entry if your main file is elsewhere. Add `ignoreDependencies` only with a written reason.
+  // GUARDS: legacy and half-finished features that only a test still reaches. They get deleted, not tested; never add an
+  //         ignore to make this pass (a deliberate test seam gets a `@public` JSDoc tag instead).
+  "entry": ["src/main.ts!"],
+  "project": ["src/**/*.ts!", "!src/tests/**"],
+  // An export that is only used inside its own file is not "unused".
+  "ignoreExportsUsedInFile": true
+}

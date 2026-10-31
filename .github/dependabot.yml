@@ -1,0 +1,123 @@
+# TEMPLATE: .github/dependabot.yml
+# WHAT: dependency update feed (npm + github-actions), PR-only, with the 14-day cooldown check-release requires.
+# CHANGE: nothing required. Drop the `ignore` entries for packages you do not use. Never reply `@dependabot ignore` on a PR
+#         (server-side state, invisible to review); every ignore belongs in this file.
+# GUARDS: a malicious release is usually live for hours to days before it is pulled (cooldown); vitest and its coverage
+#         package peer-pin each other exactly, so they must move in ONE PR; esbuild is 0.x, so its breaking changes arrive
+#         as MINORS that an update-types group filter cannot hold back.
+# Dependency update feed.
+#
+# Obsidian's community-plugin scorecard reports "No vulnerable dependencies
+# found" only AFTER a release is published. These PRs surface the same signal
+# BEFORE we tag, which is the whole point of having them.
+#
+# PR-only by design: nothing here auto-merges, so Dependabot can never affect a
+# release on its own.
+#
+# IMPORTANT: never reply `@dependabot ignore ...` on a PR. That stores the
+# ignore in Dependabot's server-side state rather than in this file — invisible
+# to code review, it survives config changes, and it can only be undone by
+# finding the original PR and replying `@dependabot unignore`. Every ignore
+# belongs in the `ignore:` blocks below, where it is visible and revertible.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    # Do not adopt a new version immediately . Supply-chain attacks are
+    # usually a malicious release that is live for hours to a few days before it
+    # is noticed and pulled. Without this block Dependabot still applies its own
+    # implicit 3-day default, which is too short to rely on and invisible in
+    # review. 14 days matches `min-release-age` in .npmrc; check-release fails
+    # if either disappears. GitHub documents that cooldown applies to VERSION
+    # updates only, so a Dependabot SECURITY update still arrives at once.
+    # Majors wait longer still: they are the riskiest and are reviewed by hand.
+    cooldown:
+      default-days: 14
+      semver-major-days: 30
+    groups:
+      # vitest and @vitest/coverage-v8 must move TOGETHER, majors included:
+      # coverage-v8 peer-pins vitest to an EXACT version, so a PR bumping one
+      # alone can never install (`npm ci` -> ERESOLVE). Dependabot split the
+      # vitest 5 bump into two PRs and both failed for exactly that
+      # reason. There is deliberately no update-types filter here — this group
+      # must catch majors too. It is listed FIRST because Dependabot assigns a
+      # dependency to the first group it matches, so this narrow family group
+      # has to precede the catch-all below.
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+      # Everything else: patch/minor only. Majors arrive as individual PRs so
+      # each can be reviewed and shipped behind its own prerelease. Grouping
+      # every update type together produced one unmergeable 10-package PR
+      # that mixed a TypeScript major in with routine patches.
+      dev-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Pinned to obsidian's EXACT peerDependencies (see package.json). Bumping
+      # either breaks `npm ci` with ERESOLVE — that is what killed one PR.
+      # They follow the `obsidian` devDependency, so they move by hand when it
+      # does.
+      # esbuild is a 0.x package, so Dependabot classifies 0.21 -> 0.28 as a
+      # MINOR update and the dev-dependencies group's update-types filter cannot
+      # hold it back — one PR smuggled a bundler bump in exactly that way. It is
+      # also the only dependency whose output lands in the shipped main.js, so
+      # it moves deliberately, on a release of its own.
+      #
+      # Scoped to version-update types ON PURPOSE. A bare `dependency-name`
+      # ignore suppresses Dependabot SECURITY updates too, and this is the last
+      # dependency we want to go quiet. `version-update:*` conditions apply only
+      # to version updates, so security PRs still fire, and patch bumps within a
+      # minor line stay allowed.
+      - dependency-name: "esbuild"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
+      - dependency-name: "@codemirror/state"
+      - dependency-name: "@codemirror/view"
+      - dependency-name: "@lezer/markdown"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "@lezer/common"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "@lezer/highlight"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      # NOTE: eslint is deliberately NOT ignored. It used to be ignored for
+      # majors, and that is exactly how the eslint 9 line reached end-of-life
+      # unnoticed — Dependabot never raised eslint 10, so nothing surfaced that
+      # 9.39.5 had been deprecated. The old comment here also claimed
+      # eslint-plugin-obsidianmd was "built against eslint 9"; it is not, its
+      # peer range is >=9.19.0 and typescript-eslint declares ^10.0.0.
+      # A Dependabot PR is visibility, not an obligation to merge, and
+      # check-release runs the Obsidian-parity lint before any release, so
+      # breakage cannot reach a release unseen.
+      #
+      # TypeScript majors stay ignored, for a concrete checkable reason rather
+      # than a guess: typescript-eslint 8.70.0 declares
+      # `typescript >=4.8.4 <6.1.0`, so TypeScript 7 breaks the lint toolchain
+      # outright. Revisit when typescript-eslint supports it.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # Should track the CI Node major, not run ahead of it.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    # 5, not 3: at 3 the fourth action (attest-build-provenance) was silently
+    # never raised.
+    open-pull-requests-limit: 5
+    # Actions are pinned to commit SHAs, and attestation would faithfully sign a
+    # build produced by a hijacked action, so the same waiting period applies.
+    # github-actions takes `default-days` only (GitHub's docs are ambiguous on
+    # semver-* keys for this ecosystem, so none are used).
+    cooldown:
+      default-days: 14

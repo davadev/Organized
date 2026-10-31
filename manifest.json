@@ -1,0 +1,10 @@
+{
+  "id": "organized",
+  "name": "Organized",
+  "version": "0.0.0",
+  "minAppVersion": "1.7.2",
+  "description": "Markdown-backed tasks, Things-style shortcuts, daily scheduling and a calendar inspector.",
+  "author": "davadev",
+  "authorUrl": "https://github.com/davadev",
+  "isDesktopOnly": false
+}

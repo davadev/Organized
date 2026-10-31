@@ -1,0 +1,10 @@
+node_modules/
+main.js
+coverage/
+.idea/
+.DS_Store
+dev-vault/.obsidian/
+dev-vault/*
+!dev-vault/Welcome.md
+test-results/
+resources/screenshots/*.png

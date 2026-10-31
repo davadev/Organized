@@ -1,0 +1,59 @@
+{
+  "scripts": {
+    "check:layout": "node scripts/check-layout.mjs chromium",
+    "check:webkit": "node scripts/check-layout.mjs webkit",
+    "check:identity": "node scripts/check-identity.mjs",
+    "check:toolchain": "node scripts/check-toolchain.mjs",
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "check-release": "node scripts/check-release.mjs",
+    "lint": "eslint 'src/**/*.ts' --max-warnings=0",
+    "lint:fix": "eslint 'src/**/*.ts' --fix",
+    "lint:css": "stylelint styles.css",
+    "lint:cloud-parity": "node scripts/lint-cloud-parity.mjs",
+    "check:dead-code": "knip --production && knip --no-config-hints --include dependencies,unlisted,binaries,unresolved",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage"
+  },
+  "allowScripts": {
+    "esbuild": false,
+    "fsevents": false
+  },
+  "devDependencies": {
+    "@codemirror/state": "6.5.0",
+    "@codemirror/view": "6.38.6",
+    "@lezer/markdown": "1.6.3",
+    "@types/js-yaml": "4.0.9",
+    "@types/node": "^24",
+    "@vitest/coverage-v8": "5.0.2",
+    "esbuild": "0.28.2",
+    "eslint": "^10.11.0",
+    "eslint-plugin-obsidianmd": "^0.4.2",
+    "happy-dom": "20.14.5",
+    "js-yaml": "4.3.2",
+    "knip": "^6.38.0",
+    "moment": "2.29.4",
+    "obsidian": "1.13.1",
+    "playwright": "1.58.2",
+    "stylelint": "17.15.0",
+    "stylelint-no-unsupported-browser-features": "8.1.2",
+    "tslib": "^2.6.2",
+    "typescript": "^5.4.5",
+    "typescript-eslint": "^8.71.0",
+    "vitest": "5.0.2"
+  },
+  "name": "organized",
+  "overrides": {
+    "@lezer/common": "1.5.1",
+    "@lezer/highlight": "1.2.3"
+  },
+  "version": "0.0.0",
+  "private": true,
+  "description": "Markdown-backed tasks, calendar and inspector for Obsidian",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11.10.0"
+  }
+}

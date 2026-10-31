@@ -1,0 +1,189 @@
+# TEMPLATE: .github/workflows/ci.yml
+# WHAT: validation on every push to main and every PR: build, tests, 100 % coverage, lint, stylelint, dead-code, the release
+#       guard, and the review's blind-view lint (last, because it temporarily hides node_modules/obsidian).
+# CHANGE: nothing required. Pick the Node major you develop on. To add browser checks, uncomment the OPTIONAL jobs at the
+#         bottom and add the matching npm scripts. Make `validate` a required status check on main.
+# GUARDS: a merge that breaks the release is found before the tag, not on the runner after it. Keep release.yml and this
+#         file in step: release.yml re-runs the same gates plus --strict. Actions are pinned to SHAs (see below).
+name: CI
+
+# Actions are pinned to full commit SHAs, not mutable tags. A tag can be
+# repointed by whoever controls the action's repo; release.yml builds the
+# main.js that ships to users, and build attestation would faithfully sign a
+# compromised build. The trailing comment records the human-readable version —
+# Dependabot (.github/dependabot.yml) updates both together.
+# Re-resolve by hand with:
+#   gh api repos/<owner>/<repo>/git/ref/tags/<tag> --jq .object.sha
+# (if that returns an annotated tag object, deref it via git/tags/<sha>)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Least privilege. Without this block the job inherits the repository
+    # default, which is frequently read/write. Nothing here writes to the repo:
+    # upload-artifact uses the Actions runtime token, not GITHUB_TOKEN.
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Test the actual branch commit, not GitHub's synthetic merge commit;
+          # project Git identities must remain the owner's public handle.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          # Don't leave a repo-writable GITHUB_TOKEN in .git/config:
+          # later steps run `npm ci`, i.e. third-party code, in this
+          # same workspace. Nothing here does git writes — `gh` uses an
+          # explicit GH_TOKEN env instead.
+          persist-credentials: false
+          # Tags and history: check-release compares the What's new notes with the latest stable release's.
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: node scripts/check-toolchain.mjs
+
+      - name: Install lockfile
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run coverage
+        run: npm run test:cov
+
+      - name: Verify public project identity
+        run: npm run check:identity
+
+      - name: Check the Obsidian lint plugin is current
+        # The cloud community-plugin review always runs the newest
+        # eslint-plugin-obsidianmd. `npm ci` pins ours to the lockfile, which
+        # keeps builds reproducible — so warn loudly (without failing the run)
+        # whenever a newer checker ships and our local mirror falls behind.
+        run: |
+          installed=$(node -p "require('eslint-plugin-obsidianmd/package.json').version")
+          latest=$(npm view eslint-plugin-obsidianmd version)
+          echo "eslint-plugin-obsidianmd installed=$installed latest=$latest"
+          if [ "$installed" != "$latest" ]; then
+            echo "::warning title=Obsidian checker outdated::eslint-plugin-obsidianmd $installed is installed but $latest is published. Bump it so local lint matches the community-plugin review."
+          fi
+
+      - name: Run lint (Obsidian-parity)
+        run: npm run lint
+      - name: Lint styles.css (stylelint, as Obsidian's review does)
+        run: npm run lint:css
+
+      # knip --production walks from src/main.ts and does not count tests as users, so legacy code and half-finished
+      # features that only a test still reaches fail here. Delete them; do not add ignores to make this pass.
+      - name: Check for dead code (knip)
+        run: npm run check:dead-code
+
+      - name: Run release guard
+        run: env -u GITHUB_REF_NAME -u GITHUB_REF npm run check-release -- --with-lint
+
+      # The auto-review lints without the obsidian/@codemirror type declarations. Warnings from that blind view are
+      # expected; an ERROR is not (it can fail the review). This hides node_modules/obsidian temporarily, so it runs last.
+      - name: Check the Obsidian review's blind view has no errors
+        run: npm run lint:cloud-parity
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: ignore
+
+  browsers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        engine: [chromium, webkit]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: node scripts/check-toolchain.mjs
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.engine }}
+      - run: node scripts/check-layout.mjs ${{ matrix.engine }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: layout-${{ matrix.engine }}
+          path: test-results/
+
+  # ---------------------------------------------------------------------------------------------------------------
+  # OPTIONAL browser jobs (kept as comments: they need your own scripts). Their own jobs, so a slow or flaky browser
+  # step never hides the fast `validate` result. They belong HERE, never in check-release/release.yml, which must stay
+  # offline and deterministic: a browser hiccup on a tag must not block a release CI already passed.
+  #
+  # layout:
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 20
+  #   permissions:
+  #     contents: read
+  #   steps:
+  #     - name: Check out repository
+  #       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+  #       with:
+  #         persist-credentials: false
+  #     - name: Set up Node.js
+  #       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+  #       with:
+  #         node-version: 24
+  #         cache: npm
+  #     - name: Install dependencies
+  #       run: npm ci
+  #     - name: Show the browser
+  #       run: google-chrome --version
+  #     # Fails (does not skip) when no browser is found, because CI is set.
+  #     - name: Check layout in Chromium
+  #       run: npm run check:layout
+  #
+  # webkit:   # the iPhone runs WebKit; a stylesheet Blink tolerates can overflow there
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 20
+  #   permissions:
+  #     contents: read
+  #   steps:
+  #     - name: Check out repository
+  #       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+  #       with:
+  #         persist-credentials: false
+  #     - name: Set up Node.js
+  #       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+  #       with:
+  #         node-version: 24
+  #         cache: npm
+  #     - name: Install dependencies
+  #       run: npm ci
+  #     - name: Install WebKit
+  #       run: npx playwright install --with-deps webkit
+  #     - name: Check wrapping in WebKit
+  #       run: npm run check:webkit
