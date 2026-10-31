@@ -2,6 +2,8 @@
 
 Only tag-triggered `.github/workflows/release.yml` publishes artifacts. Never run `gh release create` manually or upload local builds. Work on feature branches and merge a green PR first. All attribution and Git identity must be davadev.
 
+Browser checks are required PR checks on Ubuntu 24.04 (the supported Playwright 1.58.2 host); they never run during tag publication. Validation and release use `ubuntu-latest` and explicitly assert Node 24/npm >=11.10 before installing.
+
 ## Initial bootstrap
 
 This repository has no stable release. Main's `0.0.0` is an unpublished bootstrap, not a version advertised in the Community Plugins directory. The first release is `0.1.0-beta.1`. Do not publish a fake stable release just to satisfy a bootstrap invariant. After the first explicit stable promotion, main must always point to an existing stable release with all three assets.

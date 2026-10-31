@@ -6,6 +6,8 @@ CI and release assert the actual Node/npm versions before installation (`npm run
 
 Run build, lint, CSS lint, tests/coverage, dead-code, cloud lint parity and the strict release guard. Browser jobs run separately from deterministic tag publication. The shared browser harness mounts the actual inspector and stylesheet under Chromium and WebKit at narrow widths, in light/dark and RTL; its overflow canary must fail.
 
+Browser CI uses supported Ubuntu 24.04: Playwright 1.58.2 cannot install its system dependencies on the newer Ubuntu 26.04 `ubuntu-latest` runner. This is confined to layout jobs; the browser-free validation/release jobs remain on `ubuntu-latest`. Review this compatibility pin with the next Playwright update, rather than weakening or skipping browser checks.
+
 ## Manual beta checklist (isolated development vault only)
 
 1. Install the tagged assets via BRAT, or copy the three assets into `.obsidian/plugins/organized/`. Restart.
