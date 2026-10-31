@@ -1,43 +1,68 @@
-import { App, PluginSettingTab, Setting, SettingDefinition } from "obsidian";
+import { App, PluginSettingTab, Setting, SettingDefinitionItem } from "obsidian";
 import type Organized from "./main";
-import { DISPLAY_PROPERTIES, path, settingsFrom, visibleFolder } from "./model";
+import { DISPLAY_PROPERTIES, DisplayProperty, path, settingsFrom, visibleFolder } from "./model";
 import { report } from "./service";
 
+export const PROPERTY_LABELS: Record<DisplayProperty, string> = {
+  status: "Status", priority: "Priority", scheduled: "Scheduled date", created: "Created date",
+  time_tracked_seconds: "Tracked time", recurring: "Recurrence", starred: "Favorite",
+  projects: "Project links", movement_history: "Movement history", sources: "Source references", notes: "Task notes",
+};
+interface Row { name: string; desc: string; render: (setting: Setting) => void }
+interface Group { type: "group"; heading: string; items: Row[] }
 export class OrganizedSettingsTab extends PluginSettingTab {
   constructor(app: App, readonly owner: Organized) { super(app, owner); }
-  display(): void {
-    this.renderInto(this.containerEl);
-  }
-  getSettingDefinitions(): SettingDefinition[] {
-    return [{ name: "Task configuration", render: setting => { this.renderInto(setting.settingEl); } }];
-  }
+  getSettingDefinitions(): SettingDefinitionItem[] { return this.groups(); }
+  display(): void { this.renderInto(this.containerEl); }
   renderInto(host: HTMLElement): void {
     host.empty(); host.addClass("organized-settings");
-    new Setting(host).setName("Task storage").setHeading();
-    new Setting(host).setName("Task folder").setDesc("One Markdown file per task. Changing this does not move existing files.")
-      .addText(t => t.setValue(this.owner.settings.taskFolder).onChange(value => {
-        try { this.owner.settings.taskFolder = visibleFolder(value); this.owner.saveSettings(); } catch (error) { report(error); }
-      }));
-    new Setting(host).setName("Daily notes").setHeading();
-    new Setting(host).setName("Daily-note source").setDesc("Custom settings are required: Obsidian does not expose a supported API for reading core daily notes configuration. Match these to your daily-note folder and date format.")
-      .addDropdown(d => d.addOption("custom", "Use custom settings").addOption("core", "Use core settings (unavailable)").setValue("custom").setDisabled(true));
-    new Setting(host).setName("Daily-note folder").addText(t => t.setValue(this.owner.settings.dailyFolder).onChange(value => {
-      try { this.owner.settings.dailyFolder = path(value, true); this.owner.saveSettings(); } catch (error) { report(error); }
-    }));
-    new Setting(host).setName("Filename format").setDesc("Moment date format containing YYYY, MM and DD; folders in the format are supported.")
-      .addText(t => t.setValue(this.owner.settings.dailyFormat).onChange(value => {
-        const validated = settingsFrom({ ...this.owner.settings, dailyFormat: value });
-        if (validated.dailyFormat === value) { this.owner.settings = validated; this.owner.saveSettings(); }
-      }));
-    new Setting(host).setName("Task behavior").setHeading();
-    new Setting(host).setName("Auto-forward unfinished tasks").setDesc("On by default. Opening today's existing daily note carries unfinished tasks from their latest prior occurrence, updates scheduled dates, and marks prior lines forwarded. No timer or automatic note creation. A summary offers Undo.")
-      .addToggle(t => t.setValue(this.owner.settings.autoForward).onChange(value => { this.owner.settings.autoForward = value; this.owner.saveSettings(); }));
-    new Setting(host).setName("Missing sections").addDropdown(d => d.addOption("recreate", "Recreate heading path").addOption("ask", "Ask before inserting").setValue(this.owner.settings.missingSection).onChange(value => { this.owner.settings.missingSection = value === "ask" ? "ask" : "recreate"; this.owner.saveSettings(); }));
-    new Setting(host).setName("Priority sort scope").addDropdown(d => d.addOption("list", "Current task list").addOption("section", "Whole heading section").addOption("first", "First task position in section").addOption("none", "No automatic sorting").setValue(this.owner.settings.sortScope).onChange(value => { this.owner.settings = settingsFrom({ ...this.owner.settings, sortScope: value }); this.owner.saveSettings(); }));
-    new Setting(host).setName("Rendered task properties").setHeading();
-    host.createEl("p", { text: "None selected by default. Scheduled dates still appear for scheduled tasks. These are read-only projections, never inserted into note source." });
-    for (const property of DISPLAY_PROPERTIES) new Setting(host).setName(property.replace(/_/g, " ")).addToggle(t => t.setValue(this.owner.settings.displayProperties.includes(property)).onChange(value => {
-      this.owner.settings.displayProperties = value ? [...this.owner.settings.displayProperties, property] : this.owner.settings.displayProperties.filter(p => p !== property); this.owner.saveSettings();
-    }));
+    for (const group of this.groups()) {
+      new Setting(host).setName(group.heading).setHeading();
+      for (const row of group.items) row.render(new Setting(host).setName(row.name).setDesc(row.desc));
+    }
+  }
+  private groups(): Group[] {
+    const row = (name: string, desc: string, render: (setting: Setting) => void): Row => ({ name, desc, render: setting => { setting.setClass("organized-setting-row"); render(setting); } });
+    return [
+      { type: "group", heading: "Task storage", items: [
+        row("Task folder", "Visible Markdown folder; changing it does not move existing tasks.", setting => {
+          setting.addText(t => t.setValue(this.owner.settings.taskFolder).onChange(value => {
+            try { this.owner.settings.taskFolder = visibleFolder(value); this.owner.saveSettings(); } catch (error) { report(error); }
+          }));
+        }),
+      ] },
+      { type: "group", heading: "Daily notes", items: [
+        row("Daily-note source", "Custom settings are required because core daily-note configuration has no public API.", setting => {
+          setting.addDropdown(d => d.addOption("custom", "Custom settings").setValue("custom").setDisabled(true));
+        }),
+        row("Daily-note folder", "Match your daily-note setup; leave empty for the vault root.", setting => {
+          setting.addText(t => t.setValue(this.owner.settings.dailyFolder).onChange(value => {
+            try { this.owner.settings.dailyFolder = path(value, true); this.owner.saveSettings(); } catch (error) { report(error); }
+          }));
+        }),
+        row("Filename format", "Use a Moment date format with YYYY, MM and DD.", setting => {
+          setting.addText(t => t.setValue(this.owner.settings.dailyFormat).onChange(value => {
+            const validated = settingsFrom({ ...this.owner.settings, dailyFormat: value });
+            if (validated.dailyFormat === value) { this.owner.settings = validated; this.owner.saveSettings(); }
+          }));
+        }),
+      ] },
+      { type: "group", heading: "Task behavior", items: [
+        row("Auto-forward unfinished tasks", "On by default: opening today's daily note carries unfinished tasks forward, with an Undo summary.", setting => {
+          setting.addToggle(t => t.setValue(this.owner.settings.autoForward).onChange(value => { this.owner.settings.autoForward = value; this.owner.saveSettings(); }));
+        }),
+        row("Missing sections", "Choose what happens when a destination heading is missing.", setting => {
+          setting.addDropdown(d => d.addOption("recreate", "Recreate heading path").addOption("ask", "Ask before inserting").setValue(this.owner.settings.missingSection).onChange(value => { this.owner.settings.missingSection = value === "ask" ? "ask" : "recreate"; this.owner.saveSettings(); }));
+        }),
+        row("Priority sort scope", "Sorting never moves tasks across heading paths.", setting => {
+          setting.addDropdown(d => d.addOption("list", "Current task list").addOption("section", "Whole heading section").addOption("first", "First task position").addOption("none", "No automatic sorting").setValue(this.owner.settings.sortScope).onChange(value => { this.owner.settings = settingsFrom({ ...this.owner.settings, sortScope: value }); this.owner.saveSettings(); }));
+        }),
+      ] },
+      { type: "group", heading: "Rendered task properties", items: DISPLAY_PROPERTIES.map(property => row(PROPERTY_LABELS[property], "", setting => {
+        setting.addToggle(t => t.setValue(this.owner.settings.displayProperties.includes(property)).onChange(value => {
+          this.owner.settings.displayProperties = value ? [...this.owner.settings.displayProperties, property] : this.owner.settings.displayProperties.filter(p => p !== property); this.owner.saveSettings();
+        }));
+      })) },
+    ];
   }
 }

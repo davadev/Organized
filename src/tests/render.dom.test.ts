@@ -61,13 +61,21 @@ describe('read-only projections and bundled visual markers', () => {
     const { owner, task } = await fixture(); const extensions = editorExtension(owner) as any[]; const field = extensions[0] as StateField<DecorationSet>; const icons = extensions[1];
     const doc = `intro\n- [>] Forward <!--organized:${task.id}-->\n- [k] Secret\n- [ ] Plain`;
     let state = EditorState.create({ doc, extensions: [editorLivePreviewField, field] }); const fake: any = { state, visibleRanges: [{ from: 0, to: doc.length }] }; const plugin = icons.create(fake);
-    expect(plugin.decorations.size).toBe(3); const ranges: any[] = []; plugin.decorations.between(0, doc.length, (_a: number, _b: number, d: any) => { if (d.spec.widget) ranges.push(d.spec.widget); }); expect(ranges).toHaveLength(2); const iconHost = ranges[0].toDOM(); expect(iconHost.querySelector('[aria-label=Forwarded]')).toBeTruthy(); expect(ranges[0].eq(ranges[0])).toBe(true); expect(ranges[0].eq(ranges[1])).toBe(false);
+    expect(plugin.decorations.size).toBe(4); const ranges: any[] = []; plugin.decorations.between(0, doc.length, (_a: number, _b: number, d: any) => { if (d.spec.widget) ranges.push(d.spec.widget); }); expect(ranges).toHaveLength(2); const iconHost = ranges[0].toDOM(); expect(iconHost.querySelector('[aria-label=Forwarded]')).toBeTruthy(); expect(ranges[0].eq(ranges[0])).toBe(true); expect(ranges[0].eq(ranges[1])).toBe(false);
     const previous = plugin.decorations; plugin.update({ docChanged: false, viewportChanged: false, selectionSet: false, transactions: [], view: fake }); expect(plugin.decorations).toBe(previous);
     fake.visibleRanges = [{ from: 0, to: 2 }]; plugin.update({ viewportChanged: true, transactions: [], view: fake }); expect(plugin.decorations.size).toBe(0);
-    fake.visibleRanges = [{ from: 0, to: doc.length }]; fake.state = state.update({ selection: { anchor: 15 } }).state; plugin.update({ selectionSet: true, transactions: [], view: fake }); expect(plugin.decorations.size).toBe(1);
+    fake.visibleRanges = [{ from: 0, to: doc.length }]; fake.state = state.update({ selection: { anchor: 15 } }).state; plugin.update({ selectionSet: true, transactions: [], view: fake }); expect(plugin.decorations.size).toBe(2);
     fake.state = EditorState.create({ doc }); plugin.update({ docChanged: true, transactions: [], view: fake }); expect(plugin.decorations.size).toBe(0);
-    const captured: any[] = []; refreshEditor({ dispatch: (spec: any) => captured.push(spec) } as any); const transaction = state.update(captured[0]); fake.state = transaction.state; plugin.update({ transactions: [transaction], view: fake }); expect(plugin.decorations.size).toBe(3); expect(widgets(transaction.state, field)).toHaveLength(1);
+    const captured: any[] = []; refreshEditor({ dispatch: (spec: any) => captured.push(spec) } as any); const transaction = state.update(captured[0]); fake.state = transaction.state; plugin.update({ transactions: [transaction], view: fake }); expect(plugin.decorations.size).toBe(4); expect(widgets(transaction.state, field)).toHaveLength(1);
     // The actual CM listener is installed in a native editor and observes updates.
     const listener = vi.spyOn(owner, 'onEditorUpdate').mockImplementation(() => undefined); const view = new EditorView({ state: EditorState.create({ doc: 'plain', extensions: editorExtension(owner) }), parent: createDiv() }); view.dispatch({ changes: { from: 5, insert: ' text' } }); expect(listener).toHaveBeenCalledOnce(); refreshEditor(view); expect(listener).toHaveBeenCalledTimes(2); view.destroy();
+  });
+  it('hides identity and recurrence comments even on the edited Live Preview line, never in source mode', async () => {
+    const { owner, task } = await fixture(); const doc = `- [ ] Test task <!--organized:${task.id}--> <!--organized:repeat-->`;
+    vi.spyOn(owner, 'onEditorUpdate').mockImplementation(() => undefined);
+    const state = EditorState.create({ doc, selection: { anchor: 8 }, extensions: [editorLivePreviewField, editorExtension(owner)] });
+    const view = new EditorView({ state, parent: createDiv() }); expect(view.dom.textContent).not.toContain(task.id); expect(view.dom.textContent).not.toContain('organized:repeat'); expect(view.state.doc.toString()).toBe(doc);
+    const atomic = state.facet(EditorView.atomicRanges)[0]; expect(atomic(view).size).toBe(2); expect(atomic({ plugin: () => null } as any).size).toBe(0); view.destroy();
+    const source = new EditorView({ state: EditorState.create({ doc, extensions: editorExtension(owner) }), parent: createDiv() }); expect(source.dom.textContent).toContain(task.id); source.destroy();
   });
 });

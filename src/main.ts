@@ -95,12 +95,16 @@ export default class Organized extends Plugin {
     return line ? { file, line } : null;
   }
   followCursor(): void {
-    const active = this.activeEditor(); const next = active ? this.current(active.editor, active.file) : null;
+    const active = this.activeEditor();
+    // Focusing the inspector is not leaving the selected task. Only an actual
+    // Markdown editor cursor change can replace its context.
+    if (!active) return;
+    const next = this.current(active.editor, active.file);
     const changed = (next?.line.id ?? null) !== (this.context?.line.id ?? null);
     this.context = next;
     if (changed) {
       this.selectedTaskId = next?.line.id ?? null;
-      this.eachView(view => { view.origin = "Editor cursor"; void view.render().catch(report); });
+      this.eachView(view => { view.origin = "Editor cursor"; view.module = ""; void view.render().catch(report); });
     }
   }
   eachView(callback: (view: OrganizedInspectorView) => void): void {

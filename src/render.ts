@@ -109,14 +109,18 @@ export function editorExtension(owner: Organized): Extension {
       const tasks = parseTasks(view.state.doc.toString());
       for (const task of tasks) {
         const line = view.state.doc.line(task.line + 1);
-        if (!view.visibleRanges.some(r => r.from <= line.to && r.to >= line.from) || (view.state.selection.main.head >= line.from && view.state.selection.main.head <= line.to)) continue;
-        if (task.marker === ">") builder.add(line.from, line.from, Decoration.line({ class: "organized-forwarded" }));
-        if (GLYPHS[task.marker]) builder.add(line.from + task.prefix.length - 1, line.from + task.prefix.length + 2, Decoration.replace({ widget: new IconWidget(task.marker) }));
+        if (!view.visibleRanges.some(r => r.from <= line.to && r.to >= line.from)) continue;
+        const editing = view.state.selection.main.head >= line.from && view.state.selection.main.head <= line.to;
+        if (!editing && task.marker === ">") builder.add(line.from, line.from, Decoration.line({ class: "organized-forwarded" }));
+        if (!editing && GLYPHS[task.marker]) builder.add(line.from + task.prefix.length - 1, line.from + task.prefix.length + 2, Decoration.replace({ widget: new IconWidget(task.marker) }));
+        // Live Preview used to reveal the whole ID whenever its line had the
+        // caret. Identity is implementation metadata, not editable preview UI.
+        for (const comment of task.raw.matchAll(/<!--organized:(?:[a-zA-Z0-9_-]{8,80}|repeat)-->/g)) builder.add(line.from + comment.index, line.from + comment.index + comment[0].length, Decoration.replace({}));
       }
       return builder.finish();
     }
     update(update: ViewUpdate): void { if (update.docChanged || update.viewportChanged || update.selectionSet || update.transactions.some(t => t.effects.some(e => e.is(refreshEffect)))) this.decorations = this.build(update.view); }
-  }, { decorations: value => value.decorations });
+  }, { decorations: value => value.decorations, provide: plugin => EditorView.atomicRanges.of(view => view.plugin(plugin)?.decorations ?? Decoration.none) });
   return [field, icons, EditorView.updateListener.of(update => owner.onEditorUpdate(update))];
 }
 function build(state: EditorState, owner: Organized): DecorationSet {

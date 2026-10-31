@@ -16,6 +16,7 @@ Browser CI uses supported Ubuntu 24.04: Playwright 1.58.2 cannot install its sys
 4. Type `- [ ] `, search/create/cancel in the native picker; paste a block and verify no picker appears. Test stale-context cancellation.
 5. Try all planned markers, independent timers, recurrence, project links, scheduling/rescheduling, historical propagation and undo after a concurrent edit.
 6. Verify properties in Reading and Live Preview, untouched source, dark/light themes and RTL.
+   Confirm IDs stay hidden on the active Live Preview line but remain visible in source mode. Request one information card, scroll/edit the sidebar without losing the task, and check full settings labels after a restart.
 7. On real iOS/Android, verify BRAT installation, narrow sidebar, scrolling, picker keyboard ownership, touch controls, background/restart timer persistence and unload cleanup.
 
 Real-device interaction cannot be certified by desktop emulation. Stable promotion requires the owner's real-device pass and explicit approval. The first beta is for an isolated test vault, not an assertion of stable/device certification.
@@ -27,3 +28,11 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Type-blind cloud-review reproduction: zero errors; unresolved-host-type warnings are reported separately, not suppressed in real typed lint.
 - Real Chromium and WebKit: Calendar/Task/Projects at 240, 320, 390 and 768 pixels, light/dark and LTR/RTL; overflow canary detected. Internal screenshots inspected. These use actual plugin components with a host shim, not the Obsidian application.
 - The desktop CLI could not connect to a running Obsidian instance. No personal vault was opened or modified; live desktop and real iOS/Android acceptance are still manual beta checks.
+
+## Second-beta verification (2026-10-31)
+
+- 115 behavioral/policy tests; all 13 shipped TypeScript files retain 100% statements, branches, functions and lines.
+- Chromium and WebKit cover the actual Calendar/Task/Projects components, modern/legacy settings and real CodeMirror Live Preview/source at 240, 320, 390 and 768 pixels, light/dark and LTR/RTL. Host stress styles reproduce oversized mobile buttons and truncated labels; checks enforce compact calendar cells, contextual cards, readable labels and hidden-preview/visible-source IDs. Overflow canary detected; screenshots inspected.
+- Sidebar tests retain selection without an active editor, edit favorite/title controls, avoid repeated module scrolling and preserve external editor focus.
+- Build, typed lint, CSS lint and dead-code checks passed. Type-blind cloud parity reports zero errors; unresolved-host-type warnings remain visible rather than suppressed.
+- These checks use a host shim, not a live Obsidian instance. No personal vault was modified; real-device acceptance is still required before stable promotion.

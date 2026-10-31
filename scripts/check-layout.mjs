@@ -13,23 +13,43 @@ try {
   const page = await browser.newPage(); const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.setContent('<!doctype html><html><head></head><body><main id="app"></main></body></html>');
   await page.addStyleTag({ content: hostCss + css });
+  // Reproduce hostile mobile host defaults from the reported screenshots,
+  // rather than testing only an unstyled desktop DOM.
+  await page.addStyleTag({ content: '.is-mobile button { border-radius: 999px; padding: 18px 24px; font-size: 20px; box-shadow: 0 2px 4px #0005; } .setting-item-name { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; } .setting-item-control input[type=checkbox] { inline-size: 50px; block-size: 28px; } .setting-item-control { flex-shrink: 0; }' });
   await page.addScriptTag({ content: bundle.outputFiles[0].text, type: 'module' });
   await page.waitForFunction(() => typeof window.scene === 'function');
   for (const width of [240, 320, 390, 768]) for (const dark of [false, true]) for (const rtl of [false, true]) {
     await page.setViewportSize({ width, height: 900 });
-    await page.evaluate(({ dark, rtl }) => { document.body.className = dark ? 'theme-dark' : 'theme-light'; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, { dark, rtl });
-    for (const tab of ['Calendar', 'Task', 'Projects']) {
+    await page.evaluate(({ dark, rtl }) => { document.body.className = `${dark ? 'theme-dark' : 'theme-light'} is-mobile`; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, { dark, rtl });
+    for (const tab of ['Calendar', 'Task', 'Projects', 'Settings', 'LegacySettings', 'LivePreview', 'Source']) {
       await page.evaluate(tab => window.scene(tab), tab);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       if (overflow) throw Error(`${engine}: horizontal overflow at ${width}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
       const calendar = page.locator('.organized-calendar button');
       if (tab === 'Calendar' && await calendar.count() !== 42) throw Error('Calendar is not the real 42-cell inspector');
+      if (tab === 'Calendar') {
+        const height = await calendar.first().evaluate(el => el.getBoundingClientRect().height);
+        if (height > 44) throw Error('Mobile theme inflated calendar cells');
+      }
+      if (tab === 'Task') {
+        const cards = await page.locator('.organized-card-title').allTextContents();
+        if (cards.join(',') !== 'Information' || await page.locator('.organized-view .setting-item').count()) throw Error('Fresh task inspector exposed unrelated fields or native settings rows');
+      }
+      if (tab.endsWith('Settings')) {
+        if (await page.locator('.setting-item .setting-item').count()) throw Error('Settings are nested inside a native setting row');
+        const clipped = await page.locator('.organized-setting-row .setting-item-name').evaluateAll(elements => elements.some(el => el.scrollWidth > el.clientWidth + 1));
+        if (clipped) throw Error(`Unreadable clipped setting labels at ${width}`);
+      }
+      if (tab === 'LivePreview' || tab === 'Source') {
+        const visible = await page.locator('.cm-content').innerText();
+        if (visible.includes('organized:') !== (tab === 'Source')) throw Error('Task identity source/Live Preview separation regressed');
+      }
       if (width === 320 && !rtl) await page.screenshot({ path: `test-results/${engine}-${tab.toLowerCase()}-${dark ? 'dark' : 'light'}.png`, fullPage: true });
     }
   }
   // Canary: a deliberately oversized child MUST be detected by the same probe.
-  await page.addStyleTag({ content: '.organized-view { inline-size: 2000px; }' });
+  await page.addStyleTag({ content: '#app { inline-size: 2000px; }' });
   if (!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1))) throw Error('Overflow canary was invisible: layout gate cannot detect its defect');
   if (errors.length) throw Error(errors.join('\n'));
-  console.log(`${engine}: actual Calendar/Task/Projects UI, 4 widths × light/dark × LTR/RTL; overflow canary detected.`);
+  console.log(`${engine}: sidebar, modern/legacy settings and real CM Live Preview/source; 4 widths × light/dark × LTR/RTL; overflow canary detected.`);
 } finally { await browser.close(); }

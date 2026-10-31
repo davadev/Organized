@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
 import { Setting, Notice } from "./__mocks__/obsidian";
-import { OrganizedSettingsTab } from "../settings";
+import { OrganizedSettingsTab, PROPERTY_LABELS } from "../settings";
 import { DEFAULT_SETTINGS, DISPLAY_PROPERTIES } from "../model";
 import { harness } from "./harness";
 
@@ -21,8 +21,9 @@ describe('settings completeness and validation', () => {
     const select = (name: string, value: string) => { const c = controls(name); c.selectEl.value = value; c.selectEl.dispatchEvent(new Event('change')); };
     select('Missing sections', 'ask'); expect(owner.settings.missingSection).toBe('ask'); select('Missing sections', 'recreate'); expect(owner.settings.missingSection).toBe('recreate');
     select('Priority sort scope', 'none'); expect(owner.settings.sortScope).toBe('none');
-    for (const p of DISPLAY_PROPERTIES) { controls(p.replace(/_/g, ' ')).toggle(); expect(owner.settings.displayProperties).toContain(p); controls(p.replace(/_/g, ' ')).toggle(); expect(owner.settings.displayProperties).not.toContain(p); }
+    for (const p of DISPLAY_PROPERTIES) { controls(PROPERTY_LABELS[p]).toggle(); expect(owner.settings.displayProperties).toContain(p); controls(PROPERTY_LABELS[p]).toggle(); expect(owner.settings.displayProperties).not.toContain(p); }
     expect(owner.saveSettings).toHaveBeenCalled();
-    const definitions = tab.getSettingDefinitions(); expect(definitions).toHaveLength(1); const setting = new Setting(createDiv()); (definitions[0] as any).render(setting); expect(setting.settingEl.querySelectorAll('.setting-item').length).toBeGreaterThan(10);
+    const definitions = tab.getSettingDefinitions() as any[]; expect(definitions).toHaveLength(4);
+    for (const group of definitions) for (const row of group.items) { const setting = new Setting(createDiv()); row.render(setting); expect(setting.settingEl.classList.contains('organized-setting-row')).toBe(true); expect(setting.settingEl.querySelector('.setting-item')).toBeNull(); }
   });
 });

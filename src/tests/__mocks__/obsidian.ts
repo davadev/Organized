@@ -159,6 +159,7 @@ export class Setting {
     this.controlEl = (hasDom() ? document.createElement("div") : {}) as HTMLElement;
     if (hasDom()) {
       this.settingEl.className = "setting-item";
+      this.controlEl.className = "setting-item-control";
       this.infoEl = document.createElement('div'); this.infoEl.className = 'setting-item-info'; this.nameEl = document.createElement('div'); this.nameEl.className = 'setting-item-name'; this.descEl = document.createElement('div'); this.descEl.className = 'setting-item-description'; this.infoEl.append(this.nameEl, this.descEl); this.settingEl.appendChild(this.infoEl);
       this.settingEl.appendChild(this.controlEl);
       if (isNode(containerEl)) containerEl.appendChild(this.settingEl);

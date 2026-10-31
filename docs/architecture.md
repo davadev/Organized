@@ -10,7 +10,7 @@ Task recognition uses a real Lezer Markdown tree, excludes YAML, fenced/indented
 
 - The default storage folder is **Tasks**, not `.tasks`. Obsidian does not index dot-prefixed folders through Vault/FileManager; a hidden default would make tasks inaccessible to the native frontmatter API and ordinary Markdown editing. Hidden task storage is rejected rather than silently bypassing the host API. No existing files are moved automatically.
 - Core Daily Notes exposes no public configuration getter. Match the custom folder/format to the core plugin. No undocumented internal settings are inspected.
-- Minimum app version is 1.7.2 for `workspace.revealLeaf` and deferred views. Classic settings remain usable on older supported builds; modern settings search uses a compatible custom definition.
+- Minimum app version is 1.7.2 for `workspace.revealLeaf` and deferred views. Classic settings remain usable on older supported builds; modern settings search uses grouped individual row definitions shared with the classic renderer.
 - Calendar Plus informed the month grid, adjacent dates and selected/today states; native DOM replaces Svelte. No Calendar Plus implementation was copied.
 
 ## Conflict policy
@@ -18,6 +18,8 @@ Task recognition uses a real Lezer Markdown tree, excludes YAML, fenced/indented
 All actions run through a per-plugin serial queue. Background edits compare exact previously read content inside `Vault.process`; active edits compare the Editor buffer and use one minimal transaction. A changed note is preserved and reported. This is optimistic, not a cross-device distributed transaction: sync tools can still replace a file after a successful local write. Keep vault backups and inspect sync conflicts. Multi-file actions may partially succeed; canonical metadata and linked IDs support explicit repair. Task files are never automatically deleted as rollback.
 
 Status propagates only to today/future daily notes and undated references; earlier daily notes stay historical. Recurring dates are independent and the shared record stays open. Titles are canonical across all dates. Generated properties never enter source. References build lazily on first request; the index is disposable.
+
+Inspector focus is not a cursor-context change: an absent active Markdown editor preserves the selected task. Actual editor context changes replace it. Optional inspector cards require populated metadata or an explicitly requested module; references load when expanded. Live Preview replacement decorations hide identity/recurrence comments even on the active line and expose atomic cursor ranges; source mode remains unchanged.
 
 Crash state and settings snapshots live under the plugin folder, not in vault notes. Newer data pauses writes. Settings restore is queued for next restart; current data is snapshotted before restore. Retention preserves the newest stable-written backup in addition to recent snapshots. Backups cover settings only, not user task/note Markdown. Sync can restore newer data again; coordinate versions across devices before resuming sync.
 
