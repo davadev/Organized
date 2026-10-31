@@ -94,6 +94,23 @@ describe('plugin lifecycle and user-only editor actions', () => {
     editor.setCursor({ line: 1, ch: 0 }); plugin.followCursor(); expect(plugin.selectedTaskId).toBeNull(); h.clearActive(); plugin.followCursor(); expect(render).toHaveBeenCalled();
     plugin.refresh(); expect(plugin.revision).toBeGreaterThan(0);
   });
+  it('deletes a task only after confirmation and returns cleared views to projects', async () => {
+    const { h, plugin } = await loaded(); h.layout[0](); const task = await plugin.repo.create('Delete'); const view = new OrganizedInspectorView({ app: h.app } as any, plugin);
+    view.tab = 'Task'; view.module = 'Information'; h.raw.workspace.getLeavesOfType.mockReturnValue([{ view }]);
+    plugin.selectedTaskId = task.id; plugin.context = { file: { path: 'Note.md' } as any, line: parseTasks(`- [ ] Delete <!--organized:${task.id}-->`)[0] };
+    const confirm = vi.spyOn(plugin, 'confirm').mockResolvedValue(false); await plugin.deleteTask(task.id);
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Delete'), 'Delete task', 'Delete'); expect(plugin.selectedTaskId).toBe(task.id); expect(view.tab).toBe('Task');
+    confirm.mockResolvedValue(true);
+    const trash = h.raw.fileManager.trashFile.getMockImplementation()!;
+    h.raw.fileManager.trashFile.mockImplementationOnce(async (file: any) => { await trash(file); h.events.delete[0](file); });
+    const refresh = vi.spyOn(plugin, 'refresh'); await plugin.deleteTask(task.id); await flush();
+    expect(plugin.selectedTaskId).toBeNull(); expect(plugin.context).toBeNull(); expect(view.tab).toBe('Projects'); expect(view.module).toBe(''); expect(refresh).toHaveBeenCalled();
+    expect(Notice.instances.map(note => String(note.message)).join(' ')).not.toContain('Missing task');
+    const keep = await plugin.repo.create('Keep'); const other = await plugin.repo.create('Other'); plugin.selectedTaskId = keep.id;
+    plugin.context = { file: { path: 'Note.md' } as any, line: parseTasks(`- [ ] Keep <!--organized:${keep.id}-->`)[0] };
+    await plugin.deleteTask(other.id); expect(plugin.selectedTaskId).toBe(keep.id); expect(plugin.context?.line.id).toBe(keep.id);
+    await plugin.deleteTask('missing1');
+  });
   it('picker cancel writes nothing, explicit choices attach, stale context creates no record, duplicate has a new ID', async () => {
     const { h, plugin } = await loaded(); const file: any = await h.add('Note.md', '- [ ] Draft'); const editor = h.setActive(file);
     await plugin.pickTask(editor as any, file); let picker = Modal.instances.at(-1) as TaskPicker; expect(picker).toBeInstanceOf(TaskPicker); picker.close(); expect(await plugin.repo.list()).toHaveLength(0);

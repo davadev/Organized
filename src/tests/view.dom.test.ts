@@ -20,6 +20,9 @@ async function fixture() {
 const button = (host: HTMLElement, label: string) => Array.from(host.querySelectorAll('button')).find(b => b.textContent === label || b.getAttribute('aria-label') === label)!;
 const choose = (view: OrganizedInspectorView, label: string, value: string) => { const select = view.contentEl.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!; select.value = value; select.dispatchEvent(new Event('change')); };
 const titles = (view: OrganizedInspectorView) => Array.from(view.contentEl.querySelectorAll('.organized-card-title')).map(el => el.textContent);
+const card = (view: OrganizedInspectorView, title: string) => Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-list-card')).find(el => el.querySelector('.organized-list-title')?.textContent === title)!;
+const openCard = (view: OrganizedInspectorView, title: string) => card(view, title).querySelector<HTMLButtonElement>('.organized-list-open')!;
+const listed = (view: OrganizedInspectorView) => Array.from(view.contentEl.querySelectorAll('.organized-list-title')).map(el => el.textContent);
 describe('compact calendar and contextual task inspector', () => {
   it('provides accessible compact month navigation, keyboard dates and explicit creation', async () => {
     const { owner, view, raw, repo } = await fixture(); expect(view.getViewType()).toBe(VIEW_TYPE); expect(view.getDisplayText()).toBe('Organized'); expect(view.getIcon()).toBe('calendar-check');
@@ -78,13 +81,34 @@ describe('compact calendar and contextual task inspector', () => {
     const refs = Array.from(view.contentEl.querySelectorAll('details')).at(-1)!; refs.open = true; refs.dispatchEvent(new Event('toggle')); await flush(); expect(view.contentEl.textContent).toContain('No references found'); refs.open = false; refs.dispatchEvent(new Event('toggle')); expect(view.referencesOpen).toBe(false);
   });
   it('sorts project/favorite browsing, restores cancellation and clears stale module selection', async () => {
-    const { owner, view, repo } = await fixture(); const low = await repo.create('Low'); const high = await repo.create('High'); const canceled = await repo.create('Canceled');
-    await repo.update(low.id, t => ({ ...t, priority: 'low', starred: true, projects: ['Project.md'] })); await repo.update(high.id, t => ({ ...t, priority: 'high', starred: true, projects: ['Project.md'] })); await repo.update(canceled.id, t => ({ ...t, status: 'canceled' }));
-    view.tab = 'Projects'; await view.render(); const labels = Array.from(view.contentEl.querySelectorAll('button')).map(b => b.textContent); expect(labels.indexOf('High · high')).toBeLessThan(labels.indexOf('Low · low'));
-    const picker = view.contentEl.querySelector('select')!; picker.value = 'Project.md'; picker.dispatchEvent(new Event('change')); await flush(); expect(view.selectedProject).toBe('Project.md'); view.module = 'Information'; button(view.contentEl, 'High · high').click(); await flush(); expect(owner.selectedTaskId).toBe(high.id); expect(view.module).toBe(''); expect(view.origin).toBe('Projects / favorites');
-    button(view.contentEl, 'Back to projects').click(); await flush(); button(view.contentEl, 'Canceled').click(); await flush(); expect(owner.selectedTaskId).toBe(canceled.id);
+    const { owner, view, repo } = await fixture(); const low = await repo.create('Low'); const high = await repo.create('High'); const canceled = await repo.create('Canceled'); const plain = await repo.create('Plain');
+    await repo.update(plain.id, t => ({ ...t, projects: ['Project.md'] }));
+    await repo.update(low.id, t => ({ ...t, priority: 'low', starred: true, projects: ['Project.md'] })); await repo.update(high.id, t => ({ ...t, priority: 'high', starred: true, projects: ['Project.md', 'Reading list.md', 'Extra.md'], scheduled: '2026-01-02' })); await repo.update(canceled.id, t => ({ ...t, status: 'canceled' }));
+    view.tab = 'Projects'; await view.render();
+    expect(Array.from(view.contentEl.querySelectorAll('.organized-section-title')).map(el => el.textContent)).toEqual(['Favorites', 'Projects', 'Canceled']);
+    expect(Array.from(view.contentEl.querySelectorAll('.organized-count')).map(el => el.textContent)).toEqual(['2', '3', '1']);
+    expect(listed(view).indexOf('High')).toBeLessThan(listed(view).indexOf('Low'));
+    expect(card(view, 'High').querySelector('.organized-list-priority')?.textContent).toBe('high');
+    expect(card(view, 'High').querySelector('.organized-list-date')?.textContent).toBe('2026-01-02');
+    expect(card(view, 'High').querySelectorAll('.organized-chip')).toHaveLength(3);
+    expect(card(view, 'High').querySelectorAll('.organized-chip')[2].textContent).toBe('+1');
+    const picker = view.contentEl.querySelector<HTMLSelectElement>('[aria-label="Choose project"]')!; picker.value = 'Project.md'; picker.dispatchEvent(new Event('change')); await flush(); expect(view.selectedProject).toBe('Project.md'); view.module = 'Information'; openCard(view, 'High').click(); await flush(); expect(owner.selectedTaskId).toBe(high.id); expect(view.module).toBe(''); expect(view.origin).toBe('Projects / favorites');
+    button(view.contentEl, 'Back to projects').click(); await flush(); openCard(view, 'Canceled').click(); await flush(); expect(owner.selectedTaskId).toBe(canceled.id);
     view.tab = 'Projects'; await view.render(); button(view.contentEl, 'Restore').click(); await flush(); expect((await repo.read(canceled.id)).status).toBe('open');
-    view.tab = 'Projects'; await view.render(); Array.from(view.contentEl.querySelectorAll('button')).filter(b => b.textContent === 'Low · low').at(-1)!.click(); await flush(); expect(owner.selectedTaskId).toBe(low.id);
+    view.tab = 'Projects'; view.selectedProject = ''; await view.render(); openCard(view, 'Low').click(); await flush(); expect(owner.selectedTaskId).toBe(low.id);
+    view.tab = 'Projects'; await view.render(); openCard(view, 'Plain').click(); await flush(); expect(owner.selectedTaskId).toBe(plain.id);
+  });
+  it('renders empty project sections and deletes the selected task after confirmation', async () => {
+    const { owner, view, repo } = await fixture(); view.tab = 'Projects'; await view.render();
+    expect(Array.from(view.contentEl.querySelectorAll('.organized-empty')).map(el => el.textContent)).toEqual([
+      'No favorites yet. Use [*] on a task or star it in the Task tab.',
+      'No project links yet. Use [b] on a task to link its project or topic note.',
+      'No canceled tasks.',
+    ]);
+    view.selectedProject = 'Missing.md'; await view.render(); expect(view.contentEl.textContent).toContain('No tasks linked to Missing.md.');
+    view.selectedProject = ''; const task = await repo.create('Delete me'); owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render();
+    expect(button(view.contentEl, 'Delete task')).toBeTruthy();
+    const remove = vi.spyOn(owner, 'deleteTask').mockResolvedValue(); button(view.contentEl, 'Delete task').click(); await flush(); expect(remove).toHaveBeenCalledWith(task.id);
   });
   it('discards stale asynchronous task/project/reference results and re-resolves deleted links', async () => {
     const { owner, view, repo, add, files } = await fixture(); const task = await repo.create('Reference'); owner.selectedTaskId = task.id; view.tab = 'Task'; view.referencesOpen = true; await view.render(); expect(view.contentEl.textContent).toContain('No references found');

@@ -16,7 +16,7 @@ Browser CI uses supported Ubuntu 24.04: Playwright 1.58.2 cannot install its sys
 4. Type `- [ ] `, search/create/cancel in the native picker; paste a block and verify no picker appears. Test stale-context cancellation.
 5. Try all planned markers, independent timers, recurrence, project links, scheduling/rescheduling, historical propagation and undo after a concurrent edit.
 6. Verify properties in Reading and Live Preview, untouched source, dark/light themes and RTL.
-   Confirm IDs stay hidden on the active Live Preview line but remain visible in source mode. Request one information card, scroll/edit the sidebar without losing the task, and check full settings labels after a restart.
+   Confirm IDs stay hidden on the active Live Preview line but remain visible in source mode. Request one information card, scroll/edit the sidebar without losing the task, cancel a **Delete task** confirmation, then confirm one on a disposable task and check the canonical note reaches trash and linked occurrences disappear.
 7. On real iOS/Android, verify BRAT installation, narrow sidebar, scrolling, picker keyboard ownership, touch controls, background/restart timer persistence and unload cleanup.
 
 Real-device interaction cannot be certified by desktop emulation. Stable promotion requires the owner's real-device pass and explicit approval. The first beta is for an isolated test vault, not an assertion of stable/device certification.
@@ -36,3 +36,10 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Sidebar tests retain selection without an active editor, edit favorite/title controls, avoid repeated module scrolling and preserve external editor focus.
 - Build, typed lint, CSS lint and dead-code checks passed. Type-blind cloud parity reports zero errors; unresolved-host-type warnings remain visible rather than suppressed.
 - These checks use a host shim, not a live Obsidian instance. No personal vault was modified; real-device acceptance is still required before stable promotion.
+
+## Third-beta verification (2026-10-31)
+
+- 118 behavioral/policy tests; all 13 shipped TypeScript files retain 100% statements, branches, functions and lines.
+- Projects checks cover Favorites/Projects/Canceled sections, counts, labeled filtering and empty states. Task checks cover the hero, status dots, favorite/date/project metadata and the confirmed delete action, including occurrence removal, host trash and selection cleanup.
+- The information modal joins the Chromium/WebKit matrix at 240, 320, 390 and 768 pixels in light/dark and LTR/RTL. Checks enforce shared modal chrome, title integrity, an unclipped editor and no host-width overflow; the overflow canary now uses a sized host so a zero-height scene cannot mask it.
+- Build, typed lint, CSS lint, dead-code checks and cloud lint parity passed. These remain shim-based checks, not live Obsidian or real-device certification.

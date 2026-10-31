@@ -189,6 +189,10 @@ export class Modal {
     Modal.instances.push(this);
     this.app = app;
     if (hasDom()) {
+      this.containerEl.className = "modal-container";
+      this.modalEl.className = "modal";
+      this.titleEl.className = "modal-title";
+      this.contentEl.className = "modal-content";
       this.containerEl.appendChild(this.modalEl);
       this.modalEl.appendChild(this.titleEl);
       this.modalEl.appendChild(this.contentEl);

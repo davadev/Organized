@@ -37,6 +37,7 @@ export function harness() {
       processFrontMatter: vi.fn(async (file: TFile, fn: (fm: Record<string, unknown>) => void) => {
         const { frontmatter, body } = splitNote(texts.get(file.path)!); fn(frontmatter); texts.set(file.path, `---\n${stringifyYaml(frontmatter)}---\n${body}`);
       }),
+      trashFile: vi.fn(async (file: TFile) => { texts.delete(file.path); files.delete(file.path); }),
     },
     workspace: {
       on, onLayoutReady: (fn: () => void) => layout.push(fn),

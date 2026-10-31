@@ -12,7 +12,7 @@ Open **Settings → Organized** and match **Daily-note folder** and **Filename f
 
 Open the ribbon calendar or run **Organized: Open inspector**. Its tabs are Calendar, Task and Projects. Selecting a day explicitly opens/creates its daily note. Merely browsing months creates nothing.
 
-The Task tab keeps your selection while you scroll or edit the sidebar. Optional cards show populated details or the section you request with a shortcut or **Add details…**; history and references are collapsed. Beta 2 also fixes mobile settings labels. Fully restart Obsidian after updating to refresh the setting groups.
+The Task tab keeps your selection while you scroll or edit the sidebar. Optional cards show populated details or the section you request with a shortcut or **Add details…**; history and references are collapsed. Beta 3 gives the inspector a compact accent-edged hero, semantic status dots and matching modal surfaces; the Projects tab is grouped into Favorites, Projects and Canceled cards with a project filter and counts. Use **Delete task** on the Task tab to confirm removal of the canonical note and all linked occurrences. Fully restart Obsidian after updating to refresh the setting groups.
 
 ## Link or create tasks
 

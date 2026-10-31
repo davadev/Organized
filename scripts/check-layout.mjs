@@ -21,7 +21,7 @@ try {
   for (const width of [240, 320, 390, 768]) for (const dark of [false, true]) for (const rtl of [false, true]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(({ dark, rtl }) => { document.body.className = `${dark ? 'theme-dark' : 'theme-light'} is-mobile`; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, { dark, rtl });
-    for (const tab of ['Calendar', 'Task', 'Projects', 'Settings', 'LegacySettings', 'LivePreview', 'Source']) {
+    for (const tab of ['Calendar', 'Task', 'Projects', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'InformationModal']) {
       await page.evaluate(tab => window.scene(tab), tab);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       if (overflow) throw Error(`${engine}: horizontal overflow at ${width}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
@@ -34,6 +34,21 @@ try {
       if (tab === 'Task') {
         const cards = await page.locator('.organized-card-title').allTextContents();
         if (cards.join(',') !== 'Information' || await page.locator('.organized-view .setting-item').count()) throw Error('Fresh task inspector exposed unrelated fields or native settings rows');
+        if (!(await page.locator('.organized-task-hero .organized-task-title').count())) throw Error('Task inspector is missing its titled hero');
+        if (!(await page.locator('.organized-task-actions .organized-danger').count())) throw Error('Task inspector is missing its delete action');
+      }
+      if (tab === 'Projects') {
+        const sections = await page.locator('.organized-section-title').allTextContents();
+        if (sections.join(',') !== 'Favorites,Projects,Canceled') throw Error(`Projects tab lost its sections: ${sections.join(',')}`);
+        if (await page.locator('.organized-list-card').count() < 2) throw Error('Projects tab did not render task cards');
+        if (await page.locator('.organized-view .setting-item').count()) throw Error('Projects tab exposed a native settings row');
+      }
+      if (tab === 'InformationModal') {
+        const window = page.locator('.organized-modal-window'); if (await window.count() !== 1) throw Error('Information modal is missing the shared chrome');
+        const box = await window.boundingBox(); if (!box) throw Error('Information modal is not visible');
+        if (box.width > width - 8) throw Error(`Information modal overflows its ${width}px host: ${box.width}`);
+        const title = await page.locator('.organized-modal-window .modal-title').innerText(); if (title !== 'Information') throw Error(`Information modal title regressed: ${title}`);
+        const clipped = await page.locator('.organized-modal-window textarea').evaluate(el => el.scrollWidth > el.clientWidth + 1); if (clipped) throw Error('Information modal editor is clipped');
       }
       if (tab.endsWith('Settings')) {
         if (await page.locator('.setting-item .setting-item').count()) throw Error('Settings are nested inside a native setting row');
@@ -48,7 +63,7 @@ try {
     }
   }
   // Canary: a deliberately oversized child MUST be detected by the same probe.
-  await page.addStyleTag({ content: '#app { inline-size: 2000px; }' });
+  await page.addStyleTag({ content: '#app { inline-size: 2000px; min-block-size: 100px; }' });
   if (!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1))) throw Error('Overflow canary was invisible: layout gate cannot detect its defect');
   if (errors.length) throw Error(errors.join('\n'));
   console.log(`${engine}: sidebar, modern/legacy settings and real CM Live Preview/source; 4 widths × light/dark × LTR/RTL; overflow canary detected.`);
