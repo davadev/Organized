@@ -5,6 +5,7 @@
 - Make Markdown links in task titles and task-note sections open reliably from the inspector.
 - Group task details into one shared surface and tighten narrow-screen Settings rows to remove excess whitespace.
 - Keep recurring `[f]` task occurrences out of automatic forwarding.
+- Make the mobile checkbox toolbar open the task picker reliably when it inserts a new blank todo, while leaving pasted checkboxes untouched.
 
 ## 0.1.0-beta.5
 

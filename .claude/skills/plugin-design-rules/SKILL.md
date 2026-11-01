@@ -23,6 +23,7 @@ description: Starter design and code rules for an Obsidian plugin that each prev
 - Never auto-download large data at startup (a startup download once caused an iOS crash loop).
 - Node-only modules (`fs`, `path`, `electron`) require `"isDesktopOnly": true`; `check-release` enforces it.
 - Do not raise `minAppVersion` or use newer API without checking the iOS install path.
+- Mobile editor toolbar commands may dispatch CodeMirror changes without a `userEvent`; support only the exact one-line blank-checkbox insertion as a fallback, while continuing to ignore paste/drop/undo/redo.
 - Use `normalizePath()` for every vault path; use `app.vault` / `adapter` APIs, never hardcoded absolute paths.
 - Keep the load path light: do risky or slow work after the layout is ready, and keep the crash-loop guard (`src/crashGuard.ts`) in front of it.
 
