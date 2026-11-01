@@ -5,7 +5,7 @@ import Organized from "../main";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
 import { harness } from "./harness";
 import { Modal, Notice } from "./__mocks__/obsidian";
-import { ConfirmModal, DatePicker, PriorityPicker, ProjectPicker, TaskPicker, TextModal } from "../modals";
+import { ConfirmModal, DatePicker, PriorityPicker, ProjectPicker, TaskPicker } from "../modals";
 import { parseTasks } from "../codec";
 import { OrganizedInspectorView, VIEW_TYPE } from "../view";
 import { localDate } from '../model';
@@ -47,7 +47,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
   });
   it('registers capabilities only, defers vault-create handling and cleans durable crash state', async () => {
     const { h, plugin, stub } = await loaded();
-    expect(stub.commands).toHaveLength(5); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
+    expect(stub.commands).toHaveLength(6); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
     const factory = stub.views.get(VIEW_TYPE); expect(factory({ app: h.app })).toBeInstanceOf(OrganizedInspectorView);
     h.layout[0](); expect(h.events.create).toHaveLength(1);
     const created = vi.spyOn(plugin.service, 'onDailyCreated').mockResolvedValue(); const index = vi.spyOn(plugin.service, 'index').mockResolvedValue(); const reconcile = vi.spyOn(plugin.service, 'reconcile').mockResolvedValue(); const refresh = vi.spyOn(plugin, 'refresh').mockImplementation(() => undefined);
@@ -57,8 +57,9 @@ describe('plugin lifecycle and user-only editor actions', () => {
     const open = vi.spyOn(plugin, 'openInspector').mockResolvedValue(); stub.ribbon[0].cb(); stub.commands[0].callback(); await flush(); expect(open).toHaveBeenCalledTimes(2);
     open.mockRejectedValueOnce(Error('open failed')); stub.ribbon[0].cb(); await flush(); expect(Notice.instances.at(-1)?.message).toContain('open failed');
     const pick = vi.spyOn(plugin, 'pickTask').mockResolvedValue(); stub.commands[1].editorCallback({}, { file }); stub.commands[2].editorCallback({}, { file }); stub.commands[1].editorCallback({}, {}); stub.commands[2].editorCallback({}, {}); await flush(); expect(pick).toHaveBeenCalledTimes(2);
-    const undo = vi.spyOn(plugin.service, 'undo').mockResolvedValue(); stub.commands[3].callback(); await flush(); expect(undo).toHaveBeenCalledOnce();
-    const confirm = vi.spyOn(plugin, 'confirm').mockResolvedValue(false); const restore = vi.spyOn(plugin.safety, 'queueCompatibleRestore').mockResolvedValue(); stub.commands[4]?.name; // Find by stable id, not menu order.
+    const convert = vi.spyOn(plugin, 'convertTodos').mockResolvedValue(); stub.commands.find((c: any) => c.id === 'convert-todos').editorCallback({}, { file }); stub.commands.find((c: any) => c.id === 'convert-todos').editorCallback({}, {}); await flush(); expect(convert).toHaveBeenCalledExactlyOnceWith(file);
+    const undo = vi.spyOn(plugin.service, 'undo').mockResolvedValue(); stub.commands.find((c: any) => c.id === 'undo').callback(); await flush(); expect(undo).toHaveBeenCalledOnce();
+    const confirm = vi.spyOn(plugin, 'confirm').mockResolvedValue(false); const restore = vi.spyOn(plugin.safety, 'queueCompatibleRestore').mockResolvedValue(); // Find restore by stable id, not menu order.
     stub.commands.find((c: any) => c.id === 'restore-settings').callback(); await flush(); expect(restore).not.toHaveBeenCalled(); confirm.mockResolvedValue(true); stub.commands.find((c: any) => c.id === 'restore-settings').callback(); await flush(); expect(restore).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(30000); expect(JSON.parse(h.texts.get('.obsidian/plugins/organized/crash-state.json')!).counter).toBe(0);
     plugin.onunload(); await flush(); expect(JSON.parse(h.texts.get('.obsidian/plugins/organized/crash-state.json')!).counter).toBe(0);
@@ -79,7 +80,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
   it('opens a fresh view factory, reuses a leaf and tolerates deferred non-custom views', async () => {
     const { h, plugin } = await loaded(); await expect(plugin.openInspector()).rejects.toThrow('Cannot open');
     const leaf: any = { app: h.app, setViewState: vi.fn(async () => undefined) }; const view = new OrganizedInspectorView(leaf, plugin); leaf.view = view; vi.spyOn(view, 'render').mockResolvedValue();
-    h.raw.workspace.getRightLeaf.mockReturnValue(leaf); await plugin.openInspector('Task', 'Information'); expect(leaf.setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE, active: true }); expect(view.tab).toBe('Task'); expect(view.module).toBe('Information');
+    h.raw.workspace.getRightLeaf.mockReturnValue(leaf); await plugin.openInspector('Task', 'Description'); expect(leaf.setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE, active: true }); expect(view.tab).toBe('Task'); expect(view.module).toBe('Description'); expect(view.editingModule).toBe('Description');
     h.raw.workspace.getLeavesOfType.mockReturnValue([leaf, { view: {} }]); await plugin.openInspector(); expect(h.raw.workspace.revealLeaf).toHaveBeenCalledWith(leaf);
     const seen = vi.fn(); plugin.eachView(seen); expect(seen).toHaveBeenCalledExactlyOnceWith(view);
     h.raw.workspace.getLeavesOfType.mockReturnValue([{ view: {} }]); await plugin.openInspector();
@@ -96,7 +97,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
   });
   it('deletes a task only after confirmation and returns cleared views to projects', async () => {
     const { h, plugin } = await loaded(); h.layout[0](); const task = await plugin.repo.create('Delete'); const view = new OrganizedInspectorView({ app: h.app } as any, plugin);
-    view.tab = 'Task'; view.module = 'Information'; h.raw.workspace.getLeavesOfType.mockReturnValue([{ view }]);
+    view.tab = 'Task'; view.module = 'Description'; h.raw.workspace.getLeavesOfType.mockReturnValue([{ view }]);
     plugin.selectedTaskId = task.id; plugin.context = { file: { path: 'Note.md' } as any, line: parseTasks(`- [ ] Delete <!--organized:${task.id}-->`)[0] };
     const confirm = vi.spyOn(plugin, 'confirm').mockResolvedValue(false); await plugin.deleteTask(task.id);
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Delete'), 'Delete task', 'Delete'); expect(plugin.selectedTaskId).toBe(task.id); expect(view.tab).toBe('Task');
@@ -121,18 +122,20 @@ describe('plugin lifecycle and user-only editor actions', () => {
     editor.setValue('prose'); await expect(plugin.pickTask(editor as any, file)).rejects.toThrow('Markdown task');
     const task = (await plugin.repo.list())[0]; editor.setValue('- [ ] existing'); await plugin.pickTask(editor as any, file); picker = Modal.instances.at(-1) as TaskPicker; picker.onChooseSuggestion(task); picker.close(); await flush(); expect(parseTasks(editor.getValue())[0].id).toBe(task.id);
   });
-  it('routes date, priority, information, source and project markers with cancellation preserving markers', async () => {
+  it('routes date, priority, description, source and project markers with cancellation preserving markers', async () => {
     const { h, plugin } = await loaded(); const task = await plugin.repo.create('Task'); const file: any = await h.add('Note.md', '');
     const context = (marker: string) => { const text = `- [${marker}] Task <!--organized:${task.id}-->`; h.texts.set(file.path, text); return { file, line: parseTasks(text)[0] }; };
     const schedule = vi.spyOn(plugin.service, 'schedule').mockResolvedValue(); await plugin.trigger(context('<')); let modal = Modal.instances.at(-1) as DatePicker; expect(modal).toBeInstanceOf(DatePicker); await modal.choose('2026-01-01'); expect(schedule).toHaveBeenCalled(); modal.close();
     const priority = vi.spyOn(plugin.service, 'priority').mockResolvedValue(); await plugin.trigger(context('!')); const picker = Modal.instances.at(-1) as PriorityPicker; await picker.choose('high'); expect(priority).toHaveBeenCalled(); picker.close();
-    const open = vi.spyOn(plugin, 'openInspector').mockResolvedValue(); const clean = vi.spyOn(plugin.service, 'clean').mockResolvedValue(); for (const marker of ['i', 'I', '?']) await plugin.trigger(context(marker)); expect(open.mock.calls.map(c => c[1])).toEqual(['Information', 'Idea', 'Question']); expect(clean).toHaveBeenCalledTimes(3);
-    await plugin.trigger(context('"')); const source = Modal.instances.at(-1) as TextModal; expect(source).toBeInstanceOf(TextModal); await source.save('- [Source](https://example.com)'); expect(await plugin.repo.readText(plugin.repo.file(plugin.repo.taskPath(task.id))!)).toContain('https://example.com'); source.close();
+    const open = vi.spyOn(plugin, 'openInspector').mockResolvedValue(); const clean = vi.spyOn(plugin.service, 'clean').mockResolvedValue(); for (const marker of ['i', 'I', '?']) await plugin.trigger(context(marker)); expect(open.mock.calls.map(c => c[1])).toEqual(['Description', 'Idea', 'Question']); expect(clean).toHaveBeenCalledTimes(3);
+    await plugin.trigger(context('"')); expect(open).toHaveBeenLastCalledWith('Task', 'Sources'); expect(clean).toHaveBeenCalledTimes(4);
     await plugin.trigger(context('b')); const projects = Modal.instances.at(-1) as ProjectPicker; await projects.save(['Project.md']); expect((await plugin.repo.read(task.id)).projects).toEqual(['Project.md']); projects.close();
     await plugin.trigger(context('*')); expect((await plugin.repo.read(task.id)).starred).toBe(true);
     await plugin.trigger({ file, line: parseTasks('- [k] visual')[0] }); expect(await plugin.repo.list()).toHaveLength(1);
-    const missing = harness(); const p = new Organized(missing.app, {} as any); (p as any).repo = missing.repo; await expect(p.editModule('missing1', 'Sources')).rejects.toThrow('missing');
-    const canonical = plugin.repo.file(plugin.repo.taskPath(task.id))!; await plugin.editModule(task.id, 'Sources'); const edit = Modal.instances.at(-1) as TextModal; expect(edit.value).toContain('https://example.com'); await edit.save('$1 replacement'); expect(await plugin.repo.readText(canonical)).toContain('$1 replacement'); edit.close();
+    const missing = harness(); const p = new Organized(missing.app, {} as any); (p as any).repo = missing.repo; await expect(p.saveModule('missing1', 'Sources', 'text')).rejects.toThrow('missing');
+    const canonical = plugin.repo.file(plugin.repo.taskPath(task.id))!; await plugin.saveModule(task.id, 'Sources', '- [Source](https://example.com)'); expect(await plugin.repo.readText(canonical)).toContain('https://example.com');
+    await plugin.saveModule(task.id, 'Description', '$1 replacement'); const saved = await plugin.repo.readText(canonical); expect(saved).toContain('## Description'); expect(saved).toContain('$1 replacement');
+    const todos: any = await h.add('Todos.md', '- [ ] Convert me'); const delegate = vi.spyOn(plugin.service, 'convertTodos').mockResolvedValue(); await plugin.convertTodos(todos); expect(delegate).toHaveBeenCalledWith(todos);
     const confirmed = plugin.confirm('Yes?'); const confirmation = Modal.instances.at(-1) as ConfirmModal; confirmation.done(true); expect(await confirmed).toBe(true); confirmation.close();
   });
   it('ignores programmatic edits, pastes, irrelevant changes and bulk blocks', async () => {

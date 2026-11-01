@@ -5,6 +5,32 @@ import { parser } from "@lezer/markdown";
 export interface TaskLine { line: number; raw: string; prefix: string; marker: string; title: string; id: string | null; repeat: boolean; section: Section[] }
 export const ID = /<!--organized:([a-zA-Z0-9_-]{8,80})-->/g;
 const TASK = /^(\s*(?:[-+*]|\d+[.)]) \[)([^\]])(\] )(.*)$/;
+export const NOTE_SECTIONS = ["Description", "Idea", "Question", "Sources", "Notes"] as const;
+export type NoteSection = typeof NOTE_SECTIONS[number];
+const SECTION_HEADINGS: Record<NoteSection, string[]> = {
+  Description: ["Description", "Information"], Idea: ["Idea"], Question: ["Question"], Sources: ["Sources"], Notes: ["Notes"],
+};
+function sectionRegex(heading: string): RegExp { return new RegExp(`(^|\\n)## ${heading}\\n([\\s\\S]*?)(?=\\n## |$)`); }
+export function noteSection(note: string, section: NoteSection): string {
+  for (const heading of SECTION_HEADINGS[section]) {
+    const match = sectionRegex(heading).exec(note); if (match) return match[2].trim();
+  }
+  return "";
+}
+/** Writes a canonical heading. Legacy `## Information` is migrated to `## Description`. */
+export function writeNoteSection(note: string, section: NoteSection, text: string): string {
+  const content = text.endsWith("\n") ? text.slice(0, -1) : text;
+  for (const heading of SECTION_HEADINGS[section]) {
+    const regex = sectionRegex(heading);
+    if (regex.test(note)) return note.replace(regex, (_whole, lead: string) => `${lead}## ${section}\n${content}\n`);
+  }
+  return `${note}${note && !note.endsWith("\n") ? "\n" : ""}## ${section}\n${content}\n`;
+}
+export function noteLoose(note: string): string {
+  let loose = note;
+  for (const heading of new Set(Object.values(SECTION_HEADINGS).flat())) loose = loose.replace(sectionRegex(heading), "$1");
+  return loose.trim();
+}
 const cache = new Map<string, { tasks: TaskLine[]; headings: { line: number; section: Section[] }[] }>();
 export function parseTasks(text: string, onHeading?: (line: number, section: Section[]) => void): TaskLine[] {
   const cached = cache.get(text);

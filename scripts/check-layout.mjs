@@ -21,7 +21,7 @@ try {
   for (const width of [240, 320, 390, 768]) for (const dark of [false, true]) for (const rtl of [false, true]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(({ dark, rtl }) => { document.body.className = `${dark ? 'theme-dark' : 'theme-light'} is-mobile`; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, { dark, rtl });
-    for (const tab of ['Calendar', 'Task', 'Projects', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'InformationModal']) {
+    for (const tab of ['Calendar', 'Task', 'InlineEditor', 'Projects', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal']) {
       await page.evaluate(tab => window.scene(tab), tab);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       if (overflow) throw Error(`${engine}: horizontal overflow at ${width}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
@@ -31,11 +31,18 @@ try {
         const height = await calendar.first().evaluate(el => el.getBoundingClientRect().height);
         if (height > 44) throw Error('Mobile theme inflated calendar cells');
       }
-      if (tab === 'Task') {
+      if (tab === 'Task' || tab === 'InlineEditor') {
         const cards = await page.locator('.organized-card-title').allTextContents();
-        if (cards.join(',') !== 'Information' || await page.locator('.organized-view .setting-item').count()) throw Error('Fresh task inspector exposed unrelated fields or native settings rows');
+        if (cards[0] !== 'Description' || !cards.includes('Idea') || await page.locator('.organized-view .setting-item').count()) throw Error(`Task inspector lost its description-first cards: ${cards.join(',')}`);
         if (!(await page.locator('.organized-task-hero .organized-task-title').count())) throw Error('Task inspector is missing its titled hero');
         if (!(await page.locator('.organized-task-actions .organized-danger').count())) throw Error('Task inspector is missing its delete action');
+      }
+      if (tab === 'InlineEditor') {
+        const field = page.locator('.organized-inline-editor'); if (await field.count() !== 1) throw Error('Inline editor field is missing');
+        const save = page.locator('.organized-inline-actions .organized-save'); if (await save.count() !== 1) throw Error('Inline editor is missing Save');
+        const fieldBox = await field.boundingBox(), saveBox = await save.boundingBox(); if (!fieldBox || !saveBox) throw Error('Inline editor is not visible');
+        if (saveBox.y + saveBox.height > fieldBox.y) throw Error('Inline editor Save is below the keyboard-prone field');
+        if (fieldBox.width > width) throw Error(`Inline editor overflows its ${width}px host: ${fieldBox.width}`);
       }
       if (tab === 'Projects') {
         const sections = await page.locator('.organized-section-title').allTextContents();
@@ -43,12 +50,14 @@ try {
         if (await page.locator('.organized-list-card').count() < 2) throw Error('Projects tab did not render task cards');
         if (await page.locator('.organized-view .setting-item').count()) throw Error('Projects tab exposed a native settings row');
       }
-      if (tab === 'InformationModal') {
-        const window = page.locator('.organized-modal-window'); if (await window.count() !== 1) throw Error('Information modal is missing the shared chrome');
-        const box = await window.boundingBox(); if (!box) throw Error('Information modal is not visible');
-        if (box.width > width - 8) throw Error(`Information modal overflows its ${width}px host: ${box.width}`);
-        const title = await page.locator('.organized-modal-window .modal-title').innerText(); if (title !== 'Information') throw Error(`Information modal title regressed: ${title}`);
-        const clipped = await page.locator('.organized-modal-window textarea').evaluate(el => el.scrollWidth > el.clientWidth + 1); if (clipped) throw Error('Information modal editor is clipped');
+      if (tab === 'ScheduleModal') {
+        if (!(await page.locator('.modal-container.organized-modal-host').count())) throw Error('Organized modal host is missing its keyboard-safe class');
+        const window = page.locator('.organized-modal-window'); if (await window.count() !== 1) throw Error('Schedule modal is missing the shared chrome');
+        const box = await window.boundingBox(); if (!box) throw Error('Schedule modal is not visible');
+        if (box.y > 96) throw Error(`Schedule modal is not top-aligned: ${box.y}`);
+        if (box.width > width - 8) throw Error(`Schedule modal overflows its ${width}px host: ${box.width}`);
+        const title = await page.locator('.organized-modal-window .modal-title').innerText(); if (title !== 'Schedule task') throw Error(`Schedule modal title regressed: ${title}`);
+        const button = page.locator('.organized-modal-window .modal-content button'); if (!(await button.isVisible())) throw Error('Schedule modal action is hidden');
       }
       if (tab.endsWith('Settings')) {
         if (await page.locator('.setting-item .setting-item').count()) throw Error('Settings are nested inside a native setting row');

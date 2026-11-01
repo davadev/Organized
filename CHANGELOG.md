@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-beta.4
+
+- Replace the task text popup with inline editing in the inspector for the title and every task note section. Save and Cancel sit above the field, so an on-screen mobile keyboard cannot cover Save.
+- Rename the `[i]` section from Information to **Description**, render it above Idea, and migrate an existing `## Information` heading to `## Description` when it is next saved without deleting or merging other sections.
+- Add **Organized: Convert unchecked todos to tasks** for the active note. It confirms first, converts only unlinked unchecked todos, preserves indentation and line endings, and leaves completed, in-progress, linked and empty todos untouched.
+- Top-align native modal hosts and let modal content scroll on mobile so actions stay reachable.
+
+Verified with 121 tests at 100% coverage and Chromium/WebKit layout checks including the inline editor and top-aligned schedule modal. Live Obsidian and physical-device acceptance remain manual beta checks.
+
 ## 0.1.0-beta.3
 
 - Redesign the Projects tab into Favorites, Projects and Canceled sections with counts, a labeled project filter, task cards, status/priority/date/favorite metadata, project chips and clear empty states.

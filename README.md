@@ -12,11 +12,13 @@ Open **Settings → Organized** and match **Daily-note folder** and **Filename f
 
 Open the ribbon calendar or run **Organized: Open inspector**. Its tabs are Calendar, Task and Projects. Selecting a day explicitly opens/creates its daily note. Merely browsing months creates nothing.
 
-The Task tab keeps your selection while you scroll or edit the sidebar. Optional cards show populated details or the section you request with a shortcut or **Add details…**; history and references are collapsed. Beta 3 gives the inspector a compact accent-edged hero, semantic status dots and matching modal surfaces; the Projects tab is grouped into Favorites, Projects and Canceled cards with a project filter and counts. Use **Delete task** on the Task tab to confirm removal of the canonical note and all linked occurrences. Fully restart Obsidian after updating to refresh the setting groups.
+The Task tab keeps your selection while you scroll or edit the sidebar. Optional cards show populated details or the section you request with a shortcut or **Add details…**; history and references are collapsed. Editing the title or any task note section happens inline in the sidebar, with Save and Cancel above the field so the mobile keyboard cannot cover them. **Description** sits above Idea; legacy `## Information` notes are read as Description and migrate to the canonical heading when saved. The Projects tab is grouped into Favorites, Projects and Canceled cards with a project filter and counts. Use **Delete task** on the Task tab to confirm removal of the canonical note and all linked occurrences. Fully restart Obsidian after updating to refresh the setting groups.
 
 ## Link or create tasks
 
-Interactively typing a new `- [ ] ` opens Obsidian's native search picker. Choose an existing task or **Create new task**. Cancel leaves an ordinary checkbox and no task file. Existing notes and pasted task blocks are not converted. Use **Attach/create task** on an existing checkbox; **Duplicate as new task** creates an independent ID. Missing links are never silently replaced.
+Interactively typing a new `- [ ] ` opens Obsidian's native search picker. Choose an existing task or **Create new task**. Cancel leaves an ordinary checkbox and no task file. Existing notes and pasted task blocks are not converted automatically. Use **Attach/create task** on an existing checkbox; **Duplicate as new task** creates an independent ID. Missing links are never silently replaced.
+
+Run **Organized: Convert unchecked todos to tasks** on a regular note to convert its ordinary unchecked todos into canonical tasks. It confirms first, skips linked, completed, in-progress and empty items, and preserves indentation and line endings.
 
 Each canonical task is `Tasks/<id>.md`, with standard YAML and Markdown notes. Occurrences contain `<!--organized:<id>-->`. A copied ID remains the same task. Selected properties render read-only in Reading/Live Preview; no generated dates/properties are written into occurrence source. The inspector edits the canonical note.
 
@@ -28,11 +30,11 @@ Identity and recurrence comments stay hidden in Live Preview, including the line
 | `[>]` | Forward to tomorrow; daily origin stays gray, undated origin stays active |
 | `[/]` | Start durable wall-clock timer; complete or clear to stop/log |
 | `[!]` | High/medium/low/none priority, constrained sort, then clear |
-| `[i]`, `[I]`, `[?]` | Open information/idea/question inspector section, then clear |
+| `[i]`, `[I]`, `[?]` | Open description/idea/question inspector section for inline editing, then clear |
 | `[x]`, `[ ]` | Complete/reopen; stop active timer idempotently |
 | `[-]` | Reversible cancellation; recurring dates cancel independently |
 | `[*]` | Toggle favorite |
-| `["]` | Edit Markdown source references (URLs/Obsidian links, optional labels/citations) |
+| `["]` | Open the Sources section for inline Markdown references (URLs/Obsidian links, optional labels/citations) |
 | `[b]` | Multi-select project/topic notes; create missing selected root notes |
 | `[f]` | Toggle recurrence in existing/current/future and subsequently created daily notes; clear after success |
 

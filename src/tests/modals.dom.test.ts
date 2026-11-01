@@ -1,14 +1,18 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
-import { TaskPicker, PriorityPicker, DatePicker, TextModal, ConfirmModal, ProjectPicker } from "../modals";
+import { TaskPicker, PriorityPicker, DatePicker, ConfirmModal, ProjectPicker } from "../modals";
 import { newTask } from "../model";
 import { harness } from "./harness";
 import { Notice, Setting } from "./__mocks__/obsidian";
 
 installObsidianDom();
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
-const decorated = (modal: { modalEl: HTMLElement }) => expect(modal.modalEl.classList.contains("organized-modal-window")).toBe(true);
+const decorated = (modal: { modalEl: HTMLElement; containerEl: HTMLElement }) => {
+  expect(modal.modalEl.classList.contains("organized-modal-window")).toBe(true);
+  // Top-aligned host keeps actions clear of an on-screen mobile keyboard.
+  expect(modal.containerEl.classList.contains("organized-modal-host")).toBe(true);
+};
 describe("native task, date, source and project modals", () => {
   it("filters existing records and offers only explicit nonempty creation", async () => {
     const h = harness(); const task = newTask('A task', 'task1234'); const scheduled = { ...task, id: 'task5678', title: 'Later', scheduled: '2026-01-01' }; const choose = vi.fn(async () => undefined);
@@ -27,14 +31,11 @@ describe("native task, date, source and project modals", () => {
     input.value = '2026-01-02'; modal.contentEl.querySelector('button')!.click(); await flush(); expect(choose).toHaveBeenCalledWith('2026-01-02'); expect(modal.contentEl.childElementCount).toBe(0);
     const failed = new DatePicker(h.app, '2026-01-03', async () => { throw Error('date failure'); }); failed.open(); failed.contentEl.querySelector('button')!.click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain('date failure'); failed.close();
   });
-  it("keeps drafts until save and settles confirmations exactly once", async () => {
-    const h = harness(); const save = vi.fn(async () => undefined);
-    for (const multiline of [true, false]) { const modal = new TextModal(h.app, 'Notes', 'initial', save, multiline); modal.open(); decorated(modal); const input = modal.contentEl.querySelector('input,textarea') as HTMLInputElement; input.value = 'edited'; expect(save).not.toHaveBeenCalledWith('edited'); modal.contentEl.querySelector('button')!.click(); await flush(); expect(save).toHaveBeenCalledWith('edited'); save.mockClear(); }
-    const failed = new TextModal(h.app, 'Notes', '', async () => { throw Error('save failure'); }); failed.open(); failed.contentEl.querySelector('button')!.click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain('save failure');
+  it("settles confirmations exactly once and flags destructive actions", async () => {
+    const h = harness();
     const done = vi.fn(); const cancel = new ConfirmModal(h.app, 'Question?', done); cancel.open(); decorated(cancel); cancel.contentEl.querySelector('button')!.click(); expect(done).toHaveBeenCalledExactlyOnceWith(false);
     done.mockClear(); const confirm = new ConfirmModal(h.app, 'Question?', done); confirm.open(); confirm.contentEl.querySelectorAll('button')[1].click(); expect(done).toHaveBeenCalledExactlyOnceWith(true);
     const deleting = new ConfirmModal(h.app, 'Remove it?', done, 'Delete task', 'Delete'); deleting.open(); expect(deleting.titleEl.textContent).toBe('Delete task'); expect(deleting.contentEl.querySelectorAll('button')[1].textContent).toBe('Delete'); expect((Setting.instances.at(-1)!.controls.at(-1) as any).buttonEl.classList.contains('mod-warning')).toBe(true); deleting.close(); expect(done).toHaveBeenCalledTimes(2);
-    const escaped = new TextModal(h.app, 'Notes', 'draft', save); escaped.open(); escaped.close(); expect(save).not.toHaveBeenCalled(); escaped.close();
   });
   it("multi-selects projects and creates only a chosen valid root note; search keeps input focus", async () => {
     const h = harness(); const save = vi.fn(async () => undefined); const modal = new ProjectPicker(h.app, ['Existing.md', 'Other.md'], ['Selected.md'], save); modal.open(); decorated(modal);

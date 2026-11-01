@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { insertTask, parseTasks, removeUnique, replaceTask, sortTasks, taskText } from "../codec";
+import { insertTask, NOTE_SECTIONS, noteLoose, noteSection, parseTasks, removeUnique, replaceTask, sortTasks, taskText, writeNoteSection } from "../codec";
 
 describe("Markdown task codec", () => {
   it('uses real Markdown structure for nested fences, indented code, comments and setext headings', () => {
@@ -34,6 +34,22 @@ describe("Markdown task codec", () => {
     expect(removeUnique(line + '\nprose', 'task1234')).toBe('prose');
     expect(() => removeUnique(line + '\n' + line, 'task1234')).toThrow(); expect(() => removeUnique(line, 'task1234', true)).toThrow();
     expect(removeUnique(line + ' <!--organized:repeat-->', 'task1234', true)).toBe('');
+  });
+  it("reads legacy Information as Description and writes canonical sections without dropping neighbours", () => {
+    const note = '# Notes\n## Information\nLegacy context\n## Idea\nAn idea\n';
+    expect(NOTE_SECTIONS[0]).toBe('Description');
+    expect(noteSection(note, 'Description')).toBe('Legacy context');
+    expect(noteSection(note, 'Idea')).toBe('An idea');
+    expect(noteSection(note, 'Sources')).toBe('');
+    const migrated = writeNoteSection(note, 'Description', 'New context');
+    expect(migrated).toContain('## Description\nNew context\n'); expect(migrated).not.toContain('## Information'); expect(migrated).toContain('## Idea\nAn idea');
+    expect(noteSection(migrated, 'Description')).toBe('New context');
+    expect(writeNoteSection('# Notes\n## Description\nOld\n## Idea\nKeep\n', 'Description', 'Fresh')).toContain('## Idea\nKeep');
+    expect(writeNoteSection('# Notes\n', 'Sources', 'Line\n')).toContain('## Sources\nLine\n');
+    expect(writeNoteSection('# Notes', 'Notes', 'No newline')).toBe('# Notes\n## Notes\nNo newline\n');
+    expect(writeNoteSection('', 'Question', 'Why?')).toBe('## Question\nWhy?\n');
+    expect(noteLoose(note)).toBe('# Notes');
+    expect(noteLoose('Prose\n## Sources\nhttps://example.com\n')).toBe('Prose');
   });
   it("sorts only safe sibling positions, never prose, headings or subtask blocks", () => {
     const text = '# A\n- [ ] low <!--organized:task_low-->\n- [ ] high <!--organized:taskhigh-->\n\nProse\n- [ ] medium <!--organized:task_med-->\n# B\n- [ ] other';

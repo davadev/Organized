@@ -128,6 +128,30 @@ describe("repository and explicit task actions", () => {
     await h.service.projects(task.id, []); expect(h.texts.get('Project.md')).not.toContain(task.id);
     await h.service.projects(task.id, ['Project.md']); h.texts.set('Project.md', h.texts.get('Project.md')! + h.texts.get('Project.md')!); await h.service.projects(task.id, []); expect(h.texts.get('Project.md')).toContain(task.id);
   });
+  it("converts only unchecked unlinked todos after confirmation and preserves the rest of the note", async () => {
+    const h = harness(); const text = '# Work\n- [ ] First\n  - [ ] Nested\n- [x] Done\n- [/] Active\n- [ ] Linked <!--organized:task1234-->\n- [ ] \nprose';
+    const file: any = await h.add('Note.md', text);
+    h.confirm.mockResolvedValueOnce(false); await h.service.convertTodos(file);
+    expect(h.confirm).toHaveBeenCalledWith('Convert 2 unchecked todos in Note.md into Organized tasks?', 'Convert todos', 'Convert');
+    expect(h.texts.get('Note.md')).toBe(text); expect(await h.repo.list()).toEqual([]); expect(h.changed).not.toHaveBeenCalled();
+    h.confirm.mockResolvedValueOnce(true); await h.service.convertTodos(file);
+    const lines = h.texts.get('Note.md')!.split('\n');
+    expect(lines[1]).toMatch(/^- \[ \] First <!--organized:[a-zA-Z0-9_-]{8,80}-->$/);
+    expect(lines[2]).toMatch(/^  - \[ \] Nested <!--organized:[a-zA-Z0-9_-]{8,80}-->$/);
+    expect(lines.slice(3, 8)).toEqual(['- [x] Done', '- [/] Active', '- [ ] Linked <!--organized:task1234-->', '- [ ] ', 'prose']);
+    expect((await h.repo.list()).map(t => t.title).sort()).toEqual(['First', 'Nested']);
+    expect(h.changed).toHaveBeenCalledOnce(); expect(Notice.instances.at(-1)?.message).toContain('Converted 2 unchecked todos');
+    h.confirm.mockClear(); await h.service.convertTodos(file); expect(h.confirm).not.toHaveBeenCalled(); expect(Notice.instances.at(-1)?.message).toContain('No unchecked todos');
+    const single: any = await h.add('Single.md', '- [ ] Only one'); h.confirm.mockResolvedValueOnce(true); await h.service.convertTodos(single); expect(h.confirm).toHaveBeenLastCalledWith('Convert 1 unchecked todo in Single.md into Organized tasks?', 'Convert todos', 'Convert');
+  });
+  it("preserves CRLF and indentation while converting and refuses task notes", async () => {
+    const h = harness(); const file: any = await h.add('Crlf.md', '- [ ] One\r\n  - [ ] Two\r\n');
+    h.confirm.mockResolvedValueOnce(true); await h.service.convertTodos(file);
+    const out = h.texts.get('Crlf.md')!;
+    expect(out).toMatch(/^- \[ \] One <!--organized:[a-zA-Z0-9_-]{8,80}-->\r\n {2}- \[ \] Two <!--organized:[a-zA-Z0-9_-]{8,80}-->\r\n$/);
+    expect(out.match(/\r\n/g)).toHaveLength(2); expect(out.match(/\n/g)).toHaveLength(2);
+    const task = await h.repo.create('Task note'); await expect(h.service.convertTodos(h.repo.file(h.repo.taskPath(task.id))!)).rejects.toThrow('regular note');
+  });
   it("deletes a task only after confirmation, removing every occurrence and trashing its note", async () => {
     const h = harness(); const task = await h.repo.create('Delete me'); const line = `- [ ] Delete me <!--organized:${task.id}-->`;
     await h.add('Daily/2020-01-01.md', `${line}\n- [ ] Keep this`); await h.add('Project.md', line);
