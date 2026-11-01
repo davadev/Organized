@@ -70,8 +70,8 @@ export function parseTasks(text: string, onHeading?: (line: number, section: Sec
   for (const h of headings) onHeading?.(h.line, h.section);
   return tasks;
 }
-export function taskText(task: TaskLine, updates: { title?: string; marker?: string; id?: string; repeat?: boolean }): string {
-  const id = updates.id ?? task.id; const repeat = updates.repeat ?? task.repeat;
+export function taskText(task: TaskLine, updates: { title?: string; marker?: string; id?: string | null; repeat?: boolean }): string {
+  const id = Object.prototype.hasOwnProperty.call(updates, "id") ? updates.id : task.id; const repeat = updates.repeat ?? task.repeat;
   return `${task.prefix}${updates.marker ?? task.marker}] ${updates.title ?? task.title}${id ? ` <!--organized:${id}-->` : ""}${repeat ? " <!--organized:repeat-->" : ""}${task.raw.endsWith("\r") ? "\r" : ""}`;
 }
 export function replaceTask(text: string, task: TaskLine, updates: Parameters<typeof taskText>[1]): string {

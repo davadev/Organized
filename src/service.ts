@@ -11,6 +11,7 @@ export class TaskService {
   private references: Map<string, Set<string>> | null = null;
   private referenceBuild: Promise<void> | null = null;
   private reconciled = "";
+  private retentionReconciled = "";
   undoChanges: Change[] = [];
   constructor(readonly repo: Repository, readonly changed: () => void, readonly confirm: (message: string, heading?: string, confirmLabel?: string) => Promise<boolean>) { this.daily = new DailyNotes(repo, repo.settings); }
   async edit(file: TFile, before: string, after: string, changes?: Change[]): Promise<void> {
@@ -169,7 +170,12 @@ export class TaskService {
     this.changed();
   }
   async reconcile(file: TFile): Promise<void> {
-    const today = localDate(); if (!this.repo.settings().autoForward || this.daily.date(file.path) !== today || this.reconciled === today) return;
+    const today = localDate(); const settings = this.repo.settings();
+    if (this.daily.date(file.path) !== today) return;
+    if (settings.taskRetentionDays > 0 && this.retentionReconciled !== today) {
+      await this.cleanupExpiredTasks(settings.taskRetentionDays, Date.now()); this.retentionReconciled = today;
+    }
+    if (!settings.autoForward || this.reconciled === today) return;
     const latest = new Map<string, { file: TFile; line: TaskLine; date: string }>();
     for (const daily of this.daily.files().filter(d => d.date < today).sort((a, b) => a.date.localeCompare(b.date))) {
       for (const line of parseTasks(await this.repo.readText(daily.file))) if (line.id) latest.set(line.id, { ...daily, line });
@@ -186,6 +192,34 @@ export class TaskService {
     }
     this.reconciled = today;
     if (changes.length || skipped) this.summarize(changes, "Unfinished tasks carried to today", skipped ? `${skipped} conflict${skipped === 1 ? "" : "s"} skipped · previous line preserved.` : "");
+  }
+  private async cleanupExpiredTasks(days: number, now: number): Promise<void> {
+    let removed = 0; const failed: string[] = [];
+    for (const task of await this.repo.list()) {
+      if (task.recurring || !["completed", "canceled"].includes(task.status) || !task.closed_at || now - Date.parse(task.closed_at) < days * 86400000) continue;
+      try {
+        const occurrences = await this.repo.occurrences(task.id);
+        for (const occurrence of occurrences) {
+          let after = occurrence.text;
+          for (const line of [...occurrence.tasks].sort((a, b) => b.line - a.line)) {
+            const current = parseTasks(after).find(item => item.line === line.line);
+            if (!current || current.id !== task.id || current.raw !== line.raw) throw new Error(`Changed occurrence in ${occurrence.file.path}`);
+            after = replaceTask(after, current, { id: null, repeat: false });
+          }
+          await this.edit(occurrence.file, occurrence.text, after);
+        }
+        const taskFile = this.repo.file(this.repo.taskPath(task.id));
+        if (!taskFile) throw new Error(`Task note missing for ${task.id}`);
+        await this.repo.app.fileManager.trashFile(taskFile); removed++;
+      } catch { failed.push(task.title); }
+    }
+    if (removed) { this.references = null; this.changed(); }
+    if (removed || failed.length) {
+      const fragment = createFragment();
+      fragment.createDiv({ cls: "organized-notice-title", text: "Expired tasks cleaned up" });
+      fragment.createDiv({ cls: "organized-notice-detail", text: `${removed} task${removed === 1 ? "" : "s"} moved to Obsidian's trash and unlinked${failed.length ? ` · ${failed.length} cleanup${failed.length === 1 ? " was" : "s were"} incomplete; task notes were preserved` : ""}.` });
+      new Notice(fragment, 12000);
+    }
   }
   async projects(id: string, projects: string[]): Promise<void> {
     const task = await this.repo.read(id);

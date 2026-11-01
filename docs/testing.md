@@ -74,3 +74,11 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Put the cursor on prose in a note containing linked and regular checkbox tasks, then open the Task tab; verify it lists every task line from that note.
 - Tap/activate a linked task and confirm the editor focuses the matching line while the Task tab shows its details. Regular todos should move the cursor and offer **Attach/create task**; orphaned IDs should offer repair.
 - Open the inspector with no recent Markdown editor and verify the Task tab gives a helpful empty-state message.
+
+## Completed-task retention
+
+- Verify **Keep completed tasks (days)** defaults to `0`; blank, negative, fractional and over-limit values are rejected, and `0` disables cleanup.
+- Complete/cancel a non-recurring task and set a short retention period. Confirm it remains linked before expiry; opening a non-today note must not trigger cleanup.
+- After expiry, open today's daily note. Confirm linked occurrences across notes lose only Organized markers, keep their checkbox state/indentation, and the canonical Markdown task note moves to Obsidian's trash.
+- Confirm open/in-progress, recurring, and legacy completed/canceled records without a `closed_at` timestamp remain. Simulate a concurrently changed reference and verify the task note is preserved; retry after resolving the conflict.
+- Test with Obsidian's trash enabled and disabled as relevant to the vault, and verify behavior on desktop and mobile before stable promotion.

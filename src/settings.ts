@@ -35,6 +35,17 @@ export class OrganizedSettingsTab extends PluginSettingTab {
             try { this.owner.settings.taskFolder = visibleFolder(value); this.owner.saveSettings(); } catch (error) { report(error); }
           }));
         }),
+        row("Completed/canceled task retention (days)", "After this many days from completion or cancellation, linked todos become regular checkboxes and task notes move to Obsidian's trash. 0 disables cleanup; it runs when opening today's daily note.", setting => {
+          setting.addText(t => {
+            t.setValue(String(this.owner.settings.taskRetentionDays)); t.inputEl.type = "number"; t.inputEl.min = "0"; t.inputEl.max = "36500"; t.inputEl.step = "1";
+            t.onChange(value => {
+              if (!value.trim()) return;
+              const days = Number(value);
+              if (!Number.isInteger(days) || days < 0 || days > 36500) return;
+              this.owner.settings.taskRetentionDays = days; this.owner.saveSettings();
+            });
+          });
+        }),
       ] },
       { type: "group", heading: "Daily notes", items: [
         row("Daily-note source", "Custom settings are required because core daily-note configuration has no public API.", setting => {

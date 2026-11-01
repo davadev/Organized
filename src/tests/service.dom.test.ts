@@ -130,6 +130,64 @@ describe("repository and explicit task actions", () => {
     const pluralToday: any = await plural.add(`Daily/${localDate()}.md`); await plural.service.reconcile(pluralToday);
     expect((Notice.instances.at(-1)?.message as DocumentFragment).querySelector('.organized-notice-detail')?.textContent).toContain('2 conflicts skipped');
   });
+  it("expires completed and canceled tasks after retention, unlinks all references, and preserves other records", async () => {
+    const h = harness(); const now = Date.now(); const old = new Date(now - 31 * 86400000).toISOString(); const recent = new Date(now - 29 * 86400000).toISOString();
+    const completed = await h.repo.create('Old completed'); const canceled = await h.repo.create('Old canceled'); const fresh = await h.repo.create('Recent');
+    const open = await h.repo.create('Open'); const recurring = await h.repo.create('Recurring'); const legacy = await h.repo.create('Legacy completed');
+    for (const [task, status, closed_at, isRecurring] of [
+      [completed, 'completed', old, false], [canceled, 'canceled', old, false], [fresh, 'completed', recent, false],
+      [open, 'open', null, false], [recurring, 'canceled', old, true], [legacy, 'completed', null, false],
+    ] as const) await h.repo.update(task.id, t => ({ ...t, status, closed_at, recurring: isRecurring }));
+    const text = `- [x] Old completed <!--organized:${completed.id}-->\n- [-] Old completed again <!--organized:${completed.id}-->\n- [-] Old canceled <!--organized:${canceled.id}-->\n- [x] Recent <!--organized:${fresh.id}-->\n- [ ] Open <!--organized:${open.id}-->\n- [-] Recurring <!--organized:${recurring.id}-->\n- [x] Legacy <!--organized:${legacy.id}-->`;
+    const project: any = await h.add('Project.md', text); const past: any = await h.add('Daily/2020-01-01.md', `- [x] Old completed <!--organized:${completed.id}-->`);
+    const other: any = await h.add('Other.md', '- [x] Old canceled <!--organized:' + canceled.id + '-->');
+    h.setSettings({ taskRetentionDays: 30, autoForward: false });
+    await h.service.reconcile(other); expect(h.repo.file(h.repo.taskPath(completed.id))).toBeTruthy();
+    const today: any = await h.add(`Daily/${localDate()}.md`); await h.service.reconcile(today);
+    const after = h.texts.get(project.path)!;
+    expect(after).not.toContain(completed.id); expect(after).not.toContain(canceled.id);
+    expect(after).toContain('- [x] Old completed\n- [-] Old completed again\n- [-] Old canceled');
+    expect(after).toContain(fresh.id); expect(after).toContain(open.id); expect(after).toContain(recurring.id); expect(after).toContain(legacy.id);
+    expect(h.texts.get(past.path)).toBe('- [x] Old completed'); expect(h.texts.get(other.path)).toBe('- [x] Old canceled');
+    expect(h.repo.file(h.repo.taskPath(completed.id))).toBeNull(); expect(h.repo.file(h.repo.taskPath(canceled.id))).toBeNull();
+    expect(h.repo.file(h.repo.taskPath(fresh.id))).toBeTruthy(); expect(h.raw.fileManager.trashFile).toHaveBeenCalledTimes(2);
+    expect(h.changed).toHaveBeenCalledOnce(); expect((Notice.instances.at(-1)?.message as DocumentFragment).querySelector('.organized-notice-detail')?.textContent).toContain('2 tasks moved');
+    await h.service.reconcile(today); expect(h.raw.fileManager.trashFile).toHaveBeenCalledTimes(2);
+  });
+  it("preserves expired task notes when a linked occurrence cannot be safely updated", async () => {
+    const h = harness(); const task = await h.repo.create('Conflict');
+    await h.repo.update(task.id, t => ({ ...t, status: 'completed', closed_at: new Date(Date.now() - 2 * 86400000).toISOString() }));
+    await h.add('A.md', `- [x] Conflict <!--organized:${task.id}-->`); await h.add('B.md', `- [x] Conflict <!--organized:${task.id}-->`);
+    const write = vi.spyOn(h.repo, 'write').mockRejectedValue(Error('concurrent change'));
+    h.setSettings({ taskRetentionDays: 1, autoForward: false }); const today: any = await h.add(`Daily/${localDate()}.md`); await h.service.reconcile(today);
+    expect(h.repo.file(h.repo.taskPath(task.id))).toBeTruthy(); expect(h.raw.fileManager.trashFile).not.toHaveBeenCalled();
+    expect(h.texts.get('A.md')).toContain(task.id); expect(h.texts.get('B.md')).toContain(task.id); expect(write).toHaveBeenCalled();
+    expect((Notice.instances.at(-1)?.message as DocumentFragment).querySelector('.organized-notice-detail')?.textContent).toContain('task notes were preserved');
+  });
+  it("rejects stale occurrence snapshots and missing canonical files", async () => {
+    const h = harness(); const stale = await h.repo.create('Stale');
+    await h.repo.update(stale.id, t => ({ ...t, status: 'completed', closed_at: new Date(Date.now() - 2 * 86400000).toISOString() }));
+    const note: any = await h.add('Stale.md', `- [x] Stale <!--organized:${stale.id}-->`); const occurrence = (await h.repo.occurrences(stale.id))[0];
+    vi.spyOn(h.repo, 'occurrences').mockResolvedValueOnce([{ ...occurrence, tasks: [{ ...occurrence.tasks[0], raw: `${occurrence.tasks[0].raw} changed` }] }]);
+    const today: any = await h.add(`Daily/${localDate()}.md`); h.setSettings({ taskRetentionDays: 1, autoForward: false }); await h.service.reconcile(today);
+    expect(h.texts.get(note.path)).toContain(stale.id); expect(h.repo.file(h.repo.taskPath(stale.id))).toBeTruthy();
+
+    const second = harness(); const orphan = await second.repo.create('Missing canonical'); const orphan2 = await second.repo.create('Also missing');
+    for (const item of [orphan, orphan2]) await second.repo.update(item.id, t => ({ ...t, status: 'canceled', closed_at: new Date(Date.now() - 2 * 86400000).toISOString() }));
+    const find = second.repo.file.bind(second.repo); vi.spyOn(second.repo, 'file').mockImplementation(path => [orphan.id, orphan2.id].some(id => path === second.repo.taskPath(id)) ? null : find(path));
+    second.setSettings({ taskRetentionDays: 1, autoForward: false }); const today2: any = await second.add(`Daily/${localDate()}.md`); await second.service.reconcile(today2);
+    expect(second.raw.fileManager.trashFile).not.toHaveBeenCalled(); expect(second.changed).not.toHaveBeenCalled();
+    expect((Notice.instances.at(-1)?.message as DocumentFragment).querySelector('.organized-notice-detail')?.textContent).toContain('2 cleanups were incomplete');
+  });
+  it("reports singular cleanup and skips notices when no records are due", async () => {
+    const h = harness(); const task = await h.repo.create('Single expired');
+    await h.repo.update(task.id, t => ({ ...t, status: 'completed', closed_at: new Date(Date.now() - 2 * 86400000).toISOString() }));
+    h.setSettings({ taskRetentionDays: 1, autoForward: false }); const today: any = await h.add(`Daily/${localDate()}.md`); await h.service.reconcile(today);
+    expect((Notice.instances.at(-1)?.message as DocumentFragment).querySelector('.organized-notice-detail')?.textContent).toContain('1 task moved');
+    const none = harness(); const fresh = await none.repo.create('Keep'); await none.repo.update(fresh.id, t => ({ ...t, status: 'completed', closed_at: new Date().toISOString() }));
+    none.setSettings({ taskRetentionDays: 30, autoForward: false }); const empty: any = await none.add(`Daily/${localDate()}.md`); await none.service.reconcile(empty);
+    expect(none.raw.fileManager.trashFile).not.toHaveBeenCalled(); expect(Notice.instances).toHaveLength(1);
+  });
   it("links projects idempotently, removes unique occurrences, preserves conflicts", async () => {
     const h = harness(); const task = await h.repo.create('Project task'); await h.service.projects(task.id, ['Project.md']); await h.service.projects(task.id, ['Project.md']);
     expect(parseTasks(h.texts.get('Project.md')!)).toHaveLength(1); expect((await h.repo.read(task.id)).projects).toEqual(['Project.md']);
