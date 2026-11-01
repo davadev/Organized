@@ -1,7 +1,7 @@
 # Organized
 
 Mobile-compatible Obsidian plugin; TypeScript, native Obsidian UI, Markdown-backed tasks.
-Project attribution and Git author/committer identity: **davadev only**. Never publish a real name or local user path.
+Project attribution: **davadev only**. Git authors may be **davadev** or **Dany**, using the verified davadev GitHub no-reply address. Committers may match or be GitHub’s merge service (`GitHub <noreply@github.com>`). Never publish a local user path.
 
 ## Commands
 - `npm run build`: typecheck and production bundle.
