@@ -81,7 +81,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
     const { h, plugin } = await loaded(); await expect(plugin.openInspector()).rejects.toThrow('Cannot open');
     const leaf: any = { app: h.app, setViewState: vi.fn(async () => undefined) }; const view = new OrganizedInspectorView(leaf, plugin); leaf.view = view; vi.spyOn(view, 'render').mockResolvedValue();
     h.raw.workspace.getRightLeaf.mockReturnValue(leaf); await plugin.openInspector('Task', 'Description'); expect(leaf.setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE, active: true }); expect(view.tab).toBe('Task'); expect(view.module).toBe('Description'); expect(view.editingModule).toBe('Description');
-    h.raw.workspace.getLeavesOfType.mockReturnValue([leaf, { view: {} }]); await plugin.openInspector(); expect(h.raw.workspace.revealLeaf).toHaveBeenCalledWith(leaf);
+    h.raw.workspace.getLeavesOfType.mockReturnValue([leaf, { view: {} }]); const note: any = await h.add('Open.md'); h.setActive(note); await plugin.openInspector(); expect(h.raw.workspace.revealLeaf).toHaveBeenCalledWith(leaf);
     const seen = vi.fn(); plugin.eachView(seen); expect(seen).toHaveBeenCalledExactlyOnceWith(view);
     h.raw.workspace.getLeavesOfType.mockReturnValue([{ view: {} }]); await plugin.openInspector();
   });

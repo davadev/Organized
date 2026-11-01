@@ -1,10 +1,11 @@
-import { Component, ItemView, WorkspaceLeaf, setIcon } from "obsidian";
+import { Component, ItemView, WorkspaceLeaf, TFile, setIcon } from "obsidian";
+import type { Editor } from "obsidian";
 import { moment } from "./moment";
 import type Organized from "./main";
 import { elapsed, localDate, PRIORITIES, STATUSES, Task } from "./model";
 import { byPriority, report } from "./service";
 import { DatePicker } from "./modals";
-import { NoteSection, NOTE_SECTIONS, noteLoose, noteSection } from "./codec";
+import { NoteSection, NOTE_SECTIONS, noteLoose, noteSection, TaskLine } from "./codec";
 import { splitNote } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 
@@ -102,6 +103,50 @@ export class OrganizedInspectorView extends ItemView {
     else box.createDiv({ cls: "organized-muted", text: "Add context, details or links." });
     this.button(box, `${text ? "Edit" : "Add"} ${section.toLowerCase()}`, () => { this.editingModule = section; this.module = section; return this.render(); });
   }
+  private async focusNoteTask(editor: Editor, file: TFile, line: TaskLine, selectedId: string | null): Promise<void> {
+    const resolved = await this.owner.service.resolve({ file, line });
+    editor.focus(); editor.setCursor({ line: resolved.line.line, ch: Math.max(0, resolved.line.raw.indexOf("] ") + 2) });
+    this.owner.context = { file, line: resolved.line }; this.owner.selectedTaskId = selectedId && resolved.line.id === selectedId ? selectedId : null;
+    this.origin = "Editor cursor"; this.module = ""; this.editingModule = ""; this.editingTitle = false;
+    await this.render();
+  }
+  private noteTaskRow(host: HTMLElement, file: TFile, editor: Editor, line: TaskLine, label: string): HTMLElement {
+    const row = host.createDiv({ cls: "organized-list-card" });
+    const open = row.createDiv({ cls: "organized-list-open", attr: { role: "button", tabindex: "0" } });
+    const focus = () => this.focusNoteTask(editor, file, line, null);
+    open.addEventListener("click", event => { if (!(event.target as HTMLElement).closest("a")) void focus().catch(report); });
+    open.addEventListener("keydown", event => { if (!["Enter", " "].includes(event.key) || (event.target as HTMLElement).closest("a")) return; event.preventDefault(); void focus().catch(report); });
+    const title = open.createDiv({ cls: "organized-list-title" });
+    void renderMarkdownLinks(this.app, line.title || "Untitled todo", title, file.path, this.markdown).catch(report);
+    open.createDiv({ cls: "organized-list-meta", text: label });
+    const actions = row.createDiv({ cls: "organized-list-actions" });
+    this.button(actions, line.id ? "Repair/create task" : "Attach/create task", async () => {
+      await this.focusNoteTask(editor, file, line, null);
+      await this.owner.pickTask(editor, file);
+    });
+    return row;
+  }
+  private async noteTasks(host: HTMLElement, generation: number): Promise<void> {
+    const source = this.owner.taskSourceEditor();
+    if (!source) { host.createEl("p", { text: "Open a Markdown note to browse its tasks here." }); return; }
+    const lines = await this.owner.taskLines(source.file);
+    if (generation !== this.renderId) return;
+    const name = source.file.path.split("/").at(-1)!.replace(/\.md$/i, "");
+    const list = this.section(host, name, lines.length);
+    if (!lines.length) { list.createDiv({ cls: "organized-empty", text: "No tasks in this note yet." }); return; }
+    for (const line of lines) {
+      if (line.id) {
+        try {
+          const task = await this.owner.repo.read(line.id);
+          if (generation !== this.renderId) return;
+          this.taskRow(list, task, () => this.focusNoteTask(source.editor, source.file, line, task.id));
+        } catch {
+          if (generation !== this.renderId) return;
+          this.noteTaskRow(list, source.file, source.editor, line, "Linked task unavailable");
+        }
+      } else this.noteTaskRow(list, source.file, source.editor, line, "Regular todo");
+    }
+  }
   private inlineEditor(host: HTMLElement, id: string, section: NoteSection, text: string): void {
     const field = host.createEl("textarea", { cls: "organized-inline-editor", attr: { "aria-label": section } }); field.value = text;
     // Actions sit above the field so a mobile keyboard cannot cover Save.
@@ -149,7 +194,7 @@ export class OrganizedInspectorView extends ItemView {
   }
   async task(host: HTMLElement, generation: number): Promise<void> {
     const id = this.owner.selectedTaskId;
-    if (!id) { host.createEl("p", { text: "Place the cursor on a linked task, or choose one in the projects tab." }); return; }
+    if (!id) { await this.noteTasks(host, generation); return; }
     const task = await this.owner.repo.read(id);
     if (generation !== this.renderId) return;
     const hero = host.createDiv({ cls: "organized-task-hero" });

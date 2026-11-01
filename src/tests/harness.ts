@@ -63,6 +63,7 @@ export function fakeEditor(initial: string) {
   const position = (n: number) => { const before = value.slice(0, n).split("\n"); return { line: before.length - 1, ch: before.at(-1)!.length }; };
   return {
     getValue: () => value, setValue: (text: string) => { value = text; },
+    focus: vi.fn(),
     getCursor: () => cursor, setCursor: (p: typeof cursor) => { cursor = p; selections = [{ anchor: p, head: p }]; },
     listSelections: () => selections, setSelections: vi.fn((s: typeof selections) => { selections = s; }),
     offsetToPos: position, posToOffset: offset,
