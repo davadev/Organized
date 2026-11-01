@@ -6,7 +6,7 @@ import { harness } from './harness';
 import { installObsidianDom } from './__mocks__/obsidianDom';
 import { Notice, Modal } from './__mocks__/obsidian';
 import { localDate } from '../model';
-import { DatePicker, TextModal } from '../modals';
+import { DatePicker } from '../modals';
 import { parseTasks } from '../codec';
 
 installObsidianDom();
@@ -41,22 +41,29 @@ describe('compact calendar and contextual task inspector', () => {
     vi.spyOn(repo, 'list').mockRejectedValueOnce(Error('read failed')); await view.render(); await flush(); expect(view.contentEl.textContent).toContain('unavailable');
     const host = createDiv(); view.button(host, 'Throws', () => { throw Error('sync'); }).click(); expect(Notice.instances.at(-1)?.message).toContain('sync'); view.button(host, 'Rejects', async () => { throw Error('async'); }).click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain('async');
   });
-  it('shows only the requested module on a fresh task; never exposes IDs or a settings form', async () => {
-    const { owner, view, repo } = await fixture(); const task = await repo.create('Test task'); owner.selectedTaskId = task.id; view.tab = 'Task'; view.module = 'Information';
+  it('shows only the requested description on a fresh task and edits it inline without exposing IDs', async () => {
+    const { owner, view, repo } = await fixture(); const task = await repo.create('Test task'); owner.selectedTaskId = task.id; view.tab = 'Task'; view.module = 'Description';
     const refs = vi.spyOn(owner.service, 'refs'); const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
-    await view.render(); expect(titles(view)).toEqual(['Information']); expect(view.contentEl.textContent).not.toContain(task.id); expect(view.contentEl.querySelector('.setting-item')).toBeNull(); expect(refs).not.toHaveBeenCalled(); expect(scroll).toHaveBeenCalledOnce();
+    await view.render(); expect(titles(view)).toEqual(['Description']); expect(view.contentEl.textContent).toContain('Add context, details or links.'); expect(view.contentEl.textContent).not.toContain(task.id); expect(view.contentEl.querySelector('.setting-item')).toBeNull(); expect(refs).not.toHaveBeenCalled(); expect(scroll).toHaveBeenCalledOnce();
     await view.render(); expect(scroll).toHaveBeenCalledOnce();
-    const edit = vi.spyOn(owner, 'editModule').mockResolvedValue(); button(view.contentEl, 'Add information').click(); await flush(); expect(edit).toHaveBeenCalledWith(task.id, 'Information');
+    button(view.contentEl, 'Add description').click(); await flush(); expect(view.editingModule).toBe('Description');
+    const field = view.contentEl.querySelector<HTMLTextAreaElement>('textarea[aria-label="Description"]')!; expect(field).toBeTruthy();
+    field.value = 'Saved description'; const save = vi.spyOn(owner, 'saveModule').mockResolvedValue(); button(view.contentEl, 'Save').click(); await flush(); expect(save).toHaveBeenCalledWith(task.id, 'Description', 'Saved description'); expect(view.editingModule).toBe('');
+    await view.render(); button(view.contentEl, 'Add description').click(); await flush(); const discarded = view.contentEl.querySelector<HTMLTextAreaElement>('textarea[aria-label="Description"]')!; discarded.value = 'Discarded';
+    button(view.contentEl, 'Cancel').click(); await flush(); expect(view.editingModule).toBe(''); expect(view.contentEl.querySelector('.organized-inline-editor')).toBeNull();
+    choose(view, 'Add details', 'Idea'); await flush(); expect(view.module).toBe('Idea'); expect(view.editingModule).toBe('Idea'); expect(view.contentEl.querySelector('textarea[aria-label="Idea"]')).toBeTruthy();
+    (document.activeElement as HTMLElement | null)?.blur(); choose(view, 'Add details', ''); await flush(); expect(titles(view)).toEqual(['Description']);
+    view.module = 'Unknown'; await view.render(); expect(titles(view)).toEqual(['Description']);
     const editor: any = document.body.createEl('textarea'); editor.focus(); owner.refresh(); await flush(); expect(document.activeElement).toBe(editor);
     const input = view.contentEl.createEl('input'); input.focus(); const first = view.contentEl.firstChild; await view.render(); expect(view.contentEl.firstChild).toBe(first); input.blur();
-    choose(view, 'Add details', ''); await flush(); expect(titles(view)).toEqual([]);
-    view.module = 'Unknown'; await view.render(); expect(titles(view)).toEqual([]);
   });
   it('keeps task context while sidebar scrolling/controls receive focus', async () => {
     const { owner, view, repo, add, setActive, clearActive } = await fixture(); const task = await repo.create('Keep me'); const file: any = await add('Test.md', `- [ ] Keep me <!--organized:${task.id}-->`); const editor = setActive(file); owner.followCursor(); view.tab = 'Task'; await view.render();
     clearActive(); owner.followCursor(); expect(owner.selectedTaskId).toBe(task.id); expect(owner.context?.file).toBe(file); await view.render(); expect(view.contentEl.textContent).toContain('Keep me'); expect(view.contentEl.textContent).not.toContain('Place the cursor'); expect(editor.setSelections).not.toHaveBeenCalled();
     const favorite = button(view.contentEl, 'Favorite'); favorite.focus(); favorite.click(); await flush(); expect((await repo.read(task.id)).starred).toBe(true); expect(owner.selectedTaskId).toBe(task.id);
-    const change = vi.spyOn(owner.service, 'title').mockResolvedValue(); button(view.contentEl, 'Edit title').click(); const modal = Modal.instances.at(-1) as TextModal; await modal.save('Edited'); expect(change).toHaveBeenCalledWith(task.id, 'Edited'); modal.close();
+    const change = vi.spyOn(owner.service, 'title').mockResolvedValue(); button(view.contentEl, 'Edit title').click(); await flush();
+    const title = view.contentEl.querySelector<HTMLInputElement>('.organized-title-input')!; expect(document.activeElement).toBe(title); title.value = 'Edited'; button(view.contentEl, 'Save').click(); await flush(); expect(change).toHaveBeenCalledWith(task.id, 'Edited'); expect(view.editingTitle).toBe(false);
+    await view.render(); button(view.contentEl, 'Edit title').click(); await flush(); button(view.contentEl, 'Cancel').click(); await flush(); expect(view.editingTitle).toBe(false); expect(view.contentEl.querySelector('.organized-title-input')).toBeNull();
     button(view.contentEl, 'Open task note').click(); await flush(); expect(owner.app.workspace.getLeaf).toHaveBeenCalled();
   });
   it('makes optional controls available on demand and persists only deliberate actions', async () => {
@@ -76,8 +83,8 @@ describe('compact calendar and contextual task inspector', () => {
     const { owner, view, repo } = await fixture(); const task = await repo.create('Notes'); const file = repo.file(repo.taskPath(task.id))!; const before = await repo.readText(file);
     await repo.write(file, before, before + 'Loose notes\n## Information\nOnly information\n## Idea\nAn idea\n## Question\nA question\n## Sources\nhttps://example.com\n## Notes\nMore notes\n');
     await repo.update(task.id, t => ({ ...t, movement_history: [{ id: 'move', kind: 'forward', source: 'manual', from: '2026-01-01', to: '2026-01-02', at: '2026-01-01T00:00:00Z' }] })); owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render();
-    expect(titles(view)).toEqual(['Information', 'Idea', 'Question', 'Sources', 'Notes']); expect(view.contentEl.textContent!.match(/Only information/g)).toHaveLength(1); expect(view.contentEl.textContent).toContain('Loose notes'); expect(view.contentEl.querySelector('details')!.open).toBe(false);
-    const edit = vi.spyOn(owner, 'editModule').mockResolvedValue(); for (const name of ['information', 'idea', 'question', 'sources', 'notes']) button(view.contentEl, `Edit ${name}`).click(); await flush(); expect(edit).toHaveBeenCalledTimes(5);
+    expect(titles(view)).toEqual(['Description', 'Idea', 'Question', 'Sources', 'Notes']); expect(view.contentEl.textContent!.match(/Only information/g)).toHaveLength(1); expect(view.contentEl.textContent).toContain('Loose notes'); expect(view.contentEl.querySelector('details')!.open).toBe(false);
+    for (const [label, heading] of [['description', 'Description'], ['idea', 'Idea'], ['question', 'Question'], ['sources', 'Sources'], ['notes', 'Notes']]) { button(view.contentEl, `Edit ${label}`).click(); await flush(); expect(view.contentEl.querySelector(`textarea[aria-label="${heading}"]`)).toBeTruthy(); button(view.contentEl, 'Cancel').click(); await flush(); expect(view.editingModule).toBe(''); }
     const refs = Array.from(view.contentEl.querySelectorAll('details')).at(-1)!; refs.open = true; refs.dispatchEvent(new Event('toggle')); await flush(); expect(view.contentEl.textContent).toContain('No references found'); refs.open = false; refs.dispatchEvent(new Event('toggle')); expect(view.referencesOpen).toBe(false);
   });
   it('sorts project/favorite browsing, restores cancellation and clears stale module selection', async () => {
@@ -92,7 +99,7 @@ describe('compact calendar and contextual task inspector', () => {
     expect(card(view, 'High').querySelector('.organized-list-date')?.textContent).toBe('2026-01-02');
     expect(card(view, 'High').querySelectorAll('.organized-chip')).toHaveLength(3);
     expect(card(view, 'High').querySelectorAll('.organized-chip')[2].textContent).toBe('+1');
-    const picker = view.contentEl.querySelector<HTMLSelectElement>('[aria-label="Choose project"]')!; picker.value = 'Project.md'; picker.dispatchEvent(new Event('change')); await flush(); expect(view.selectedProject).toBe('Project.md'); view.module = 'Information'; openCard(view, 'High').click(); await flush(); expect(owner.selectedTaskId).toBe(high.id); expect(view.module).toBe(''); expect(view.origin).toBe('Projects / favorites');
+    const picker = view.contentEl.querySelector<HTMLSelectElement>('[aria-label="Choose project"]')!; picker.value = 'Project.md'; picker.dispatchEvent(new Event('change')); await flush(); expect(view.selectedProject).toBe('Project.md'); view.module = 'Description'; openCard(view, 'High').click(); await flush(); expect(owner.selectedTaskId).toBe(high.id); expect(view.module).toBe(''); expect(view.origin).toBe('Projects / favorites');
     button(view.contentEl, 'Back to projects').click(); await flush(); openCard(view, 'Canceled').click(); await flush(); expect(owner.selectedTaskId).toBe(canceled.id);
     view.tab = 'Projects'; await view.render(); button(view.contentEl, 'Restore').click(); await flush(); expect((await repo.read(canceled.id)).status).toBe('open');
     view.tab = 'Projects'; view.selectedProject = ''; await view.render(); openCard(view, 'Low').click(); await flush(); expect(owner.selectedTaskId).toBe(low.id);

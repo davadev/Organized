@@ -1,12 +1,12 @@
 import { Editor, MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { Transaction } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
-import { parseTasks, TaskLine } from "./codec";
+import { parseTasks, NoteSection, TaskLine, writeNoteSection } from "./codec";
 import { DEFAULT_SETTINGS, localDate, object, Settings, Task } from "./model";
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
 import { Context, report, TaskService } from "./service";
-import { ConfirmModal, DatePicker, PriorityPicker, ProjectPicker, TaskPicker, TextModal } from "./modals";
+import { ConfirmModal, DatePicker, PriorityPicker, ProjectPicker, TaskPicker } from "./modals";
 import { OrganizedInspectorView, VIEW_TYPE } from "./view";
 import { OrganizedSettingsTab } from "./settings";
 import { editorExtension, reading, refreshEditor } from "./render";
@@ -44,6 +44,7 @@ export default class Organized extends Plugin {
       this.addCommand({ id: "open-inspector", name: "Open inspector", callback: () => { void this.openInspector().catch(report); } });
       this.addCommand({ id: "attach-task", name: "Attach/create task (or repair missing link)", editorCallback: (editor, view) => { if (view.file) void this.pickTask(editor, view.file).catch(report); } });
       this.addCommand({ id: "duplicate-task", name: "Duplicate as new task", editorCallback: (editor, view) => { if (view.file) void this.pickTask(editor, view.file, true).catch(report); } });
+      this.addCommand({ id: "convert-todos", name: "Convert unchecked todos to tasks", editorCallback: (_editor, view) => { if (view.file) void this.convertTodos(view.file).catch(report); } });
       this.addCommand({ id: "undo", name: "Undo last recurrence/auto-forward batch", callback: () => { void this.service.undo().catch(report); } });
       this.addCommand({ id: "restore-settings", name: "Restore compatible settings backup (restart required)", callback: () => { void this.confirm("Queue the newest compatible settings backup for restoration on next restart? Task Markdown will not change.").then(yes => yes ? this.safety.queueCompatibleRestore() : undefined).catch(report); } });
       this.registerEditorExtension(editorExtension(this));
@@ -104,7 +105,7 @@ export default class Organized extends Plugin {
     this.context = next;
     if (changed) {
       this.selectedTaskId = next?.line.id ?? null;
-      this.eachView(view => { view.origin = "Editor cursor"; view.module = ""; void view.render().catch(report); });
+      this.eachView(view => { view.origin = "Editor cursor"; view.module = ""; view.editingModule = ""; view.editingTitle = false; void view.render().catch(report); });
     }
   }
   eachView(callback: (view: OrganizedInspectorView) => void): void {
@@ -126,7 +127,7 @@ export default class Organized extends Plugin {
     let leaf: WorkspaceLeaf | null = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0] ?? null;
     if (!leaf) { leaf = this.app.workspace.getRightLeaf(false); if (!leaf) throw new Error("Cannot open the sidebar; try opening a workspace pane first."); await leaf.setViewState({ type: VIEW_TYPE, active: true }); }
     await this.app.workspace.revealLeaf(leaf);
-    if (leaf.view instanceof OrganizedInspectorView) { if (tab) leaf.view.tab = tab; leaf.view.module = module; await leaf.view.render(); }
+    if (leaf.view instanceof OrganizedInspectorView) { if (tab) leaf.view.tab = tab; leaf.view.module = module; if (module) leaf.view.editingModule = module; await leaf.view.render(); }
   }
   confirm(message: string, heading = "Confirm task action", confirmLabel = "Confirm"): Promise<boolean> { return new Promise(resolve => new ConfirmModal(this.app, message, resolve, heading, confirmLabel).open()); }
   async deleteTask(id: string): Promise<void> {
@@ -138,7 +139,7 @@ export default class Organized extends Plugin {
       });
     });
     if (!removed) return;
-    this.eachView(view => { view.tab = "Projects"; view.module = ""; });
+    this.eachView(view => { view.tab = "Projects"; view.module = ""; view.editingModule = ""; view.editingTitle = false; });
     this.refresh();
   }
   async pickTask(editor: Editor, file: TFile, duplicate = false): Promise<void> {
@@ -194,20 +195,20 @@ export default class Organized extends Plugin {
     if (marker === "<") { const task = await this.repo.read(id); new DatePicker(this.app, task.scheduled ?? localDate(), date => this.run(() => this.service.schedule(context, date))).open(); }
     else if (marker === "!") new PriorityPicker(this.app, priority => this.run(() => this.service.priority(context, priority))).open();
     else if (["i", "I", "?"].includes(marker)) {
-      await this.openInspector("Task", marker === "i" ? "Information" : marker === "I" ? "Idea" : "Question"); await this.run(() => this.service.clean(context));
-    } else if (marker === '"') await this.editModule(id, "Sources", context);
+      await this.openInspector("Task", marker === "i" ? "Description" : marker === "I" ? "Idea" : "Question"); await this.run(() => this.service.clean(context));
+    } else if (marker === '"') { await this.openInspector("Task", "Sources"); await this.run(() => this.service.clean(context)); }
     else if (marker === "b") this.pickProjects(await this.repo.read(id), context);
     else await this.run(() => this.service.marker(context, marker));
   }
   pickProjects(task: Task, context?: Context): void {
     new ProjectPicker(this.app, this.app.vault.getMarkdownFiles().filter(f => !f.path.startsWith(`${this.settings.taskFolder}/`)).map(f => f.path), task.projects, notes => this.run(async () => { await this.service.projects(task.id, notes); if (context) await this.service.clean(context); })).open();
   }
-  async editModule(id: string, heading: string, context?: Context): Promise<void> {
+  async saveModule(id: string, section: NoteSection, text: string): Promise<void> {
     const file = this.repo.file(this.repo.taskPath(id)); if (!file) throw new Error("Task note is missing.");
-    const before = await this.repo.readText(file); const regex = new RegExp(`(^|\\n)## ${heading}\\n([\\s\\S]*?)(?=\\n## |$)`); const match = regex.exec(before);
-    new TextModal(this.app, `Edit ${heading.toLowerCase()}`, match?.[2].trim() ?? "", text => this.run(async () => {
-      const after = match ? before.replace(regex, `$1## ${heading}\n${text.replace(/\$/g, "$$$$")}\n`) : `${before}\n## ${heading}\n${text}\n`;
-      await this.repo.write(file, before, after); if (context) await this.service.clean(context); this.refresh();
-    })).open();
+    const before = await this.repo.readText(file);
+    await this.repo.write(file, before, writeNoteSection(before, section, text)); this.refresh();
+  }
+  async convertTodos(file: TFile): Promise<void> {
+    await this.run(() => this.service.convertTodos(file));
   }
 }

@@ -9,7 +9,7 @@ import { splitNote } from "./repository";
 import { report } from "./service";
 
 export const GLYPHS: Record<string, string> = {
-  "<": "Scheduled", ">": "Forwarded", "/": "In progress", "!": "Priority", i: "Information", I: "Idea", "?": "Question", "-": "Canceled", "*": "Star", '"': "Source", l: "Location", b: "Project", S: "Savings", p: "Pros", c: "Cons", f: "Recurring", k: "Key", w: "Win", u: "Up", d: "Down", D: "Draft pull request", P: "Open pull request", M: "Merged pull request",
+  "<": "Scheduled", ">": "Forwarded", "/": "In progress", "!": "Priority", i: "Description", I: "Idea", "?": "Question", "-": "Canceled", "*": "Star", '"': "Source", l: "Location", b: "Project", S: "Savings", p: "Pros", c: "Cons", f: "Recurring", k: "Key", w: "Win", u: "Up", d: "Down", D: "Draft pull request", P: "Open pull request", M: "Merged pull request",
 };
 export function icon(host: HTMLElement, marker: string): void {
   const label = GLYPHS[marker]; if (!label) return;

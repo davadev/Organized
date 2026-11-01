@@ -3,7 +3,11 @@ import { path, PRIORITIES, Priority, Task, validDate } from "./model";
 import { report } from "./service";
 
 /** Share the compact inspector surface with native modal chrome. */
-function decorate(modal: Modal): void { modal.modalEl?.addClass("organized-modal-window"); }
+function decorate(modal: Modal): void {
+  modal.modalEl?.addClass("organized-modal-window");
+  // Top-align the host so a mobile keyboard cannot cover the modal's actions.
+  modal.containerEl?.addClass("organized-modal-host");
+}
 
 export class TaskPicker extends SuggestModal<Task | string> {
   constructor(app: App, readonly tasks: Task[], readonly choose: (choice: Task | string) => Promise<void>, query = "") {
@@ -39,17 +43,6 @@ export class DatePicker extends Modal {
       if (!validDate(input.value)) { input.setCustomValidity("Choose a valid date."); input.reportValidity(); return; }
       this.close(); void this.choose(input.value).catch(report);
     }));
-    input.focus();
-  }
-  onClose(): void { this.contentEl.empty(); }
-}
-export class TextModal extends Modal {
-  constructor(app: App, readonly heading: string, readonly value: string, readonly save: (text: string) => Promise<void>, readonly multiline = true) { super(app); decorate(this); }
-  onOpen(): void {
-    this.titleEl.setText(this.heading); this.contentEl.addClass("organized-modal");
-    const input = this.multiline ? this.contentEl.createEl("textarea") : this.contentEl.createEl("input", { type: "text" });
-    input.setAttribute("aria-label", this.heading); input.value = this.value;
-    new Setting(this.contentEl).addButton(b => b.setButtonText("Save").setCta().onClick(() => { this.close(); void this.save(input.value).catch(report); }));
     input.focus();
   }
   onClose(): void { this.contentEl.empty(); }

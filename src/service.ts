@@ -1,5 +1,5 @@
 import { Notice, TFile } from "obsidian";
-import { insertTask, parseTasks, removeUnique, replaceTask, sortTasks, TaskLine } from "./codec";
+import { insertTask, parseTasks, removeUnique, replaceTask, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, Movement, nextDate, PRIORITIES, Priority, setStatus, Status, Task } from "./model";
 import { Repository } from "./repository";
@@ -212,6 +212,21 @@ export class TaskService {
   }
   hasReference(id: string | null, notePath: string): boolean { return id !== null && this.references?.get(id)?.has(notePath) === true; }
   forget(notePath: string): void { if (this.references) for (const refs of this.references.values()) refs.delete(notePath); }
+  async convertTodos(file: TFile): Promise<void> {
+    if (file.path.startsWith(`${this.repo.settings().taskFolder}/`)) throw new Error("Choose a regular note, not a task note.");
+    const text = await this.repo.readText(file);
+    const todos = parseTasks(text).filter(t => !t.id && t.marker === " " && t.title);
+    if (!todos.length) { new Notice("No unchecked todos to convert in this note."); return; }
+    const count = `${todos.length} unchecked todo${todos.length === 1 ? "" : "s"}`;
+    if (!(await this.confirm(`Convert ${count} in ${file.path} into Organized tasks?`, "Convert todos", "Convert"))) return;
+    const lines = text.split("\n");
+    for (const todo of todos) {
+      const task = await this.repo.create(todo.title);
+      lines[todo.line] = taskText(todo, { id: task.id, repeat: false });
+    }
+    await this.edit(file, text, lines.join("\n"));
+    this.changed(); new Notice(`Converted ${count} into Organized tasks.`);
+  }
   async deleteTask(id: string, onConfirmed?: () => void): Promise<boolean> {
     // The inspector must clear its now-invalid selection before occurrence or
     // trash events can trigger a refresh, so the confirmed hook runs first.
