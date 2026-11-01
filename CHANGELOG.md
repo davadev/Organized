@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Make Markdown links in task titles and task-note sections open reliably from the inspector.
+- Group task details into one shared surface and tighten narrow-screen Settings rows to remove excess whitespace.
+- Keep recurring `[f]` task occurrences out of automatic forwarding.
+
 ## 0.1.0-beta.5
 
 - Format forwarding and recurrence summaries as a clear title, detail and Undo action.

@@ -1,4 +1,4 @@
-import { Component, ItemView, MarkdownRenderer, WorkspaceLeaf, setIcon } from "obsidian";
+import { Component, ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import { moment } from "./moment";
 import type Organized from "./main";
 import { elapsed, localDate, PRIORITIES, STATUSES, Task } from "./model";
@@ -6,6 +6,7 @@ import { byPriority, report } from "./service";
 import { DatePicker } from "./modals";
 import { NoteSection, NOTE_SECTIONS, noteLoose, noteSection } from "./codec";
 import { splitNote } from "./repository";
+import { renderMarkdownLinks } from "./markdown";
 
 export const VIEW_TYPE = "organized-inspector";
 export type Tab = "Calendar" | "Task" | "Projects";
@@ -80,7 +81,7 @@ export class OrganizedInspectorView extends ItemView {
       event.preventDefault(); activate();
     });
     const title = open.createDiv({ cls: "organized-list-title" });
-    void MarkdownRenderer.render(this.app, task.title, title, this.owner.repo.taskPath(task.id), this.markdown).catch(report);
+    void renderMarkdownLinks(this.app, task.title, title, this.owner.repo.taskPath(task.id), this.markdown).catch(report);
     const meta = open.createDiv({ cls: "organized-list-meta" }); this.statusDot(meta, task);
     meta.createSpan({ cls: "organized-list-status", text: task.status.replace(/_/g, " ") });
     if (task.priority !== "none") meta.createSpan({ cls: `organized-list-priority priority-${task.priority}`, text: task.priority });
@@ -96,7 +97,7 @@ export class OrganizedInspectorView extends ItemView {
   private async moduleCard(host: HTMLElement, filePath: string, id: string, section: NoteSection, text: string): Promise<void> {
     const box = this.card(host, section, "file-text");
     if (this.editingModule === section) { this.inlineEditor(box, id, section, text); return; }
-    if (text) await MarkdownRenderer.render(this.app, text, box.createDiv({ cls: "organized-task-notes" }), filePath, this.markdown);
+    if (text) await renderMarkdownLinks(this.app, text, box.createDiv({ cls: "organized-task-notes" }), filePath, this.markdown);
     // Only Description renders without text; other empty sections stay hidden.
     else box.createDiv({ cls: "organized-muted", text: "Add context, details or links." });
     this.button(box, `${text ? "Edit" : "Add"} ${section.toLowerCase()}`, () => { this.editingModule = section; this.module = section; return this.render(); });
@@ -164,7 +165,7 @@ export class OrganizedInspectorView extends ItemView {
       input.focus(); input.select();
     } else {
       const title = header.createDiv({ cls: "organized-task-title", attr: { role: "heading", "aria-level": "2" } });
-      void MarkdownRenderer.render(this.app, task.title, title, this.owner.repo.taskPath(id), this.markdown).catch(report);
+       void renderMarkdownLinks(this.app, task.title, title, this.owner.repo.taskPath(id), this.markdown).catch(report);
       this.iconButton(header, "Edit title", "pencil", () => { this.editingTitle = true; return this.render(); });
     }
     const star = this.iconButton(header, "Favorite", "star", () => this.owner.run(async () => { await this.owner.repo.update(id, t => ({ ...t, starred: !t.starred })); this.owner.refresh(); })); star.setAttribute("aria-pressed", String(task.starred));
@@ -173,20 +174,21 @@ export class OrganizedInspectorView extends ItemView {
     this.select(status, "Status", task.status, STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(() => this.owner.service.status(id, value as Task["status"], this.owner.context ?? undefined)); });
     const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Description", "Idea", "Question", "Sources", "Notes"], value => { this.module = value; this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
     const file = this.owner.repo.file(this.owner.repo.taskPath(id))!; const body = splitNote(await this.owner.repo.readText(file)).body;
-    await this.moduleCard(host, file.path, id, "Description", noteSection(body, "Description"));
-    if (task.priority !== "none" || this.module === "Priority") this.select(this.card(host, "Priority", "flag"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.repo.update(id, t => ({ ...t, priority: value as Task["priority"] })); this.owner.refresh(); }); });
-    if (task.scheduled || this.module === "Schedule") this.button(this.card(host, "Schedule", "calendar"), task.scheduled ?? "Choose date", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined))).open(); });
+    const details = host.createDiv({ cls: "organized-task-details" });
+    await this.moduleCard(details, file.path, id, "Description", noteSection(body, "Description"));
+    if (task.priority !== "none" || this.module === "Priority") this.select(this.card(details, "Priority", "flag"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.repo.update(id, t => ({ ...t, priority: value as Task["priority"] })); this.owner.refresh(); }); });
+    if (task.scheduled || this.module === "Schedule") this.button(this.card(details, "Schedule", "calendar"), task.scheduled ?? "Choose date", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined))).open(); });
     if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || this.module === "Timer") {
-      const timer = this.card(host, "Timer", "timer"); timer.createDiv({ cls: "organized-timer-value", text: `${Math.floor(elapsed(task) / 60)} min${task.time_tracking_started_at ? " · running" : ""}` });
+      const timer = this.card(details, "Timer", "timer"); timer.createDiv({ cls: "organized-timer-value", text: `${Math.floor(elapsed(task) / 60)} min${task.time_tracking_started_at ? " · running" : ""}` });
       this.button(timer, task.time_tracking_started_at ? "Stop timer" : "Start timer", () => this.owner.run(() => this.owner.service.status(id, task.time_tracking_started_at ? "open" : "in_progress", this.owner.context ?? undefined)));
     }
     if (task.recurring || task.recurrence_periods.length || this.module === "Recurring") {
-      const recurring = this.card(host, "Recurring", "repeat");
+      const recurring = this.card(details, "Recurring", "repeat");
       const toggle = this.button(recurring, task.recurring ? "On" : "Off", () => this.owner.run(() => this.owner.service.recurrence(id, this.owner.context?.line.id === id ? this.owner.context : undefined))); toggle.setAttribute("role", "switch"); toggle.setAttribute("aria-label", "Recurring"); toggle.setAttribute("aria-checked", String(task.recurring));
       if (task.recurrence_periods.length) recurring.createDiv({ cls: "organized-muted", text: `${task.recurrence_periods[0].start} → ${task.recurring ? "active" : task.recurrence_periods[task.recurrence_periods.length - 1].stop}` });
     }
     if (task.projects.length || this.module === "Projects") {
-      const projects = this.card(host, "Projects", "folder"); for (const project of task.projects) projects.createDiv({ text: project });
+      const projects = this.card(details, "Projects", "folder"); for (const project of task.projects) projects.createDiv({ text: project });
       this.button(projects, "Link projects or topics", () => this.owner.pickProjects(task));
     }
     const loose = noteLoose(body);
@@ -195,7 +197,7 @@ export class OrganizedInspectorView extends ItemView {
       let text = noteSection(body, section);
       if (section === "Notes") text = `${text}\n${loose}`.trim();
       if (!text && this.module !== section) continue;
-      await this.moduleCard(host, file.path, id, section, text);
+      await this.moduleCard(details, file.path, id, section, text);
     }
     const moduleKey = `${id}:${this.module}`;
     if (this.module && this.scrolledModule !== moduleKey) {

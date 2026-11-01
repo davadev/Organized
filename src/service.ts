@@ -176,7 +176,8 @@ export class TaskService {
     }
     const present = new Set(parseTasks(await this.repo.readText(file)).map(t => t.id)); const changes: Change[] = []; let skipped = 0;
     for (const [id, occurrence] of latest) {
-      if (present.has(id) || ![" ", "/", ">", "<"].includes(occurrence.line.marker)) continue;
+       // The [f] marker is a recurrence instruction, not an unfinished task to carry forward.
+       if (present.has(id) || ![" ", "/", ">", "<"].includes(occurrence.line.marker)) continue;
       try {
         const task = await this.repo.read(id);
         if (task.recurring || ["completed", "canceled"].includes(task.status) || (task.scheduled && task.scheduled > today)) continue;
