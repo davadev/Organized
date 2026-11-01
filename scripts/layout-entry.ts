@@ -36,11 +36,13 @@ let modal: DatePicker | null = null;
       const host = root.createDiv({ cls: 'organized-settings' });
       for (const group of settings.getSettingDefinitions() as any[]) {
         new Setting(host).setName(group.heading).setHeading();
-        for (const row of group.items) row.render(new Setting(host).setName(row.name).setDesc(row.desc));
+        for (const row of group.items) { const setting = new Setting(host).setName(row.name); if (row.desc) setting.setDesc(row.desc); row.render(setting); }
       }
     }
-  } else if (tab === 'LivePreview' || tab === 'Source') {
-    editor = new EditorView({ state: EditorState.create({ doc: '- [ ] Test task <!--organized:task1234--> <!--organized:repeat-->', selection: { anchor: 8 }, extensions: [EditorView.lineWrapping, ...(tab === 'LivePreview' ? [editorLivePreviewField] : []), editorExtension(owner)] }), parent: root });
+  } else if (tab === 'LivePreview' || tab === 'Source' || tab === 'Eof') {
+    owner.settings.displayProperties = tab === 'Eof' ? ['priority'] : [];
+    const doc = tab === 'Eof' ? 'intro\n- [ ] Test task <!--organized:task1234-->' : '- [ ] Test task <!--organized:task1234--> <!--organized:repeat-->';
+    editor = new EditorView({ state: EditorState.create({ doc, selection: { anchor: 0 }, extensions: [EditorView.lineWrapping, ...(tab === 'Source' ? [] : [editorLivePreviewField]), editorExtension(owner)] }), parent: root });
   } else if (tab === 'ScheduleModal') {
     modal = new DatePicker(app, '2026-01-01', async () => undefined);
     modal.open();

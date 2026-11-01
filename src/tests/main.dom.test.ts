@@ -5,7 +5,7 @@ import Organized from "../main";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
 import { harness } from "./harness";
 import { Modal, Notice } from "./__mocks__/obsidian";
-import { ConfirmModal, DatePicker, PriorityPicker, ProjectPicker, TaskPicker } from "../modals";
+import { ConfirmModal, DatePicker, KEEP_AS_TODO, PriorityPicker, ProjectPicker, TaskPicker } from "../modals";
 import { parseTasks } from "../codec";
 import { OrganizedInspectorView, VIEW_TYPE } from "../view";
 import { localDate } from '../model';
@@ -121,6 +121,14 @@ describe('plugin lifecycle and user-only editor actions', () => {
     await plugin.pickTask(editor as any, file, true); picker = Modal.instances.at(-1) as TaskPicker; expect(picker.tasks).toHaveLength(0); picker.onChooseSuggestion('Independent'); picker.close(); await flush(); expect(parseTasks(editor.getValue())[0].id).not.toBe(first); expect(await plugin.repo.list()).toHaveLength(2);
     editor.setValue('prose'); await expect(plugin.pickTask(editor as any, file)).rejects.toThrow('Markdown task');
     const task = (await plugin.repo.list())[0]; editor.setValue('- [ ] existing'); await plugin.pickTask(editor as any, file); picker = Modal.instances.at(-1) as TaskPicker; picker.onChooseSuggestion(task); picker.close(); await flush(); expect(parseTasks(editor.getValue())[0].id).toBe(task.id);
+  });
+  it('closes the automatic picker while preserving a plain checkbox todo', async () => {
+    const { h, plugin } = await loaded(); const file: any = await h.add('Todo.md', '- [ ] Keep ordinary'); const editor = h.setActive(file);
+    await plugin.pickTask(editor as any, file, false, true);
+    const picker = Modal.instances.at(-1) as TaskPicker;
+    expect(picker.getSuggestions('')).toContainEqual(expect.objectContaining({ keepAsTodo: true }));
+    picker.onChooseSuggestion(KEEP_AS_TODO); picker.close(); await flush();
+    expect(editor.getValue()).toBe('- [ ] Keep ordinary'); expect(await plugin.repo.list()).toHaveLength(0);
   });
   it('routes date, priority, description, source and project markers with cancellation preserving markers', async () => {
     const { h, plugin } = await loaded(); const task = await plugin.repo.create('Task'); const file: any = await h.add('Note.md', '');

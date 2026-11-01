@@ -105,6 +105,23 @@ describe('compact calendar and contextual task inspector', () => {
     view.tab = 'Projects'; view.selectedProject = ''; await view.render(); openCard(view, 'Low').click(); await flush(); expect(owner.selectedTaskId).toBe(low.id);
     view.tab = 'Projects'; await view.render(); openCard(view, 'Plain').click(); await flush(); expect(owner.selectedTaskId).toBe(plain.id);
   });
+  it('renders task-title links as links and keeps card activation separate', async () => {
+    const { owner, view, repo } = await fixture();
+    const linked = await repo.create('Read [[Reading list]] and [web](https://example.com)');
+    await repo.update(linked.id, task => ({ ...task, starred: true })); view.tab = 'Projects'; await view.render(); await flush();
+    const row = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-list-card')).find(item => item.querySelector('.organized-list-title')?.textContent?.includes('Reading list'))!;
+    const anchors = row.querySelectorAll('a');
+    expect(anchors).toHaveLength(2); expect(anchors[0].getAttribute('href')).toBe('Reading list.md');
+    expect(anchors[1].getAttribute('href')).toBe('https://example.com');
+    anchors[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); expect(owner.selectedTaskId).toBeNull();
+    const open = row.querySelector<HTMLElement>('.organized-list-open')!;
+    open.dispatchEvent(new MouseEvent('click', { bubbles: true })); await flush(); expect(owner.selectedTaskId).toBe(linked.id); owner.selectedTaskId = null;
+    open.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await flush();
+    expect(owner.selectedTaskId).toBe(linked.id);
+    owner.selectedTaskId = null; open.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); expect(owner.selectedTaskId).toBeNull();
+    const render = vi.spyOn(view, 'render').mockImplementation(() => { throw new Error('sync render failure'); });
+    open.dispatchEvent(new MouseEvent('click', { bubbles: true })); expect(Notice.instances.at(-1)?.message).toContain('sync render failure'); render.mockRestore();
+  });
   it('renders empty project sections and deletes the selected task after confirmation', async () => {
     const { owner, view, repo } = await fixture(); view.tab = 'Projects'; await view.render();
     expect(Array.from(view.contentEl.querySelectorAll('.organized-empty')).map(el => el.textContent)).toEqual([

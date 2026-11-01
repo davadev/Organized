@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
-import { TaskPicker, PriorityPicker, DatePicker, ConfirmModal, ProjectPicker } from "../modals";
+import { TaskPicker, PriorityPicker, DatePicker, ConfirmModal, ProjectPicker, KEEP_AS_TODO } from "../modals";
 import { newTask } from "../model";
 import { harness } from "./harness";
 import { Notice, Setting } from "./__mocks__/obsidian";
@@ -24,6 +24,23 @@ describe("native task, date, source and project modals", () => {
     choose.mockRejectedValueOnce(Error('write failed')); picker.onChooseSuggestion('new'); await flush(); expect(Notice.instances.at(-1)?.message).toContain('write failed');
     const priority = new PriorityPicker(h.app, choose as any); expect(priority.getSuggestions('h')).toEqual(['high']); expect(priority.getSuggestions('')).toHaveLength(4); priority.renderSuggestion('none', host); expect(host.textContent).toBe('None'); priority.onChooseSuggestion('low'); await flush(); expect(choose).toHaveBeenCalledWith('low');
     choose.mockRejectedValueOnce(Error('priority failure')); priority.onChooseSuggestion('none'); await flush(); expect(Notice.instances.at(-1)?.message).toContain('priority failure');
+  });
+  it("offers keep-as-todo only when the automatic trigger enables it", async () => {
+    const h = harness(); const task = newTask('A task', 'task1234'); const choose = vi.fn(async () => undefined);
+    const regular = new TaskPicker(h.app, [task], choose);
+    expect(regular.getSuggestions('task')).toEqual([task, 'task']);
+    const triggered = new TaskPicker(h.app, [task], choose, '', true);
+    expect(triggered.getSuggestions('')).toEqual([KEEP_AS_TODO, task]);
+    const row = createDiv(); triggered.renderSuggestion(KEEP_AS_TODO, row);
+    expect(row.textContent).toContain('Keep as regular todo');
+    triggered.onChooseSuggestion(KEEP_AS_TODO); expect(choose).toHaveBeenCalledWith(KEEP_AS_TODO);
+    const linkedTask = newTask('[[Other note]]', 'task9876'); const linkedRow = createDiv(); triggered.renderSuggestion(linkedTask, linkedRow); await flush();
+    const anchor = linkedRow.querySelector<HTMLAnchorElement>('a')!; expect(anchor.getAttribute('href')).toBe('Other note.md');
+    const open = vi.fn(); (h.app.workspace as any).openLinkText = open; anchor.click(); expect(open).toHaveBeenCalledWith('Other note', '');
+    const externalTask = newTask('[website](https://example.com)', 'task8765'); const externalRow = createDiv(); triggered.renderSuggestion(externalTask, externalRow); await flush();
+    const external = externalRow.querySelector<HTMLAnchorElement>('a')!; const windowOpen = vi.spyOn(window, 'open').mockReturnValue(null);
+    external.click(); expect(windowOpen).toHaveBeenCalledWith('https://example.com', '_blank', 'noopener'); windowOpen.mockRestore();
+    const missingHref = vi.spyOn(anchor, 'getAttribute').mockReturnValue(null); anchor.click(); expect(open).toHaveBeenLastCalledWith('', ''); missingHref.mockRestore();
   });
   it("date confirmation validates, cancellation creates nothing, errors are visible", async () => {
     const h = harness(); const choose = vi.fn(async () => undefined); const modal = new DatePicker(h.app, '2026-01-01', choose); modal.open(); decorated(modal);

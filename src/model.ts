@@ -24,10 +24,11 @@ export interface Settings {
   missingSection: "recreate" | "ask";
   sortScope: "list" | "section" | "first" | "none";
   displayProperties: DisplayProperty[];
+  showScheduledDate: boolean;
 }
 export const DEFAULT_SETTINGS: Settings = {
   taskFolder: "Tasks", dailyFolder: "Daily", dailyFormat: "YYYY-MM-DD", autoForward: true,
-  missingSection: "recreate", sortScope: "list", displayProperties: [],
+  missingSection: "recreate", sortScope: "list", displayProperties: [], showScheduledDate: true,
 };
 export function object(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -65,6 +66,7 @@ export function settingsFrom(value: unknown): Settings {
   s.missingSection = member(v.missingSection, ["recreate", "ask"], "recreate");
   s.sortScope = member(v.sortScope, ["list", "section", "first", "none"], "list");
   s.displayProperties = strings(v.displayProperties).filter((p): p is DisplayProperty => DISPLAY_PROPERTIES.includes(p as DisplayProperty));
+  s.showScheduledDate = typeof v.showScheduledDate === "boolean" ? v.showScheduledDate : true;
   return s;
 }
 export function taskFrom(value: unknown, expectedId: string): Task {

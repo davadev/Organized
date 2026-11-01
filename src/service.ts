@@ -26,10 +26,14 @@ export class TaskService {
       new Notice(failures.length ? `Undo preserved concurrent edits in: ${failures.join(", ")}` : "Organized changes undone. Created notes are preserved.");
     });
   }
-  summarize(changes: Change[], description: string): void {
+  summarize(changes: Change[], title: string, detail = ""): void {
     this.undoChanges = changes;
-    const fragment = createFragment(); fragment.createSpan({ text: `${description}: ${new Set(changes.map(c => c.file.path)).size} notes. ` });
-    const button = fragment.createEl("button", { text: "Undo" });
+    const notes = new Set(changes.map(c => c.file.path)).size;
+    const fragment = createFragment();
+    const notice = fragment.createDiv({ cls: "organized-notice" });
+    notice.createDiv({ cls: "organized-notice-title", text: title });
+    notice.createDiv({ cls: "organized-notice-detail", text: detail || `${notes} ${notes === 1 ? "note" : "notes"} updated.` });
+    const button = notice.createEl("button", { text: "Undo", cls: "organized-notice-undo" });
     button.addEventListener("click", () => { void this.undo().catch(report); });
     new Notice(fragment, 12000); this.changed();
   }
@@ -156,8 +160,8 @@ export class TaskService {
       try { const fresh = await this.resolve(context); await this.edit(context.file, fresh.text, replaceTask(fresh.text, fresh.line, { marker: " " }), changes); }
       catch { skipped.push(context.file.path); }
     }
-    const conflicts = skipped.length ? ` · skipped/preserved for repair: ${[...new Set(skipped)].join(", ")}` : "";
-    this.summarize(changes, `${task.recurring ? "Recurrence enabled" : "Recurrence disabled"}${conflicts}`);
+    const skippedPaths = [...new Set(skipped)];
+    this.summarize(changes, task.recurring ? "Recurrence enabled" : "Recurrence disabled", skippedPaths.length ? `Skipped/preserved for repair: ${skippedPaths.join(", ")}` : "");
   }
   async onDailyCreated(file: TFile): Promise<void> {
     const date = this.daily.date(file.path); if (!date || date < localDate()) return;
@@ -180,7 +184,7 @@ export class TaskService {
       } catch { skipped++; }
     }
     this.reconciled = today;
-    if (changes.length || skipped) this.summarize(changes, `Unfinished tasks carried to today${skipped ? ` (${skipped} conflicts skipped)` : ""}`);
+    if (changes.length || skipped) this.summarize(changes, "Unfinished tasks carried to today", skipped ? `${skipped} conflict${skipped === 1 ? "" : "s"} skipped · previous line preserved.` : "");
   }
   async projects(id: string, projects: string[]): Promise<void> {
     const task = await this.repo.read(id);

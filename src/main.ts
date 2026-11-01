@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS, localDate, object, Settings, Task } from "./model";
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
 import { Context, report, TaskService } from "./service";
-import { ConfirmModal, DatePicker, PriorityPicker, ProjectPicker, TaskPicker } from "./modals";
+import { ConfirmModal, DatePicker, isKeepAsTodo, PriorityPicker, ProjectPicker, TaskPicker } from "./modals";
 import { OrganizedInspectorView, VIEW_TYPE } from "./view";
 import { OrganizedSettingsTab } from "./settings";
 import { editorExtension, reading, refreshEditor } from "./render";
@@ -142,18 +142,19 @@ export default class Organized extends Plugin {
     this.eachView(view => { view.tab = "Projects"; view.module = ""; view.editingModule = ""; view.editingTitle = false; });
     this.refresh();
   }
-  async pickTask(editor: Editor, file: TFile, duplicate = false): Promise<void> {
+  async pickTask(editor: Editor, file: TFile, duplicate = false, allowTodo = false): Promise<void> {
     this.assertWritable(); const context = this.current(editor, file); if (!context) throw new Error("Place the cursor on a Markdown task-list item.");
     if (context.line.id && !duplicate && this.repo.file(this.repo.taskPath(context.line.id))) throw new Error("Task already linked. Use duplicate as new task for a fresh identity.");
     const captured = editor.getValue(); const selection = editor.listSelections();
     this.pickerOpen = true;
     const picker = new TaskPicker(this.app, duplicate ? [] : await this.repo.list(), async choice => {
+      if (isKeepAsTodo(choice)) return;
       await this.run(async () => {
         if (this.activeEditor()?.editor !== editor || editor.getValue() !== captured || JSON.stringify(editor.listSelections()) !== JSON.stringify(selection)) throw new Error("Editor changed while the picker was open. Line preserved; invoke attach/create to retry.");
         const task = typeof choice === "string" ? await this.repo.create(choice) : choice;
         await this.service.attach(context, task, duplicate || !!context.line.id);
       });
-    }, context.line.title);
+    }, context.line.title, allowTodo);
     const close = picker.onClose.bind(picker);
     picker.onClose = () => { close(); this.pickerOpen = false; };
     picker.open();
@@ -175,7 +176,7 @@ export default class Organized extends Plugin {
     const context = this.current(active.editor, active.file); if (!context) return;
     const old = parseTasks(update.startState.doc.toString()).find(t => t.line === context.line.line);
     if (!context.line.id && context.line.marker === " " && (!old || !/^\s*(?:[-+*]|\d+[.)]) \[ \]/.test(old.raw))) {
-      queueMicrotask(() => { if (!this.pickerOpen) void this.pickTask(active.editor, active.file).catch(report); }); return;
+      queueMicrotask(() => { if (!this.pickerOpen) void this.pickTask(active.editor, active.file, false, true).catch(report); }); return;
     }
     if (!context.line.id && context.line.title && '<>/!iI?xX-*"bf'.includes(context.line.marker) && context.line.marker !== old?.marker) {
       queueMicrotask(() => { void this.run(async () => {
