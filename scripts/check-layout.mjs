@@ -21,7 +21,7 @@ try {
   for (const width of [240, 320, 390, 768]) for (const dark of [false, true]) for (const rtl of [false, true]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(({ dark, rtl }) => { document.body.className = `${dark ? 'theme-dark' : 'theme-light'} is-mobile`; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, { dark, rtl });
-    for (const tab of ['Calendar', 'Task', 'InlineEditor', 'Projects', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal']) {
+    for (const tab of ['Calendar', 'Task', 'InlineEditor', 'Projects', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'Eof']) {
       await page.evaluate(tab => window.scene(tab), tab);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       if (overflow) throw Error(`${engine}: horizontal overflow at ${width}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
@@ -63,6 +63,10 @@ try {
         if (await page.locator('.setting-item .setting-item').count()) throw Error('Settings are nested inside a native setting row');
         const clipped = await page.locator('.organized-setting-row .setting-item-name').evaluateAll(elements => elements.some(el => el.scrollWidth > el.clientWidth + 1));
         if (clipped) throw Error(`Unreadable clipped setting labels at ${width}`);
+      }
+      if (tab === 'Eof') {
+        const projection = page.locator('.organized-projection');
+        if (await projection.count() !== 1 || !(await projection.innerText()).includes('priority: none')) throw Error('Final-line task properties are missing at EOF');
       }
       if (tab === 'LivePreview' || tab === 'Source') {
         const visible = await page.locator('.cm-content').innerText();

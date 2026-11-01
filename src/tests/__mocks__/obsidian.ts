@@ -275,7 +275,11 @@ export function setIcon(el: { setAttribute?: (k: string, v: string) => void }, n
   el.setAttribute?.("data-icon", name);
 }
 export class MarkdownRenderer {
-  static async render(_app: unknown, markdown: string, el: HTMLElement, _path: string, _component: unknown) { el.textContent = markdown; }
+  static async render(_app: unknown, markdown: string, el: HTMLElement, _path: string, _component: unknown) {
+    const linked = markdown.replace(/\[\[([^\]]+)\]\]/g, (_match, note: string) => `<a href="${note.endsWith('.md') ? note : `${note}.md`}">${note.replace(/\|/g, ' ')}</a>`)
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    el.innerHTML = linked;
+  }
 }
 export class MarkdownRenderChild extends Component {
   constructor(public containerEl: HTMLElement) { super(); }

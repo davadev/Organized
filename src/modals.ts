@@ -1,4 +1,4 @@
-import { App, Modal, Setting, SuggestModal } from "obsidian";
+import { App, Component, MarkdownRenderer, Modal, Setting, SuggestModal } from "obsidian";
 import { path, PRIORITIES, Priority, Task, validDate } from "./model";
 import { report } from "./service";
 
@@ -9,23 +9,44 @@ function decorate(modal: Modal): void {
   modal.containerEl?.addClass("organized-modal-host");
 }
 
-export class TaskPicker extends SuggestModal<Task | string> {
-  constructor(app: App, readonly tasks: Task[], readonly choose: (choice: Task | string) => Promise<void>, query = "") {
-    super(app); decorate(this); this.setPlaceholder("Find an existing task or create a new one"); this.inputEl.value = query;
+/** The automatic `- [ ] ` trigger offers an explicit escape hatch that links nothing. */
+export const KEEP_AS_TODO = { keepAsTodo: true } as const;
+export type TaskChoice = Task | string | typeof KEEP_AS_TODO;
+export function isKeepAsTodo(value: TaskChoice): value is typeof KEEP_AS_TODO {
+  return typeof value === "object" && value !== null && "keepAsTodo" in value && value.keepAsTodo === true;
+}
+
+export class TaskPicker extends SuggestModal<TaskChoice> {
+  readonly markdown = new Component();
+  constructor(app: App, readonly tasks: Task[], readonly choose: (choice: TaskChoice) => Promise<void>, query = "", readonly allowTodo = false) {
+    super(app); this.markdown.load(); decorate(this); this.setPlaceholder("Find an existing task or create a new one"); this.inputEl.value = query;
   }
-  getSuggestions(query: string): (Task | string)[] {
+  onClose(): void { super.onClose(); this.markdown.unload(); }
+  getSuggestions(query: string): TaskChoice[] {
     const q = query.trim(); const matches = this.tasks.filter(t => t.title.toLocaleLowerCase().includes(q.toLocaleLowerCase()));
-    return q ? [...matches, q] : matches;
+    return [...(this.allowTodo ? [KEEP_AS_TODO] : []), ...matches, ...(q ? [q] : [])];
   }
-  renderSuggestion(value: Task | string, el: HTMLElement): void {
+  renderSuggestion(value: TaskChoice, el: HTMLElement): void {
     el.addClass("organized-suggestion");
-    if (typeof value === "string") el.createDiv({ text: `Create new task: “${value}”` });
+    if (isKeepAsTodo(value)) {
+      el.addClass("organized-suggestion-keep");
+      el.createDiv({ cls: "organized-suggestion-title", text: "Keep as regular todo" });
+      el.createDiv({ cls: "organized-suggestion-meta", text: "Close without linking this line" });
+    } else if (typeof value === "string") el.createDiv({ text: `Create new task: “${value}”` });
     else {
-      el.createDiv({ cls: "organized-suggestion-title", text: value.title });
+      const title = el.createDiv({ cls: "organized-suggestion-title" });
+      void MarkdownRenderer.render(this.app, value.title, title, "", this.markdown).then(() => {
+        for (const anchor of title.querySelectorAll<HTMLAnchorElement>("a")) anchor.addEventListener("click", event => {
+          event.preventDefault(); event.stopPropagation();
+          const href = anchor.getAttribute("href") ?? "";
+          if (/^https?:\/\//i.test(href)) window.open(href, "_blank", "noopener");
+          else void this.app.workspace.openLinkText(decodeURIComponent(href.replace(/\.md(?:#.*)?$/, "")), "");
+        }, true);
+      }).catch(report);
       el.createDiv({ cls: "organized-suggestion-meta", text: `${value.status.replace(/_/g, " ")} · ${value.priority}${value.scheduled ? ` · ${value.scheduled}` : ""}` });
     }
   }
-  onChooseSuggestion(value: Task | string): void { void this.choose(value).catch(report); }
+  onChooseSuggestion(value: TaskChoice): void { void this.choose(value).catch(report); }
 }
 export class PriorityPicker extends SuggestModal<Priority> {
   constructor(app: App, readonly choose: (priority: Priority) => Promise<void>) { super(app); decorate(this); this.setPlaceholder("Choose priority"); }

@@ -70,12 +70,21 @@ export class OrganizedInspectorView extends ItemView {
     return host.createSpan({ cls: "organized-status-dot", attr: { "data-status": task.status, "aria-hidden": "true" } });
   }
   private taskRow(host: HTMLElement, task: Task, action: () => Promise<unknown> | void): HTMLElement {
-    const row = host.createDiv({ cls: "organized-list-card" }); const open = this.button(row, "", action); open.addClass("organized-list-open");
-    open.createDiv({ cls: "organized-list-title", text: task.title });
+    const row = host.createDiv({ cls: "organized-list-card" });
+    // A real button cannot contain links; this focusable card keeps both usable.
+    const open = row.createDiv({ cls: "organized-list-open", attr: { role: "button", tabindex: "0" } });
+    const activate = () => { try { const result = action(); if (result) void result.catch(report); } catch (error) { report(error); } };
+    open.addEventListener("click", event => { if (!(event.target as HTMLElement).closest("a")) activate(); });
+    open.addEventListener("keydown", event => {
+      if (!["Enter", " "].includes(event.key) || (event.target as HTMLElement).closest("a")) return;
+      event.preventDefault(); activate();
+    });
+    const title = open.createDiv({ cls: "organized-list-title" });
+    void MarkdownRenderer.render(this.app, task.title, title, this.owner.repo.taskPath(task.id), this.markdown).catch(report);
     const meta = open.createDiv({ cls: "organized-list-meta" }); this.statusDot(meta, task);
     meta.createSpan({ cls: "organized-list-status", text: task.status.replace(/_/g, " ") });
     if (task.priority !== "none") meta.createSpan({ cls: `organized-list-priority priority-${task.priority}`, text: task.priority });
-    if (task.scheduled) meta.createSpan({ cls: "organized-list-date", text: task.scheduled });
+    if (task.scheduled && this.owner.settings.showScheduledDate) meta.createSpan({ cls: "organized-list-date", text: task.scheduled });
     if (task.starred) { const star = meta.createSpan({ cls: "organized-list-star", attr: { "aria-label": "Favorite" } }); setIcon(star, "star"); }
     if (task.projects.length) {
       const chips = open.createDiv({ cls: "organized-chips" });
@@ -154,7 +163,8 @@ export class OrganizedInspectorView extends ItemView {
       this.button(actions, "Cancel", () => { input.blur(); this.editingTitle = false; return this.render(); });
       input.focus(); input.select();
     } else {
-      header.createEl("h2", { cls: "organized-task-title", text: task.title });
+      const title = header.createDiv({ cls: "organized-task-title", attr: { role: "heading", "aria-level": "2" } });
+      void MarkdownRenderer.render(this.app, task.title, title, this.owner.repo.taskPath(id), this.markdown).catch(report);
       this.iconButton(header, "Edit title", "pencil", () => { this.editingTitle = true; return this.render(); });
     }
     const star = this.iconButton(header, "Favorite", "star", () => this.owner.run(async () => { await this.owner.repo.update(id, t => ({ ...t, starred: !t.starred })); this.owner.refresh(); })); star.setAttribute("aria-pressed", String(task.starred));

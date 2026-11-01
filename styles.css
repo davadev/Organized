@@ -10,6 +10,11 @@
   touch-action: pan-y;
 }
 .organized-settings { display: block; padding: 12px; }
+.organized-settings .setting-item { padding-block: 8px; }
+.organized-settings .setting-item-heading { margin-block: 14px 0; padding-block: 0 4px; }
+.organized-settings .setting-item-heading:first-child { margin-block-start: 0; }
+.organized-settings .setting-item-description { margin-block-start: 2px; line-height: 1.4; }
+.organized-settings .setting-item-description:empty { display: none; }
 .organized-view *, .organized-modal * { box-sizing: border-box; min-inline-size: 0; }
 .organized-tabs { display: flex; gap: 3px; padding: 3px; margin-block-end: 20px; border-radius: var(--radius-m, 8px); background: var(--background-secondary); }
 .organized-view .organized-tabs button.organized-tab {
@@ -88,9 +93,12 @@
 .organized-section-title { margin: 0; color: var(--text-normal); font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
 .organized-count { min-inline-size: 20px; padding: 1px 6px; border: 1px solid var(--background-modifier-border); border-radius: 999px; background: var(--background-secondary); color: var(--text-muted); font-size: 11px; font-weight: 500; text-align: center; font-variant-numeric: tabular-nums; }
 .organized-list-card { border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m, 8px); background: var(--organized-card); overflow: hidden; }
-.organized-view .organized-panel button.organized-list-open { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 6px; inline-size: 100%; padding: 12px; border: 0; border-inline-start: 3px solid transparent; border-radius: 0; background: transparent; color: var(--text-normal); text-align: start; }
-.organized-view .organized-panel button.organized-list-open:hover { border-inline-start-color: var(--interactive-accent); background: var(--background-modifier-hover); }
+.organized-view .organized-panel .organized-list-open { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 6px; inline-size: 100%; padding: 12px; border: 0; border-inline-start: 3px solid transparent; border-radius: 0; background: transparent; color: var(--text-normal); text-align: start; cursor: pointer; }
+.organized-view .organized-panel .organized-list-open:hover { border-inline-start-color: var(--interactive-accent); background: var(--background-modifier-hover); }
+.organized-view .organized-panel .organized-list-open:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: -2px; }
 .organized-list-title { inline-size: 100%; color: var(--text-normal); font-size: 14px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.organized-list-title p, .organized-task-title p { margin: 0; }
+.organized-list-title a, .organized-task-title a { color: var(--link-color, var(--interactive-accent)); text-decoration: var(--link-decoration, underline); cursor: pointer; }
 .organized-list-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--text-muted); font-size: 11px; }
 .organized-list-status { text-transform: capitalize; }
 .organized-list-priority { font-weight: 600; }
@@ -143,6 +151,13 @@ body.is-mobile .modal-container.organized-modal-host { overflow-y: auto; }
 .organized-project-results { max-block-size: 45dvh; overflow-y: auto; }
 .organized-project-choice { display: flex; align-items: center; gap: var(--size-4-2); min-block-size: 44px; overflow-wrap: anywhere; }
 .organized-suggestion { padding-block: var(--size-4-2); min-block-size: 44px; }
+.organized-suggestion-keep { border-block-end: 1px solid var(--background-modifier-border); }
+.organized-suggestion-title p { margin: 0; }
+.organized-notice { display: flex; flex-direction: column; gap: 6px; min-inline-size: 0; }
+.organized-notice-title { font-weight: 600; line-height: 1.35; }
+.organized-notice-detail { color: var(--text-muted); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.organized-notice-undo { align-self: flex-start; min-block-size: 30px; margin-block-start: 2px; padding: 4px 12px; border: 1px solid var(--interactive-accent); border-radius: var(--radius-s, 5px); background: transparent; color: var(--interactive-accent); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.organized-notice-undo:hover { background: var(--interactive-accent); color: var(--text-on-accent); }
 .organized-forwarded { color: var(--text-faint); }
 .organized-projection { margin-inline-start: var(--size-4-2); white-space: normal; overflow-wrap: anywhere; }
 .organized-property, .organized-date { display: inline-block; margin-inline-end: var(--size-4-2); max-inline-size: 100%; }

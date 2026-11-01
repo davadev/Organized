@@ -25,9 +25,10 @@ describe('read-only projections and bundled visual markers', () => {
     owner.settings.displayProperties = [...DISPLAY_PROPERTIES]; const record = await repo.update(task.id, t => ({ ...t, scheduled: '2026-01-01', starred: true }));
     const file = repo.file(repo.taskPath(task.id))!; const before = await repo.readText(file); await repo.write(file, before, before + '\n## Sources\n- [Source](https://example.com)\n');
     raw.vault.process.mockClear(); raw.fileManager.processFrontMatter.mockClear(); await projection(owner, host, record, new Component() as any);
-    expect(host.textContent).toContain('2026-01-01'); expect(host.textContent).toContain('https://example.com'); expect(host.textContent).toContain('priority: none'); expect(host.textContent).toContain('starred: true'); expect(raw.vault.process).not.toHaveBeenCalled(); expect(raw.fileManager.processFrontMatter).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('2026-01-01'); expect(host.querySelector('a[href="https://example.com"]')).toBeTruthy(); expect(host.textContent).toContain('priority: none'); expect(host.textContent).toContain('starred: true'); expect(raw.vault.process).not.toHaveBeenCalled(); expect(raw.fileManager.processFrontMatter).not.toHaveBeenCalled();
     const open = vi.spyOn(owner.service.daily, 'open').mockResolvedValue(file); host.querySelector<HTMLAnchorElement>('a')!.click(); await flush(); expect(open).toHaveBeenCalledWith('2026-01-01');
     owner.safety.writable = false; host.querySelector<HTMLAnchorElement>('a')!.click(); await flush(); expect(open).toHaveBeenCalledOnce(); owner.safety.writable = true;
+    owner.settings.showScheduledDate = false; const hiddenDate = createDiv(); await projection(owner, hiddenDate, record, new Component() as any); expect(hiddenDate.querySelector('.organized-date')).toBeNull();
     owner.settings.displayProperties = ['sources']; const noSources = await repo.create('Without sources'); const noSourcesHost = createDiv(); await projection(owner, noSourcesHost, noSources, new Component() as any); expect(noSourcesHost.textContent).toBe('');
     owner.settings.displayProperties = ['notes', 'sources']; const missing = { ...task, id: 'missing1' }; const empty = createDiv(); await projection(owner, empty, missing, new Component() as any); expect(empty.childElementCount).toBe(0);
   });
@@ -56,6 +57,16 @@ describe('read-only projections and bundled visual markers', () => {
     const badDoc = 'intro\n- [ ] Missing <!--organized:missing1-->'; const bad = widgets(EditorState.create({ doc: badDoc, extensions: [editorLivePreviewField, field] }), field)[0]; const badHost = bad.toDOM(); await flush(); expect(badHost.textContent).toContain('Missing task'); bad.destroy();
     const disposed = widgets(EditorState.create({ doc, extensions: [editorLivePreviewField, field] }), field)[0]; const disposedHost = disposed.toDOM(); disposed.destroy(); await flush(); expect(disposedHost.childElementCount).toBe(0);
     const failed = widgets(EditorState.create({ doc: badDoc, extensions: [editorLivePreviewField, field] }), field)[0]; const failedHost = failed.toDOM(); failed.destroy(); await flush(); expect(failedHost.textContent).toBe('');
+  });
+  it('renders a properties widget on a final task line without a trailing newline', async () => {
+    const { owner, task } = await fixture(); owner.settings.displayProperties = ['priority'];
+    const doc = `intro\n- [ ] Rendered <!--organized:${task.id}-->`;
+    const field = (editorExtension(owner) as any[])[0] as StateField<DecorationSet>;
+    const state = EditorState.create({ doc, selection: { anchor: 0 }, extensions: [editorLivePreviewField, field] });
+    expect(widgets(state, field)).toHaveLength(1);
+    const editor = new EditorView({ state, parent: createDiv() });
+    await flush(); expect(editor.dom.querySelector('.organized-projection')?.textContent).toContain('priority: none');
+    expect(editor.state.doc.toString()).toBe(doc); editor.destroy();
   });
   it('limits icons to visible ranges, rebuilds only for relevant updates and refreshes projected data', async () => {
     const { owner, task } = await fixture(); const extensions = editorExtension(owner) as any[]; const field = extensions[0] as StateField<DecorationSet>; const icons = extensions[1];

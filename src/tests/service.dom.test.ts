@@ -120,7 +120,14 @@ describe("repository and explicit task actions", () => {
     const other = harness(); const record = await other.repo.create('Future'); await other.repo.update(record.id, t => ({ ...t, scheduled: '2099-01-01' }));
     await other.add('Daily/2020-01-01.md', `- [ ] Future <!--organized:${record.id}-->\n- [x] Done <!--organized:done1234-->\n- [ ] Broken <!--organized:broken12-->`);
     const now: any = await other.add(`Daily/${localDate()}.md`); await other.service.reconcile(now); expect(other.texts.get(now.path)).toBe('');
-    expect(Notice.instances.at(-1)?.message).toBeInstanceOf(DocumentFragment);
+    const notice = Notice.instances.at(-1)?.message as DocumentFragment;
+    expect(notice.querySelector('.organized-notice-title')?.textContent).toContain('Unfinished tasks carried to today');
+    expect(notice.querySelector('.organized-notice-detail')?.textContent).toContain('conflict skipped');
+    expect(notice.querySelector('.organized-notice-undo')?.textContent).toBe('Undo');
+    const plural = harness();
+    await plural.add('Daily/2020-01-01.md', '- [ ] Broken <!--organized:broken1234-->\n- [ ] Broken too <!--organized:broken3456-->');
+    const pluralToday: any = await plural.add(`Daily/${localDate()}.md`); await plural.service.reconcile(pluralToday);
+    expect((Notice.instances.at(-1)?.message as DocumentFragment).querySelector('.organized-notice-detail')?.textContent).toContain('2 conflicts skipped');
   });
   it("links projects idempotently, removes unique occurrences, preserves conflicts", async () => {
     const h = harness(); const task = await h.repo.create('Project task'); await h.service.projects(task.id, ['Project.md']); await h.service.projects(task.id, ['Project.md']);

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-beta.5
+
+- Format forwarding and recurrence summaries as a clear title, detail and Undo action.
+- Render Markdown/Obsidian links in task titles as clickable links in the inspector and picker, without activating the surrounding task card.
+- Offer **Keep as regular todo** in the picker opened by typing `- [ ] `; dismissing it leaves the checkbox unlinked.
+- Add a global **Show scheduled date link** setting (on by default), and tighten spacing throughout Settings.
+- Keep selected task properties visible in Live Preview when the task is the final line of a note with no trailing newline.
+
+Verified with 125 behavioral/policy tests at 100% coverage. Live Obsidian and physical-device acceptance remain manual beta checks.
+
 ## 0.1.0-beta.4
 
 - Replace the task text popup with inline editing in the inspector for the title and every task note section. Save and Cancel sit above the field, so an on-screen mobile keyboard cannot cover Save.

@@ -13,9 +13,9 @@ Browser CI uses supported Ubuntu 24.04: Playwright 1.58.2 cannot install its sys
 1. Install the tagged assets via BRAT, or copy the three assets into `.obsidian/plugins/organized/`. Restart.
 2. Confirm startup and ordinary navigation do not create/mutate notes.
 3. Set matching daily-note folder/format; understand the default-on auto-forward toggle before opening today's note.
-4. Type `- [ ] `, search/create/cancel in the native picker; paste a block and verify no picker appears. Test stale-context cancellation.
+4. Type `- [ ] `, search/create/cancel in the native picker; choose **Keep as regular todo** and confirm the checkbox remains unlinked. Test task titles containing `[[wikilinks]]` and `[Markdown links](https://example.com)` in the picker and inspector, and verify clicking a link does not select the task card. Paste a block and verify no picker appears. Test stale-context cancellation.
 5. Try all planned markers, independent timers, recurrence, project links, scheduling/rescheduling, historical propagation and undo after a concurrent edit.
-6. Verify properties in Reading and Live Preview, untouched source, dark/light themes and RTL.
+6. Verify properties in Reading and Live Preview, including a task at the very end of a note without a trailing newline; toggle **Show scheduled date link** off and confirm date links disappear globally. Verify untouched source, dark/light themes and RTL.
    Confirm IDs stay hidden on the active Live Preview line but remain visible in source mode. Edit the title and Description inline, confirm Save stays above the field with the mobile keyboard open, and verify a legacy `## Information` note reads as Description and migrates when saved. Convert ordinary unchecked todos from the command palette and confirm linked, completed, in-progress and empty items are untouched. Scroll/edit the sidebar without losing the task, cancel a **Delete task** confirmation, then confirm one on a disposable task and check the canonical note reaches trash and linked occurrences disappear.
 7. On real iOS/Android, verify BRAT installation, narrow sidebar, scrolling, picker keyboard ownership, touch controls, background/restart timer persistence and unload cleanup.
 
@@ -51,3 +51,9 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Todo conversion tests cover confirmation, cancellation, single/plural summaries, CRLF and indentation preservation, the no-todo notice, and refusal to convert a task note. The new command is registered as `convert-todos` and delegates through the serial queue.
 - The Chromium/WebKit matrix now includes the InlineEditor and ScheduleModal scenes. Checks assert the first card is Description with Idea below it, Save sits above the inline field without host overflow, and the shared modal host is top-aligned with visible actions.
 - Build, typed lint, CSS lint, dead-code checks and cloud lint parity passed. These remain shim-based checks, not live Obsidian or real-device certification.
+
+## Fifth-beta candidate verification (2026-11-01)
+
+- 125 behavioral/policy tests; all shipped TypeScript files at 100% statements, branches, functions and lines.
+- Chromium/WebKit include an EOF Live Preview scene and assert properties render for a final task line without a trailing newline. Task-title link activation, the keep-as-todo escape, the scheduled-date setting and structured Undo notice are covered by DOM tests.
+- Build, review-parity lint, CSS lint, dead-code and both browser layout gates passed. UI checks use a host shim, not live Obsidian or a physical device; acceptance remains a manual beta check.

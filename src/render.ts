@@ -17,7 +17,7 @@ export function icon(host: HTMLElement, marker: string): void {
 }
 export async function projection(owner: Organized, host: HTMLElement, task: Task, component: Component): Promise<void> {
   host.addClass("organized-projection"); const selected = owner.settings.displayProperties;
-  if (task.scheduled) {
+  if (task.scheduled && owner.settings.showScheduledDate) {
     const scheduled = task.scheduled;
     const link = host.createEl("a", { text: scheduled, cls: "organized-date", href: "#", attr: { "aria-label": `Open daily note for ${scheduled}` } });
     link.addEventListener("click", event => { event.preventDefault(); void owner.run(() => owner.service.daily.open(scheduled)); });
@@ -130,7 +130,9 @@ function build(state: EditorState, owner: Organized): DecorationSet {
     if (!task.id) continue;
     const line = state.doc.line(task.line + 1);
     if (state.selection.main.head >= line.from && state.selection.main.head <= line.to) continue;
-    ranges.push(Decoration.widget({ widget: new PropertyWidget(owner, task.id, owner.revision), block: true, side: 1 }).range(line.to));
+    // CodeMirror drops a block widget placed exactly at the end of a document
+    // without a trailing newline; an inline widget there still renders.
+    ranges.push(Decoration.widget({ widget: new PropertyWidget(owner, task.id, owner.revision), block: line.to < state.doc.length, side: 1 }).range(line.to));
   }
   return Decoration.set(ranges, true);
 }
