@@ -7,6 +7,7 @@
 - Keep recurring `[f]` task occurrences out of automatic forwarding.
 - Make the mobile checkbox toolbar open the task picker reliably when it inserts a new blank todo, while leaving pasted checkboxes untouched.
 - Browse task lines from the current note in the Task tab when the cursor is elsewhere; selecting a linked task jumps the editor cursor to it.
+- Configure retention in days for completed/canceled task notes; expired linked todos become ordinary checkboxes before task files are moved to Obsidian's trash.
 
 ## 0.1.0-beta.5
 

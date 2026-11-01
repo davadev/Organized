@@ -12,7 +12,7 @@ export interface Movement {
 export interface Task {
   schema_version: number; id: string; title: string; status: Status; priority: Priority;
   scheduled: string | null; created: string; time_tracked_seconds: number;
-  time_tracking_started_at: string | null; recurring: boolean;
+  time_tracking_started_at: string | null; recurring: boolean; closed_at: string | null;
   recurrence_periods: { start: string; stop: string | null }[];
   starred: boolean; projects: string[]; movement_history: Movement[];
   daily_note_section_path: Section[];
@@ -25,10 +25,11 @@ export interface Settings {
   sortScope: "list" | "section" | "first" | "none";
   displayProperties: DisplayProperty[];
   showScheduledDate: boolean;
+  taskRetentionDays: number;
 }
 export const DEFAULT_SETTINGS: Settings = {
   taskFolder: "Tasks", dailyFolder: "Daily", dailyFormat: "YYYY-MM-DD", autoForward: true,
-  missingSection: "recreate", sortScope: "list", displayProperties: [], showScheduledDate: true,
+  missingSection: "recreate", sortScope: "list", displayProperties: [], showScheduledDate: true, taskRetentionDays: 0,
 };
 export function object(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -67,6 +68,7 @@ export function settingsFrom(value: unknown): Settings {
   s.sortScope = member(v.sortScope, ["list", "section", "first", "none"], "list");
   s.displayProperties = strings(v.displayProperties).filter((p): p is DisplayProperty => DISPLAY_PROPERTIES.includes(p as DisplayProperty));
   s.showScheduledDate = typeof v.showScheduledDate === "boolean" ? v.showScheduledDate : true;
+  s.taskRetentionDays = Number.isInteger(v.taskRetentionDays) && Number(v.taskRetentionDays) >= 0 && Number(v.taskRetentionDays) <= 36500 ? Number(v.taskRetentionDays) : 0;
   return s;
 }
 export function taskFrom(value: unknown, expectedId: string): Task {
@@ -82,6 +84,7 @@ export function taskFrom(value: unknown, expectedId: string): Task {
     created: typeof v.created === "string" && Number.isFinite(Date.parse(v.created)) ? v.created : "1970-01-01T00:00:00.000Z",
     time_tracked_seconds: typeof v.time_tracked_seconds === "number" && Number.isFinite(v.time_tracked_seconds) && v.time_tracked_seconds >= 0 ? v.time_tracked_seconds : 0,
     time_tracking_started_at: typeof v.time_tracking_started_at === "string" && Number.isFinite(Date.parse(v.time_tracking_started_at)) ? v.time_tracking_started_at : null,
+    closed_at: typeof v.closed_at === "string" && Number.isFinite(Date.parse(v.closed_at)) ? v.closed_at : null,
     recurring: v.recurring === true, recurrence_periods: periods as unknown as Task["recurrence_periods"], starred: v.starred === true,
     projects: strings(v.projects).filter(p => { try { return path(p) === p && p.endsWith(".md"); } catch { return false; } }),
     movement_history: history as unknown as Movement[], daily_note_section_path: sections as unknown as Section[],
@@ -100,6 +103,8 @@ export function elapsed(task: Task, now = Date.now()): number {
 }
 export function setStatus(task: Task, status: Status, now = new Date()): Task {
   const next = { ...task, status: task.recurring ? "open" as const : status };
+  if (next.status === "completed" || next.status === "canceled") next.closed_at = task.status === next.status && task.closed_at ? task.closed_at : now.toISOString();
+  else next.closed_at = null;
   if (status === "in_progress") next.time_tracking_started_at = task.time_tracking_started_at ?? now.toISOString();
   else { next.time_tracked_seconds = elapsed(task, now.getTime()); next.time_tracking_started_at = null; }
   return next;
