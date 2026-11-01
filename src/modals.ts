@@ -1,6 +1,7 @@
-import { App, Component, MarkdownRenderer, Modal, Setting, SuggestModal } from "obsidian";
+import { App, Component, Modal, Setting, SuggestModal } from "obsidian";
 import { path, PRIORITIES, Priority, Task, validDate } from "./model";
 import { report } from "./service";
+import { renderMarkdownLinks } from "./markdown";
 
 /** Share the compact inspector surface with native modal chrome. */
 function decorate(modal: Modal): void {
@@ -35,14 +36,7 @@ export class TaskPicker extends SuggestModal<TaskChoice> {
     } else if (typeof value === "string") el.createDiv({ text: `Create new task: “${value}”` });
     else {
       const title = el.createDiv({ cls: "organized-suggestion-title" });
-      void MarkdownRenderer.render(this.app, value.title, title, "", this.markdown).then(() => {
-        for (const anchor of title.querySelectorAll<HTMLAnchorElement>("a")) anchor.addEventListener("click", event => {
-          event.preventDefault(); event.stopPropagation();
-          const href = anchor.getAttribute("href") ?? "";
-          if (/^https?:\/\//i.test(href)) window.open(href, "_blank", "noopener");
-          else void this.app.workspace.openLinkText(decodeURIComponent(href.replace(/\.md(?:#.*)?$/, "")), "");
-        }, true);
-      }).catch(report);
+      void renderMarkdownLinks(this.app, value.title, title, "", this.markdown).catch(report);
       el.createDiv({ cls: "organized-suggestion-meta", text: `${value.status.replace(/_/g, " ")} · ${value.priority}${value.scheduled ? ` · ${value.scheduled}` : ""}` });
     }
   }

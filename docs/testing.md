@@ -57,3 +57,9 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - 125 behavioral/policy tests; all shipped TypeScript files at 100% statements, branches, functions and lines.
 - Chromium/WebKit include an EOF Live Preview scene and assert properties render for a final task line without a trailing newline. Task-title link activation, the keep-as-todo escape, the scheduled-date setting and structured Undo notice are covered by DOM tests.
 - Build, review-parity lint, CSS lint, dead-code and both browser layout gates passed. UI checks use a host shim, not live Obsidian or a physical device; acceptance remains a manual beta check.
+
+## Inspector/layout follow-up
+
+- Verify wikilinks and Markdown links open from the inspector's task title and note sections; ordinary links in task-list cards remain separate from card activation.
+- Verify the task inspector uses a single grouped details surface and that mobile Settings controls stay close to their labels at 240–390 px.
+- Confirm an unfinished `[f]` recurring occurrence is not copied by automatic daily-note reconciliation.

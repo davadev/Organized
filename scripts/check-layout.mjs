@@ -36,6 +36,7 @@ try {
         if (cards[0] !== 'Description' || !cards.includes('Idea') || await page.locator('.organized-view .setting-item').count()) throw Error(`Task inspector lost its description-first cards: ${cards.join(',')}`);
         if (!(await page.locator('.organized-task-hero .organized-task-title').count())) throw Error('Task inspector is missing its titled hero');
         if (!(await page.locator('.organized-task-actions .organized-danger').count())) throw Error('Task inspector is missing its delete action');
+        if (await page.locator('.organized-task-details').count() !== 1) throw Error('Task properties are fragmented instead of grouped into one details surface');
       }
       if (tab === 'InlineEditor') {
         const field = page.locator('.organized-inline-editor'); if (await field.count() !== 1) throw Error('Inline editor field is missing');
@@ -63,6 +64,14 @@ try {
         if (await page.locator('.setting-item .setting-item').count()) throw Error('Settings are nested inside a native setting row');
         const clipped = await page.locator('.organized-setting-row .setting-item-name').evaluateAll(elements => elements.some(el => el.scrollWidth > el.clientWidth + 1));
         if (clipped) throw Error(`Unreadable clipped setting labels at ${width}`);
+        if (width <= 390) {
+          const gap = await page.locator('.organized-setting-row').first().evaluate(row => {
+            const info = row.querySelector('.setting-item-info')?.getBoundingClientRect();
+            const control = row.querySelector('.setting-item-control')?.getBoundingClientRect();
+            return info && control ? control.top - info.bottom : 0;
+          });
+          if (gap > 48) throw Error(`Mobile settings control is separated from its label by ${gap}px at width ${width}`);
+        }
       }
       if (tab === 'Eof') {
         const projection = page.locator('.organized-projection');

@@ -44,7 +44,7 @@ describe('compact calendar and contextual task inspector', () => {
   it('shows only the requested description on a fresh task and edits it inline without exposing IDs', async () => {
     const { owner, view, repo } = await fixture(); const task = await repo.create('Test task'); owner.selectedTaskId = task.id; view.tab = 'Task'; view.module = 'Description';
     const refs = vi.spyOn(owner.service, 'refs'); const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
-    await view.render(); expect(titles(view)).toEqual(['Description']); expect(view.contentEl.textContent).toContain('Add context, details or links.'); expect(view.contentEl.textContent).not.toContain(task.id); expect(view.contentEl.querySelector('.setting-item')).toBeNull(); expect(refs).not.toHaveBeenCalled(); expect(scroll).toHaveBeenCalledOnce();
+    await view.render(); expect(titles(view)).toEqual(['Description']); expect(view.contentEl.querySelector('.organized-task-details')?.contains(view.contentEl.querySelector('.organized-card'))).toBe(true); expect(view.contentEl.textContent).toContain('Add context, details or links.'); expect(view.contentEl.textContent).not.toContain(task.id); expect(view.contentEl.querySelector('.setting-item')).toBeNull(); expect(refs).not.toHaveBeenCalled(); expect(scroll).toHaveBeenCalledOnce();
     await view.render(); expect(scroll).toHaveBeenCalledOnce();
     button(view.contentEl, 'Add description').click(); await flush(); expect(view.editingModule).toBe('Description');
     const field = view.contentEl.querySelector<HTMLTextAreaElement>('textarea[aria-label="Description"]')!; expect(field).toBeTruthy();
@@ -119,8 +119,21 @@ describe('compact calendar and contextual task inspector', () => {
     open.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await flush();
     expect(owner.selectedTaskId).toBe(linked.id);
     owner.selectedTaskId = null; open.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); expect(owner.selectedTaskId).toBeNull();
+    owner.selectedTaskId = null; open.createEl('a', { href: '#unhandled', text: 'unhandled' }).dispatchEvent(new MouseEvent('click', { bubbles: true })); await flush(); expect(owner.selectedTaskId).toBeNull();
     const render = vi.spyOn(view, 'render').mockImplementation(() => { throw new Error('sync render failure'); });
     open.dispatchEvent(new MouseEvent('click', { bubbles: true })); expect(Notice.instances.at(-1)?.message).toContain('sync render failure'); render.mockRestore();
+  });
+  it('opens internal Markdown links from the task inspector using the task note as source', async () => {
+    const { owner, view, repo } = await fixture();
+    const linked = await repo.create('Review [[Recovery_plan]]'); owner.selectedTaskId = linked.id; view.tab = 'Task';
+    const file = repo.file(repo.taskPath(linked.id))!; const before = await repo.readText(file);
+    await repo.write(file, before, `${before}\n## Description\nSee also [[Recovery_plan]].\n`);
+    const open = vi.fn(async () => undefined); (owner.app.workspace as any).openLinkText = open;
+    await view.render(); await flush(); const anchor = view.contentEl.querySelector<HTMLAnchorElement>('.organized-task-title a')!;
+    expect(anchor).toBeTruthy(); anchor.click(); await flush();
+    expect(open).toHaveBeenCalledWith('Recovery_plan', repo.taskPath(linked.id));
+    const noteAnchor = view.contentEl.querySelector<HTMLAnchorElement>('.organized-task-notes a')!;
+    noteAnchor.click(); await flush(); expect(open).toHaveBeenLastCalledWith('Recovery_plan', repo.taskPath(linked.id));
   });
   it('renders empty project sections and deletes the selected task after confirmation', async () => {
     const { owner, view, repo } = await fixture(); view.tab = 'Projects'; await view.render();

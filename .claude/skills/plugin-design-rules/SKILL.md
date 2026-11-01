@@ -3,10 +3,6 @@ name: plugin-design-rules
 description: Starter design and code rules for an Obsidian plugin that each prevent a known regression (CSS, settings tab, mobile, data safety, tests and coverage, lint). Use before editing src/, styles.css, settings or any code that reads or writes user data; append your own hard-won rules.
 ---
 
-<!-- TEMPLATE: .claude/skills/plugin-design-rules/SKILL.md. These are STARTER rules that hold for any plugin. CHANGE: replace
-     organized; APPEND a rule (with the incident in one line) every time a bug teaches you one, grouped under a heading.
-     Delete this comment after editing. -->
-
 # Plugin design rules
 
 ## CSS (`styles.css`)
@@ -21,6 +17,7 @@ description: Starter design and code rules for an Obsidian plugin that each prev
 - Per-device state (last seen version, one-time hints) is not a preference: list it in `NOT_IN_SETTINGS_TAB` in `settingsCoverage.test.ts` with the reason.
 - A new settings group needs a full Obsidian restart to appear (iPad: swipe the app away).
 - Do not rebuild the DOM per keystroke in a search/filter input (it closes the phone keyboard).
+- On narrow screens, explicitly stack setting labels and controls and cap their gap; host flex-wrap defaults can strand controls far below their descriptions.
 
 ## Mobile / platform
 - Never auto-download large data at startup (a startup download once caused an iOS crash loop).

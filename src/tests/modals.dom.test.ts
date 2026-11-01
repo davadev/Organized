@@ -40,7 +40,7 @@ describe("native task, date, source and project modals", () => {
     const externalTask = newTask('[website](https://example.com)', 'task8765'); const externalRow = createDiv(); triggered.renderSuggestion(externalTask, externalRow); await flush();
     const external = externalRow.querySelector<HTMLAnchorElement>('a')!; const windowOpen = vi.spyOn(window, 'open').mockReturnValue(null);
     external.click(); expect(windowOpen).toHaveBeenCalledWith('https://example.com', '_blank', 'noopener'); windowOpen.mockRestore();
-    const missingHref = vi.spyOn(anchor, 'getAttribute').mockReturnValue(null); anchor.click(); expect(open).toHaveBeenLastCalledWith('', ''); missingHref.mockRestore();
+    const missingHref = vi.spyOn(anchor, 'getAttribute').mockReturnValue(null); anchor.click(); expect(open).toHaveBeenCalledOnce(); missingHref.mockRestore();
   });
   it("date confirmation validates, cancellation creates nothing, errors are visible", async () => {
     const h = harness(); const choose = vi.fn(async () => undefined); const modal = new DatePicker(h.app, '2026-01-01', choose); modal.open(); decorated(modal);

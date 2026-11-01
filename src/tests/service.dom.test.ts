@@ -112,10 +112,11 @@ describe("repository and explicit task actions", () => {
   });
   it("auto-forwards latest unfinished occurrences once, respects settings, recurring/completed/future schedules", async () => {
     const h = harness(); const task = await h.repo.create('Carry');
-    await h.add('Daily/2020-01-01.md', `- [ ] Carry <!--organized:${task.id}-->`); await h.add('Daily/2020-01-03.md', `# Work\n- [ ] Carry <!--organized:${task.id}-->`);
+    const recurringMarker = await h.repo.create('Recurring by marker');
+    await h.add('Daily/2020-01-01.md', `- [ ] Carry <!--organized:${task.id}-->\n- [f] Recurring <!--organized:${recurringMarker.id}-->`); await h.add('Daily/2020-01-03.md', `# Work\n- [ ] Carry <!--organized:${task.id}-->`);
     const today: any = await h.add(`Daily/${localDate()}.md`);
     h.setSettings({ autoForward: false }); await h.service.reconcile(today); expect(h.texts.get(today.path)).toBe('');
-    h.setSettings({ autoForward: true }); await h.service.reconcile(today); expect(h.texts.get(today.path)).toContain(task.id); expect(h.texts.get('Daily/2020-01-03.md')).toContain('[>]'); expect(h.texts.get('Daily/2020-01-01.md')).toContain('[ ]');
+    h.setSettings({ autoForward: true }); await h.service.reconcile(today); expect(h.texts.get(today.path)).toContain(task.id); expect(h.texts.get(today.path)).not.toContain(recurringMarker.id); expect(h.texts.get('Daily/2020-01-01.md')).toContain('[f] Recurring'); expect(h.texts.get('Daily/2020-01-03.md')).toContain('[>]'); expect(h.texts.get('Daily/2020-01-01.md')).toContain('[ ] Carry');
     await h.service.reconcile(today); expect(parseTasks(h.texts.get(today.path)!)).toHaveLength(1); await h.service.undo(); expect(h.texts.get(today.path)).not.toContain(task.id);
     const other = harness(); const record = await other.repo.create('Future'); await other.repo.update(record.id, t => ({ ...t, scheduled: '2099-01-01' }));
     await other.add('Daily/2020-01-01.md', `- [ ] Future <!--organized:${record.id}-->\n- [x] Done <!--organized:done1234-->\n- [ ] Broken <!--organized:broken12-->`);
