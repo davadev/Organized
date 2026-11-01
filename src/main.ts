@@ -162,8 +162,9 @@ export default class Organized extends Plugin {
   onEditorUpdate(update: ViewUpdate): void {
     if (update.selectionSet) this.followCursor();
     if (!update.docChanged || this.busy || this.pickerOpen) return;
-    const user = update.transactions.some(t => { const event = t.annotation(Transaction.userEvent); return event && !event.startsWith("input.organized") && !event.includes("paste") && !event.includes("drop") && !event.includes("undo") && !event.includes("redo"); });
-    if (!user) return;
+    const events = update.transactions.map(t => t.annotation(Transaction.userEvent));
+    if (events.some(event => event && ["paste", "drop", "undo", "redo"].some(ignored => event.includes(ignored)))) return;
+    const user = events.some(event => event && !event.startsWith("input.organized"));
     const active = this.activeEditor(); if (!active || active.editor.getValue() !== update.state.doc.toString()) return;
     // Deletion is meaningful even when the cursor no longer sits on a task.
     const remaining = new Set(parseTasks(update.state.doc.toString()).map(t => t.id));
@@ -175,6 +176,15 @@ export default class Organized extends Plugin {
     if (touchedLines > 2) return;
     const context = this.current(active.editor, active.file); if (!context) return;
     const old = parseTasks(update.startState.doc.toString()).find(t => t.line === context.line.line);
+    let changes = 0; let exactBlankCheckboxInsertion = false;
+    update.changes.iterChanges((from, to, _newFrom, _newTo, inserted) => {
+      changes++;
+      exactBlankCheckboxInsertion = update.startState.doc.sliceString(from, to).trim() === ""
+        && /^\s*(?:[-+*]|\d+[.)]) \[ \] ?$/.test(inserted.toString());
+    });
+    // Some mobile toolbar actions dispatch a single blank checkbox without a CM userEvent annotation.
+    // Accept only that exact one-line insertion; pasted blocks, undo/redo and bulk edits stay ignored.
+    if (!user && !(changes === 1 && exactBlankCheckboxInsertion && !context.line.id && context.line.marker === " " && !context.line.title)) return;
     if (!context.line.id && context.line.marker === " " && (!old || !/^\s*(?:[-+*]|\d+[.)]) \[ \]/.test(old.raw))) {
       queueMicrotask(() => { if (!this.pickerOpen) void this.pickTask(active.editor, active.file, false, true).catch(report); }); return;
     }

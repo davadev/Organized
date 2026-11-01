@@ -63,3 +63,8 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Verify wikilinks and Markdown links open from the inspector's task title and note sections; ordinary links in task-list cards remain separate from card activation.
 - Verify the task inspector uses a single grouped details surface and that mobile Settings controls stay close to their labels at 240–390 px.
 - Confirm an unfinished `[f]` recurring occurrence is not copied by automatic daily-note reconciliation.
+
+## Mobile toolbar picker regression
+
+- With a mobile-toolbar-like CM transaction that inserts exactly `- [ ] ` without `Transaction.userEvent`, verify the picker opens once.
+- Verify paste/drop/undo/redo and multi-line task blocks still do not auto-open the picker; choosing **Keep as regular todo** leaves the checkbox unlinked.

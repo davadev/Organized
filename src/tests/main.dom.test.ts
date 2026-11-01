@@ -155,6 +155,14 @@ describe('plugin lifecycle and user-only editor actions', () => {
     await flush(); expect(pick).not.toHaveBeenCalled(); expect(trigger).not.toHaveBeenCalled();
     h.setActive(file, '- [ ] '); plugin.onEditorUpdate(update('- [', '- [ ] ')); await flush(); expect(pick).toHaveBeenCalledOnce();
   });
+  it('opens the task picker for the mobile checkbox toolbar insertion without a CM user event', async () => {
+    const { h, plugin } = await loaded(); const file: any = await h.add('Toolbar.md');
+    const editor = h.setActive(file, '- [ ] '); const pick = vi.spyOn(plugin, 'pickTask').mockResolvedValue();
+    plugin.onEditorUpdate(update('', '- [ ] ', null)); await flush();
+    expect(editor.getValue()).toBe('- [ ] '); expect(pick).toHaveBeenCalledOnce();
+    (plugin as any).pickerOpen = false; pick.mockClear();
+    plugin.onEditorUpdate(update('', '- [ ] ', 'input.paste')); await flush(); expect(pick).not.toHaveBeenCalled();
+  });
   it('triggers only changed linked markers, first manages deliberate syntax and prompts for removed active timers', async () => {
     const { h, plugin } = await loaded(); const task = await plugin.repo.create('Managed'); const file: any = await h.add('Note.md'); const editor = h.setActive(file);
     const trigger = vi.spyOn(plugin, 'trigger').mockResolvedValue();
