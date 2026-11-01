@@ -6,7 +6,7 @@ import { harness } from './harness';
 import { installObsidianDom } from './__mocks__/obsidianDom';
 import { Notice, Modal } from './__mocks__/obsidian';
 import { localDate } from '../model';
-import { DatePicker } from '../modals';
+import { DatePicker, TaskPicker } from '../modals';
 import { parseTasks } from '../codec';
 
 installObsidianDom();
@@ -32,7 +32,7 @@ describe('compact calendar and contextual task inspector', () => {
     for (const [key, index] of [['ArrowRight', 9], ['ArrowLeft', 7], ['ArrowDown', 15], ['ArrowUp', 1], ['Enter', 8]] as const) { days[8].focus(); days[8].dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })); expect(document.activeElement).toBe(days[index]); }
     button(view.contentEl, 'Today').click(); await flush(); expect(repo.file(owner.service.daily.path(localDate()))).toBeTruthy(); expect(view.selectedDate).toBe(localDate()); await view.render(); expect(view.contentEl.querySelector('.organized-has-note')).toBeTruthy();
     const select = vi.spyOn(view, 'selectDay').mockResolvedValue(); view.contentEl.querySelector<HTMLButtonElement>('.organized-calendar button')!.click(); await flush(); expect(select).toHaveBeenCalled();
-    button(view.contentEl, 'Task').click(); await flush(); expect(view.contentEl.textContent).toContain('Place the cursor'); button(view.contentEl, 'Projects').click(); await flush(); expect(view.tab).toBe('Projects');
+     button(view.contentEl, 'Task').click(); await flush(); expect(view.contentEl.textContent).toContain('Open a Markdown note'); button(view.contentEl, 'Projects').click(); await flush(); expect(view.tab).toBe('Projects');
     await view.onClose(); await view.onClose(); expect(view.contentEl.childElementCount).toBe(0); expect((view as any).children).toHaveLength(0);
   });
   it('renders a small statistics strip and reports action/read errors', async () => {
@@ -134,6 +134,56 @@ describe('compact calendar and contextual task inspector', () => {
     expect(open).toHaveBeenCalledWith('Recovery_plan', repo.taskPath(linked.id));
     const noteAnchor = view.contentEl.querySelector<HTMLAnchorElement>('.organized-task-notes a')!;
     noteAnchor.click(); await flush(); expect(open).toHaveBeenLastCalledWith('Recovery_plan', repo.taskPath(linked.id));
+  });
+  it('lists current-note tasks without a task cursor and moves the editor cursor when one is selected', async () => {
+    const { owner, view, repo, add, setActive, clearActive, files } = await fixture();
+    const first = await repo.create('First linked'); const second = await repo.create('Second linked');
+    const text = `Intro\n- [ ] First linked <!--organized:${first.id}-->\n- [ ] Plain todo\n- [ ] Second linked <!--organized:${second.id}-->\n- [ ] Orphan link <!--organized:missing123-->\n- [ ] `;
+    const file: any = await add('Daily/Today.md', text); const editor = setActive(file);
+    owner.context = null; owner.selectedTaskId = null; view.tab = 'Task'; await view.render(); await flush();
+    expect(view.contentEl.querySelector('.organized-section-title')?.textContent).toBe('Today');
+    expect(listed(view)).toEqual(['First linked', 'Plain todo', 'Second linked', 'Orphan link', 'Untitled todo']);
+    const secondRow = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-list-card')).find(row => row.textContent?.includes('Second linked'))!;
+    secondRow.querySelector<HTMLElement>('.organized-list-open')!.click(); await flush();
+    expect(editor.focus).toHaveBeenCalledOnce(); expect(editor.getCursor()).toEqual({ line: 3, ch: text.split('\n')[3].indexOf('] ') + 2 });
+    expect(owner.selectedTaskId).toBe(second.id); expect(view.contentEl.querySelector('.organized-task-title')?.textContent).toContain('Second linked');
+
+    owner.selectedTaskId = null; owner.context = null; clearActive(); owner.followCursor(); view.tab = 'Task'; await view.render(); await flush();
+    expect(listed(view)).toEqual(['First linked', 'Plain todo', 'Second linked', 'Orphan link', 'Untitled todo']);
+    const orphan = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-list-card')).find(row => row.textContent?.includes('Orphan link'))!;
+    expect(orphan.textContent).toContain('Linked task unavailable'); button(orphan, 'Repair/create task').click(); await flush(); expect(Modal.instances.at(-1)).toBeInstanceOf(TaskPicker); (Modal.instances.at(-1) as TaskPicker).close();
+    const plain = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-list-card')).find(row => row.textContent?.includes('Plain todo'))!;
+    const plainOpen = plain.querySelector<HTMLElement>('.organized-list-open')!; plainOpen.click(); await flush(); expect(editor.getCursor().line).toBe(2);
+    const currentPlain = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-list-card')).find(row => row.textContent?.includes('Plain todo'))!;
+    const currentOpen = currentPlain.querySelector<HTMLElement>('.organized-list-open')!;
+    currentOpen.createEl('a', { href: '#note', text: 'note' }).click(); await flush(); expect(editor.getCursor().line).toBe(2);
+    currentOpen.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    currentOpen.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await flush(); expect(editor.getCursor().line).toBe(2);
+    const keyboardPlain = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-list-card')).find(row => row.textContent?.includes('Plain todo'))!;
+    const anchor = keyboardPlain.querySelector<HTMLElement>('.organized-list-open')!.createEl('a', { href: '#note', text: 'note' }); anchor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    button(keyboardPlain, 'Attach/create task').click(); await flush(); expect(editor.getCursor().line).toBe(2); expect(Modal.instances.at(-1)).toBeInstanceOf(TaskPicker);
+    (Modal.instances.at(-1) as TaskPicker).close();
+    files.delete(file.path); owner.selectedTaskId = null; view.tab = 'Task'; await view.render(); await flush();
+    expect(view.contentEl.textContent).toContain('Open a Markdown note');
+    const empty: any = await add('Empty.md'); setActive(empty); owner.selectedTaskId = null; await view.render(); await flush(); expect(view.contentEl.textContent).toContain('No tasks in this note yet.');
+  });
+  it('discards stale note-task list and task-record loads during rerender', async () => {
+    const { owner, view, repo, add, setActive } = await fixture();
+    const linked = await repo.create('Delayed task'); const file: any = await add('Delayed.md', `- [ ] Delayed task <!--organized:${linked.id}-->`);
+    setActive(file); owner.selectedTaskId = null; view.tab = 'Task';
+    let releaseLines!: (lines: any[]) => void;
+    const lines = new Promise<any[]>(resolve => { releaseLines = resolve; });
+    vi.spyOn(owner, 'taskLines').mockReturnValueOnce(lines);
+    const staleLines = view.render(); await flush(); await view.render(); releaseLines(await owner.taskLines(file)); await staleLines;
+
+    let releaseTask!: (task: any) => void; const read = vi.spyOn(repo, 'read');
+    read.mockImplementationOnce(() => new Promise(resolve => { releaseTask = resolve; }));
+    const staleTask = view.render(); await flush(); await view.render(); releaseTask(linked); await staleTask;
+
+    const orphanFile: any = await add('Orphan.md', '- [ ] Missing <!--organized:missing123-->'); setActive(orphanFile);
+    let rejectTask!: (error: Error) => void;
+    read.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectTask = reject; }));
+    const staleFailure = view.render(); await flush(); await view.render(); rejectTask(Error('removed')); await staleFailure;
   });
   it('renders empty project sections and deletes the selected task after confirmation', async () => {
     const { owner, view, repo } = await fixture(); view.tab = 'Projects'; await view.render();

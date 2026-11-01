@@ -6,6 +6,7 @@
 - Group task details into one shared surface and tighten narrow-screen Settings rows to remove excess whitespace.
 - Keep recurring `[f]` task occurrences out of automatic forwarding.
 - Make the mobile checkbox toolbar open the task picker reliably when it inserts a new blank todo, while leaving pasted checkboxes untouched.
+- Browse task lines from the current note in the Task tab when the cursor is elsewhere; selecting a linked task jumps the editor cursor to it.
 
 ## 0.1.0-beta.5
 

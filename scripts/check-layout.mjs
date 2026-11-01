@@ -21,7 +21,7 @@ try {
   for (const width of [240, 320, 390, 768]) for (const dark of [false, true]) for (const rtl of [false, true]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(({ dark, rtl }) => { document.body.className = `${dark ? 'theme-dark' : 'theme-light'} is-mobile`; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, { dark, rtl });
-    for (const tab of ['Calendar', 'Task', 'InlineEditor', 'Projects', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'Eof']) {
+    for (const tab of ['Calendar', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'Eof']) {
       await page.evaluate(tab => window.scene(tab), tab);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       if (overflow) throw Error(`${engine}: horizontal overflow at ${width}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
@@ -37,6 +37,10 @@ try {
         if (!(await page.locator('.organized-task-hero .organized-task-title').count())) throw Error('Task inspector is missing its titled hero');
         if (!(await page.locator('.organized-task-actions .organized-danger').count())) throw Error('Task inspector is missing its delete action');
         if (await page.locator('.organized-task-details').count() !== 1) throw Error('Task properties are fragmented instead of grouped into one details surface');
+      }
+      if (tab === 'NoteTasks') {
+        if (await page.locator('.organized-list-card').count() !== 2) throw Error('Task tab is missing current-note tasks when no task is selected');
+        if (await page.locator('.organized-list-card').first().innerText().then(text => !text.includes('A task title'))) throw Error('Current-note linked task title is missing');
       }
       if (tab === 'InlineEditor') {
         const field = page.locator('.organized-inline-editor'); if (await field.count() !== 1) throw Error('Inline editor field is missing');

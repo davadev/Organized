@@ -6,6 +6,7 @@ import { editorExtension } from '../src/render';
 import { Setting, editorLivePreviewField } from '../src/tests/__mocks__/obsidian';
 import { OrganizedSettingsTab } from '../src/settings';
 import { DatePicker } from '../src/modals';
+import { parseTasks } from '../src/codec';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 
@@ -14,6 +15,9 @@ const task = newTask('A task title that stays readable at phone widths', 'task12
 const browseTask = { ...task, starred: true, projects: ['Research and project notes.md', 'Reading list.md'], priority: 'high' };
 const canceledTask = { ...newTask('A canceled task', 'task5678'), status: 'canceled' };
 const note = '---\ntitle: A task title that stays readable at phone widths\n---\n\n## Description\nA note that explains the task in enough detail to wrap cleanly on a narrow phone sidebar without clipping.\n\n## Idea\nAn idea that should stay below the description.\n';
+const noteTasksDoc = `Intro\n- [ ] ${task.title} <!--organized:${task.id}-->\n- [ ] A regular todo`;
+const noteTasksFile = { path: 'Daily/Today.md' } as any;
+const noteTasksEditor = { focus() {}, setCursor() {} } as any;
 const app: any = { workspace: { getLeaf: () => ({ openFile: async () => undefined }) } };
 const owner: any = {
   app, selectedTaskId: task.id, context: null, settings: { ...DEFAULT_SETTINGS, displayProperties: [] }, revision: 0,
@@ -21,7 +25,8 @@ const owner: any = {
   assertWritable() {}, run: async (fn: () => unknown) => fn(), contextFor: () => null,
   pickProjects() {}, saveModule: async () => undefined, refresh() {},
   repo: { list: async () => [browseTask, canceledTask], file: (path: string) => path.startsWith('Tasks/') ? { path } : null, read: async () => task, taskPath: () => 'Tasks/task1234.md', readText: async () => note },
-  service: { daily: { path: (d: string) => `Daily/${d}.md`, open: async () => null }, refs: async () => [], reconcile: async () => undefined },
+   service: { daily: { path: (d: string) => `Daily/${d}.md`, open: async () => null }, refs: async () => [], reconcile: async () => undefined, resolve: async (context: any) => ({ text: noteTasksDoc, line: context.line }) },
+   taskSourceEditor: () => ({ editor: noteTasksEditor, file: noteTasksFile }), taskLines: async () => parseTasks(noteTasksDoc),
 };
 const view = new OrganizedInspectorView({ app } as any, owner);
 const root = document.querySelector('#app')!; root.appendChild(view.contentEl);
@@ -46,7 +51,11 @@ let modal: DatePicker | null = null;
   } else if (tab === 'ScheduleModal') {
     modal = new DatePicker(app, '2026-01-01', async () => undefined);
     modal.open();
+  } else if (tab === 'NoteTasks') {
+    owner.selectedTaskId = null; view.module = ''; view.editingTitle = false; view.tab = 'Task';
+    root.appendChild(view.contentEl); await view.render();
   } else {
+    owner.selectedTaskId = task.id;
     root.appendChild(view.contentEl); view.module = ''; view.editingTitle = false;
     view.editingModule = tab === 'InlineEditor' ? 'Description' : '';
     view.tab = tab === 'InlineEditor' ? 'Task' : tab as typeof view.tab; await view.render();

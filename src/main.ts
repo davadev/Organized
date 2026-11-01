@@ -20,6 +20,7 @@ export default class Organized extends Plugin {
   safety!: DataSafety;
   context: Context | null = null;
   selectedTaskId: string | null = null;
+  private lastNoteEditor: { editor: Editor; file: TFile } | null = null;
   revision = 0;
   readonly projectionListeners = new Set<() => void>();
   private busy = 0;
@@ -90,6 +91,11 @@ export default class Organized extends Plugin {
   activeEditor(): { editor: Editor; file: TFile } | null {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView); return view?.file && view.getMode() === "source" ? { editor: view.editor, file: view.file } : null;
   }
+  taskSourceEditor(): { editor: Editor; file: TFile } | null {
+    const active = this.activeEditor(); if (active) this.lastNoteEditor = active;
+    if (this.lastNoteEditor && !this.repo.file(this.lastNoteEditor.file.path)) this.lastNoteEditor = null;
+    return active ?? this.lastNoteEditor;
+  }
   async taskLines(file: TFile): Promise<TaskLine[]> { return parseTasks(await this.repo.readText(file)); }
   current(editor: Editor, file: TFile): Context | null {
     const line = parseTasks(editor.getValue()).find(t => t.line === editor.getCursor().line);
@@ -100,6 +106,7 @@ export default class Organized extends Plugin {
     // Focusing the inspector is not leaving the selected task. Only an actual
     // Markdown editor cursor change can replace its context.
     if (!active) return;
+    this.lastNoteEditor = active;
     const next = this.current(active.editor, active.file);
     const changed = (next?.line.id ?? null) !== (this.context?.line.id ?? null);
     this.context = next;
@@ -124,6 +131,7 @@ export default class Organized extends Plugin {
     }
   }
   async openInspector(tab?: "Task", module = ""): Promise<void> {
+    const active = this.activeEditor(); if (active) this.lastNoteEditor = active;
     let leaf: WorkspaceLeaf | null = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0] ?? null;
     if (!leaf) { leaf = this.app.workspace.getRightLeaf(false); if (!leaf) throw new Error("Cannot open the sidebar; try opening a workspace pane first."); await leaf.setViewState({ type: VIEW_TYPE, active: true }); }
     await this.app.workspace.revealLeaf(leaf);
@@ -166,6 +174,7 @@ export default class Organized extends Plugin {
     if (events.some(event => event && ["paste", "drop", "undo", "redo"].some(ignored => event.includes(ignored)))) return;
     const user = events.some(event => event && !event.startsWith("input.organized"));
     const active = this.activeEditor(); if (!active || active.editor.getValue() !== update.state.doc.toString()) return;
+    this.lastNoteEditor = active;
     // Deletion is meaningful even when the cursor no longer sits on a task.
     const remaining = new Set(parseTasks(update.state.doc.toString()).map(t => t.id));
     for (const removed of parseTasks(update.startState.doc.toString()).filter(t => t.id && t.marker === "/" && !remaining.has(t.id))) {

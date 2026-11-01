@@ -68,3 +68,9 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 
 - With a mobile-toolbar-like CM transaction that inserts exactly `- [ ] ` without `Transaction.userEvent`, verify the picker opens once.
 - Verify paste/drop/undo/redo and multi-line task blocks still do not auto-open the picker; choosing **Keep as regular todo** leaves the checkbox unlinked.
+
+## Current-note task browsing
+
+- Put the cursor on prose in a note containing linked and regular checkbox tasks, then open the Task tab; verify it lists every task line from that note.
+- Tap/activate a linked task and confirm the editor focuses the matching line while the Task tab shows its details. Regular todos should move the cursor and offer **Attach/create task**; orphaned IDs should offer repair.
+- Open the inspector with no recent Markdown editor and verify the Task tab gives a helpful empty-state message.
