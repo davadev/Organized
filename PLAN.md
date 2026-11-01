@@ -1,6 +1,6 @@
 # Organized Obsidian plugin — implementation plan
 
-**Status:** implementation authorized by davadev; first beta requested. All project attribution and Git identities must use davadev only.
+**Status:** implementation authorized by davadev; first beta requested. Project attribution remains davadev only. Git authors may be davadev or Dany using the verified davadev GitHub no-reply address; committers may match or be GitHub's merge service (`GitHub <noreply@github.com>`).
 
 ## 1. Goal
 

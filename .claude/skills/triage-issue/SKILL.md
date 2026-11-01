@@ -10,7 +10,7 @@ Repository: `davadev/Organized`. No project board is configured; do not invent o
 ## Every issue, always
 1. Use an existing appropriate label (`bug` or `enhancement`) and include the intended beta in the issue body.
 2. Track implementation in a feature-branch PR referencing the issue.
-3. Record verified checks, known limitations and install instructions; project attribution is davadev only.
+3. Record verified checks, known limitations and install instructions; project attribution is davadev only. Git authors may be davadev or Dany using the verified davadev GitHub no-reply address; committers may match or be GitHub's merge service (`GitHub <noreply@github.com>`).
 4. Large features start as a research-and-design issue: verified facts / hypotheses / open questions kept separate, a timeboxed spike, explicit continue/stop criteria.
 
 ## Picking next work

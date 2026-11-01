@@ -1,6 +1,6 @@
 # Release procedure
 
-Only tag-triggered `.github/workflows/release.yml` publishes artifacts. Never run `gh release create` manually or upload local builds. Work on feature branches and merge a green PR first. All attribution and Git identity must be davadev.
+Only tag-triggered `.github/workflows/release.yml` publishes artifacts. Never run `gh release create` manually or upload local builds. Work on feature branches and merge a green PR first. Project/license attribution must be davadev; Git authors may be davadev or Dany using the verified davadev GitHub no-reply address, and committers may match or be GitHub's merge service (`GitHub <noreply@github.com>`).
 
 Browser checks are required PR checks on Ubuntu 24.04 (the supported Playwright 1.58.2 host); they never run during tag publication. Validation and release use `ubuntu-latest` and explicitly assert Node 24/npm >=11.10 before installing.
 
@@ -15,7 +15,7 @@ This repository has no stable release. Main's `0.0.0` is an unpublished bootstra
 1. Use Node 24, npm >=11.10; run `npm ci` and `npm ls --all`.
 2. Run `npm run lint`, `npm run lint:css`, `npm run build`, `npm run test:cov`, `npm run check:dead-code`, `npm run lint:cloud-parity`, `npm run check:layout`, `npm run check:webkit`.
 3. Run `npm run check-release -- --with-build --strict`. Inspect actual UI screenshots and document any device checks honestly.
-4. Push the feature branch, open a PR, wait for every required check, then fast-forward main to that exact tested head (`git switch main`, `git merge --ff-only <feature branch>`, `git push origin main`). GitHub marks the PR merged when its head lands on the base. This preserves davadev author/committer metadata instead of introducing a server-generated merge identity. If main advanced, rebase/update the feature branch and re-run CI first; never bypass required checks. No version metadata bump for a beta.
+4. Push the feature branch, open a PR, and wait for every required check before merging. If main advanced, update the feature branch and re-run CI first; never bypass required checks. No version metadata bump for a beta.
 5. Tag reviewed main: `git tag 0.1.0-beta.1`, then `git push origin 0.1.0-beta.1`. No `v` prefix; use the next unused beta number on subsequent releases.
 6. CI stamps the exact prerelease into its working tree, repeats deterministic checks, validates nonempty `main.js`, `manifest.json`, `styles.css`, attests those bytes and publishes a prerelease. Browsers are in CI, never in the tag workflow.
 7. Verify: `gh release view 0.1.0-beta.1 --json isDraft,isPrerelease,assets,tagName`; download assets and check the manifest version equals the tag. Verify main's manifest remains 0.0.0 until a stable is explicitly approved. Verify attestation with `gh attestation verify <asset> --repo davadev/Organized`.
