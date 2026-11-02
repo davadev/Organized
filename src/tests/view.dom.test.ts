@@ -281,4 +281,10 @@ describe('compact calendar and contextual task inspector', () => {
     expect(Array.from(view.contentEl.querySelectorAll('.organized-list-card')).map(card => card.getAttribute('data-status')).sort()).toEqual(['canceled', 'completed', 'in_progress', 'open']);
     for (const [task, status] of [[done, 'completed'], [active, 'in_progress']] as const) { owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); expect(view.contentEl.querySelector('.organized-task-hero')?.getAttribute('data-status')).toBe(status); }
   });
+  it('shows the Calendar, Task and Projects tabs as labelled icon buttons', async () => {
+    const { view } = await fixture(); await view.render();
+    const tabs = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-tabs button'));
+    expect(tabs.map(tab => tab.getAttribute('aria-label'))).toEqual(['Calendar', 'Task', 'Projects']); expect(tabs.map(tab => tab.title)).toEqual(['Calendar', 'Task', 'Projects']); expect(tabs.every(tab => tab.textContent === '')).toBe(true); expect(tabs.map(tab => tab.getAttribute('data-icon'))).toEqual(['calendar', 'list-checks', 'folder']);
+    expect(tabs.map(tab => tab.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']); tabs[2].click(); await flush(); expect(view.tab).toBe('Projects'); expect(view.contentEl.querySelector('.organized-tabs button[aria-selected="true"]')?.getAttribute('aria-label')).toBe('Projects');
+  });
 });

@@ -28,6 +28,11 @@ try {
       await page.evaluate(tab => window.scene(tab), tab);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       if (overflow) throw Error(`${engine}: horizontal overflow at ${width}${scale === 1 ? '' : ` with ${scale}x text`}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
+      const tabs = await page.evaluate(() => { const list = document.querySelector('.organized-tabs'); const host = document.querySelector('.organized-view'); if (!list || !host) return null; const box = list.getBoundingClientRect(); const hostBox = host.getBoundingClientRect(); const rtl = getComputedStyle(host).direction === 'rtl'; const buttons = [...list.querySelectorAll('button')].map(button => { const b = button.getBoundingClientRect(); return [b.width, b.height, button.getAttribute('aria-label'), button.hasAttribute('data-icon')]; }); return { buttons, gap: rtl ? box.left - hostBox.left : hostBox.right - box.right }; });
+      if (tabs) {
+        if (tabs.buttons.length !== 3 || tabs.buttons.some(([w, h, label, icon]) => w !== h || w > 44 || !label || !icon)) throw Error(`Tabs are not square labelled icon buttons: ${JSON.stringify(tabs.buttons)}`);
+        if (tabs.gap > 24) throw Error(`Tabs are not aligned to the inline end of the panel: ${tabs.gap}px away at ${width}`);
+      }
       const clippedButtons = await page.evaluate(() => [...document.querySelectorAll('.organized-view button')].filter(button => button.clientWidth > 0 && button.scrollWidth > button.clientWidth + 1).map(button => button.textContent.trim() || button.className));
       if (clippedButtons.length) throw Error(`${engine}: button text is clipped at ${width}${scale === 1 ? '' : ` with ${scale}x text`}: ${clippedButtons.join(', ')}`);
       const calendar = page.locator('.organized-calendar button');
