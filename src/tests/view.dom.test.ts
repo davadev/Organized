@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { softTint } from '../colors';
+import { softTint, TEXT_LIGHTNESS } from '../colors';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Organized from '../main';
 import { OrganizedInspectorView, VIEW_TYPE } from '../view';
@@ -400,7 +400,9 @@ describe('compact calendar and contextual task inspector', () => {
     owner.rememberProjects([blue.path, `${folder}/Plain.md`]);
     view.tab = 'Projects'; await view.render(); await flush();
     for (let n = 0; n < 6; n++) await flush();
-    const blueCard = card(view, 'Blue task'); expect(blueCard.hasAttribute('data-project')).toBe(true); expect(blueCard.style.getPropertyValue('--organized-project-rgb')).toBe(softTint('#3b82f6')); expect(blueCard.getAttribute('data-status')).toBe('completed'); expect(card(view, 'Gray task').hasAttribute('data-project')).toBe(false);
+    const blueCard = card(view, 'Blue task'); expect(blueCard.hasAttribute('data-project')).toBe(false); expect(blueCard.getAttribute('data-status')).toBe('completed');
+    const blueChip = blueCard.querySelector<HTMLElement>('.organized-chip')!; expect(blueChip.textContent).toBe('Blue'); expect(blueChip.hasAttribute('data-project')).toBe(true); expect(blueChip.style.getPropertyValue('--organized-project-rgb')).toBe(softTint('#3b82f6')); expect(blueChip.style.getPropertyValue('--organized-project-text')).toBe(softTint('#3b82f6', TEXT_LIGHTNESS.light)); expect(blueChip.style.getPropertyValue('--organized-project-text-dark')).toBe(softTint('#3b82f6', TEXT_LIGHTNESS.dark));
+    expect(card(view, 'Gray task').querySelector('.organized-chip')!.hasAttribute('data-project')).toBe(false);
     const rows = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-color-row')); expect(rows.map(row => row.querySelector('.organized-color-name')!.textContent)).toEqual(['Blue', 'Plain']);
     const inputs = rows.map(row => row.querySelector<HTMLInputElement>('input[type=color]')!); expect(inputs.map(input => input.value)).toEqual(['#3b82f6', '#808080']); expect(rows[0].querySelector('.organized-color-clear')).toBeTruthy(); expect(rows[1].querySelector('.organized-color-clear')).toBeNull();
     inputs[1].value = '#22c55e'; inputs[1].dispatchEvent(new Event('change')); for (let n = 0; n < 6; n++) await flush(); expect(repo.projectColor(`${folder}/Plain.md`)).toBe('#22c55e');

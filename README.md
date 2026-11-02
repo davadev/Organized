@@ -39,7 +39,7 @@ Identity and recurrence comments stay hidden in Live Preview, including the line
 | `[-]` | Reversible cancellation; recurring dates cancel independently |
 | `[*]` | Toggle favorite |
 | `[s]` | Open the Sources section for inline Markdown references (URLs/Obsidian links, optional labels/citations) |
-| `[j]` | Multi-select project notes; missing selected notes are created in `<task folder>/Projects/` with `organized_type: project` in their frontmatter, and only such notes are listed. A project can have a colour (`organized_color: "#rrggbb"`, set from the Projects tab) that fills its tasks in the side panel and calendar; status shows as the outline |
+| `[j]` | Multi-select project notes; missing selected notes are created in `<task folder>/Projects/` with `organized_type: project` in their frontmatter, and only such notes are listed. A project can have a colour (`organized_color: "#rrggbb"`, set from the Projects tab) shown on its name label in the side panel and as the fill of its blocks in the calendar |
 | `[r]` | Toggle recurrence in existing/current/future and subsequently created daily notes; clear after success |
 
 Only the markers above act. Every other character, including the old action letters `[i]`, `[I]`, `[?]`, `["]`, `[b]` and `[f]` and the theme glyphs `[d]`, `[p]`, `[k]`, `[l]`, `[S]`, `[c]`, `[w]`, `[u]`, `[D]`, `[P]`, `[M]`, is **formatting only**: it shows its icon and never changes metadata or storage. Use them freely to style a todo without side effects. Things-style glyphs are bundled, so the Things theme is not required.

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Task cards in the side panel are coloured by status again: done and in-progress tasks get a green wash and edge (in progress stronger), open stays neutral, canceled stays faded. The project colour now appears only as the colour of the project's name label on the card (a tinted chip, readable in light and dark themes). The calendar keeps the project colour for its Day blocks and Week bars.
 - Favorites have their own tab (a star icon, after Projects) instead of sitting above the projects; the Projects tab now lists projects and canceled tasks. Opening a task from Favorites offers **Back to favorites**.
 - In-progress tasks use the same green status icon as done ones (the shapes still differ: a play triangle and a tick), on cards and Day blocks.
 - The colour pickers in **Project colors** are small rounded squares instead of large circles, and the Clear buttons are compact.

@@ -81,7 +81,7 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Change a task's priority in the side panel with *Current task list* sorting: the list in the note reorders.
 
 ## Project colours
-- Projects tab → Project colors: pick a colour for a project; its note gets `organized_color: "#rrggbb"`. Linked tasks are filled with it in the side panel and in the Day and Week views; tasks without a coloured project show gray blocks. The card or block outline shows the status (open neutral, in progress accent, done green). Clear removes the property.
+- Projects tab → Project colors: pick a colour for a project; its note gets `organized_color: "#rrggbb"`. The project's name label on task cards is tinted with it, and its tasks' blocks in the Day and Week views are filled with it (gray without a coloured project). Task cards themselves are coloured by status (done and in progress green). Clear removes the property.
 
 ## Completed-task retention
 
