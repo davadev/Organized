@@ -129,6 +129,9 @@ export function insertTask(text: string, line: string, section: Section[]): { te
 }
 /** Status sections of a project note, in the order a project reads: what is being done, what waits, what is finished. */
 export const PROJECT_SECTIONS = { in_progress: "In progress", open: "Open", completed: "Done", canceled: "Canceled" } as const;
+/** Recurring tasks never finish, so in a project note they live under their own heading instead of a status one. */
+export const PROJECT_ONGOING = "Ongoing";
+export const projectSection = (task: { recurring: boolean; status: keyof typeof PROJECT_SECTIONS }): string => task.recurring ? PROJECT_ONGOING : PROJECT_SECTIONS[task.status];
 /** The heading path to use for `name` in a note: an existing heading of that name at any level, else a new level-2 heading. */
 export function sectionNamed(text: string, name: string): Section[] {
   let found: Section[] | null = null;

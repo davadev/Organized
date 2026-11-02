@@ -1,7 +1,7 @@
 import { App, Editor, TFile, parseYaml, stringifyYaml } from "obsidian";
 import { validColor } from "./colors";
 import { localDate, makeId, newTask, object, path, Task, taskFrom, Settings, validDate } from "./model";
-import { parseTasks, PROJECT_SECTIONS, TaskLine } from "./codec";
+import { parseTasks, PROJECT_ONGOING, PROJECT_SECTIONS, TaskLine } from "./codec";
 
 export function splitNote(text: string): { frontmatter: Record<string, unknown>; body: string } {
   const match = /^---\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)(?:\r?\n|$)/.exec(text);
@@ -17,7 +17,7 @@ export const START_KEY = "organized_start";
 const hasStart = (value: unknown): boolean => validDate(value) || (value instanceof Date && Number.isFinite(value.getTime()));
 /** A new project note: frontmatter marking it, dating its start, and one heading per status that linked tasks move between. */
 export function projectTemplate(today = localDate()): string {
-  return `---\n${PROJECT_KEY}: project\n${START_KEY}: ${today}\n---\n\n## ${PROJECT_SECTIONS.open}\n\n## ${PROJECT_SECTIONS.in_progress}\n\n## ${PROJECT_SECTIONS.completed}\n`;
+  return `---\n${PROJECT_KEY}: project\n${START_KEY}: ${today}\n---\n\n## ${PROJECT_SECTIONS.open}\n\n## ${PROJECT_SECTIONS.in_progress}\n\n## ${PROJECT_ONGOING}\n\n## ${PROJECT_SECTIONS.completed}\n`;
 }
 export class Repository {
   private tail: Promise<unknown> = Promise.resolve();

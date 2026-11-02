@@ -1,5 +1,5 @@
 import { Notice, TFile } from "obsidian";
-import { insertTask, moveTask, noteLoose, noteSection, parseTasks, PROJECT_SECTIONS, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
+import { insertTask, moveTask, noteLoose, noteSection, parseTasks, projectSection, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, Status, Task, WorkSession } from "./model";
 import { seconds } from "./sessions";
@@ -129,7 +129,7 @@ export class TaskService {
         after = replaceTask(after, line, { marker: occurrenceMarker });
       }
       // In a project note the line also moves to the heading for the new status.
-      if (occurrence.tasks.length === 1 && this.isProjectFile(occurrence.file)) after = moveTask(after, id, PROJECT_SECTIONS[task.status]);
+      if (occurrence.tasks.length === 1 && this.isProjectFile(occurrence.file)) after = moveTask(after, id, projectSection(task));
       await this.edit(occurrence.file, occurrence.text, after);
       if (!this.isProjectFile(occurrence.file)) await this.resortAfter(occurrence.file, task);
     }
@@ -178,6 +178,11 @@ export class TaskService {
       return { ...t, status: "open", recurring: !t.recurring, recurrence_periods: periods, daily_note_section_path: context?.line.section ?? t.daily_note_section_path };
     });
     changes.push({ file, before, after: await this.repo.readText(file) });
+    // In a project note the line moves between Ongoing and its status heading.
+    for (const notePath of task.projects) {
+      const project = this.repo.file(notePath); if (!project) continue;
+      try { const text = await this.repo.readText(project); await this.edit(project, text, moveTask(text, id, projectSection(task)), changes); } catch { skipped.push(project.path); }
+    }
     for (const daily of this.daily.files().filter(d => d.date >= today)) {
       try {
         if (task.recurring) await this.insert(daily.file, task, " ", true, changes);
@@ -261,7 +266,7 @@ export class TaskService {
     for (const notePath of projects) {
       const file = await this.repo.ensure(notePath, projectTemplate()); await this.repo.markProject(file);
       // A linked task lands under the heading for its status, so the project reads as open / in progress / done.
-      const section = sectionNamed(await this.repo.readText(file), PROJECT_SECTIONS[task.status]);
+      const section = sectionNamed(await this.repo.readText(file), projectSection(task));
       await this.insert(file, { ...task, daily_note_section_path: section }, task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.time_tracking_started_at ? "/" : " ", false);
     }
     for (const removed of task.projects.filter(p => !projects.includes(p))) {

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Ongoing section in projects.** Recurring tasks now sit under their own **Ongoing** heading in a project note instead of Open or Done, since they never finish. New project notes include the heading; turning recurrence on or off moves the line between Ongoing and its status heading. Existing project notes get the heading when a recurring task is next linked or its recurrence or status changes; nothing is rewritten in bulk.
+
 - Making a standalone note no longer loses tracked time. A running timer is stopped and logged first, and a task with tracked sessions keeps its (hidden) task note, so its blocks stay in the Day and Week calendar and open the standalone note when tapped. The dialog says so. Tasks without tracked time are still removed as before.
 
 - You can now select and copy text in the side panel: task titles, descriptions, notes, sources and list rows. Obsidian disables text selection in plugin views; read-only content opts back in, while buttons and controls stay unselectable.
