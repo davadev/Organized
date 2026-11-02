@@ -1,5 +1,6 @@
 /* Organized — MIT, Copyright (c) 2026 davadev. */
 .organized-view {
+  /* Neutral on purpose: any tint in the base card would shift every project colour washed over it. */
   --organized-card: var(--background-secondary);
   padding: var(--size-4-3);
   padding-block-end: calc(5.5rem + var(--mobile-navbar-height, 0px) + env(safe-area-inset-bottom, 0px));
@@ -215,9 +216,6 @@
   .organized-setting-row.setting-item .setting-item-control { flex: 0 0 auto; inline-size: 100%; min-block-size: 0; block-size: auto; }
   .organized-setting-row.setting-item .setting-item-control { justify-content: flex-start; }
   .organized-setting-row input:not([type="checkbox"]), .organized-setting-row select { inline-size: 100%; }
-}
-@supports (color: color-mix(in srgb, red, blue)) {
-  .organized-view { --organized-card: color-mix(in srgb, var(--background-secondary), var(--interactive-accent) 3%); }
 }
 .organized-task-notes, .organized-rich-property { white-space: normal; overflow-wrap: anywhere; }
 .organized-modal { max-block-size: 80vh; overflow-y: auto; }

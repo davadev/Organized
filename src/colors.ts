@@ -17,14 +17,15 @@ function srgbOf(l: number, c: number, h: number): number[] {
   const l3 = (l + 0.3963377774 * a + 0.2158037573 * b) ** 3, m3 = (l - 0.1055613458 * a - 0.0638541728 * b) ** 3, s3 = (l - 0.0894841775 * a - 1.291485548 * b) ** 3;
   return [4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3, -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3, -0.0041960863 * l3 - 0.7034186147 * m3 + 1.707614701 * s3];
 }
-/** Lightness and the chroma range every project colour is drawn with. Only the hue of the picked colour is kept, so projects look like one family whatever is picked. */
-export const SOFT = { lightness: 0.74, minChroma: 0.07, maxChroma: 0.13, grayBelow: 0.025 };
-/** The picked colour as space-separated `r g b` channels for CSS `rgb(r g b / alpha)`, drawn at the shared lightness and a moderate chroma. A gray pick stays gray. */
+/** Lightness and chroma range every project colour is drawn with, so projects look like one family. The hue is kept; lightness follows the pick halfway inside a narrow band, because a yellow forced to the lightness of a blue turns olive. */
+export const SOFT = { lightness: 0.74, follow: 0.5, lowest: 0.66, highest: 0.88, minChroma: 0.07, maxChroma: 0.13, grayBelow: 0.025 };
+/** The picked colour as space-separated `r g b` channels for CSS `rgb(r g b / alpha)`, drawn in the shared lightness band and a moderate chroma. A gray pick stays gray. */
 export function softTint(color: string): string {
-  const { c, h } = oklchOf(color); const gray = c < SOFT.grayBelow;
+  const { l: picked, c, h } = oklchOf(color); const gray = c < SOFT.grayBelow;
+  const lightness = Math.min(SOFT.highest, Math.max(SOFT.lowest, SOFT.lightness + SOFT.follow * (picked - SOFT.lightness)));
   let chroma = gray ? c : Math.min(SOFT.maxChroma, Math.max(SOFT.minChroma, c));
-  let rgb = srgbOf(SOFT.lightness, chroma, h);
+  let rgb = srgbOf(lightness, chroma, h);
   // Pull chroma in until the colour fits the screen's gamut, rather than clipping a channel and shifting the hue.
-  for (let step = 0; step < 24 && rgb.some(v => v < 0 || v > 1); step++) { chroma *= 0.92; rgb = srgbOf(SOFT.lightness, chroma, h); }
+  for (let step = 0; step < 24 && rgb.some(v => v < 0 || v > 1); step++) { chroma *= 0.92; rgb = srgbOf(lightness, chroma, h); }
   return rgb.map(v => Math.round(Math.min(1, Math.max(0, toGamma(Math.min(1, Math.max(0, v))))) * 255)).join(" ");
 }
