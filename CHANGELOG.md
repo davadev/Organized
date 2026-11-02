@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Task cards are coloured by status in the side panel: done tasks get a faint green wash with a green edge, in-progress tasks take the accent of your theme, open tasks stay neutral so unfinished work stands out, and canceled tasks are struck through and faded. The status dot on cards is gone; the colours replace it. The mixes are subtle and adapt to light and dark themes, and fall back to plain edge colours on an old Android WebView that cannot mix colours.
+- Android: the side panel can no longer slide sideways; tab labels no longer clip with a large system font (the tabs wrap onto a second row instead); and dialogs keep a height limit on a WebView without dynamic viewport units.
 - Tighten the Task tab's heading rows (the mobile theme no longer inflates them to button height) and indent tasks inside the heading that owns them, with smaller gaps between rows.
 - New project notes are created in `<task folder>/Projects/` instead of the vault root. On first launch of this version, notes already linked as projects are moved there automatically (Obsidian updates links to them); a summary notice offers Undo and reports any note skipped because a same-named note already exists in the destination. Project notes in that folder are treated as ordinary notes, not task records.
 - Add an **All tasks in this note** button to the task view that moves the editor cursor off the task and returns the Task tab to the note's task overview.

@@ -86,7 +86,7 @@ export class OrganizedInspectorView extends ItemView {
     return host.createSpan({ cls: "organized-status-dot", attr: { "data-status": this.shownStatus(task), "aria-hidden": "true" } });
   }
   private taskRow(host: HTMLElement, task: Task, action: () => Promise<unknown> | void): HTMLElement {
-    const row = host.createDiv({ cls: "organized-list-card" });
+    const row = host.createDiv({ cls: "organized-list-card", attr: { "data-status": this.shownStatus(task) } });
     // A real button cannot contain links; this focusable card keeps both usable.
     const open = row.createDiv({ cls: "organized-list-open", attr: { role: "button", tabindex: "0" } });
     const activate = () => { try { const result = action(); if (result) void result.catch(report); } catch (error) { report(error); } };
@@ -97,7 +97,7 @@ export class OrganizedInspectorView extends ItemView {
     });
     const title = open.createDiv({ cls: "organized-list-title" });
     void renderMarkdownLinks(this.app, task.title, title, this.owner.repo.taskPath(task.id), this.markdown).catch(report);
-    const meta = open.createDiv({ cls: "organized-list-meta" }); this.statusDot(meta, task);
+    const meta = open.createDiv({ cls: "organized-list-meta" });
     meta.createSpan({ cls: "organized-list-status", text: task.recurring && this.shownStatus(task) === "completed" ? "done · today" : task.status.replace(/_/g, " ") });
     if (task.priority !== "none") meta.createSpan({ cls: `organized-list-priority priority-${task.priority}`, text: task.priority });
     if (task.scheduled && this.owner.settings.showScheduledDate) meta.createSpan({ cls: "organized-list-date", text: task.scheduled });
@@ -257,7 +257,7 @@ export class OrganizedInspectorView extends ItemView {
     if (!id) { await this.noteTasks(host, generation); return; }
     const task = await this.owner.repo.read(id); await this.loadDoneToday();
     if (generation !== this.renderId) return;
-    const hero = host.createDiv({ cls: "organized-task-hero" });
+    const hero = host.createDiv({ cls: "organized-task-hero", attr: { "data-status": this.shownStatus(task) } });
     const eyebrow = hero.createDiv({ cls: "organized-eyebrow" });
     this.statusDot(eyebrow, task); eyebrow.createSpan({ text: this.origin === "Editor cursor" ? "From editor" : "From projects" });
     if (this.origin === "Editor cursor") this.iconButton(eyebrow, "All tasks in this note", "list", () => this.showNoteTasks()).addClass("organized-note-overview");

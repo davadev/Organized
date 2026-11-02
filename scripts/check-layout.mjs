@@ -7,24 +7,29 @@ const engine = process.argv[2] === 'webkit' ? 'webkit' : 'chromium';
 const bundle = await build({ entryPoints: ['scripts/layout-entry.ts'], bundle: true, write: false, format: 'esm', target: 'es2022', alias: { obsidian: resolve('src/tests/__mocks__/obsidian.ts') } });
 const browser = await ({ chromium, webkit }[engine]).launch({ headless: true });
 const css = await readFile('styles.css', 'utf8');
-const hostCss = `*, *::before, *::after { box-sizing: border-box; } body { margin: 0; font: 14px system-ui; --text-normal: #222; --text-muted: #666; --text-faint: #777; --background-primary: #fff; --background-secondary: #eee; --background-modifier-border: #ccc; --interactive-accent: #6755c5; --text-on-accent: #fff; --font-ui-small: 13px; --font-ui-smaller: 11px; --size-4-1: 4px; --size-4-2: 8px; --size-4-3: 12px; } body.theme-dark { --text-normal: #ddd; --text-muted: #aaa; --text-faint: #999; --background-primary: #202020; --background-secondary: #303030; --background-modifier-border: #555; background: #202020; color: #ddd; } button, input, select, textarea { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); color: var(--text-normal); font: inherit; } button { cursor: pointer; } .setting-item { display: flex; justify-content: space-between; padding-block: 8px; }`;
+const hostCss = `*, *::before, *::after { box-sizing: border-box; } body { margin: 0; font: 14px system-ui; --text-normal: #222; --text-muted: #666; --text-faint: #777; --background-primary: #fff; --background-secondary: #eee; --background-modifier-border: #ccc; --interactive-accent: #6755c5; --color-green: #2f9e44; --text-on-accent: #fff; --font-ui-small: 13px; --font-ui-smaller: 11px; --size-4-1: 4px; --size-4-2: 8px; --size-4-3: 12px; } body.theme-dark { --text-normal: #ddd; --text-muted: #aaa; --text-faint: #999; --background-primary: #202020; --background-secondary: #303030; --background-modifier-border: #555; background: #202020; color: #ddd; } button, input, select, textarea { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); color: var(--text-normal); font: inherit; } button { cursor: pointer; } .setting-item { display: flex; justify-content: space-between; padding-block: 8px; }`;
 await mkdir('test-results', { recursive: true });
 try {
-  const page = await browser.newPage(); const errors = []; page.on('pageerror', e => errors.push(e.message));
+  let page; const errors = [];
+  // A phone with a large system font scales every text size but not the fixed boxes around it (Android), so each width is also checked with text 1.3 times larger.
+  for (const scale of [1, 1.3]) {
+  page = await browser.newPage(); page.on('pageerror', e => errors.push(e.message));
   await page.setContent('<!doctype html><html><head></head><body><main id="app"></main></body></html>');
-  await page.addStyleTag({ content: hostCss + css });
+  await page.addStyleTag({ content: hostCss + css.replace(/font-size:\s*(\d+(?:\.\d+)?)px/g, (_match, size) => `font-size: ${Number(size) * scale}px`) });
   // Reproduce hostile mobile host defaults from the reported screenshots,
   // rather than testing only an unstyled desktop DOM.
   await page.addStyleTag({ content: '.is-mobile button { block-size: 48px; margin-block: 6px; border-radius: 999px; padding: 18px 24px; font-size: 20px; box-shadow: 0 2px 4px #0005; } .setting-item-name { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; } .setting-item-control input[type=checkbox] { inline-size: 50px; block-size: 28px; } .setting-item-control { flex-shrink: 0; } .is-mobile .setting-item { display: flex; flex-direction: column; }' });
   await page.addScriptTag({ content: bundle.outputFiles[0].text, type: 'module' });
   await page.waitForFunction(() => typeof window.scene === 'function');
-  for (const width of [240, 320, 390, 768]) for (const dark of [false, true]) for (const rtl of [false, true]) {
+  for (const width of [240, 320, 360, 390, 412, 768].filter(width => scale === 1 || width <= 412)) for (const dark of [false, true]) for (const rtl of [false, true]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(({ dark, rtl }) => { document.body.className = `${dark ? 'theme-dark' : 'theme-light'} is-mobile`; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, { dark, rtl });
     for (const tab of ['Calendar', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'Eof']) {
       await page.evaluate(tab => window.scene(tab), tab);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
-      if (overflow) throw Error(`${engine}: horizontal overflow at ${width}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
+      if (overflow) throw Error(`${engine}: horizontal overflow at ${width}${scale === 1 ? '' : ` with ${scale}x text`}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
+      const clippedButtons = await page.evaluate(() => [...document.querySelectorAll('.organized-view button')].filter(button => button.clientWidth > 0 && button.scrollWidth > button.clientWidth + 1).map(button => button.textContent.trim() || button.className));
+      if (clippedButtons.length) throw Error(`${engine}: button text is clipped at ${width}${scale === 1 ? '' : ` with ${scale}x text`}: ${clippedButtons.join(', ')}`);
       const calendar = page.locator('.organized-calendar button');
       if (tab === 'Calendar' && await calendar.count() !== 42) throw Error('Calendar is not the real 42-cell inspector');
       if (tab === 'Calendar') {
@@ -58,6 +63,12 @@ try {
         const sections = await page.locator('.organized-section-title').allTextContents();
         if (sections.join(',') !== 'Favorites,Projects,Canceled') throw Error(`Projects tab lost its sections: ${sections.join(',')}`);
         if (await page.locator('.organized-list-card').count() < 2) throw Error('Projects tab did not render task cards');
+        const fills = await page.evaluate(() => { const fill = status => { const card = document.querySelector(`.organized-list-card[data-status="${status}"]`); return card ? getComputedStyle(card).backgroundColor : null; }; return { open: fill('open'), completed: fill('completed'), active: fill('in_progress') }; });
+        if (!fills.open || !fills.completed || !fills.active) throw Error(`Projects tab is missing status cards: ${JSON.stringify(fills)}`);
+        if (new Set([fills.open, fills.completed, fills.active]).size !== 3) throw Error(`Task status colours are not distinct: ${JSON.stringify(fills)}`);
+        const edges = await page.evaluate(() => ['completed', 'in_progress'].map(status => getComputedStyle(document.querySelector(`.organized-list-card[data-status="${status}"] .organized-list-open`)).borderInlineStartColor));
+        if (edges.some(edge => edge === 'rgba(0, 0, 0, 0)') || edges[0] === edges[1]) throw Error(`Status edge colours are missing or identical: ${edges}`);
+        if (await page.locator('.organized-list-meta .organized-status-dot').count()) throw Error('Task rows still show a status dot next to their tinted card');
         if (await page.locator('.organized-view .setting-item').count()) throw Error('Projects tab exposed a native settings row');
       }
       if (tab === 'ScheduleModal') {
@@ -92,8 +103,9 @@ try {
         const visible = await page.locator('.cm-content').innerText();
         if (visible.includes('organized:') !== (tab === 'Source')) throw Error('Task identity source/Live Preview separation regressed');
       }
-      if (width === 320 && !rtl) await page.screenshot({ path: `test-results/${engine}-${tab.toLowerCase()}-${dark ? 'dark' : 'light'}.png`, fullPage: true });
+      if (scale === 1 && width === 320 && !rtl) await page.screenshot({ path: `test-results/${engine}-${tab.toLowerCase()}-${dark ? 'dark' : 'light'}.png`, fullPage: true });
     }
+  }
   }
   // Canary: a deliberately oversized child MUST be detected by the same probe.
   await page.addStyleTag({ content: '#app { inline-size: 2000px; min-block-size: 100px; }' });

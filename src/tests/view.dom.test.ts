@@ -223,7 +223,7 @@ describe('compact calendar and contextual task inspector', () => {
     const task = await repo.create('Daily habit'); await repo.update(task.id, t => ({ ...t, recurring: true, starred: true }));
     await view.render(); owner.selectedTaskId = task.id; view.tab = 'Projects'; await view.render(); expect(view.contentEl.textContent).not.toContain('done · today');
     await add(today, `- [x] Daily habit <!--organized:${task.id}-->\n- [X] Other <!--organized:otherotherother-->`);
-    await view.render(); const row = view.contentEl.querySelector('.organized-list-card')!; expect(row.querySelector('.organized-list-status')?.textContent).toBe('done · today'); expect(row.querySelector('.organized-status-dot')?.getAttribute('data-status')).toBe('completed');
+    await view.render(); const row = view.contentEl.querySelector('.organized-list-card')!; expect(row.querySelector('.organized-list-status')?.textContent).toBe('done · today'); expect(row.getAttribute('data-status')).toBe('completed'); expect(row.querySelector('.organized-status-dot')).toBeNull();
     view.tab = 'Task'; await view.render(); const status = view.contentEl.querySelector<HTMLSelectElement>('select[aria-label="Status"]')!;
     expect(status.value).toBe('completed'); expect(Array.from(status.options).find(o => o.value === 'completed')?.text).toBe('done · today'); expect((await repo.read(task.id)).status).toBe('open');
     status.value = 'open'; status.dispatchEvent(new Event('change')); await flush(); expect(texts.get(today)).toContain(`- [ ] Daily habit <!--organized:${task.id}-->`);
@@ -273,5 +273,12 @@ describe('compact calendar and contextual task inspector', () => {
     const task = await repo.create('Planned'); await repo.update(task.id, t => ({ ...t, projects: [`${folder}/Plan.md`, 'Elsewhere/Notes.md'] }));
     view.tab = 'Projects'; await view.render(); expect(Array.from(view.contentEl.querySelectorAll('.organized-chip')).map(c => c.textContent)).toEqual(['Plan', 'Elsewhere/Notes']);
     expect(Array.from(view.contentEl.querySelectorAll<HTMLOptionElement>('#organized-project-filter option')).map(o => o.text)).toContain('Plan');
+  });
+  it('marks task cards and the task header with their status for colouring', async () => {
+    const { owner, view, repo } = await fixture(); const open = await repo.create('Open one'); const active = await repo.create('Active one'); const done = await repo.create('Done one'); const canceled = await repo.create('Canceled one');
+    for (const [task, status] of [[open, 'open'], [active, 'in_progress'], [done, 'completed'], [canceled, 'canceled']] as const) await repo.update(task.id, t => ({ ...t, status, starred: true }));
+    view.tab = 'Projects'; await view.render();
+    expect(Array.from(view.contentEl.querySelectorAll('.organized-list-card')).map(card => card.getAttribute('data-status')).sort()).toEqual(['canceled', 'completed', 'in_progress', 'open']);
+    for (const [task, status] of [[done, 'completed'], [active, 'in_progress']] as const) { owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); expect(view.contentEl.querySelector('.organized-task-hero')?.getAttribute('data-status')).toBe(status); }
   });
 });
