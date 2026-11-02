@@ -28,8 +28,5 @@ export function softTint(color: string): string {
   // Inside the lightness band and chroma range every hue fits the screen's gamut to within rounding; clamping only guards the last bit.
   return rgb.map(v => Math.round(Math.max(0, toGamma(Math.min(1, Math.max(0, v)))) * 255)).join(" ");
 }
-/** A project label: the picked colour itself, opaque, so it stays saturated on top of any card, with dark or white text for whichever reads better. */
-export function labelColors(color: string): { background: string; text: string } {
-  const channels = [1, 3, 5].map(at => parseInt(color.slice(at, at + 2), 16));
-  return { background: channels.join(" "), text: oklchOf(color).l > 0.68 ? "26 26 26" : "255 255 255" };
-}
+/** The picked colour itself as `r g b` channels, for the small dot beside a project's name. */
+export function rgbOf(color: string): string { return [1, 3, 5].map(at => parseInt(color.slice(at, at + 2), 16)).join(" "); }

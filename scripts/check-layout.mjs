@@ -98,8 +98,13 @@ try {
         const sections = await page.locator('.organized-section-title').allTextContents();
         if (sections.join(',') !== 'Projects,Canceled') throw Error(`Projects tab lost its sections: ${sections.join(',')}`);
         if (await page.locator('.organized-list-card').count() < 2) throw Error('Projects tab did not render task cards');
-        const chips = await page.evaluate(() => Array.from(document.querySelectorAll('.organized-chip[data-project]')).map(chip => ({ color: getComputedStyle(chip).color, plain: getComputedStyle(document.querySelector('.organized-list-title')).color, fill: getComputedStyle(chip).backgroundColor })));
-        if (!chips.length || chips.some(chip => chip.color === chip.plain || chip.fill === 'rgba(0, 0, 0, 0)')) throw Error(`Project labels lost their colour: ${JSON.stringify(chips)}`);
+        const chips = await page.evaluate(() => Array.from(document.querySelectorAll('.organized-chip[data-project]')).map(chip => { const dot = getComputedStyle(chip, '::before'); return { dot: dot.backgroundColor, size: [dot.width, dot.height] }; }));
+        if (!chips.length || chips.some(chip => chip.dot === 'rgba(0, 0, 0, 0)' || chip.size[0] !== '8px' || chip.size[1] !== '8px')) throw Error(`Project labels lost their colour dot: ${JSON.stringify(chips)}`);
+        // Open the colour list: each swatch is a small square holding an invisible full-size input, whatever the host does to colour inputs.
+        await page.evaluate(() => { const details = document.querySelector('.organized-colors'); if (details) details.open = true; });
+        const swatches = await page.evaluate(() => Array.from(document.querySelectorAll('.organized-color-swatch')).map(swatch => { const box = swatch.getBoundingClientRect(); const input = swatch.querySelector('input').getBoundingClientRect(); return { w: Math.round(box.width), h: Math.round(box.height), inside: input.left >= box.left - 1 && input.right <= box.right + 1 && input.top >= box.top - 1 && input.bottom <= box.bottom + 1, fill: getComputedStyle(swatch).backgroundColor }; }));
+        if (!swatches.length || swatches.some(swatch => swatch.w !== swatch.h || swatch.w > 26 || !swatch.inside || swatch.fill === 'rgba(0, 0, 0, 0)')) throw Error(`Colour swatches are not small squares holding their input: ${JSON.stringify(swatches)}`);
+        const overflowing = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1); if (overflowing) throw Error('Colour list overflows the panel');
         if (await page.locator('.organized-list-meta .organized-status-dot').count()) throw Error('Task rows still show a status dot next to their tinted card');
         if (await page.locator('.organized-view .setting-item').count()) throw Error('Projects tab exposed a native settings row');
       }

@@ -154,12 +154,12 @@
 @supports (color: color-mix(in oklab, red, blue)) {
   .organized-view {
     --organized-edge-done: color-mix(in oklab, var(--color-green) 70%, var(--organized-card));
-    --organized-card-done: color-mix(in oklab, var(--organized-card), var(--color-green) 13%);
-    --organized-card-active: color-mix(in oklab, var(--organized-card), var(--color-green) 20%);
+    --organized-card-done: color-mix(in oklab, var(--organized-card), var(--color-green) 9%);
+    --organized-card-active: color-mix(in oklab, var(--organized-card), var(--color-green) 17%);
   }
   .theme-dark .organized-view {
-    --organized-card-done: color-mix(in oklab, var(--organized-card), var(--color-green) 17%);
-    --organized-card-active: color-mix(in oklab, var(--organized-card), var(--color-green) 26%);
+    --organized-card-done: color-mix(in oklab, var(--organized-card), var(--color-green) 13%);
+    --organized-card-active: color-mix(in oklab, var(--organized-card), var(--color-green) 24%);
   }
 }
 .organized-task-hero[data-status="completed"] { background: var(--organized-card-done); }
@@ -172,14 +172,13 @@
 .organized-colors { margin-block: 6px; font-size: var(--font-ui-small); }
 .organized-colors summary { color: var(--text-muted); cursor: pointer; }
 .organized-color-row { display: flex; align-items: center; gap: 8px; margin-block: 4px; min-inline-size: 0; }
-.organized-view .organized-panel input[type="color"].organized-color-input { flex: 0 0 auto; appearance: none; inline-size: 22px; block-size: 22px; min-block-size: 0; margin: 0; padding: 0; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s, 5px); background: transparent; box-shadow: none; cursor: pointer; }
-.organized-color-input::-webkit-color-swatch-wrapper { padding: 0; }
-.organized-color-input::-webkit-color-swatch { border: 0; border-radius: calc(var(--radius-s, 5px) - 1px); }
-.organized-color-input::-moz-color-swatch { border: 0; border-radius: calc(var(--radius-s, 5px) - 1px); }
+.organized-color-swatch { position: relative; flex: 0 0 22px; inline-size: 22px; block-size: 22px; overflow: hidden; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s, 5px); background: var(--organized-swatch, #808080); cursor: pointer; }
+/* The native control only receives the tap: it is invisible and fills the swatch, because mobile WebViews ignore a colour input's own size. */
+.organized-view .organized-panel .organized-color-swatch input[type="color"].organized-color-input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; min-block-size: 0; margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; }
 .organized-view .organized-panel button.organized-color-clear { flex: 0 0 auto; block-size: auto; min-block-size: 0; margin: 0; padding: 2px 10px; font-size: var(--font-ui-smaller, 12px); box-shadow: none; }
 .organized-color-name { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.organized-view .organized-panel .organized-list-card[data-status="completed"] .organized-list-open, .organized-view .organized-panel .organized-list-card[data-status="in_progress"] .organized-list-open { border-inline-start-color: var(--organized-edge-done); }
-.organized-chip[data-project] { border-color: transparent; background: rgb(var(--organized-chip-bg)); color: rgb(var(--organized-chip-fg)); font-weight: 500; }
+.organized-view .organized-panel .organized-list-card[data-status="in_progress"] .organized-list-open { border-inline-start-color: var(--organized-edge-done); }
+.organized-chip[data-project]::before { content: ""; flex: 0 0 8px; inline-size: 8px; block-size: 8px; border-radius: 50%; background: rgb(var(--organized-chip-bg)); }
 .organized-task-hero[data-status="completed"] { border-inline-start-color: var(--organized-edge-done); }
 .organized-task-hero[data-status="canceled"] { border-inline-start-color: var(--background-modifier-border-hover); }
 .organized-list-card[data-status="completed"] .organized-list-title { color: var(--text-muted); }
@@ -203,8 +202,8 @@
 .organized-list-date { font-variant-numeric: tabular-nums; }
 .organized-list-star { display: inline-flex; color: var(--interactive-accent); }
 .organized-list-star svg { inline-size: 12px; block-size: 12px; }
-.organized-chips { display: flex; flex-wrap: wrap; gap: 4px; inline-size: 100%; }
-.organized-chip { max-inline-size: 100%; padding: 2px 6px; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s, 5px); color: var(--text-muted); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.organized-chips { display: flex; flex-wrap: wrap; gap: 2px 10px; inline-size: 100%; }
+.organized-chip { display: inline-flex; align-items: center; gap: 5px; max-inline-size: 100%; color: var(--text-muted); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
 .organized-list-actions { display: flex; justify-content: flex-end; padding: 0 10px 10px; }
 .organized-field { display: flex; flex-direction: column; gap: 6px; }
 .organized-field-label { color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }

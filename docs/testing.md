@@ -81,7 +81,7 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Change a task's priority in the side panel with *Current task list* sorting: the list in the note reorders.
 
 ## Project colours
-- Projects tab → Project colors: pick a colour for a project; its note gets `organized_color: "#rrggbb"`. The project's name label on task cards is tinted with it, and its tasks' blocks in the Day and Week views are filled with it (gray without a coloured project). Task cards themselves are coloured by status (done and in progress green). Clear removes the property.
+- Projects tab → Project colors: pick a colour for a project; its note gets `organized_color: "#rrggbb"`. A dot in it precedes the project's name on task cards, and its tasks' blocks in the Day and Week views are filled with it (gray without a coloured project). Task cards themselves are coloured by status (done and in progress green). Clear removes the property.
 
 ## Hide done tasks
 - Task tab with no task selected: the eye button beside the note title hides done tasks (headings with only done tasks disappear, counts follow) and a line reports how many are hidden; the eye-off state shows them again and the choice survives a restart.

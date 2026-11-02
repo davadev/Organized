@@ -1,7 +1,7 @@
 import { Component, ItemView, WorkspaceLeaf, TFile, setIcon } from "obsidian";
 import type { Editor } from "obsidian";
 import { moment } from "./moment";
-import { labelColors, softTint } from "./colors";
+import { rgbOf, softTint } from "./colors";
 import type Organized from "./main";
 import { elapsed, localDate, PRIORITIES, Section, STATUSES, Task } from "./model";
 import { byPriority, report } from "./service";
@@ -227,7 +227,9 @@ export class OrganizedInspectorView extends ItemView {
     const box = host.createEl("details", { cls: "organized-colors" }); box.createEl("summary", { text: "Project colors" });
     for (const project of projects) {
       const row = box.createDiv({ cls: "organized-color-row" }); const current = this.owner.repo.projectColor(project);
-      const input = row.createEl("input", { type: "color", cls: "organized-color-input", attr: { "aria-label": `Color of ${this.projectLabel(project)}` } }); input.value = current ?? "#808080";
+      const swatch = row.createEl("label", { cls: "organized-color-swatch" }); swatch.setCssProps({ "--organized-swatch": current ?? "#808080" });
+      const input = swatch.createEl("input", { type: "color", cls: "organized-color-input", attr: { "aria-label": `Color of ${this.projectLabel(project)}` } }); input.value = current ?? "#808080";
+      input.addEventListener("input", () => swatch.setCssProps({ "--organized-swatch": input.value }));
       row.createSpan({ cls: "organized-color-name", text: this.projectLabel(project) });
       input.addEventListener("change", () => { void this.owner.run(() => this.owner.service.setProjectColor(project, input.value)); });
       if (current) this.button(row, "Clear", () => this.owner.run(() => this.owner.service.setProjectColor(project, null))).addClass("organized-color-clear");
@@ -236,7 +238,7 @@ export class OrganizedInspectorView extends ItemView {
   /** The project's name as a small label, in the project's colour when it has one. */
   private projectChip(host: HTMLElement, project: string): void {
     const chip = host.createSpan({ cls: "organized-chip", text: this.projectLabel(project) }); const color = this.owner.repo.projectColor(project); if (!color) return;
-    const { background, text } = labelColors(color); chip.setAttribute("data-project", ""); chip.setCssProps({ "--organized-chip-bg": background, "--organized-chip-fg": text });
+    chip.setAttribute("data-project", ""); chip.setCssProps({ "--organized-chip-bg": rgbOf(color) });
   }
   /** Project notes in the project folder show by name; others keep their path. */
   private projectLabel(project: string): string {

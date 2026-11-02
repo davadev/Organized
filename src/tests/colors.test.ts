@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { labelColors, oklchOf, SOFT, softTint, validColor } from "../colors";
+import { oklchOf, rgbOf, SOFT, softTint, validColor } from "../colors";
 
 const hex = (channels: number[]) => `#${channels.map(v => v.toString(16).padStart(2, "0")).join("")}`;
 const soft = (color: string) => oklchOf(hex(softTint(color).split(" ").map(Number)));
@@ -22,9 +22,8 @@ describe("project colours", () => {
   it("keeps a yellow lighter than a blue instead of forcing both to one lightness", () => {
     expect(soft("#ffee00").l).toBeGreaterThan(soft("#3b82f6").l + 0.1); expect(soft("#ffee00").l).toBeLessThanOrEqual(SOFT.highest + 0.02); expect(soft("#0a0a0a").l).toBeGreaterThanOrEqual(SOFT.lowest - 0.02);
   });
-  it("labels use the picked colour itself with dark text on light colours and white text on dark ones", () => {
-    expect(labelColors("#3b82f6")).toEqual({ background: "59 130 246", text: "255 255 255" }); expect(labelColors("#fffa65")).toEqual({ background: "255 250 101", text: "26 26 26" });
-    expect(labelColors("#533310").text).toBe("255 255 255"); expect(labelColors("#a4d46f").text).toBe("26 26 26");
+  it("converts the picked colour to rgb channels unchanged", () => {
+    expect(rgbOf("#3b82f6")).toBe("59 130 246"); expect(rgbOf("#fffa65")).toBe("255 250 101"); expect(rgbOf("#000000")).toBe("0 0 0");
   });
   it("leaves grays gray and fits strong colours inside the screen's gamut", () => {
     for (const gray of ["#808080", "#000000", "#ffffff"]) { const [r, g, b] = softTint(gray).split(" ").map(Number); expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(6); }
