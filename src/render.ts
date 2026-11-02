@@ -114,16 +114,23 @@ export function editorExtension(owner: Organized): Extension {
     build(view: EditorView): DecorationSet {
       if (!view.state.field(editorLivePreviewField, false)) return Decoration.none;
       const builder = new RangeSetBuilder<Decoration>();
-      const tasks = parseTasks(view.state.doc.toString());
-      for (const task of tasks) {
-        const line = view.state.doc.line(task.line + 1);
+      const byLine = new Map(parseTasks(view.state.doc.toString()).map(task => [task.line, task]));
+      for (let number = 1; number <= view.state.doc.lines; number++) {
+        const line = view.state.doc.line(number);
+        if (!line.text.includes("<!--organized:") && !byLine.has(number - 1)) continue;
         if (!view.visibleRanges.some(r => r.from <= line.to && r.to >= line.from)) continue;
-        const editing = view.state.selection.main.head >= line.from && view.state.selection.main.head <= line.to;
-        if (!editing && task.marker === ">") builder.add(line.from, line.from, Decoration.line({ class: "organized-forwarded" }));
-        if (!editing && GLYPHS[task.marker]) builder.add(line.from + task.prefix.length - 1, line.from + task.prefix.length + 2, Decoration.replace({ widget: new IconWidget(task.marker) }));
+        const task = byLine.get(number - 1);
+        if (task) {
+          const editing = view.state.selection.main.head >= line.from && view.state.selection.main.head <= line.to;
+          if (!editing && task.marker === ">") builder.add(line.from, line.from, Decoration.line({ class: "organized-forwarded" }));
+          if (!editing && GLYPHS[task.marker]) builder.add(line.from + task.prefix.length - 1, line.from + task.prefix.length + 2, Decoration.replace({ widget: new IconWidget(task.marker) }));
+        }
         // Live Preview used to reveal the whole ID whenever its line had the
         // caret. Identity is implementation metadata, not editable preview UI.
-        for (const comment of task.raw.matchAll(/<!--organized:(?:[a-zA-Z0-9_-]{8,80}|repeat)-->/g)) builder.add(line.from + comment.index, line.from + comment.index + comment[0].length, Decoration.replace({}));
+        // Hidden on any line, not only valid task lines: while the marker is
+        // being retyped ("[/]" -> "[]" -> "[>]") the line stops parsing as a task
+        // and the ID would flash.
+        for (const comment of line.text.matchAll(/<!--organized:(?:[a-zA-Z0-9_-]{8,80}|repeat)-->/g)) builder.add(line.from + comment.index, line.from + comment.index + comment[0].length, Decoration.replace({}));
       }
       return builder.finish();
     }

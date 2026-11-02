@@ -81,6 +81,12 @@ describe('read-only projections and bundled visual markers', () => {
     // The actual CM listener is installed in a native editor and observes updates.
     const listener = vi.spyOn(owner, 'onEditorUpdate').mockImplementation(() => undefined); const view = new EditorView({ state: EditorState.create({ doc: 'plain', extensions: editorExtension(owner) }), parent: createDiv() }); view.dispatch({ changes: { from: 5, insert: ' text' } }); expect(listener).toHaveBeenCalledOnce(); refreshEditor(view); expect(listener).toHaveBeenCalledTimes(2); view.destroy();
   });
+  it('keeps the ID hidden while the marker is mid-edit and the line no longer parses as a task', async () => {
+    const { owner, task } = await fixture(); vi.spyOn(owner, 'onEditorUpdate').mockImplementation(() => undefined);
+    const doc = `- [] Half typed <!--organized:${task.id}-->`;
+    const view = new EditorView({ state: EditorState.create({ doc, selection: { anchor: 5 }, extensions: [editorLivePreviewField, editorExtension(owner)] }), parent: createDiv() });
+    expect(view.dom.textContent).not.toContain(task.id); expect(view.state.doc.toString()).toBe(doc); view.destroy();
+  });
   it('hides identity and recurrence comments even on the edited Live Preview line, never in source mode', async () => {
     const { owner, task } = await fixture(); const doc = `- [ ] Test task <!--organized:${task.id}--> <!--organized:repeat-->`;
     vi.spyOn(owner, 'onEditorUpdate').mockImplementation(() => undefined);
