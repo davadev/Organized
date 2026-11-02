@@ -194,6 +194,18 @@ describe("standalone notes from tasks", () => {
     expect(h.texts.get(today.path)).toBe("# Work\n  - [[Notes/Plan launch]]\n  - [ ] Other\n"); expect(h.texts.get(old.path)).toBe(""); expect(h.texts.get(project.path)).toBe("## Open\n");
     expect(h.repo.file(file.path)).toBeNull(); expect(h.raw.fileManager.trashFile).toHaveBeenCalledWith(file); expect(h.changed).toHaveBeenCalled(); expect(h.raw.fileManager.generateMarkdownLink).toHaveBeenCalledWith(made, today.path);
   });
+  it("keeps the task note, hidden, when the task tracked time: a running timer is logged first and the calendar still sees the sessions", async () => {
+    const { h, task, file, context } = await setup(); const minutesAgo = (n: number) => new Date(Date.now() - n * 60000).toISOString();
+    await h.repo.update(task.id, t => ({ ...t, status: "in_progress", time_tracking_started_at: minutesAgo(10), work_sessions: [{ start: minutesAgo(200), end: minutesAgo(180) }], time_tracked_seconds: 1200 }));
+    const made = await h.service.convertToNote(task.id, options, context);
+    expect(h.raw.fileManager.trashFile).not.toHaveBeenCalled(); expect(h.repo.file(file.path)).not.toBeNull();
+    const kept = await h.repo.read(task.id); expect(kept.converted_to).toBe(made.path); expect(kept.time_tracking_started_at).toBeNull(); expect(kept.work_sessions).toHaveLength(2); expect(kept.status).toBe("open");
+    expect((await h.repo.list()).map(t => t.id)).not.toContain(task.id); expect((await h.repo.list(true)).map(t => t.id)).toContain(task.id);
+  });
+  it("trashes the task note when only a sub-minute run exists", async () => {
+    const { h, task, file, context } = await setup(); await h.repo.update(task.id, t => ({ ...t, status: "in_progress", time_tracking_started_at: new Date(Date.now() - 20000).toISOString() }));
+    await h.service.convertToNote(task.id, options, context); expect(h.raw.fileManager.trashFile).toHaveBeenCalledWith(file);
+  });
   it("works from the panel without a line: the latest daily note keeps the link", async () => {
     const { h, task, today, old } = await setup(); await h.service.convertToNote(task.id, { ...options, folder: "", tags: [] });
     expect(h.texts.get("Plan launch.md")).toContain("Why we launch."); expect(h.texts.get(today.path)).toContain("  - [[Plan launch]]"); expect(h.texts.get(old.path)).toBe("");

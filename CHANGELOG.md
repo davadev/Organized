@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Making a standalone note no longer loses tracked time. A running timer is stopped and logged first, and a task with tracked sessions keeps its (hidden) task note, so its blocks stay in the Day and Week calendar and open the standalone note when tapped. The dialog says so. Tasks without tracked time are still removed as before.
+
 - You can now select and copy text in the side panel: task titles, descriptions, notes, sources and list rows. Obsidian disables text selection in plugin views; read-only content opts back in, while buttons and controls stay unselectable.
 
 - Dependency updates: js-yaml 5.5.0, knip 6.42 and the upload-artifact action 7.0.2.

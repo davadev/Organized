@@ -84,11 +84,12 @@ export class Repository {
     const file = this.file(this.taskPath(id)); if (!file) throw new Error(`Missing task ${id}. Use attach/create on the occurrence to repair or relink it.`);
     return taskFrom(splitNote(await this.readText(file)).frontmatter, id);
   }
-  async list(): Promise<Task[]> {
+  /** Every task note; one kept only for the time it tracked after becoming a standalone note is left out unless `withConverted`. */
+  async list(withConverted = false): Promise<Task[]> {
     const files = this.app.vault.getMarkdownFiles().filter(f => this.isTaskRecord(f.path));
     const result: Task[] = [];
     for (const file of files) {
-      try { result.push(taskFrom(splitNote(await this.readText(file)).frontmatter, file.basename)); } catch { /* Invalid task notes remain available for manual repair, never overwritten. */ }
+      try { const task = taskFrom(splitNote(await this.readText(file)).frontmatter, file.basename); if (withConverted || !task.converted_to) result.push(task); } catch { /* Invalid task notes remain available for manual repair, never overwritten. */ }
     }
     return result;
   }

@@ -2,7 +2,7 @@ import { Editor, MarkdownView, Notice, Plugin, TFile, TFolder, WorkspaceLeaf } f
 import { Transaction } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
 import { ACTION_MARKERS, parseTasks, NOTE_MARKER, NoteSection, PROJECT_MARKER, SECTION_MARKERS, TaskLine, writeNoteSection } from "./codec";
-import { DEFAULT_SETTINGS, localDate, object, Settings, Task } from "./model";
+import { DEFAULT_SETTINGS, elapsed, localDate, object, Settings, Task } from "./model";
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
 import { Context, report, TaskService } from "./service";
@@ -329,6 +329,7 @@ export default class Organized extends Plugin {
   convertToNote(task: Task, context?: Context): void {
     new NoteConversionModal(this.app, {
       title: task.title, folders: this.noteFolders(), folder: this.settings.noteFolder, templates: this.templateFiles(), exists: notePath => this.repo.file(notePath) !== null,
+      tracked: task.work_sessions.length || task.time_tracking_started_at ? `${Math.max(1, Math.floor(elapsed(task) / 60))} min` : undefined,
       convert: options => this.run(async () => {
         await this.service.convertToNote(task.id, options, context);
         this.settings.noteFolder = options.folder; this.saveSettings(false);

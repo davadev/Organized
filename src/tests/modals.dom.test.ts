@@ -83,6 +83,10 @@ describe("native task, date, source and project modals", () => {
     const failing = new SessionModal(h.app, { heading: "Add", taskTitle: "x", start: at(9), end: at(10), save: async () => { throw Error("save failed"); } }, () => now); failing.open(); failing.contentEl.querySelector("button")!.click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain("save failed");
     const picker = new TaskPicker(h.app, [newTask("Alpha task", "alpha12345")], async () => undefined, "", false, false); expect(picker.getSuggestions("Alpha").length).toBe(1); expect(picker.getSuggestions("nothing like it")).toEqual([]); expect(new TaskPicker(h.app, [], async () => undefined).getSuggestions("brand new")).toEqual(["brand new"]);
   });
+  it("tells the user when tracked time keeps the task note", () => {
+    const h = harness(); const modal = new NoteConversionModal(h.app, { title: "Plan", folders: [], folder: "", templates: [], exists: () => false, convert: async () => undefined, tracked: "42 min" }); modal.open();
+    expect(modal.contentEl.textContent).toContain("The 42 min of tracked time stays on the calendar"); const plain = new NoteConversionModal(h.app, { title: "Plan", folders: [], folder: "", templates: [], exists: () => false, convert: async () => undefined }); plain.open(); expect(plain.contentEl.textContent).not.toContain("tracked time");
+  });
   it("asks for folder, tags and template, previews the result and handles a name clash", async () => {
     const h = harness(); const taken = new Set<string>(["Notes/Plan.md"]); const convert = vi.fn(async () => undefined);
     const modal = new NoteConversionModal(h.app, { title: "Plan", folders: ["Notes", "Ideas"], folder: "Ideas", templates: ["Templates/A.md"], exists: p => taken.has(p), convert }); modal.open(); decorated(modal);
