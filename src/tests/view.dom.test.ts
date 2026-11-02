@@ -407,6 +407,7 @@ describe('compact calendar and contextual task inspector', () => {
     await repo.update(tinted.id, t => ({ ...t, status: 'completed' })); await service.setProjectColor(blue.path, '#ef4444');
     view.tab = 'Calendar'; view.calendarMode = 'Day'; view.selectedDate = '2026-03-04'; await view.render(); const blocks = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-block'));
     expect(blocks.map(b => [b.querySelector('.organized-block-title')!.textContent, b.style.getPropertyValue('--organized-project-rgb'), b.getAttribute('data-status')]).sort()).toEqual([['Blue task', softTint('#ef4444'), 'completed'], ['Gray task', softTint('#22c55e'), 'open']].sort());
+    expect(blocks.map(b => b.querySelector('.organized-block-status')?.getAttribute('data-status')).sort()).toEqual(['completed', 'open']);
     view.calendarMode = 'Week'; await view.render(); expect(Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-week-block')).map(b => b.style.getPropertyValue('--organized-project-rgb')).sort()).toEqual([softTint('#ef4444'), softTint('#22c55e')].sort());
     const none = await repo.create('No project'); await repo.update(none.id, t => ({ ...t, work_sessions: [{ start: new Date(2026, 2, 4, 12, 0).toISOString(), end: new Date(2026, 2, 4, 13, 0).toISOString() }] })); view.calendarMode = 'Day'; await view.render(); const plainBlock = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-block')).find(b => b.textContent!.includes('No project')); expect(plainBlock?.hasAttribute('data-project')).toBe(false);
   });

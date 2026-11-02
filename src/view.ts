@@ -385,6 +385,7 @@ export class OrganizedInspectorView extends ItemView {
       const part = grid.createEl("button", { cls: "organized-block", attr: { type: "button", "data-status": this.shownStatus(block.task), "aria-label": `${title}, ${range}${block.running ? ", running" : ""}`, title: `${title} · ${range}` } });
       this.tint(part, block.task);
       part.setCssProps({ "--organized-top": String((block.startMin - from * 60) / span * 100), "--organized-height": String((block.endMin - block.startMin) / span * 100), "--organized-lane": String(block.lane), "--organized-lanes": String(block.lanes) });
+      const shown = this.shownStatus(block.task); setIcon(part.createSpan({ cls: "organized-block-status", attr: { "data-status": shown, "aria-hidden": "true" } }), STATUS_ICONS[shown]);
       part.createSpan({ cls: "organized-block-title", text: title }); if (block.endMin - block.startMin >= 30) part.createSpan({ cls: "organized-block-time", text: range });
       // A retired task has no task note: open the daily note that kept its time instead.
       const kept = retired.get(block.task.id);
