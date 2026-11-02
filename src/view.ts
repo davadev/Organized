@@ -44,9 +44,10 @@ export class OrganizedInspectorView extends ItemView {
   onOpen(): Promise<void> { return this.render(); }
   onClose(): Promise<void> { this.renderId++; this.removeChild(this.markdown); this.contentEl.empty(); return Promise.resolve(); }
   async render(): Promise<void> {
-    const generation = ++this.renderId; const host = this.contentEl;
-    // A task refresh must never destroy an input the user is editing.
+    const host = this.contentEl;
+    // A task refresh must never destroy an input the user is editing. It also must not bump the generation, or a render already in flight would abandon its own DOM.
     if (host.contains(host.doc.activeElement) && ["INPUT", "TEXTAREA", "SELECT"].includes(host.doc.activeElement!.tagName)) return;
+    const generation = ++this.renderId;
     this.removeChild(this.markdown);
     this.markdown = this.addChild(new Component());
     host.empty(); host.addClass("organized-view");
@@ -473,6 +474,7 @@ export class OrganizedInspectorView extends ItemView {
     if (task.recurring) statusSelect.options[STATUSES.indexOf("completed")].text = "done · today";
     const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Description", "Idea", "Question", "Sources", "Notes"], value => { this.module = value; this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
     const file = this.owner.repo.file(this.owner.repo.taskPath(id))!; const body = splitNote(await this.owner.repo.readText(file)).body;
+    if (generation !== this.renderId) return;
     const details = host.createDiv({ cls: "organized-task-details" });
     await this.moduleCard(details, file.path, id, "Description", noteSection(body, "Description"));
     if (task.priority !== "none" || this.module === "Priority") this.select(this.card(details, "Priority", "flag"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.service.setPriority(id, value as Task["priority"], this.owner.context?.line.id === id ? this.owner.context : undefined); this.owner.refresh(); }); });
@@ -500,6 +502,7 @@ export class OrganizedInspectorView extends ItemView {
       if (!text && this.module !== section) continue;
       await this.moduleCard(details, file.path, id, section, text);
     }
+    if (generation !== this.renderId) return;
     const moduleKey = `${id}:${this.module}`;
     if (this.module && this.scrolledModule !== moduleKey) {
       this.scrolledModule = moduleKey; host.querySelector<HTMLElement>(".organized-selected-module")?.scrollIntoView({ block: "nearest" });
