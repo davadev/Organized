@@ -81,7 +81,7 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Change a task's priority in the side panel with *Current task list* sorting: the list in the note reorders.
 
 ## Project sections and start date
-- Link a task to a new project: the note has Open / In progress / Done headings and the task sits under Open. Start the timer, complete it, cancel another: each line moves under the matching heading (Canceled appears when needed). A project note without headings gets them added when a linked task changes status. After updating, every existing project note has `organized_start` set to the update date (once); notes that already had a start keep it.
+- Link a task to a new project: the note has Open / In progress / Ongoing / Done headings and the task sits under Open. Turn recurrence on for it: the line moves under Ongoing and stays there when completed; turn it off and it returns to Open. Start the timer, complete it, cancel another: each line moves under the matching heading (Canceled appears when needed). A project note without headings gets them added when a linked task changes status. After updating, every existing project note has `organized_start` set to the update date (once); notes that already had a start keep it.
 
 ## Standalone notes
 - Type `[n]` in a linked todo (or press **Make standalone note** on the Task tab): pick a folder, tags and a template, and see the path preview. With a note of the same name already there, choose between a numbered new note and linking the existing one; the existing note is never changed. The note holds the description (sub-headings included), then Sources and Notes; the todo becomes one link, other copies disappear and the task note is in the trash.
