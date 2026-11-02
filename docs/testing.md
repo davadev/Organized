@@ -80,6 +80,9 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Set retention to a few days, choose *Add everything*, track time on a task, complete it and open today's daily note after expiry: the latest daily note shows the description as a quote and `- Worked …` lines under a plain checkbox, and the Day/Week views still show the block.
 - Change a task's priority in the side panel with *Current task list* sorting: the list in the note reorders.
 
+## Manual time
+- Day view → **+** beside Time: pick a task, set a start/end and save; a block appears and the Task tab's tracked total grows. Tap the block: change the end and save, then Delete; the total follows. Try an end before the start, 30 seconds, more than 24 hours and a future end: each shows a reason and saves nothing. A running timer's block opens the task instead of the form.
+
 ## Project colours
 - Projects tab → Project colors: pick a colour for a project; its note gets `organized_color: "#rrggbb"`. A dot in it precedes the project's name on task cards, and its tasks' blocks in the Day and Week views are filled with it (gray without a coloured project). Task cards themselves are coloured by status (done and in progress green). Clear removes the property.
 

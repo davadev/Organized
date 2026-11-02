@@ -1,6 +1,6 @@
-import type { Task } from "./model";
+import type { Task, WorkSession } from "./model";
 
-export interface Block { task: Task; startMin: number; endMin: number; running: boolean; lane: number; lanes: number }
+export interface Block { task: Task; startMin: number; endMin: number; running: boolean; lane: number; lanes: number; /** The stored session behind the block, unclipped; absent for a running timer. */ session?: WorkSession }
 export const DEFAULT_HOURS: readonly [number, number] = [8, 18];
 
 /** A block is drawn at least this tall (see `.organized-block`), so a shorter run still occupies this much of the grid and must not share a column with the next one. */
@@ -31,12 +31,12 @@ export function blocksOn(tasks: Task[], date: string, now: number): Block[] {
   const blocks: Block[] = [];
   for (const task of tasks) {
     const running = task.time_tracking_started_at !== null;
-    const sessions = [...task.work_sessions.map(s => ({ start: Date.parse(s.start), end: Date.parse(s.end), running: false })),
+    const sessions: { start: number; end: number; running: boolean; session?: WorkSession }[] = [...task.work_sessions.map(s => ({ start: Date.parse(s.start), end: Date.parse(s.end), running: false, session: s })),
       ...(running ? [{ start: Date.parse(task.time_tracking_started_at!), end: now, running: true }] : [])];
     for (const session of sessions) {
       if (session.end <= start.getTime() || session.start >= end.getTime() || session.end <= session.start) continue;
       const startMin = minutesInto(session.start, start, end); const endMin = minutesInto(session.end, start, end);
-      if (endMin > startMin) blocks.push({ task, startMin, endMin, running: session.running, lane: 0, lanes: 1 });
+      if (endMin > startMin) blocks.push({ task, startMin, endMin, running: session.running, lane: 0, lanes: 1, session: session.session });
     }
   }
   return assignLanes(blocks);

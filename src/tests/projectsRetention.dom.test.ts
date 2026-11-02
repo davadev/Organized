@@ -116,3 +116,14 @@ describe("project colours in frontmatter", () => {
     const plain: any = await h.add("Plain.md", "plain"); await h.service.setProjectColor(plain.path, "#000000"); expect(h.repo.isProjectNote(plain)).toBe(true);
   });
 });
+
+describe("manual sessions", () => {
+  it("adds a session and counts it toward the total, edits it, deletes it and refuses a vanished one", async () => {
+    const h = harness(); const task = await h.repo.create("Plan"); const at = (hh: number, mm = 0) => new Date(2026, 2, 4, hh, mm).toISOString(); const a = { start: at(9), end: at(10) }; const b = { start: at(11), end: at(11, 30) };
+    await h.service.addSession(task.id, b); await h.service.addSession(task.id, a); let t = await h.repo.read(task.id); expect(t.work_sessions).toEqual([a, b]); expect(t.time_tracked_seconds).toBe(3600 + 1800); expect(h.changed).toHaveBeenCalled();
+    await h.service.changeSession(task.id, a, { start: at(9), end: at(10, 30) }); t = await h.repo.read(task.id); expect(t.time_tracked_seconds).toBe(5400 + 1800); expect(t.work_sessions[0].end).toBe(at(10, 30));
+    await h.service.changeSession(task.id, b, null); t = await h.repo.read(task.id); expect(t.work_sessions).toHaveLength(1); expect(t.time_tracked_seconds).toBe(5400);
+    await expect(h.service.changeSession(task.id, b, null)).rejects.toThrow("no longer exists");
+    await h.repo.update(task.id, x => ({ ...x, time_tracked_seconds: 10 })); await h.service.changeSession(task.id, { start: at(9), end: at(10, 30) }, null); expect((await h.repo.read(task.id)).time_tracked_seconds).toBe(0);
+  });
+});

@@ -3,9 +3,10 @@ import type { Editor } from "obsidian";
 import { moment } from "./moment";
 import { rgbOf, softTint } from "./colors";
 import type Organized from "./main";
-import { elapsed, localDate, PRIORITIES, Section, STATUSES, Task } from "./model";
+import { elapsed, localDate, PRIORITIES, Section, STATUSES, Task, WorkSession } from "./model";
 import { byPriority, report } from "./service";
-import { DatePicker } from "./modals";
+import { DatePicker, SessionModal, TaskPicker } from "./modals";
+import { lengthOf } from "./sessions";
 import { NoteSection, NOTE_SECTIONS, noteLoose, noteSection, parseTasks, TaskLine } from "./codec";
 import { splitNote } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
@@ -354,6 +355,21 @@ export class OrganizedInspectorView extends ItemView {
       row.addEventListener("click", () => { this.selectedDate = key; this.calendarMode = "Day"; void this.render().catch(report); });
     });
   }
+  /** Adds a block of time to a task, or edits/deletes a recorded one. */
+  private editSession(task: Task, session: WorkSession | null, date: string): void {
+    const at = (time: string) => new Date(`${date}T${time}:00`).toISOString();
+    new SessionModal(this.app, {
+      heading: session ? "Edit time worked" : "Add time worked", taskTitle: task.title, start: session?.start ?? at("09:00"), end: session?.end ?? at("10:00"),
+      save: next => this.owner.run(() => session ? this.owner.service.changeSession(task.id, session, next) : this.owner.service.addSession(task.id, next)),
+      remove: session ? () => this.owner.run(() => this.owner.service.changeSession(task.id, session, null)) : undefined,
+      openTask: session ? () => this.openFromCalendar(task.id) : undefined,
+    }).open();
+  }
+  /** Picks an existing task, then asks for the time to log on it. */
+  private async addTime(date: string): Promise<void> {
+    const tasks = (await this.owner.repo.list()).filter(t => t.status !== "canceled");
+    new TaskPicker(this.app, tasks, async choice => { if (typeof choice === "object" && "id" in choice) this.editSession(choice, null, date); }, "", false, false).open();
+  }
   private async openNote(notePath: string): Promise<void> {
     const note = this.owner.repo.file(notePath); if (!note) throw new Error("The note that kept this time was renamed or removed.");
     await this.app.workspace.getLeaf(false).openFile(note);
@@ -387,6 +403,8 @@ export class OrganizedInspectorView extends ItemView {
       else this.plainTaskRow(list, line, note!.path);
     }
     const timeline = this.section(host, "Time", blocks.length);
+    const timeHead = timeline.querySelector<HTMLElement>(".organized-section-head")!;
+    const addTime = this.iconButton(timeHead, "Add time worked", "plus", () => this.addTime(date)); addTime.addClass("organized-head-action"); timeHead.insertBefore(addTime, timeHead.querySelector(".organized-count"));
     if (!blocks.length) { timeline.createDiv({ cls: "organized-empty", text: "No tracked time this day. Set a task In Progress to record it." }); return; }
     const [from, to] = hourRange(blocks); const span = (to - from) * 60;
     const grid = timeline.createDiv({ cls: "organized-day-grid" }); grid.setCssProps({ "--organized-hours": String(to - from) });
@@ -403,7 +421,8 @@ export class OrganizedInspectorView extends ItemView {
       part.createSpan({ cls: "organized-block-title", text: title }); if (block.endMin - block.startMin >= 30) part.createSpan({ cls: "organized-block-time", text: range });
       // A retired task has no task note: open the daily note that kept its time instead.
       const kept = retired.get(block.task.id);
-      part.addEventListener("click", () => { void (kept ? this.openNote(kept.path) : this.openFromCalendar(block.task.id)).catch(report); });
+      // A stored session opens for editing (with an Open task button); a running timer has nothing to edit yet.
+      part.addEventListener("click", () => { if (!kept && block.session) { this.editSession(block.task, block.session, date); return; } void (kept ? this.openNote(kept.path) : this.openFromCalendar(block.task.id)).catch(report); });
     }
     const minutes = new Date(now).getHours() * 60 + new Date(now).getMinutes();
     if (date === localDate() && minutes >= from * 60 && minutes <= to * 60) { const nowLine = grid.createDiv({ cls: "organized-now-line", attr: { "aria-hidden": "true" } }); nowLine.setCssProps({ "--organized-at": String((minutes - from * 60) / span * 100) }); }
@@ -449,6 +468,11 @@ export class OrganizedInspectorView extends ItemView {
     if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || this.module === "Timer") {
       const timer = this.card(details, "Timer", "timer"); timer.createDiv({ cls: "organized-timer-value", text: `${Math.floor(elapsed(task) / 60)} min${task.time_tracking_started_at ? " · running" : ""}` });
       this.button(timer, task.time_tracking_started_at ? "Stop timer" : "Start timer", () => this.owner.run(() => this.owner.service.status(id, task.time_tracking_started_at ? "open" : "in_progress", this.owner.context ?? undefined)));
+      this.button(timer, "Add time", () => this.editSession(task, null, localDate()));
+      for (const session of [...task.work_sessions].reverse().slice(0, 5)) {
+        const start = new Date(session.start); const end = new Date(session.end); const clock = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+        this.button(timer, `${localDate(start)} · ${clock(start)}–${clock(end)} · ${lengthOf(session)}`, () => this.editSession(task, session, localDate(start))).addClass("organized-session-row");
+      }
     }
     if (task.recurring || task.recurrence_periods.length || this.module === "Recurring") {
       const recurring = this.card(details, "Recurring", "repeat");

@@ -1,7 +1,8 @@
 import { Notice, TFile } from "obsidian";
 import { insertTask, parseTasks, RECURRING_MARKER, removeUnique, replaceTask, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
-import { localDate, makeId, Movement, nextDate, path, PRIORITIES, Priority, setStatus, Status, Task } from "./model";
+import { localDate, makeId, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, Status, Task, WorkSession } from "./model";
+import { seconds } from "./sessions";
 import { PROJECT_FRONTMATTER, Repository, splitNote } from "./repository";
 import { parseWorked, retiredLines } from "./retention";
 
@@ -278,6 +279,18 @@ export class TaskService {
     const linked = new Set([...(await this.repo.list()).flatMap(t => t.projects), ...this.repo.settings().knownProjects]);
     const pairs = [...linked].filter(p => !p.startsWith(`${folder}/`) && this.repo.file(p)).map(from => ({ from, to: path(`${folder}/${from.split("/").at(-1)!}`) }));
     return this.moveProjects(pairs);
+  }
+  /** Logs time worked by hand; it counts toward the task's total like a timer run does. */
+  async addSession(id: string, session: WorkSession): Promise<void> {
+    await this.repo.update(id, t => ({ ...t, work_sessions: [...t.work_sessions, session].slice(-MAX_WORK_SESSIONS), time_tracked_seconds: t.time_tracked_seconds + seconds(session) })); this.changed();
+  }
+  /** Replaces one recorded session, or removes it when `to` is null, keeping the task's total in step. */
+  async changeSession(id: string, from: WorkSession, to: WorkSession | null): Promise<void> {
+    await this.repo.update(id, t => {
+      const at = t.work_sessions.findIndex(s => s.start === from.start && s.end === from.end); if (at < 0) throw new Error("That session no longer exists; it may have been changed elsewhere.");
+      const sessions = to ? t.work_sessions.map((s, n) => n === at ? to : s) : t.work_sessions.filter((_s, n) => n !== at);
+      return { ...t, work_sessions: sessions, time_tracked_seconds: Math.max(0, t.time_tracked_seconds - seconds(from) + (to ? seconds(to) : 0)) };
+    }); this.changed();
   }
   async setProjectColor(notePath: string, color: string | null): Promise<void> {
     const file = this.repo.file(notePath); if (!file) throw new Error("The project note was renamed or removed.");
