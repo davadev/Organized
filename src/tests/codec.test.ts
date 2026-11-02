@@ -39,7 +39,7 @@ describe("Markdown task codec", () => {
     const note = '# Notes\n## Information\nLegacy context\n## Idea\nAn idea\n';
     expect(NOTE_SECTIONS[0]).toBe('Description');
     expect(noteSection(note, 'Description')).toBe('Legacy context');
-    expect(noteSection(note, 'Idea')).toBe('An idea');
+    expect(noteSection(note, 'Notes')).toBe('');
     expect(noteSection(note, 'Sources')).toBe('');
     const migrated = writeNoteSection(note, 'Description', 'New context');
     expect(migrated).toContain('## Description\nNew context\n'); expect(migrated).not.toContain('## Information'); expect(migrated).toContain('## Idea\nAn idea');
@@ -47,8 +47,8 @@ describe("Markdown task codec", () => {
     expect(writeNoteSection('# Notes\n## Description\nOld\n## Idea\nKeep\n', 'Description', 'Fresh')).toContain('## Idea\nKeep');
     expect(writeNoteSection('# Notes\n', 'Sources', 'Line\n')).toContain('## Sources\nLine\n');
     expect(writeNoteSection('# Notes', 'Notes', 'No newline')).toBe('# Notes\n## Notes\nNo newline\n');
-    expect(writeNoteSection('', 'Question', 'Why?')).toBe('## Question\nWhy?\n');
-    expect(noteLoose(note)).toBe('# Notes');
+    expect(writeNoteSection('', 'Sources', 'Why?')).toBe('## Sources\nWhy?\n');
+    expect(noteLoose(note)).toBe('# Notes\n\n## Idea\nAn idea');
     expect(noteLoose('Prose\n## Sources\nhttps://example.com\n')).toBe('Prose');
   });
   it("sorts only safe sibling positions, never prose, headings or subtask blocks", () => {
@@ -70,5 +70,18 @@ describe("Markdown task codec", () => {
     expect(insertTask('# Day\n\n## Todos\n- [ ] A\n\n\n## Log\n', '- [ ] B', [{ level: 1, text: 'Day', ordinal: 0 }, { level: 2, text: 'Todos', ordinal: 0 }]).text).toBe('# Day\n\n## Todos\n- [ ] A\n- [ ] B\n\n\n## Log\n');
     expect(insertTask('# Day', '- [ ] A', [{ level: 1, text: 'New', ordinal: 0 }]).text).toBe('# Day\n\n# New\n\n- [ ] A\n');
     expect(insertTask('# Day\n- [ ] A\n# Last', '- [ ] B', [{ level: 1, text: 'Day', ordinal: 0 }]).text).toBe('# Day\n- [ ] A\n- [ ] B\n# Last');
+  });
+  it("keeps other headings inside a section as its content, ending it only at the next section heading", () => {
+    const note = '## Description\nIntro\n\n## Plan\n### Deep\ntext\n\n## Sources\nhttps://a.b\n\n## Notes\nn1\n';
+    expect(noteSection(note, 'Description')).toBe('Intro\n\n## Plan\n### Deep\ntext'); expect(noteSection(note, 'Sources')).toBe('https://a.b'); expect(noteSection(note, 'Notes')).toBe('n1');
+    expect(writeNoteSection(note, 'Description', 'New\n\n## Kept')).toBe('## Description\nNew\n\n## Kept\n\n## Sources\nhttps://a.b\n\n## Notes\nn1\n'); expect(noteLoose(note)).toBe('');
+    expect(noteSection('## Description\nOnly\n## Notes', 'Description')).toBe('Only'); expect(noteSection('## Description\nOld\n## Idea\nlegacy\n', 'Description')).toBe('Old');
+  });
+  it("sorts in-progress lines first and ranks forwarded and scheduled lines as no priority", () => {
+    const priorities = new Map<string, any>([['aaaaaaaa1', 'high'], ['bbbbbbbb1', 'high'], ['cccccccc1', 'medium'], ['dddddddd1', 'none'], ['eeeeeeee1', 'low']]);
+    const text = ['- [>] Forwarded high <!--organized:aaaaaaaa1-->', '- [<] Scheduled high <!--organized:bbbbbbbb1-->', '- [ ] Medium <!--organized:cccccccc1-->', '- [ ] None <!--organized:dddddddd1-->', '- [/] Low but running <!--organized:eeeeeeee1-->', '- [!] Plain running'].join('\n').replace('[!] Plain running', '[/] Plain running');
+    const titles = (out: string) => out.split('\n').map(l => l.replace(/^- \[.\] | <!--.*$/g, ''));
+    expect(titles(sortTasks(text, 2, 'list', priorities))).toEqual(['Low but running', 'Plain running', 'Medium', 'Forwarded high', 'Scheduled high', 'None']);
+    expect(titles(sortTasks(text, 2, 'none', priorities))).toEqual(titles(text)); expect(titles(sortTasks(text, 4, 'first', priorities))[0]).toBe('Low but running');
   });
 });

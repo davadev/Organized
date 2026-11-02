@@ -205,12 +205,13 @@ export class OrganizedInspectorView extends ItemView {
     const tasks = new Map<string, Task | null>(await Promise.all(lines.filter(line => line.id).map(async line => [line.id!, await this.owner.repo.read(line.id!).catch(() => null)] as const)));
     if (generation !== this.renderId) return;
     const hideDone = this.owner.settings.hideDoneTasks;
-    const isDone = (line: TaskLine) => { const task = line.id ? tasks.get(line.id) : null; return task ? this.shownStatus(task) === "completed" : line.marker.toLowerCase() === "x"; };
+    // Done, scheduled (`<`) and forwarded (`>`) lines are finished business for this note; hiding them keeps the list to what is still to do.
+    const isDone = (line: TaskLine) => { if (line.marker === "<" || line.marker === ">") return true; const task = line.id ? tasks.get(line.id) : null; return task ? this.shownStatus(task) === "completed" : line.marker.toLowerCase() === "x"; };
     const visible = hideDone ? lines.filter(line => !isDone(line)) : lines; const doneHidden = lines.length - visible.length;
     const name = source.file.path.split("/").at(-1)!.replace(/\.md$/i, "");
     const list = this.section(host, name, visible.length); list.addClass("organized-grouped");
     const head = list.querySelector<HTMLElement>(".organized-section-head")!;
-    const toggle = this.iconButton(head, hideDone ? "Show done tasks" : "Hide done tasks", hideDone ? "eye-off" : "eye", () => { this.owner.setHideDoneTasks(!hideDone); return this.render(); });
+    const toggle = this.iconButton(head, hideDone ? "Show done and moved tasks" : "Hide done and moved tasks", hideDone ? "eye-off" : "eye", () => { this.owner.setHideDoneTasks(!hideDone); return this.render(); });
     toggle.setAttribute("aria-pressed", String(hideDone)); toggle.addClass("organized-hide-done"); head.insertBefore(toggle, head.querySelector(".organized-count"));
     if (!lines.length) { list.createDiv({ cls: "organized-empty", text: "No tasks in this note yet." }); return; }
     let shown: Section[] = []; let hidden = 0;
@@ -233,7 +234,7 @@ export class OrganizedInspectorView extends ItemView {
       if (task) indent(this.taskRow(list, task, () => this.focusNoteTask(source.editor, source.file, line, task.id)));
       else indent(this.noteTaskRow(list, source.file, source.editor, line, line.id ? "Linked task unavailable" : "Regular todo"));
     }
-    if (doneHidden) list.createDiv({ cls: "organized-empty", text: `${doneHidden} done task${doneHidden === 1 ? "" : "s"} hidden.` });
+    if (doneHidden) list.createDiv({ cls: "organized-empty", text: `${doneHidden} done or moved task${doneHidden === 1 ? "" : "s"} hidden.` });
   }
   /** Paints an element with the colour of the task's project; without a coloured project it stays gray (blocks) or neutral (cards). */
   private tint(el: HTMLElement, task: Task): void {
@@ -486,7 +487,7 @@ export class OrganizedInspectorView extends ItemView {
     const shown = this.shownStatus(task); setIcon(status.createSpan({ cls: "organized-status-icon", attr: { "data-status": shown, "aria-hidden": "true" } }), task.recurring && shown === "completed" ? "calendar-check" : STATUS_ICONS[task.status]);
     const statusSelect = this.select(status, "Status", this.shownStatus(task), STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(async () => this.owner.service.status(id, value as Task["status"], this.owner.context?.line.id === id ? this.owner.context : task.recurring ? await this.todayContext(id) : undefined)); });
     if (task.recurring) statusSelect.options[STATUSES.indexOf("completed")].text = "done · today";
-    const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Description", "Idea", "Question", "Sources", "Notes"], value => { this.module = value; this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
+    const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Description", "Sources", "Notes"], value => { this.module = value; this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
     const file = this.owner.repo.file(this.owner.repo.taskPath(id))!; const body = splitNote(await this.owner.repo.readText(file)).body;
     if (generation !== this.renderId) return;
     const details = host.createDiv({ cls: "organized-task-details" });
@@ -535,6 +536,7 @@ export class OrganizedInspectorView extends ItemView {
     if (this.referencesOpen) await load();
     const actions = host.createDiv({ cls: "organized-task-actions" });
     this.button(actions, "Open task note", () => this.app.workspace.getLeaf(false).openFile(file)).addClass("organized-note-link");
+    this.button(actions, "Make standalone note", () => this.owner.convertToNote(task, this.owner.context?.line.id === id ? this.owner.context : undefined)).addClass("organized-note-link");
     this.button(actions, "Delete task", () => this.owner.deleteTask(id)).addClass("organized-danger");
   }
   /** Opens a task from the Projects or Favorites tab; the origin decides which tab Back returns to. */

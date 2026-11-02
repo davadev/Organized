@@ -1,6 +1,7 @@
 import { App, Component, Modal, Setting, SuggestModal } from "obsidian";
 import { path, PRIORITIES, Priority, Task, validDate, WorkSession } from "./model";
 import { isoFromInput, lengthOf, localInput, sessionProblem } from "./sessions";
+import { cleanTags, freePath, noteName } from "./notes";
 import { report } from "./service";
 import { renderMarkdownLinks } from "./markdown";
 
@@ -130,6 +131,49 @@ export class SessionModal extends Modal {
     if (this.edit.openTask) { const open = this.edit.openTask; actions.addButton(b => b.setButtonText("Open task").onClick(() => { this.close(); void open().catch(report); })); }
     if (this.edit.remove) { const remove = this.edit.remove; actions.addButton(b => { b.setButtonText("Delete").onClick(() => { this.close(); void remove().catch(report); }); b.buttonEl.addClass("mod-warning"); }); }
     start.focus();
+  }
+  onClose(): void { this.contentEl.empty(); }
+}
+
+export interface NoteConversion {
+  title: string; folders: string[]; folder: string; templates: string[]; exists: (path: string) => boolean;
+  convert: (options: { folder: string; tags: string[]; template: string | null; clash: "new" | "existing" }) => Promise<void>;
+}
+/** Asks where a todo's standalone note goes (folder, tags, template) and what to do when a note of that name already exists. */
+export class NoteConversionModal extends Modal {
+  constructor(app: App, readonly conversion: NoteConversion) { super(app); decorate(this); }
+  onOpen(): void {
+    const { conversion } = this; this.titleEl.setText("Make a standalone note"); this.contentEl.addClass("organized-modal");
+    this.contentEl.createEl("p", { cls: "organized-modal-copy", text: `“${conversion.title}” becomes a note holding its description. A link to the note replaces the todo here, its other copies are removed and its task note moves to Obsidian's trash.` });
+    this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Folder" });
+    const folder = this.contentEl.createEl("input", { type: "text", attr: { "aria-label": "Folder", list: "organized-folder-options", placeholder: "Vault root" } }); folder.value = conversion.folder;
+    const options = this.contentEl.createEl("datalist", { attr: { id: "organized-folder-options" } }); for (const name of conversion.folders) options.createEl("option", { value: name });
+    this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Tags (optional)" });
+    const tags = this.contentEl.createEl("input", { type: "text", attr: { "aria-label": "Tags", placeholder: "Separate with commas" } });
+    this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Template (optional)" });
+    const template = this.contentEl.createEl("select", { attr: { "aria-label": "Template" } }); template.createEl("option", { text: "No template", value: "" }); for (const file of conversion.templates) template.createEl("option", { text: file, value: file });
+    const clashLabel = this.contentEl.createEl("label", { cls: "organized-modal-label", text: "A note with this name already exists" });
+    const clash = this.contentEl.createEl("select", { attr: { "aria-label": "Existing note" } }); clash.createEl("option", { text: "Create a new note with a number", value: "new" }); clash.createEl("option", { text: "Link to the existing note", value: "existing" });
+    const note = this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-note", attr: { role: "status" } });
+    const place = (): { path: string; taken: boolean } | null => {
+      let dir: string; try { dir = path(folder.value, true); } catch { return null; }
+      const wanted = freePath(dir, noteName(conversion.title), () => false); return { path: wanted, taken: conversion.exists(wanted) };
+    };
+    const paint = () => {
+      const spot = place(); clashLabel.toggle(spot?.taken === true); clash.toggle(spot?.taken === true);
+      if (!spot) note.setText("Use a relative vault folder without reserved characters.");
+      else if (!spot.taken) note.setText(`Creates “${spot.path}”.`);
+      else if (clash.value === "existing") note.setText(`Links to the existing “${spot.path}”; nothing new is created.`);
+      else note.setText(`Creates “${freePath(spot.path.replace(/\/?[^/]*$/, ""), noteName(conversion.title), conversion.exists)}”.`);
+      note.toggleClass("organized-session-problem", !spot);
+    };
+    for (const field of [folder, clash]) { field.addEventListener("input", paint); field.addEventListener("change", paint); } paint();
+    new Setting(this.contentEl).addButton(b => b.setButtonText("Cancel").onClick(() => this.close()))
+      .addButton(b => b.setButtonText("Create note").setCta().onClick(() => {
+        const spot = place(); if (!spot) { paint(); return; }
+        this.close(); void conversion.convert({ folder: folder.value.trim(), tags: cleanTags(tags.value), template: template.value || null, clash: spot.taken && clash.value === "existing" ? "existing" : "new" }).catch(report);
+      }));
+    folder.focus();
   }
   onClose(): void { this.contentEl.empty(); }
 }

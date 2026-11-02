@@ -111,4 +111,12 @@ describe('read-only projections and bundled visual markers', () => {
     owner.settings.displayProperties = ['priority']; const inline = list(); await reading(owner, inline.host, context); const span = inline.item.querySelector('.organized-properties')!; expect(span.tagName).toBe('SPAN'); expect(span.nextElementSibling?.tagName).toBe('UL');
     owner.settings.displayProperties = ['notes']; const rich = list(); await reading(owner, rich.host, context); expect(rich.item.querySelector('.organized-properties')!.tagName).toBe('DIV'); expect(rich.item.lastElementChild?.classList.contains('organized-properties')).toBe(true);
   });
+  it('colours a displayed priority: high red, medium orange, low yellow, none uncoloured', async () => {
+    const { owner, task } = await fixture(); owner.settings.displayProperties = ['priority']; const component: any = new Component();
+    for (const priority of ['high', 'medium', 'low', 'none'] as const) {
+      const host = createDiv(); await projection(owner, host, { ...task, priority }, component); const span = host.querySelector('.organized-property')!;
+      expect(span.textContent).toBe(`priority: ${priority}`); expect(span.classList.contains(`organized-priority-${priority}`)).toBe(true);
+    }
+    const other = createDiv(); owner.settings.displayProperties = ['status']; await projection(owner, other, task, component); expect(other.querySelector('.organized-property')!.className).toBe('organized-property');
+  });
 });

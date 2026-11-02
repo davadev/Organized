@@ -49,7 +49,7 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - 121 behavioral/policy tests; all 13 shipped TypeScript files at 100% statements, branches, functions and lines.
 - Inline editing replaces the text popup for titles and task note sections. Tests cover Save/Cancel for both, actions rendered above the field, Description-first card order, legacy `## Information` migration, and the section helpers for read/write/loose content.
 - Todo conversion tests cover confirmation, cancellation, single/plural summaries, CRLF and indentation preservation, the no-todo notice, and refusal to convert a task note. The new command is registered as `convert-todos` and delegates through the serial queue.
-- The Chromium/WebKit matrix now includes the InlineEditor and ScheduleModal scenes. Checks assert the first card is Description with Idea below it, Save sits above the inline field without host overflow, and the shared modal host is top-aligned with visible actions.
+- The Chromium/WebKit matrix now includes the InlineEditor and ScheduleModal scenes. Checks assert the first card is Description with Sources below it, Save sits above the inline field without host overflow, and the shared modal host is top-aligned with visible actions.
 - Build, typed lint, CSS lint, dead-code checks and cloud lint parity passed. These remain shim-based checks, not live Obsidian or real-device certification.
 
 ## Fifth-beta candidate verification (2026-11-01)
@@ -82,6 +82,9 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 
 ## Project sections and start date
 - Link a task to a new project: the note has Open / In progress / Done headings and the task sits under Open. Start the timer, complete it, cancel another: each line moves under the matching heading (Canceled appears when needed). A project note without headings gets them added when a linked task changes status. After updating, every existing project note has `organized_start` set to the update date (once); notes that already had a start keep it.
+
+## Standalone notes
+- Type `[n]` in a linked todo (or press **Make standalone note** on the Task tab): pick a folder, tags and a template, and see the path preview. With a note of the same name already there, choose between a numbered new note and linking the existing one; the existing note is never changed. The note holds the description (sub-headings included), then Sources and Notes; the todo becomes one link, other copies disappear and the task note is in the trash.
 
 ## Hide done in Projects
 - Projects tab: done and canceled tasks are hidden by default and a line counts them; the eye button beside the title shows them (and the Canceled section) and the choice survives a restart. With more than 50 tasks in a list, the rest sits behind **Show all N**.

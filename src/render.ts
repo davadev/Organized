@@ -35,7 +35,9 @@ export async function projection(owner: Organized, host: HTMLElement, task: Task
       const block = host.createDiv({ cls: "organized-rich-property" }); await MarkdownRenderer.render(owner.app, content, block, file.path, component);
     } else {
       const value = property === "time_tracked_seconds" ? `${Math.floor(elapsed(task) / 60)} min` : typeof task[property] === "object" ? JSON.stringify(task[property]) : String(task[property]);
-      host.createSpan({ cls: "organized-property", text: `${property.replace(/_/g, " ")}: ${value}` });
+      const span = host.createSpan({ cls: "organized-property", text: `${property.replace(/_/g, " ")}: ${value}` });
+      // Priority is coloured: high red, medium orange, low yellow.
+      if (property === "priority") span.addClass(`organized-priority-${task.priority}`);
     }
   }
 }

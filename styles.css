@@ -126,6 +126,18 @@
 .organized-timer-value { color: var(--text-normal); font-size: 20px; font-variant-numeric: tabular-nums; }
 .organized-card .organized-task-notes { inline-size: 100%; font-size: 13px; line-height: 1.6; }
 .organized-task-notes > :first-child { margin-block-start: 0; }
+/* Rendered Markdown stays in proportion to the card: headings only a little larger than the text, and wide content scrolls inside the card instead of widening it. */
+.organized-view .organized-task-notes :is(h1, h2, h3, h4, h5, h6) { margin-block: 0.8em 0.3em; color: var(--text-normal); font-size: 1.05em; font-weight: 600; line-height: 1.3; }
+.organized-view .organized-task-notes h1 { font-size: 1.2em; }
+.organized-view .organized-task-notes h2 { font-size: 1.12em; }
+.organized-view .organized-task-notes :is(h5, h6) { color: var(--text-muted); font-size: 1em; }
+.organized-task-notes :is(img, video, canvas, svg) { max-inline-size: 100%; block-size: auto; }
+.organized-task-notes pre { max-inline-size: 100%; overflow-x: auto; }
+.organized-task-notes table { display: block; max-inline-size: 100%; overflow-x: auto; }
+.organized-task-notes :is(ul, ol) { margin-block: 0.4em; padding-inline-start: 1.4em; }
+.organized-task-notes blockquote { margin-inline: 0; padding-inline-start: 0.8em; border-inline-start: 3px solid var(--background-modifier-border); }
+.organized-task-notes hr { margin-block: 0.8em; }
+.organized-task-notes .callout { margin-block: 0.6em; }
 .organized-task-notes > :last-child { margin-block-end: 0; }
 .organized-disclosure { padding-block: 8px; border-block-start: 1px solid var(--background-modifier-border); color: var(--text-muted); font-size: 12px; }
 .organized-disclosure summary { cursor: pointer; padding-block: 4px; }
@@ -237,6 +249,7 @@ body.is-mobile .modal-container.organized-modal-host { overflow-y: auto; }
 .organized-modal-window .organized-modal { max-block-size: 70vh; overflow-y: auto; }
 .organized-modal-window .organized-modal-label { display: block; margin-block: 2px 6px; color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .organized-modal-window .organized-modal input:not([type="checkbox"]), .organized-modal-window .organized-modal textarea { inline-size: 100%; min-block-size: 44px; padding: 8px 10px; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s, 5px); background: var(--background-primary); color: var(--text-normal); box-shadow: none; font: inherit; font-size: 14px; }
+.organized-modal-window .organized-modal select { inline-size: 100%; min-block-size: 44px; margin-block-end: 8px; }
 .organized-modal-window .organized-modal input:not([type="checkbox"]):focus, .organized-modal-window .organized-modal textarea:focus { border-color: var(--interactive-accent); outline: 2px solid var(--interactive-accent); outline-offset: 1px; }
 .organized-modal-window .organized-modal textarea { min-block-size: 12rem; line-height: 1.5; resize: vertical; }
 .organized-modal-window .modal-content .setting-item { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-block-start: 16px; padding: 0; border: 0; }
@@ -509,3 +522,7 @@ SOFTWARE.
 .organized-sessions summary { color: var(--text-muted); font-size: var(--font-ui-small); cursor: pointer; }
 .organized-session-day { margin-block: 8px 2px; color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
 .organized-view .organized-panel button.organized-show-more { inline-size: 100%; margin-block-start: 6px; block-size: auto; min-block-size: 0; padding: 4px 8px; color: var(--text-muted); font-size: var(--font-ui-small); }
+
+.organized-property.organized-priority-high { color: var(--color-red, #d64545); }
+.organized-property.organized-priority-medium { color: var(--color-orange, #e08a1e); }
+.organized-property.organized-priority-low { color: var(--color-yellow, #d9a60f); }

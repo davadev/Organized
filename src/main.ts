@@ -1,12 +1,12 @@
-import { Editor, MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
+import { Editor, MarkdownView, Notice, Plugin, TFile, TFolder, WorkspaceLeaf } from "obsidian";
 import { Transaction } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
-import { ACTION_MARKERS, parseTasks, NoteSection, PROJECT_MARKER, SECTION_MARKERS, TaskLine, writeNoteSection } from "./codec";
+import { ACTION_MARKERS, parseTasks, NOTE_MARKER, NoteSection, PROJECT_MARKER, SECTION_MARKERS, TaskLine, writeNoteSection } from "./codec";
 import { DEFAULT_SETTINGS, localDate, object, Settings, Task } from "./model";
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
 import { Context, report, TaskService } from "./service";
-import { ConfirmModal, DatePicker, isKeepAsTodo, PriorityPicker, ProjectPicker, TaskPicker } from "./modals";
+import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, PriorityPicker, ProjectPicker, TaskPicker } from "./modals";
 import { OrganizedInspectorView, VIEW_TYPE } from "./view";
 import { OrganizedSettingsTab } from "./settings";
 import { editorExtension, reading, refreshEditor } from "./render";
@@ -314,7 +314,28 @@ export default class Organized extends Plugin {
     else if (marker === "!") new PriorityPicker(this.app, priority => this.run(() => this.service.priority(context, priority))).open();
     else if (marker in SECTION_MARKERS) { await this.openInspector("Task", SECTION_MARKERS[marker]); await this.run(() => this.service.clean(context)); }
     else if (marker === PROJECT_MARKER) this.pickProjects(await this.repo.read(id), context);
+    else if (marker === NOTE_MARKER) this.convertToNote(await this.repo.read(id), context);
     else await this.run(() => this.service.marker(context, marker));
+  }
+  /** Folders offered for a standalone note. */
+  noteFolders(): string[] { return this.app.vault.getAllLoadedFiles().filter(f => f instanceof TFolder && f.path !== "/").map(f => f.path).sort(); }
+  /** Template notes: the core Templates plugin's folder when it is set, otherwise notes in a folder called Template(s). */
+  templateFiles(): string[] {
+    const plugins = (this.app as unknown as { internalPlugins?: { getPluginById?: (id: string) => { instance?: { options?: { folder?: string } } } | null } }).internalPlugins;
+    const configured = plugins?.getPluginById?.("templates")?.instance?.options?.folder;
+    return this.app.vault.getMarkdownFiles().filter(f => configured ? f.path.startsWith(`${configured}/`) : /(^|\/)templates?\//i.test(f.path)).map(f => f.path).sort();
+  }
+  /** Asks where to put the task's standalone note, then replaces the task by a link to it. */
+  convertToNote(task: Task, context?: Context): void {
+    new NoteConversionModal(this.app, {
+      title: task.title, folders: this.noteFolders(), folder: this.settings.noteFolder, templates: this.templateFiles(), exists: notePath => this.repo.file(notePath) !== null,
+      convert: options => this.run(async () => {
+        await this.service.convertToNote(task.id, options, context);
+        this.settings.noteFolder = options.folder; this.saveSettings(false);
+        if (this.selectedTaskId === task.id) this.selectedTaskId = null; if (this.context?.line.id === task.id) this.context = null;
+        this.eachView(view => { view.module = ""; view.editingModule = ""; view.editingTitle = false; }); this.refresh();
+      }),
+    }).open();
   }
   pickProjects(task: Task, context?: Context): void {
     new ProjectPicker(this.app, this.repo.projectNotes(), task.projects, notes => this.run(async () => { await this.service.projects(task.id, notes); this.rememberProjects(notes); if (context) await this.service.clean(context); }), this.repo.projectFolder()).open();

@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
 import { harness } from "./harness";
 import { localDate } from "../model";
 import { Notice } from "./__mocks__/obsidian";
-import { moveTask, sectionNamed, writeNoteSection } from "../codec";
+import { moveTask, parseTasks, sectionNamed, writeNoteSection } from "../codec";
 import { projectTemplate } from "../repository";
 
 installObsidianDom();
@@ -38,7 +38,7 @@ describe("retired tasks keep what the setting says", () => {
     const h = harness(); h.setSettings({ taskRetentionDays: 30, autoForward: false, retentionDetail: detail });
     const task = await h.repo.create("Plan release");
     await h.repo.update(task.id, t => ({ ...t, status: "completed", closed_at: ago(40), time_tracked_seconds: 5400, work_sessions: [{ start: when(1, 5, 9, 0), end: when(1, 5, 10, 0) }] }));
-    const file = h.repo.file(h.repo.taskPath(task.id))!; h.texts.set(file.path, writeNoteSection(writeNoteSection(h.texts.get(file.path)!, "Description", "Ship it."), "Idea", "Dry run"));
+    const file = h.repo.file(h.repo.taskPath(task.id))!; h.texts.set(file.path, writeNoteSection(writeNoteSection(h.texts.get(file.path)!, "Description", "Ship it."), "Notes", "Dry run"));
     const first: any = await h.add("Daily/2026-01-05.md", `- [>] Plan release <!--organized:${task.id}-->`);
     const last: any = await h.add("Daily/2026-01-06.md", `# Work\n  - [x] Plan release <!--organized:${task.id}-->\n  - [ ] Next\n`);
     const crlf: any = await h.add("Other.md", `1. [x] Plan release <!--organized:${task.id}-->\r\nafter\r\n`);
@@ -54,7 +54,7 @@ describe("retired tasks keep what the setting says", () => {
   });
   it("everything adds notes, days worked and the tracked total", async () => {
     const { h, last } = await retire("all"); const text = h.texts.get(last.path)!;
-    expect(text).toContain("    > Ship it.\n    > **Idea**\n    > Dry run\n    - Worked 2026-01-05: 09:00–10:00 (1 h)\n    - Tracked 1 h 30 min\n  - [ ] Next");
+    expect(text).toContain("    > Ship it.\n    > **Notes**\n    > Dry run\n    - Worked 2026-01-05: 09:00–10:00 (1 h)\n    - Tracked 1 h 30 min\n  - [ ] Next");
   });
   it("picks the latest daily note whatever order the vault lists notes in", async () => {
     const h = harness(); h.setSettings({ taskRetentionDays: 30, autoForward: false, retentionDetail: "description" }); const task = await h.repo.create("Order");
@@ -170,5 +170,68 @@ describe("project sections and start date", () => {
   });
   it("adds only the missing property: a start date without the project marker keeps its date", async () => {
     const h = harness(); const note: any = await h.add("Half.md", "---\norganized_start: 2024-02-02\n---\nbody"); expect(await h.repo.markProject(note, "2030-01-01")).toBe(true); expect(h.texts.get(note.path)).toContain("organized_type: project"); expect(h.texts.get(note.path)).toMatch(/organized_start: '?2024-02-02'?/); expect(h.texts.get(note.path)).not.toContain("2030");
+  });
+});
+
+describe("standalone notes from tasks", () => {
+  const setup = async (title = "Plan launch") => {
+    const h = harness(); const task = await h.repo.create(title); const file = h.repo.file(h.repo.taskPath(task.id))!;
+    h.texts.set(file.path, writeNoteSection(writeNoteSection(writeNoteSection(h.texts.get(file.path)!, "Description", "Why we launch.\n\n## Plan\nSteps"), "Sources", "https://a.b"), "Notes", "Remember."));
+    const today: any = await h.add(`Daily/${localDate()}.md`, `# Work\n  - [ ] ${title} <!--organized:${task.id}-->\n  - [ ] Other\n`); const old: any = await h.add("Daily/2026-01-05.md", `- [>] ${title} <!--organized:${task.id}-->\n`);
+    const project: any = await h.add("Tasks/Projects/Alpha.md", `## Open\n- [ ] ${title} <!--organized:${task.id}-->\n`);
+    const context = { file: today, line: parseTasks(h.texts.get(today.path)!)[0] };
+    return { h, task, file, today, old, project, context };
+  };
+  const options = { folder: "Notes", tags: ["idea"], template: null, clash: "new" as const };
+  it("creates the note and leaves one link where the task was converted, removing every other copy and the task note", async () => {
+    const { h, task, file, today, old, project, context } = await setup(); const made = await h.service.convertToNote(task.id, options, context);
+    expect(made.path).toBe("Notes/Plan launch.md"); expect(h.texts.get(made.path)).toBe("---\ntags:\n  - idea\n---\n\nWhy we launch.\n\n## Plan\nSteps\n\n## Sources\nhttps://a.b\n\n## Notes\nRemember.\n");
+    expect(h.texts.get(today.path)).toBe("# Work\n  - [[Notes/Plan launch]]\n  - [ ] Other\n"); expect(h.texts.get(old.path)).toBe(""); expect(h.texts.get(project.path)).toBe("## Open\n");
+    expect(h.repo.file(file.path)).toBeNull(); expect(h.raw.fileManager.trashFile).toHaveBeenCalledWith(file); expect(h.changed).toHaveBeenCalled(); expect(h.raw.fileManager.generateMarkdownLink).toHaveBeenCalledWith(made, today.path);
+  });
+  it("works from the panel without a line: the latest daily note keeps the link", async () => {
+    const { h, task, today, old } = await setup(); await h.service.convertToNote(task.id, { ...options, folder: "", tags: [] });
+    expect(h.texts.get("Plan launch.md")).toContain("Why we launch."); expect(h.texts.get(today.path)).toContain("  - [[Plan launch]]"); expect(h.texts.get(old.path)).toBe("");
+  });
+  it("numbers the name or links the existing note when one of that name exists, never overwriting it", async () => {
+    const { h, task, today, context } = await setup(); await h.add("Notes/Plan launch.md", "mine"); await h.add("Notes/Plan launch 2.md", "also mine");
+    const made = await h.service.convertToNote(task.id, options, context); expect(made.path).toBe("Notes/Plan launch 3.md"); expect(h.texts.get("Notes/Plan launch.md")).toBe("mine"); expect(h.texts.get(today.path)).toContain("[[Notes/Plan launch 3]]");
+    const second = await setup(); await second.h.add("Notes/Plan launch.md", "mine"); const linked = await second.h.service.convertToNote(second.task.id, { ...options, clash: "existing" }, second.context);
+    expect(linked.path).toBe("Notes/Plan launch.md"); expect(second.h.texts.get("Notes/Plan launch.md")).toBe("mine"); expect(second.h.texts.get(second.today.path)).toContain("[[Notes/Plan launch]]"); expect(second.h.repo.file(second.file.path)).toBeNull();
+    const third = await setup(); const fresh = await third.h.service.convertToNote(third.task.id, { ...options, clash: "existing" }, third.context); expect(fresh.path).toBe("Notes/Plan launch.md"); expect(third.h.texts.get(fresh.path)).toContain("Why we launch.");
+  });
+  it("applies a template, and refuses a missing template or a bad folder before changing anything", async () => {
+    const { h, task, file, today, context } = await setup(); await h.add("Templates/Idea.md", "---\nstatus: draft\n---\n# {{title}}\n");
+    const made = await h.service.convertToNote(task.id, { ...options, template: "Templates/Idea.md" }, context); expect(h.texts.get(made.path)).toContain("status: draft"); expect(h.texts.get(made.path)).toContain("# Plan launch\n\nWhy we launch.");
+    const bad = await setup(); await expect(bad.h.service.convertToNote(bad.task.id, { ...options, template: "Templates/Missing.md" }, bad.context)).rejects.toThrow("not found"); await expect(bad.h.service.convertToNote(bad.task.id, { ...options, folder: "../up" }, bad.context)).rejects.toThrow("relative");
+    expect(bad.h.files.has("Notes/Plan launch.md")).toBe(false); expect(bad.h.texts.get(bad.today.path)).toContain(bad.task.id); expect(bad.h.repo.file(bad.file.path)).toBeTruthy(); expect(file).toBeTruthy(); expect(today).toBeTruthy();
+    await expect(h.service.convertToNote("missing1234", options)).rejects.toThrow();
+    const gone = await setup(); const real = gone.h.repo.file.bind(gone.h.repo); gone.h.repo.file = ((p: string) => p === gone.h.repo.taskPath(gone.task.id) ? null : real(p)) as any; await expect(gone.h.service.convertToNote(gone.task.id, options)).rejects.toThrow("Task note is missing");
+  });
+  it("keeps numbered bullets and CRLF, converts a task that has no copies and stops before trashing when a copy cannot be edited", async () => {
+    const h = harness(); const task = await h.repo.create("Numbered"); const file = h.repo.file(h.repo.taskPath(task.id))!; const daily: any = await h.add(`Daily/${localDate()}.md`, `1. [ ] Numbered <!--organized:${task.id}-->\r\nnext\r\n`);
+    await h.service.convertToNote(task.id, { ...options, tags: [] }); expect(h.texts.get(daily.path)).toBe("1. [[Notes/Numbered]]\r\nnext\r\n"); expect(h.repo.file(file.path)).toBeNull();
+    const lone = await h.repo.create("Lonely"); await h.service.convertToNote(lone.id, { ...options, tags: [] }); expect(h.texts.get("Notes/Lonely.md")).toBe("");
+    const busy = await setup("Busy"); vi.spyOn(busy.h.repo, "write").mockRejectedValue(Error("concurrent change")); await expect(busy.h.service.convertToNote(busy.task.id, options, busy.context)).rejects.toThrow("concurrent"); expect(busy.h.repo.file(busy.file.path)).toBeTruthy(); expect(busy.h.raw.fileManager.trashFile).not.toHaveBeenCalled();
+  });
+});
+
+describe("sorting follows status and moves", () => {
+  const titles = (text: string) => text.split("\n").filter(l => l.trim()).map(l => l.replace(/^\s*- \[.\] | <!--.*$/g, ""));
+  it("lifts a task to the top when it starts, drops it when it is forwarded and re-sorts quietly when sorting is off", async () => {
+    const h = harness(); const a = await h.repo.create("Alpha"); const b = await h.repo.create("Bravo"); const c = await h.repo.create("Charlie");
+    await h.repo.update(a.id, t => ({ ...t, priority: "high" })); await h.repo.update(b.id, t => ({ ...t, priority: "medium" }));
+    const note: any = await h.add(`Daily/${localDate()}.md`, `- [ ] Alpha <!--organized:${a.id}-->\n- [ ] Bravo <!--organized:${b.id}-->\n- [ ] Charlie <!--organized:${c.id}-->\n`);
+    await h.service.status(c.id, "in_progress"); expect(titles(h.texts.get(note.path)!)).toEqual(["Charlie", "Alpha", "Bravo"]);
+    await h.service.status(c.id, "open"); expect(titles(h.texts.get(note.path)!)).toEqual(["Alpha", "Bravo", "Charlie"]);
+    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); const context = { file: note, line: parseTasks(h.texts.get(note.path)!)[0] };
+    await h.service.schedule(context, localDate(tomorrow), "forward", "manual"); expect(titles(h.texts.get(note.path)!)).toEqual(["Bravo", "Alpha", "Charlie"]); expect(h.texts.get(note.path)).toContain(`- [>] Alpha`);
+    h.setSettings({ sortScope: "none" }); await h.service.status(c.id, "in_progress"); expect(titles(h.texts.get(note.path)!)).toEqual(["Bravo", "Alpha", "Charlie"]);
+  });
+  it("leaves project notes in their status sections and survives a sort that cannot be written", async () => {
+    const h = harness(); const folder = h.repo.projectFolder(); const a = await h.repo.create("Alpha"); const b = await h.repo.create("Bravo"); await h.service.projects(a.id, [`${folder}/P.md`]); await h.service.projects(b.id, [`${folder}/P.md`]);
+    await h.service.status(b.id, "in_progress"); expect(h.texts.get(`${folder}/P.md`)).toMatch(/## In progress\n\n?- \[\/\] Bravo/);
+    const note: any = await h.add(`Daily/${localDate()}.md`, `- [ ] Alpha <!--organized:${a.id}-->\n- [ ] Bravo <!--organized:${b.id}-->\n`); const real = h.repo.write.bind(h.repo); let calls = 0; vi.spyOn(h.repo, "write").mockImplementation(async (f, before, after) => { if (calls++ > 1) throw Error("concurrent"); return real(f, before, after); });
+    await h.service.status(a.id, "in_progress"); expect(h.texts.get(note.path)).toContain("- [/] Alpha"); expect(note).toBeTruthy();
   });
 });
