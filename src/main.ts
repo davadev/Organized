@@ -223,6 +223,8 @@ export default class Organized extends Plugin {
       const id = removed.id!;
       void this.confirm("An in-progress occurrence was removed. Stop and accumulate its timer? Cancel keeps it running.").then(yes => yes ? this.run(() => this.service.status(id, "open")) : undefined).catch(report);
     }
+    // Ticking a checkbox in Live Preview replaces one marker character, often with no user event and without moving the cursor onto the line.
+    if (this.tickedLinkedTask(update, active, user)) return;
     let touchedLines = 0; update.changes.iterChanges((_a, _b, from, to) => { touchedLines += update.state.doc.lineAt(to).number - update.state.doc.lineAt(from).number + 1; });
     if (touchedLines > 2) return;
     const context = this.current(active.editor, active.file); if (!context) return;
@@ -250,6 +252,20 @@ export default class Organized extends Plugin {
       return;
     }
     if (context.line.id && old?.marker !== context.line.marker) queueMicrotask(() => { void this.trigger(context).catch(report); });
+  }
+  /** Handles a one-character [ ] <-> [x] change on a linked task that the cursor-based path would miss; returns whether it did. */
+  private tickedLinkedTask(update: ViewUpdate, active: { editor: Editor; file: TFile }, user: boolean): boolean {
+    let count = 0; let at = -1; update.changes.iterChanges((from, to, _newFrom, _newTo, inserted) => { count++; at = to - from === 1 && inserted.length === 1 ? from : -1; });
+    if (count !== 1 || at < 0) return false;
+    const line = update.state.doc.lineAt(at).number - 1;
+    const before = parseTasks(update.startState.doc.toString()).find(t => t.line === line); const after = parseTasks(update.state.doc.toString()).find(t => t.line === line);
+    const done = (marker: string) => marker === "x" || marker === "X";
+    if (!after?.id || before?.id !== after.id || !(done(before.marker) || before.marker === " ") || !(done(after.marker) || after.marker === " ") || done(before.marker) === done(after.marker)) return false;
+    // A typed marker with the cursor on the line is handled by the trigger path.
+    if (user && active.editor.getCursor().line === line) return false;
+    const context = { file: active.file, line: after }; const id = after.id;
+    queueMicrotask(() => { void this.run(() => this.service.status(id, done(after.marker) ? "completed" : "open", context)); });
+    return true;
   }
   async trigger(context: Context): Promise<void> {
     const marker = context.line.marker; const id = context.line.id; if (!id) return;

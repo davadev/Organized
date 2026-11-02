@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix ticking or unticking a linked task's checkbox in the editor (Live Preview) not updating the side panel: such a click changes one character, often without a user event and without the cursor on that line, so it was ignored. It now updates the task's status, its other occurrences and the panel.
 - Fix the Task tab keeping the previous note's tasks after you switch notes: the panel now repaints whenever the note in the main area changes (including on file open and when the side panel has focus), not only when the task under the cursor changes.
 - Fix the Task tab saying "Open a Markdown note to browse its tasks here" while a note is open: the note shown in the main area is now found directly, instead of only after you have edited or moved the cursor in it, so the daily note's tasks appear as soon as the side panel opens (also on mobile and with the note in reading view).
 - Task cards are coloured by status in the side panel: done tasks get a faint green wash with a green edge, in-progress tasks take the accent of your theme, open tasks stay neutral so unfinished work stands out, and canceled tasks are struck through and faded. The status dot on cards is gone; the colours replace it. The mixes are subtle and adapt to light and dark themes, and fall back to plain edge colours on an old Android WebView that cannot mix colours.
