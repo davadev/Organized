@@ -42,4 +42,18 @@ describe("task model and persisted settings", () => {
     expect(setStatus({ ...stopped, closed_at: null }, "completed", new Date("2026-01-02T00:00:00Z")).closed_at).toBe("2026-01-02T00:00:00.000Z");
     expect(setStatus({ ...started, recurring: true }, "completed", new Date("2026-01-01T01:00:00Z")).status).toBe("open"); expect(elapsed(task)).toBe(0);
   });
+  it("records timer runs of a minute or more as work sessions and validates stored sessions", () => {
+    const task = newTask("Timer", "timer123", new Date("2026-01-01T00:00:00Z")); expect(task.work_sessions).toEqual([]);
+    const started = setStatus(task, "in_progress", new Date("2026-01-01T09:00:00Z"));
+    expect(setStatus(started, "in_progress", new Date("2026-01-01T09:30:00Z")).work_sessions).toEqual([]);
+    const done = setStatus(started, "completed", new Date("2026-01-01T09:45:00Z")); expect(done.work_sessions).toEqual([{ start: "2026-01-01T09:00:00.000Z", end: "2026-01-01T09:45:00.000Z" }]);
+    const again = setStatus(setStatus(done, "in_progress", new Date("2026-01-01T11:00:00Z")), "open", new Date("2026-01-01T11:00:59Z")); expect(again.work_sessions).toHaveLength(1); expect(again.time_tracked_seconds).toBe(2700 + 59);
+    const reopened = setStatus(setStatus(done, "in_progress", new Date("2026-01-01T11:00:00Z")), "open", new Date("2026-01-01T11:01:00Z")); expect(reopened.work_sessions.map(w => w.end)).toEqual(["2026-01-01T09:45:00.000Z", "2026-01-01T11:01:00.000Z"]);
+    const recurring = { ...task, recurring: true }; expect(setStatus(setStatus(recurring, "in_progress", new Date("2026-01-01T09:00:00Z")), "completed", new Date("2026-01-01T10:00:00Z")).work_sessions).toHaveLength(1);
+    const messy = taskFrom({ id: "timer123", title: "T", work_sessions: [{ start: "2026-01-02T10:00:00Z", end: "2026-01-02T11:00:00Z" }, { start: "2026-01-01T10:00:00Z", end: "2026-01-01T11:00:00Z" }, { start: "bad", end: "2026-01-01T11:00:00Z" }, { start: "2026-01-03T11:00:00Z", end: "2026-01-03T10:00:00Z" }, { start: 5, end: 6 }, "x", null] }, "timer123");
+    expect(messy.work_sessions.map(w => w.start)).toEqual(["2026-01-01T10:00:00Z", "2026-01-02T10:00:00Z"]); expect(taskFrom({ id: "timer123", title: "T", work_sessions: "nope" }, "timer123").work_sessions).toEqual([]);
+    const many = Array.from({ length: 520 }, (_, i) => ({ start: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(), end: new Date(Date.UTC(2026, 0, 1, 0, i, 30)).toISOString() }));
+    const capped = taskFrom({ id: "timer123", title: "T", work_sessions: many }, "timer123").work_sessions; expect(capped).toHaveLength(500); expect(capped[0]).toEqual(many[20]);
+    const full = setStatus({ ...task, work_sessions: many.slice(0, 500), time_tracking_started_at: "2026-02-01T00:00:00.000Z" }, "open", new Date("2026-02-01T00:05:00Z")); expect(full.work_sessions).toHaveLength(500); expect(full.work_sessions.at(-1)?.end).toBe("2026-02-01T00:05:00.000Z");
+  });
 });

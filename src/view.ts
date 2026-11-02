@@ -8,12 +8,18 @@ import { DatePicker } from "./modals";
 import { NoteSection, NOTE_SECTIONS, noteLoose, noteSection, parseTasks, TaskLine } from "./codec";
 import { splitNote } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
+import { blocksOn, hourRange } from "./timeline";
 
 const sameHeading = (a: Section, b: Section): boolean => a.level === b.level && a.text === b.text && a.ordinal === b.ordinal;
 export const VIEW_TYPE = "organized-inspector";
 export type Tab = "Calendar" | "Task" | "Projects";
+export const CALENDAR_MODES = ["Month", "Week", "Day"] as const;
+export type CalendarMode = typeof CALENDAR_MODES[number];
+const pad = (value: number): string => String(value).padStart(2, "0");
+const clock = (minutes: number): string => `${pad(Math.floor(minutes / 60) % 24)}:${pad(Math.floor(minutes % 60))}`;
 export class OrganizedInspectorView extends ItemView {
   tab: Tab = "Calendar";
+  calendarMode: CalendarMode = "Month";
   month = moment().startOf("month");
   selectedDate = localDate();
   selectedProject = "";
@@ -46,7 +52,7 @@ export class OrganizedInspectorView extends ItemView {
       b.addEventListener("click", () => { this.tab = tab; this.module = ""; this.editingModule = ""; this.editingTitle = false; void this.render().catch(report); });
     }
     const panel = host.createDiv({ cls: "organized-panel", attr: { role: "tabpanel" } });
-    if (this.tab === "Calendar") this.calendar(panel);
+    if (this.tab === "Calendar") await this.calendar(panel, generation);
     else if (this.tab === "Task") await this.task(panel, generation);
     else await this.projects(panel, generation);
   }
@@ -216,7 +222,17 @@ export class OrganizedInspectorView extends ItemView {
     field.addEventListener("blur", () => { this.editingModule = ""; void save().then(() => this.render()).catch(report); });
     field.focus(); field.setSelectionRange(text.length, text.length); field.scrollIntoView({ block: "nearest" });
   }
-  calendar(host: HTMLElement): void {
+  async calendar(host: HTMLElement, generation: number): Promise<void> {
+    const modes = host.createDiv({ cls: "organized-seg", attr: { role: "group", "aria-label": "Calendar view" } });
+    for (const mode of CALENDAR_MODES) {
+      const b = modes.createEl("button", { cls: "organized-seg-button", text: mode, attr: { type: "button", "aria-pressed": String(this.calendarMode === mode) } });
+      b.addEventListener("click", () => { this.calendarMode = mode; void this.render().catch(report); });
+    }
+    if (this.calendarMode === "Month") this.monthView(host);
+    else if (this.calendarMode === "Week") await this.weekView(host, generation);
+    else await this.dayView(host, generation);
+  }
+  private monthView(host: HTMLElement): void {
     const nav = host.createDiv({ cls: "organized-calendar-nav" });
     this.iconButton(nav, "Previous month", "chevron-left", () => { this.month.subtract(1, "month"); return this.render(); });
     nav.createEl("h3", { text: this.month.format("MMMM YYYY"), attr: { "aria-live": "polite" } });
@@ -248,6 +264,91 @@ export class OrganizedInspectorView extends ItemView {
       }
     }).catch(() => stats.setText("Task statistics unavailable"));
   }
+  /** Navigation row shared by the week and day views: previous, title, next and Today. */
+  private rangeNav(host: HTMLElement, title: string, previous: string, next: string, step: () => void, back: () => void): void {
+    const nav = host.createDiv({ cls: "organized-calendar-nav" });
+    this.iconButton(nav, previous, "chevron-left", () => { back(); return this.render(); });
+    nav.createEl("h3", { text: title, attr: { "aria-live": "polite" } });
+    this.iconButton(nav, next, "chevron-right", () => { step(); return this.render(); });
+    this.button(nav, "Today", () => { this.selectedDate = localDate(); return this.render(); }).addClass("organized-today-button");
+  }
+  private openFromCalendar(id: string): Promise<void> {
+    this.owner.selectedTaskId = id; this.origin = "Calendar"; this.tab = "Task"; this.module = ""; this.editingModule = ""; this.editingTitle = false;
+    return this.render();
+  }
+  private async weekView(host: HTMLElement, generation: number): Promise<void> {
+    const start = moment(this.selectedDate, "YYYY-MM-DD").startOf("week"); const end = start.clone().add(6, "days");
+    this.rangeNav(host, `${start.format("MMM D")} – ${end.format("MMM D, YYYY")}`, "Previous week", "Next week",
+      () => { this.selectedDate = moment(this.selectedDate, "YYYY-MM-DD").add(1, "week").format("YYYY-MM-DD"); },
+      () => { this.selectedDate = moment(this.selectedDate, "YYYY-MM-DD").subtract(1, "week").format("YYYY-MM-DD"); });
+    const tasks = await this.owner.repo.list(); const now = Date.now();
+    const days = Array.from({ length: 7 }, (_, i) => start.clone().add(i, "days"));
+    const blocks = days.map(day => blocksOn(tasks, day.format("YYYY-MM-DD"), now)); const [from, to] = hourRange(blocks.flat());
+    const counts = await Promise.all(days.map(async day => {
+      const note = this.owner.repo.file(this.owner.service.daily.path(day.format("YYYY-MM-DD"))); const lines = note ? await this.owner.taskLines(note) : [];
+      return { done: lines.filter(line => line.marker.toLowerCase() === "x").length, total: lines.length };
+    }));
+    if (generation !== this.renderId) return;
+    const week = host.createDiv({ cls: "organized-week", attr: { role: "group", "aria-label": `${start.format("LL")} to ${end.format("LL")}` } });
+    days.forEach((day, i) => {
+      const key = day.format("YYYY-MM-DD"); const { done, total } = counts[i];
+      const row = week.createEl("button", { cls: "organized-week-row", attr: { type: "button", "aria-label": `${day.format("dddd, LL")}: ${done} of ${total} tasks done, ${blocks[i].length} tracked blocks` } });
+      if (key === localDate()) row.setAttribute("aria-current", "date");
+      if (key === this.selectedDate) row.setAttribute("aria-pressed", "true");
+      const label = row.createDiv({ cls: "organized-week-label" }); label.createSpan({ cls: "organized-week-weekday", text: day.format("ddd") }); label.createSpan({ cls: "organized-week-date", text: day.format("D") });
+      const track = row.createDiv({ cls: "organized-week-track" });
+      for (const block of blocks[i]) {
+        const left = (block.startMin - from * 60) / ((to - from) * 60) * 100; const width = (block.endMin - block.startMin) / ((to - from) * 60) * 100;
+        const part = track.createSpan({ cls: "organized-week-block", attr: { "data-status": this.shownStatus(block.task) } });
+        part.setCssProps({ "--organized-start": String(left), "--organized-width": String(width) });
+      }
+      row.createSpan({ cls: "organized-week-count", text: total ? `${done}/${total}` : "–" });
+      row.addEventListener("click", () => { this.selectedDate = key; this.calendarMode = "Day"; void this.render().catch(report); });
+    });
+  }
+  private plainTaskRow(host: HTMLElement, line: TaskLine, path: string): void {
+    const status = line.marker.toLowerCase() === "x" ? "completed" : line.marker === "-" ? "canceled" : line.marker === "/" ? "in_progress" : "open";
+    const row = host.createDiv({ cls: "organized-list-card organized-day-task", attr: { "data-status": status } });
+    const open = row.createDiv({ cls: "organized-list-open" });
+    void renderMarkdownLinks(this.app, line.title || "Untitled todo", open.createDiv({ cls: "organized-list-title" }), path, this.markdown).catch(report);
+    open.createDiv({ cls: "organized-list-meta", text: status === "completed" ? "Done" : "Regular todo" });
+  }
+  private async dayView(host: HTMLElement, generation: number): Promise<void> {
+    const date = this.selectedDate; const day = moment(date, "YYYY-MM-DD");
+    this.rangeNav(host, day.format("ddd, MMM D, YYYY"), "Previous day", "Next day",
+      () => { this.selectedDate = day.clone().add(1, "day").format("YYYY-MM-DD"); }, () => { this.selectedDate = day.clone().subtract(1, "day").format("YYYY-MM-DD"); });
+    const tasks = await this.owner.repo.list(); const now = Date.now(); const blocks = blocksOn(tasks, date, now);
+    const note = this.owner.repo.file(this.owner.service.daily.path(date)); const lines = note ? await this.owner.taskLines(note) : [];
+    const linked = new Map(tasks.map(task => [task.id, task]));
+    if (generation !== this.renderId) return;
+    const list = this.section(host, "Tasks", lines.length); list.addClass("organized-grouped");
+    if (!note) {
+      const empty = list.createDiv({ cls: "organized-empty", text: "There is no daily note for this day yet." });
+      this.button(empty, "Create daily note", () => this.selectDay(date)).addClass("organized-note-link");
+    } else if (!lines.length) list.createDiv({ cls: "organized-empty", text: "No tasks in this day's note." });
+    for (const line of lines) {
+      const task = line.id ? linked.get(line.id) : undefined;
+      if (task) this.taskRow(list, task, () => this.openFromCalendar(task.id)).addClass("organized-day-task");
+      else this.plainTaskRow(list, line, note!.path);
+    }
+    const timeline = this.section(host, "Time", blocks.length);
+    if (!blocks.length) { timeline.createDiv({ cls: "organized-empty", text: "No tracked time this day. Set a task In Progress to record it." }); return; }
+    const [from, to] = hourRange(blocks); const span = (to - from) * 60;
+    const grid = timeline.createDiv({ cls: "organized-day-grid" }); grid.setCssProps({ "--organized-hours": String(to - from) });
+    for (let hour = from; hour <= to; hour++) {
+      const line = grid.createDiv({ cls: "organized-hour-line" }); line.setCssProps({ "--organized-at": String((hour - from) / (to - from) * 100) });
+      line.createSpan({ cls: "organized-hour-label", text: `${pad(hour % 24)}:00` });
+    }
+    for (const block of blocks) {
+      const title = block.task.title; const range = `${clock(block.startMin)}–${block.endMin >= 1440 ? "24:00" : clock(block.endMin)}`;
+      const part = grid.createEl("button", { cls: "organized-block", attr: { type: "button", "data-status": this.shownStatus(block.task), "aria-label": `${title}, ${range}${block.running ? ", running" : ""}`, title: `${title} · ${range}` } });
+      part.setCssProps({ "--organized-top": String((block.startMin - from * 60) / span * 100), "--organized-height": String((block.endMin - block.startMin) / span * 100), "--organized-lane": String(block.lane), "--organized-lanes": String(block.lanes) });
+      part.createSpan({ cls: "organized-block-title", text: title }); if (block.endMin - block.startMin >= 30) part.createSpan({ cls: "organized-block-time", text: range });
+      part.addEventListener("click", () => { void this.openFromCalendar(block.task.id).catch(report); });
+    }
+    const minutes = new Date(now).getHours() * 60 + new Date(now).getMinutes();
+    if (date === localDate() && minutes >= from * 60 && minutes <= to * 60) { const nowLine = grid.createDiv({ cls: "organized-now-line", attr: { "aria-hidden": "true" } }); nowLine.setCssProps({ "--organized-at": String((minutes - from * 60) / span * 100) }); }
+  }
   async selectDay(date: string): Promise<void> {
     this.owner.assertWritable(); this.selectedDate = date;
     const file = await this.owner.service.daily.open(date);
@@ -260,9 +361,9 @@ export class OrganizedInspectorView extends ItemView {
     if (generation !== this.renderId) return;
     const hero = host.createDiv({ cls: "organized-task-hero", attr: { "data-status": this.shownStatus(task) } });
     const eyebrow = hero.createDiv({ cls: "organized-eyebrow" });
-    this.statusDot(eyebrow, task); eyebrow.createSpan({ text: this.origin === "Editor cursor" ? "From editor" : "From projects" });
+    this.statusDot(eyebrow, task); eyebrow.createSpan({ text: this.origin === "Editor cursor" ? "From editor" : this.origin === "Calendar" ? "From calendar" : "From projects" });
     if (this.origin === "Editor cursor") this.iconButton(eyebrow, "All tasks in this note", "list", () => this.showNoteTasks()).addClass("organized-note-overview");
-    if (this.origin !== "Editor cursor") this.button(hero, "Back to projects", () => { this.tab = "Projects"; return this.render(); }).addClass("organized-back");
+    if (this.origin !== "Editor cursor") this.button(hero, this.origin === "Calendar" ? "Back to calendar" : "Back to projects", () => { this.tab = this.origin === "Calendar" ? "Calendar" : "Projects"; return this.render(); }).addClass("organized-back");
     const header = hero.createDiv({ cls: "organized-task-header" });
     if (this.editingTitle) {
       const input = header.createEl("input", { cls: "organized-title-input", type: "text", attr: { "aria-label": "Task title" } }); input.value = task.title;

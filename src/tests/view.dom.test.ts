@@ -6,6 +6,7 @@ import { harness } from './harness';
 import { installObsidianDom } from './__mocks__/obsidianDom';
 import { Notice, Modal } from './__mocks__/obsidian';
 import { localDate } from '../model';
+import { moment } from '../moment';
 import { DatePicker, TaskPicker } from '../modals';
 import { parseTasks } from '../codec';
 
@@ -286,5 +287,67 @@ describe('compact calendar and contextual task inspector', () => {
     const tabs = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-tabs button'));
     expect(tabs.map(tab => tab.getAttribute('aria-label'))).toEqual(['Calendar', 'Task', 'Projects']); expect(tabs.map(tab => tab.title)).toEqual(['Calendar', 'Task', 'Projects']); expect(tabs.every(tab => tab.textContent === '')).toBe(true); expect(tabs.map(tab => tab.getAttribute('data-icon'))).toEqual(['calendar', 'list-checks', 'folder']);
     expect(tabs.map(tab => tab.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']); tabs[2].click(); await flush(); expect(view.tab).toBe('Projects'); expect(view.contentEl.querySelector('.organized-tabs button[aria-selected="true"]')?.getAttribute('aria-label')).toBe('Projects');
+  });
+  it('switches the calendar between month, week and day and keeps month behaviour', async () => {
+    const { view } = await fixture(); await view.render();
+    const modes = () => Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-seg-button'));
+    expect(modes().map(b => b.textContent)).toEqual(['Month', 'Week', 'Day']); expect(modes().map(b => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false']); expect(view.contentEl.querySelector('.organized-calendar')).toBeTruthy(); expect(view.contentEl.querySelector('.organized-stats')).toBeTruthy();
+    modes()[1].click(); await flush(); expect(view.calendarMode).toBe('Week'); expect(view.contentEl.querySelector('.organized-calendar')).toBeNull(); expect(view.contentEl.querySelectorAll('.organized-week-row')).toHaveLength(7);
+    modes()[2].click(); await flush(); expect(view.calendarMode).toBe('Day'); expect(view.contentEl.querySelector('.organized-week')).toBeNull(); modes()[0].click(); await flush(); expect(view.contentEl.querySelector('.organized-calendar')).toBeTruthy();
+  });
+  it('shows the week as day rows with task counts and in-progress blocks and opens a day from a row', async () => {
+    const { owner, view, repo, add, service } = await fixture(); vi.setSystemTime(new Date(2026, 2, 4, 15, 0, 0));
+    const task = await repo.create('Deep work'); const finished = await repo.create('Report');
+    await repo.update(task.id, t => ({ ...t, work_sessions: [{ start: new Date(2026, 2, 3, 9, 0).toISOString(), end: new Date(2026, 2, 3, 11, 30).toISOString() }, { start: new Date(2026, 2, 4, 9, 0).toISOString(), end: new Date(2026, 2, 4, 10, 0).toISOString() }], time_tracking_started_at: new Date(2026, 2, 4, 14, 0).toISOString(), status: 'in_progress' }));
+    await repo.update(finished.id, t => ({ ...t, status: 'completed', work_sessions: [{ start: new Date(2026, 2, 3, 20, 0).toISOString(), end: new Date(2026, 2, 3, 21, 0).toISOString() }] }));
+    await add(service.daily.path('2026-03-03'), `- [x] A <!--organized:${finished.id}-->\n- [ ] B\n- [/] C <!--organized:${task.id}-->`);
+    view.selectedDate = '2026-03-04'; view.calendarMode = 'Week'; await view.render();
+    const rows = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-week-row')); expect(rows).toHaveLength(7);
+    expect(rows.map(row => row.querySelector('.organized-week-weekday')!.textContent)).toEqual(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']); expect(view.contentEl.querySelector('h3')!.textContent).toBe('Mar 1 – Mar 7, 2026');
+    expect(rows[2].querySelector('.organized-week-count')!.textContent).toBe('1/3'); expect(rows[1].querySelector('.organized-week-count')!.textContent).toBe('–');
+    expect(rows[2].querySelectorAll('.organized-week-block')).toHaveLength(2); expect(rows[3].querySelectorAll('.organized-week-block')).toHaveLength(2); expect(rows[3].getAttribute('aria-pressed')).toBe('true'); expect(rows[2].querySelector('.organized-week-block[data-status="completed"]')).toBeTruthy();
+    const running = rows[3].querySelectorAll<HTMLElement>('.organized-week-block')[1]; expect(Number(running.style.getPropertyValue('--organized-width'))).toBeGreaterThan(0); expect(rows[3].getAttribute('aria-label')).toContain('2 tracked blocks');
+    rows[4].click(); await flush(); expect(view.calendarMode).toBe('Day'); expect(view.selectedDate).toBe('2026-03-05');
+    view.calendarMode = 'Week'; await view.render(); button(view.contentEl, 'Next week').click(); await flush(); expect(view.selectedDate).toBe('2026-03-12'); button(view.contentEl, 'Previous week').click(); await flush(); button(view.contentEl, 'Previous week').click(); await flush(); expect(view.selectedDate).toBe('2026-02-26');
+    button(view.contentEl, 'Today').click(); await flush(); expect(view.selectedDate).toBe(localDate()); expect(owner.settings).toBeTruthy();
+  });
+  it('shows the day tasks on top and time blocks on an hour grid, and opens a task from either', async () => {
+    const { owner, view, repo, add, service } = await fixture(); vi.setSystemTime(new Date(2026, 2, 4, 15, 30, 0));
+    const a = await repo.create('Write plan'); const b = await repo.create('Review plan'); const c = await repo.create('Night shift');
+    await repo.update(a.id, t => ({ ...t, status: 'completed', work_sessions: [{ start: new Date(2026, 2, 4, 9, 0).toISOString(), end: new Date(2026, 2, 4, 10, 30).toISOString() }] }));
+    await repo.update(b.id, t => ({ ...t, status: 'in_progress', work_sessions: [{ start: new Date(2026, 2, 4, 10, 0).toISOString(), end: new Date(2026, 2, 4, 10, 20).toISOString() }], time_tracking_started_at: new Date(2026, 2, 4, 15, 0).toISOString() }));
+    await repo.update(c.id, t => ({ ...t, work_sessions: [{ start: new Date(2026, 2, 3, 23, 0).toISOString(), end: new Date(2026, 2, 4, 6, 30).toISOString() }] }));
+    await add(service.daily.path('2026-03-04'), `# Work\n- [x] A <!--organized:${a.id}-->\n- [/] B <!--organized:${b.id}-->\n- [ ] Plain\n- [-] Dropped\n- [x] Done plain`);
+    view.selectedDate = '2026-03-04'; view.calendarMode = 'Day'; await view.render();
+    expect(view.contentEl.querySelector('h3')!.textContent).toBe('Wed, Mar 4, 2026');
+    const cards = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-day-task')); expect(cards.map(card => card.getAttribute('data-status'))).toEqual(['completed', 'in_progress', 'open', 'canceled', 'completed']); expect(cards[2].textContent).toContain('Regular todo'); expect(cards[4].textContent).toContain('Done');
+    const blocks = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-block')); expect(blocks.map(block => block.querySelector('.organized-block-title')!.textContent)).toEqual(['Night shift', 'Write plan', 'Review plan', 'Review plan']);
+    expect(blocks[0].getAttribute('aria-label')).toBe('Night shift, 00:00–06:30'); expect(blocks[1].getAttribute('aria-label')).toBe('Write plan, 09:00–10:30'); expect(blocks[3].getAttribute('aria-label')).toBe('Review plan, 15:00–15:30, running'); expect(blocks[2].querySelector('.organized-block-time')).toBeNull(); expect(blocks[1].querySelector('.organized-block-time')!.textContent).toBe('09:00–10:30');
+    expect(blocks[1].getAttribute('data-status')).toBe('completed'); expect([blocks[1], blocks[2]].map(block => block.style.getPropertyValue('--organized-lanes'))).toEqual(['2', '2']);
+    const labels = Array.from(view.contentEl.querySelectorAll('.organized-hour-label')).map(l => l.textContent); expect(labels[0]).toBe('00:00'); expect(labels.at(-1)).toBe('18:00'); expect(view.contentEl.querySelector('.organized-now-line')).toBeTruthy();
+    blocks[1].click(); await flush(); expect(owner.selectedTaskId).toBe(a.id); expect(view.tab).toBe('Task'); expect(view.origin).toBe('Calendar'); expect(view.contentEl.textContent).toContain('From calendar');
+    button(view.contentEl, 'Back to calendar').click(); await flush(); expect(view.tab).toBe('Calendar'); expect(view.contentEl.querySelector('.organized-day-grid')).toBeTruthy();
+    view.contentEl.querySelectorAll<HTMLElement>('.organized-day-task .organized-list-open')[0].click(); await flush(); expect(owner.selectedTaskId).toBe(a.id); view.origin = 'Projects / favorites'; await view.render(); button(view.contentEl, 'Back to projects').click(); await flush(); expect(view.tab).toBe('Projects');
+  });
+  it('shows a now line on today, navigates days and offers to create a missing daily note without creating it while browsing', async () => {
+    const { view, repo, files, service } = await fixture(); const now = new Date(); vi.setSystemTime(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0));
+    const task = await repo.create('Midday'); await repo.update(task.id, t => ({ ...t, status: 'in_progress', time_tracking_started_at: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 11, 0).toISOString() }));
+    view.selectedDate = localDate(); view.calendarMode = 'Day'; await view.render();
+    expect(view.contentEl.querySelector('.organized-now-line')).toBeTruthy(); expect(view.contentEl.textContent).toContain('There is no daily note for this day yet.'); expect(files.has(service.daily.path(localDate()))).toBe(false);
+    const next = moment(localDate(), 'YYYY-MM-DD').add(1, 'day').format('YYYY-MM-DD'); button(view.contentEl, 'Next day').click(); await flush(); expect(view.selectedDate).toBe(next); expect(view.contentEl.textContent).toContain('No tracked time this day.'); expect(view.contentEl.querySelector('.organized-day-grid')).toBeNull();
+    button(view.contentEl, 'Previous day').click(); await flush(); expect(view.selectedDate).toBe(localDate()); button(view.contentEl, 'Next day').click(); await flush(); button(view.contentEl, 'Today').click(); await flush(); expect(view.selectedDate).toBe(localDate());
+    const create = vi.spyOn(view, 'selectDay').mockResolvedValue(); button(view.contentEl, 'Create daily note').click(); await flush(); expect(create).toHaveBeenCalledWith(localDate()); expect(files.has(service.daily.path(localDate()))).toBe(false);
+  });
+  it('covers day edge cases: empty notes, plain in-progress lines, midnight ends, a now line outside the grid and stale renders', async () => {
+    const { view, repo, add, service } = await fixture(); vi.setSystemTime(new Date(2026, 2, 4, 22, 0, 0));
+    const task = await repo.create('Night'); await repo.update(task.id, t => ({ ...t, work_sessions: [{ start: new Date(2026, 2, 3, 23, 0).toISOString(), end: new Date(2026, 2, 4, 1, 0).toISOString() }, { start: new Date(2026, 2, 4, 9, 0).toISOString(), end: new Date(2026, 2, 4, 10, 0).toISOString() }] }));
+    await add(service.daily.path('2026-03-03'), ''); view.calendarMode = 'Day'; view.selectedDate = '2026-03-03'; await view.render();
+    expect(view.contentEl.textContent).toContain("No tasks in this day's note."); expect(view.contentEl.querySelector('.organized-block')!.getAttribute('aria-label')).toBe('Night, 23:00–24:00');
+    await add(service.daily.path('2026-03-04'), '- [/] Plain doing\n- [ ] '); view.selectedDate = '2026-03-04'; await view.render();
+    const cards = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-day-task')); expect(cards.map(card => card.getAttribute('data-status'))).toEqual(['in_progress', 'open']); expect(cards[1].textContent).toContain('Untitled todo');
+    expect(view.contentEl.querySelector('.organized-now-line')).toBeNull();
+    let release!: (tasks: any[]) => void; const list = vi.spyOn(repo, 'list'); list.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    const staleDay = view.render(); view.calendarMode = 'Month'; await view.render(); release([]); await staleDay; expect(view.contentEl.querySelector('.organized-day-grid')).toBeNull(); expect(view.contentEl.querySelector('.organized-calendar')).toBeTruthy();
+    list.mockImplementationOnce(() => new Promise(resolve => { release = resolve; })); view.calendarMode = 'Week'; const staleWeek = view.render(); view.calendarMode = 'Month'; await view.render(); release([]); await staleWeek; expect(view.contentEl.querySelector('.organized-week')).toBeNull();
   });
 });

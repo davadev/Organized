@@ -1,0 +1,46 @@
+import type { Task } from "./model";
+
+export interface Block { task: Task; startMin: number; endMin: number; running: boolean; lane: number; lanes: number }
+export const DEFAULT_HOURS: readonly [number, number] = [8, 18];
+
+function minutesInto(ms: number, start: Date, end: Date): number {
+  if (ms <= start.getTime()) return 0;
+  if (ms >= end.getTime()) return 1440;
+  const at = new Date(ms); return at.getHours() * 60 + at.getMinutes() + at.getSeconds() / 60;
+}
+/** Overlapping blocks share the width of the day: each gets a column and the number of columns in its group. */
+export function assignLanes(blocks: Block[]): Block[] {
+  const sorted = [...blocks].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+  let group: Block[] = []; let groupEnd = -1; const laneEnds: number[] = [];
+  const close = () => { for (const block of group) block.lanes = laneEnds.length; group = []; laneEnds.length = 0; };
+  for (const block of sorted) {
+    if (block.startMin >= groupEnd) close();
+    let lane = laneEnds.findIndex(end => end <= block.startMin); if (lane < 0) lane = laneEnds.length;
+    laneEnds[lane] = block.endMin; block.lane = lane; group.push(block); groupEnd = Math.max(groupEnd, block.endMin);
+  }
+  close();
+  return sorted;
+}
+/** In-progress blocks of every task on one local day, with the running timer drawn up to `now`. Sessions that cross midnight appear on both days. */
+export function blocksOn(tasks: Task[], date: string, now: number): Block[] {
+  const [year, month, day] = date.split("-").map(Number);
+  const start = new Date(year, month - 1, day); const end = new Date(year, month - 1, day + 1);
+  const blocks: Block[] = [];
+  for (const task of tasks) {
+    const running = task.time_tracking_started_at !== null;
+    const sessions = [...task.work_sessions.map(s => ({ start: Date.parse(s.start), end: Date.parse(s.end), running: false })),
+      ...(running ? [{ start: Date.parse(task.time_tracking_started_at!), end: now, running: true }] : [])];
+    for (const session of sessions) {
+      if (session.end <= start.getTime() || session.start >= end.getTime() || session.end <= session.start) continue;
+      const startMin = minutesInto(session.start, start, end); const endMin = minutesInto(session.end, start, end);
+      if (endMin > startMin) blocks.push({ task, startMin, endMin, running: session.running, lane: 0, lanes: 1 });
+    }
+  }
+  return assignLanes(blocks);
+}
+/** Whole hours to draw: the usual working day, widened when a block falls outside it. */
+export function hourRange(blocks: Block[], [from, to]: readonly [number, number] = DEFAULT_HOURS): [number, number] {
+  const first = blocks.length ? Math.min(from, Math.floor(Math.min(...blocks.map(b => b.startMin)) / 60)) : from;
+  const last = blocks.length ? Math.max(to, Math.ceil(Math.max(...blocks.map(b => b.endMin)) / 60)) : to;
+  return [first, last];
+}

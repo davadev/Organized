@@ -9,13 +9,18 @@ export interface Movement {
   id: string; kind: "schedule" | "reschedule" | "forward";
   source: "manual" | "automatic"; from: string; to: string; at: string;
 }
+export interface WorkSession { start: string; end: string }
+/** Sessions are kept for the day/week views; the newest are kept so a task note cannot grow without bound. */
+export const MAX_WORK_SESSIONS = 500;
+/** Shorter timer runs still count toward tracked time but are not worth a block on the calendar. */
+export const MIN_SESSION_SECONDS = 60;
 export interface Task {
   schema_version: number; id: string; title: string; status: Status; priority: Priority;
   scheduled: string | null; created: string; time_tracked_seconds: number;
   time_tracking_started_at: string | null; recurring: boolean; closed_at: string | null;
   recurrence_periods: { start: string; stop: string | null }[];
   starred: boolean; projects: string[]; movement_history: Movement[];
-  daily_note_section_path: Section[];
+  daily_note_section_path: Section[]; work_sessions: WorkSession[];
 }
 export const DISPLAY_PROPERTIES = ["status", "priority", "scheduled", "created", "time_tracked_seconds", "recurring", "starred", "projects", "movement_history", "sources", "notes"] as const;
 export type DisplayProperty = typeof DISPLAY_PROPERTIES[number];
@@ -88,6 +93,8 @@ export function taskFrom(value: unknown, expectedId: string): Task {
   const periods = Array.isArray(v.recurrence_periods) ? v.recurrence_periods.map(object).filter(p => validDate(p.start) && (p.stop === null || validDate(p.stop))) : [];
   const history = Array.isArray(v.movement_history) ? v.movement_history.map(object).filter(m => typeof m.id === "string" && ["schedule", "reschedule", "forward"].includes(String(m.kind)) && ["manual", "automatic"].includes(String(m.source)) && typeof m.from === "string" && validDate(m.to) && typeof m.at === "string" && Number.isFinite(Date.parse(m.at))) : [];
   const sections = Array.isArray(v.daily_note_section_path) ? v.daily_note_section_path.map(object).filter(s => Number.isInteger(s.level) && Number(s.level) >= 1 && Number(s.level) <= 6 && typeof s.text === "string" && Number.isInteger(s.ordinal) && Number(s.ordinal) >= 0) : [];
+  const sessions = (Array.isArray(v.work_sessions) ? v.work_sessions.map(object) : []).flatMap(w => typeof w.start === "string" && typeof w.end === "string" && Date.parse(w.start) < Date.parse(w.end) ? [{ start: w.start, end: w.end }] : [])
+    .sort((a, b) => Date.parse(a.start) - Date.parse(b.start)).slice(-MAX_WORK_SESSIONS);
   return {
     schema_version: 1, id: v.id, title: v.title.trim(), status: member(v.status, STATUSES, "open"), priority: member(v.priority, PRIORITIES, "none"),
     scheduled: validDate(v.scheduled) ? v.scheduled : null,
@@ -97,7 +104,7 @@ export function taskFrom(value: unknown, expectedId: string): Task {
     closed_at: typeof v.closed_at === "string" && Number.isFinite(Date.parse(v.closed_at)) ? v.closed_at : null,
     recurring: v.recurring === true, recurrence_periods: periods as unknown as Task["recurrence_periods"], starred: v.starred === true,
     projects: strings(v.projects).filter(p => { try { return path(p) === p && p.endsWith(".md"); } catch { return false; } }),
-    movement_history: history as unknown as Movement[], daily_note_section_path: sections as unknown as Section[],
+    movement_history: history as unknown as Movement[], daily_note_section_path: sections as unknown as Section[], work_sessions: sessions,
   };
 }
 export function visibleFolder(value: string): string {
@@ -116,6 +123,11 @@ export function setStatus(task: Task, status: Status, now = new Date()): Task {
   if (next.status === "completed" || next.status === "canceled") next.closed_at = task.status === next.status && task.closed_at ? task.closed_at : now.toISOString();
   else next.closed_at = null;
   if (status === "in_progress") next.time_tracking_started_at = task.time_tracking_started_at ?? now.toISOString();
-  else { next.time_tracked_seconds = elapsed(task, now.getTime()); next.time_tracking_started_at = null; }
+  else {
+    if (task.time_tracking_started_at && now.getTime() - Date.parse(task.time_tracking_started_at) >= MIN_SESSION_SECONDS * 1000) {
+      next.work_sessions = [...task.work_sessions, { start: task.time_tracking_started_at, end: now.toISOString() }].slice(-MAX_WORK_SESSIONS);
+    }
+    next.time_tracked_seconds = elapsed(task, now.getTime()); next.time_tracking_started_at = null;
+  }
   return next;
 }
