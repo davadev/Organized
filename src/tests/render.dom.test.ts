@@ -49,7 +49,7 @@ describe('read-only projections and bundled visual markers', () => {
     let state = EditorState.create({ doc, extensions: [editorLivePreviewField, field] }); const widget = widgets(state, field)[0]; expect(widget).toBeTruthy(); const host = widget.toDOM(); await flush(); expect(host.classList.contains('organized-projection')).toBe(true);
     expect(widget.eq(widget)).toBe(true); expect(widget.eq({ id: 'another1', revision: 0 })).toBe(false); expect(widget.ignoreEvent()).toBe(false);
     const unchanged = state.update({}).state; expect(unchanged.field(field)).toBe(state.field(field));
-    state = state.update({ selection: { anchor: 10 } }).state; expect(widgets(state, field)).toHaveLength(0);
+    const before = state.field(field); state = state.update({ selection: { anchor: 10 } }).state; expect(widgets(state, field)).toHaveLength(1); expect(state.field(field)).toBe(before);
     state = state.update({ selection: { anchor: 0 } }).state; expect(widgets(state, field)).toHaveLength(1);
     expect(widgets(EditorState.create({ doc, extensions: [field] }), field)).toHaveLength(0);
     expect(widgets(EditorState.create({ doc, extensions: [editorLivePreviewField.init(() => false), field] }), field)).toHaveLength(0);
