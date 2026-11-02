@@ -4,6 +4,14 @@
 
 Many of us run our day from a daily note: a few checkboxes, some notes, done. That works until a todo needs more than a checkbox: it is unfinished and should show up again tomorrow, it matters more than the rest, it belongs to a project, it needs a deadline, a few notes, or a timer. Organized adds exactly that, without moving your work out of Markdown. No service, telemetry or proprietary task database.
 
+## See it
+
+The side panel, rendered from the plugin's own code and styles with sample data (light or dark, following your GitHub theme).
+
+<table><tr><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/day-dark.png"><img src="resources/screenshots/day-light.png" alt="Day view: the day's tasks above a time grid with blocks for when each task was in progress, overlapping blocks side by side, and a now-line." width="300"></picture><br><sub>Day</sub></td><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/week-dark.png"><img src="resources/screenshots/week-light.png" alt="Week view: seven day rows, each with its done and total counts and a thin timeline of when work happened." width="300"></picture><br><sub>Week</sub></td><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/month-dark.png"><img src="resources/screenshots/month-light.png" alt="Month calendar with a dot on days that have a daily note, and active, done-today and timer counts." width="300"></picture><br><sub>Month</sub></td></tr></table>
+
+<table><tr><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/task-dark.png"><img src="resources/screenshots/task-light.png" alt="Task tab: a task with its status, description, priority, schedule, running timer, projects, sources and notes." width="300"></picture><br><sub>Task</sub></td><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/projects-dark.png"><img src="resources/screenshots/projects-light.png" alt="Projects tab: tasks grouped by project with a filter, colour dots and counts." width="300"></picture><br><sub>Projects</sub></td></tr></table>
+
 ## Why use it
 
 - **Unfinished work follows you.** Open today's daily note and yesterday's open todos are already there. Nothing is copied by hand and nothing silently disappears.

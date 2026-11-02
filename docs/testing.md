@@ -122,3 +122,13 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Check Week and Day at phone width, in dark mode and with a large system font.
 - In the Day view, collapse the **Tasks** heading, switch days and restart Obsidian; confirm it stays collapsed until expanded.
 - Edit the text of a linked todo in a daily note, pause for a second, and confirm the Task tab, the task note's title and the same todo in other notes show the new text.
+
+## README screenshots
+
+The images in `resources/screenshots/` are rendered, not captured: `scripts/render-screenshots.mjs` bundles the real inspector view and `styles.css`, loads fixture data from `scripts/screenshots/entry.ts` in headless Chromium at 2x, and writes `<scene>-light.png` and `<scene>-dark.png`. The clock is fixed to Wed 4 March 2026, 15:20, so the output does not drift. Obsidian's own chrome is approximated (default theme variables, Lucide icons from `scripts/screenshots/icons.json`, ISC licence); the content is the plugin's.
+
+- `npm run screenshots` rewrites the images (`npm run screenshots -- day week` for some scenes). Open every changed PNG and look at it; the check below cannot see wrong content.
+- `npm run check:screenshots` renders into a temp folder and fails on a script error, horizontal overflow, an empty scene or an icon without a glyph. CI runs it in the Chromium job.
+- A new icon in the UI makes the check fail with its name; add its Lucide paths to `icons.json`.
+- A new scene is one entry in `SCENES` (script) and one branch in `entry.ts`; add it to the README with alt text.
+
