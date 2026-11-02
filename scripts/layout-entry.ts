@@ -15,7 +15,7 @@ const task = newTask('A task title that stays readable at phone widths', 'task12
 const browseTask = { ...task, starred: true, projects: ['Research and project notes.md', 'Reading list.md'], priority: 'high' };
 const canceledTask = { ...newTask('A canceled task', 'task5678'), status: 'canceled' };
 const note = '---\ntitle: A task title that stays readable at phone widths\n---\n\n## Description\nA note that explains the task in enough detail to wrap cleanly on a narrow phone sidebar without clipping.\n\n## Idea\nAn idea that should stay below the description.\n';
-const noteTasksDoc = `Intro\n- [ ] ${task.title} <!--organized:${task.id}-->\n- [ ] A regular todo`;
+const noteTasksDoc = `Intro\n# Mood & Focus\n- [ ] ${task.title} <!--organized:${task.id}-->\n## Daily Prep\n- [ ] A regular todo`;
 const noteTasksFile = { path: 'Daily/Today.md' } as any;
 const noteTasksEditor = { focus() {}, setCursor() {} } as any;
 const app: any = { workspace: { getLeaf: () => ({ openFile: async () => undefined }) } };

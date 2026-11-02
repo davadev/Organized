@@ -15,7 +15,7 @@ try {
   await page.addStyleTag({ content: hostCss + css });
   // Reproduce hostile mobile host defaults from the reported screenshots,
   // rather than testing only an unstyled desktop DOM.
-  await page.addStyleTag({ content: '.is-mobile button { border-radius: 999px; padding: 18px 24px; font-size: 20px; box-shadow: 0 2px 4px #0005; } .setting-item-name { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; } .setting-item-control input[type=checkbox] { inline-size: 50px; block-size: 28px; } .setting-item-control { flex-shrink: 0; } .is-mobile .setting-item { display: flex; flex-direction: column; }' });
+  await page.addStyleTag({ content: '.is-mobile button { block-size: 48px; margin-block: 6px; border-radius: 999px; padding: 18px 24px; font-size: 20px; box-shadow: 0 2px 4px #0005; } .setting-item-name { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; } .setting-item-control input[type=checkbox] { inline-size: 50px; block-size: 28px; } .setting-item-control { flex-shrink: 0; } .is-mobile .setting-item { display: flex; flex-direction: column; }' });
   await page.addScriptTag({ content: bundle.outputFiles[0].text, type: 'module' });
   await page.waitForFunction(() => typeof window.scene === 'function');
   for (const width of [240, 320, 390, 768]) for (const dark of [false, true]) for (const rtl of [false, true]) {
@@ -41,6 +41,11 @@ try {
       if (tab === 'NoteTasks') {
         if (await page.locator('.organized-list-card').count() !== 2) throw Error('Task tab is missing current-note tasks when no task is selected');
         if (await page.locator('.organized-list-card').first().innerText().then(text => !text.includes('A task title'))) throw Error('Current-note linked task title is missing');
+        const headings = page.locator('.organized-heading-row'); if (await headings.count() !== 2) throw Error('Task tab is missing current-note headings');
+        const boxes = await headings.evaluateAll(rows => rows.map(row => { const box = row.getBoundingClientRect(); const text = row.querySelector('.organized-heading-text').getBoundingClientRect(); return { height: box.height, text: text.left, right: text.right }; }));
+        if (boxes.some(box => box.height > 40)) throw Error(`Mobile theme inflated heading rows: ${boxes.map(box => box.height)}`);
+        const cardWidths = await page.locator('.organized-list-card').evaluateAll(cards => cards.map(card => card.getBoundingClientRect().width));
+        if (!(cardWidths[1] < cardWidths[0])) throw Error('Tasks under a nested heading are not indented inside their parent heading');
       }
       if (tab === 'InlineEditor') {
         const field = page.locator('.organized-inline-editor'); if (await field.count() !== 1) throw Error('Inline editor field is missing');

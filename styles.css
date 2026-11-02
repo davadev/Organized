@@ -96,8 +96,10 @@
 .organized-task-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding-block-start: 4px; }
 .organized-section { display: flex; flex-direction: column; gap: 8px; }
 .organized-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.organized-view .organized-panel button.organized-heading-row { display: flex; align-items: center; gap: 6px; inline-size: 100%; padding: 4px 8px; padding-inline-start: calc(8px + var(--organized-depth, 0) * 14px); border-color: transparent; background: transparent; box-shadow: none; color: var(--text-muted); font-size: 12px; font-weight: 600; text-align: start; min-block-size: 32px; }
+.organized-view .organized-panel button.organized-heading-row { display: flex; align-items: center; gap: 6px; inline-size: 100%; margin: 0; padding: 2px 8px; padding-inline-start: calc(4px + var(--organized-depth, 0) * 14px); border-color: transparent; border-radius: var(--radius-s, 5px); background: transparent; box-shadow: none; color: var(--text-muted); font-size: 12px; font-weight: 600; line-height: 1.3; text-align: start; block-size: auto; min-block-size: 28px; }
 .organized-view .organized-panel button.organized-heading-row:hover { color: var(--text-normal); }
+.organized-section.organized-grouped { gap: 4px; }
+.organized-section.organized-grouped > .organized-list-card.organized-indented { margin-inline-start: calc(var(--organized-depth, 0) * 14px); }
 .organized-heading-chevron { display: inline-flex; flex: 0 0 auto; }
 .organized-heading-chevron svg { inline-size: 14px; block-size: 14px; }
 .organized-heading-text { flex: 1 1 auto; min-inline-size: 0; overflow-wrap: anywhere; }
