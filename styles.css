@@ -166,14 +166,20 @@
 .organized-task-hero[data-status="canceled"] { border-inline-start-color: var(--background-modifier-border-hover); }
 .organized-list-card[data-status="completed"] .organized-list-title { color: var(--text-muted); }
 .organized-list-card[data-status="canceled"] .organized-list-title { color: var(--text-faint); text-decoration: line-through; }
-.organized-view .organized-panel .organized-list-open { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 6px; inline-size: 100%; padding: 12px; border: 0; border-inline-start: 3px solid transparent; border-radius: 0; background: transparent; color: var(--text-normal); text-align: start; cursor: pointer; }
+.organized-view .organized-panel .organized-list-open { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 4px; inline-size: 100%; padding: 8px 10px; border: 0; border-inline-start: 3px solid transparent; border-radius: 0; background: transparent; color: var(--text-normal); text-align: start; cursor: pointer; }
 .organized-view .organized-panel .organized-list-open:hover { border-inline-start-color: var(--interactive-accent); background: var(--background-modifier-hover); }
 .organized-view .organized-panel .organized-list-open:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: -2px; }
 .organized-list-title { inline-size: 100%; color: var(--text-normal); font-size: 14px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
 .organized-list-title p, .organized-task-title p { margin: 0; }
 .organized-list-title a, .organized-task-title a { color: var(--link-color, var(--interactive-accent)); text-decoration: var(--link-decoration, underline); cursor: pointer; }
 .organized-list-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--text-muted); font-size: 11px; }
-.organized-list-status { text-transform: capitalize; }
+.organized-list-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; inline-size: 100%; }
+.organized-list-head .organized-list-title { flex: 1 1 auto; min-inline-size: 0; }
+.organized-list-status { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; inline-size: 20px; block-size: 20px; color: var(--text-faint); }
+.organized-list-status svg { inline-size: 14px; block-size: 14px; }
+.organized-list-status[data-status="in_progress"] { color: var(--interactive-accent); }
+.organized-list-status[data-status="completed"] { color: var(--color-green, #2f9e44); }
+.organized-list-status[data-status="canceled"] { color: var(--color-red, #d64545); }
 .organized-list-priority { font-weight: 600; }
 .organized-list-priority.priority-high { color: var(--color-red, #d64545); }
 .organized-list-priority.priority-medium { color: var(--color-yellow, #d9a60f); }

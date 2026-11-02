@@ -2,10 +2,16 @@ import { Notice, TFile } from "obsidian";
 import { insertTask, parseTasks, RECURRING_MARKER, removeUnique, replaceTask, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, Movement, nextDate, path, PRIORITIES, Priority, setStatus, Status, Task } from "./model";
-import { Repository } from "./repository";
+import { PROJECT_FRONTMATTER, Repository, splitNote } from "./repository";
+import { parseWorked, retiredLines } from "./retention";
 
 export interface Change { file: TFile; before: string; after: string }
 export interface Context { file: TFile; line: TaskLine }
+/** Adds nested lines under one todo, indented to sit inside its list item. */
+function insertBelow(text: string, line: number, extra: string[], prefix: string, crlf: boolean): string {
+  const bullet = /^(\s*)([-+*]|\d+[.)]) /.exec(prefix)!; const indent = `${bullet[1]}${" ".repeat(bullet[2].length + 1)}`;
+  const lines = text.split("\n"); lines.splice(line + 1, 0, ...extra.map(item => `${indent}${item}${crlf ? "\r" : ""}`)); return lines.join("\n");
+}
 export class TaskService {
   readonly daily: DailyNotes;
   private references: Map<string, Set<string>> | null = null;
@@ -132,10 +138,23 @@ export class TaskService {
   }
   async priority(context: Context, priority: Priority): Promise<void> {
     const { line } = await this.resolve(context); if (!line.id) throw new Error("Attach the task first.");
-    await this.repo.update(line.id, t => ({ ...t, priority })); await this.clean(context);
-    const text = await this.repo.readText(context.file);
-    const priorities = new Map((await this.repo.list()).map(t => [t.id, t.priority]));
-    await this.edit(context.file, text, sortTasks(text, line.line, this.repo.settings().sortScope, priorities)); this.changed();
+    const task = await this.repo.update(line.id, t => ({ ...t, priority })); await this.clean(context);
+    await this.resort(context.file, task); this.changed();
+  }
+  /** Sets a priority from outside the note (the side panel): the task note changes, and so does the order of its list in the note, as with the editor's `!` marker. */
+  async setPriority(id: string, priority: Priority, context?: Context): Promise<void> {
+    const task = await this.repo.update(id, t => ({ ...t, priority }));
+    if (this.repo.settings().sortScope !== "none") {
+      if (context) await this.resort(context.file, task);
+      else for (const occurrence of await this.repo.occurrences(id)) await this.resort(occurrence.file, task).catch(() => undefined);
+    }
+    this.changed();
+  }
+  /** Re-sorts the list holding the task by priority, using the priority just saved rather than a possibly stale re-read of the task note. */
+  private async resort(file: TFile, changed: Task): Promise<void> {
+    const text = await this.repo.readText(file); const line = parseTasks(text).find(t => t.id === changed.id); if (!line) return;
+    const priorities = new Map((await this.repo.list()).map(t => [t.id, t.priority])); priorities.set(changed.id, changed.priority);
+    await this.edit(file, text, sortTasks(text, line.line, this.repo.settings().sortScope, priorities));
   }
   async recurrence(id: string, context?: Context): Promise<void> {
     const today = localDate(); const changes: Change[] = []; const skipped: string[] = [];
@@ -194,22 +213,26 @@ export class TaskService {
     if (changes.length || skipped) this.summarize(changes, "Unfinished tasks carried to today", skipped ? `${skipped} conflict${skipped === 1 ? "" : "s"} skipped · previous line preserved.` : "");
   }
   private async cleanupExpiredTasks(days: number, now: number): Promise<void> {
-    let removed = 0; const failed: string[] = [];
+    const detail = this.repo.settings().retentionDetail; let removed = 0; const failed: string[] = [];
     for (const task of await this.repo.list()) {
       if (task.recurring || !["completed", "canceled"].includes(task.status) || !task.closed_at || now - Date.parse(task.closed_at) < days * 86400000) continue;
       try {
+        const taskFile = this.repo.file(this.repo.taskPath(task.id));
+        if (!taskFile) throw new Error(`Task note missing for ${task.id}`);
         const occurrences = await this.repo.occurrences(task.id);
+        // What the user chose to keep goes under one occurrence only (the latest daily note), so forwarded copies are not repeated.
+        const keep = detail === "title" ? [] : retiredLines(task, splitNote(await this.repo.readText(taskFile)).body, detail, "");
+        const target = keep.length ? occurrences.reduce((best, item) => (this.daily.date(item.file.path) ?? "") >= (this.daily.date(best.file.path) ?? "") ? item : best) : null;
         for (const occurrence of occurrences) {
-          let after = occurrence.text;
+          let after = occurrence.text; const last = Math.max(...occurrence.tasks.map(line => line.line));
           for (const line of [...occurrence.tasks].sort((a, b) => b.line - a.line)) {
             const current = parseTasks(after).find(item => item.line === line.line);
             if (!current || current.id !== task.id || current.raw !== line.raw) throw new Error(`Changed occurrence in ${occurrence.file.path}`);
             after = replaceTask(after, current, { id: null, repeat: false });
+            if (occurrence === target && line.line === last) after = insertBelow(after, line.line, keep, current.prefix, current.raw.endsWith("\r"));
           }
           await this.edit(occurrence.file, occurrence.text, after);
         }
-        const taskFile = this.repo.file(this.repo.taskPath(task.id));
-        if (!taskFile) throw new Error(`Task note missing for ${task.id}`);
         await this.repo.app.fileManager.trashFile(taskFile); removed++;
       } catch { failed.push(task.title); }
     }
@@ -224,7 +247,7 @@ export class TaskService {
   async projects(id: string, projects: string[]): Promise<void> {
     const task = await this.repo.read(id);
     for (const notePath of projects) {
-      const file = await this.repo.ensure(notePath);
+      const file = await this.repo.ensure(notePath, PROJECT_FRONTMATTER); await this.repo.markProject(file);
       await this.insert(file, { ...task, daily_note_section_path: [] }, task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.time_tracking_started_at ? "/" : " ", false);
     }
     for (const removed of task.projects.filter(p => !projects.includes(p))) {
@@ -255,6 +278,29 @@ export class TaskService {
     const linked = new Set([...(await this.repo.list()).flatMap(t => t.projects), ...this.repo.settings().knownProjects]);
     const pairs = [...linked].filter(p => !p.startsWith(`${folder}/`) && this.repo.file(p)).map(from => ({ from, to: path(`${folder}/${from.split("/").at(-1)!}`) }));
     return this.moveProjects(pairs);
+  }
+  /** Gives every project note that predates the project marker its frontmatter: linked ones, remembered ones and anything already in the project folder. */
+  async markProjects(): Promise<number> {
+    const folder = this.repo.projectFolder();
+    const notes = new Set([...(await this.repo.list()).flatMap(t => t.projects), ...this.repo.settings().knownProjects, ...this.repo.app.vault.getMarkdownFiles().map(f => f.path).filter(p => p.startsWith(`${folder}/`))]);
+    let marked = 0;
+    for (const notePath of notes) { const file = this.repo.file(notePath); if (file && !this.repo.isTaskRecord(file.path) && await this.repo.markProject(file).catch(() => false)) marked++; }
+    return marked;
+  }
+  /** How many days after a day a retired task can still have been completed; its time is kept in the note of that later day. */
+  static readonly RETIRED_WINDOW_DAYS = 31;
+  private retired = new Map<string, { stamp: string; tasks: Task[] }>();
+  /** Time worked on tasks whose notes were retired with "keep everything", read back from the daily notes that could hold it. Notes are read once and re-read only when they change, so browsing the calendar stays cheap. */
+  async retiredWork(from: string, to: string): Promise<{ task: Task; path: string }[]> {
+    const [year, month, day] = to.split("-").map(Number); const last = localDate(new Date(year, month - 1, day + TaskService.RETIRED_WINDOW_DAYS));
+    const result: { task: Task; path: string }[] = [];
+    for (const { file, date } of this.daily.files()) {
+      if (date < from || date > last) continue;
+      const stamp = `${file.stat.mtime}:${file.stat.size}`; let entry = this.retired.get(file.path);
+      if (entry?.stamp !== stamp) { entry = { stamp, tasks: parseWorked(await this.repo.readText(file)) }; this.retired.set(file.path, entry); }
+      for (const task of entry.tasks) result.push({ task, path: file.path });
+    }
+    return result;
   }
   async refs(id: string): Promise<string[]> {
     if (!this.references) {

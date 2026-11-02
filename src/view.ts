@@ -17,6 +17,7 @@ export const CALENDAR_MODES = ["Month", "Week", "Day"] as const;
 export type CalendarMode = typeof CALENDAR_MODES[number];
 const pad = (value: number): string => String(value).padStart(2, "0");
 const clock = (minutes: number): string => `${pad(Math.floor(minutes / 60) % 24)}:${pad(Math.floor(minutes % 60))}`;
+const STATUS_ICONS: Record<Task["status"], string> = { open: "circle", in_progress: "play", completed: "check", canceled: "x" };
 export class OrganizedInspectorView extends ItemView {
   tab: Tab = "Calendar";
   calendarMode: CalendarMode = "Month";
@@ -111,13 +112,19 @@ export class OrganizedInspectorView extends ItemView {
       if (!["Enter", " "].includes(event.key) || (event.target as HTMLElement).closest("a")) return;
       event.preventDefault(); activate();
     });
-    const title = open.createDiv({ cls: "organized-list-title" });
+    const head = open.createDiv({ cls: "organized-list-head" });
+    const title = head.createDiv({ cls: "organized-list-title" });
     void renderMarkdownLinks(this.app, task.title, title, this.owner.repo.taskPath(task.id), this.markdown).catch(report);
-    const meta = open.createDiv({ cls: "organized-list-meta" });
-    meta.createSpan({ cls: "organized-list-status", text: task.recurring && this.shownStatus(task) === "completed" ? "done · today" : task.status.replace(/_/g, " ") });
-    if (task.priority !== "none") meta.createSpan({ cls: `organized-list-priority priority-${task.priority}`, text: task.priority });
-    if (task.scheduled && this.owner.settings.showScheduledDate) meta.createSpan({ cls: "organized-list-date", text: task.scheduled });
-    if (task.starred) { const star = meta.createSpan({ cls: "organized-list-star", attr: { "aria-label": "Favorite" } }); setIcon(star, "star"); }
+    // One small icon per status instead of a word keeps the card compact.
+    const shown = this.shownStatus(task); const doneToday = task.recurring && shown === "completed";
+    const label = doneToday ? "done · today" : task.status.replace(/_/g, " ");
+    const status = head.createSpan({ cls: "organized-list-status", attr: { "data-status": shown, role: "img", "aria-label": label, title: label } }); setIcon(status, doneToday ? "calendar-check" : STATUS_ICONS[task.status]);
+    if (task.priority !== "none" || (task.scheduled && this.owner.settings.showScheduledDate) || task.starred) {
+      const meta = open.createDiv({ cls: "organized-list-meta" });
+      if (task.priority !== "none") meta.createSpan({ cls: `organized-list-priority priority-${task.priority}`, text: task.priority });
+      if (task.scheduled && this.owner.settings.showScheduledDate) meta.createSpan({ cls: "organized-list-date", text: task.scheduled });
+      if (task.starred) { const star = meta.createSpan({ cls: "organized-list-star", attr: { "aria-label": "Favorite" } }); setIcon(star, "star"); }
+    }
     if (task.projects.length) {
       const chips = open.createDiv({ cls: "organized-chips" });
       for (const project of task.projects.slice(0, 2)) chips.createSpan({ cls: "organized-chip", text: this.projectLabel(project) });
@@ -292,7 +299,8 @@ export class OrganizedInspectorView extends ItemView {
       () => { this.selectedDate = moment(this.selectedDate, "YYYY-MM-DD").subtract(1, "week").format("YYYY-MM-DD"); });
     const tasks = await this.owner.repo.list(); const now = Date.now();
     const days = Array.from({ length: 7 }, (_, i) => start.clone().add(i, "days"));
-    const blocks = days.map(day => blocksOn(tasks, day.format("YYYY-MM-DD"), now)); const [from, to] = hourRange(blocks.flat());
+    const retired = (await this.owner.service.retiredWork(days[0].format("YYYY-MM-DD"), days[6].format("YYYY-MM-DD"))).map(item => item.task);
+    const blocks = days.map(day => blocksOn([...tasks, ...retired], day.format("YYYY-MM-DD"), now)); const [from, to] = hourRange(blocks.flat());
     const counts = await Promise.all(days.map(async day => {
       const note = this.owner.repo.file(this.owner.service.daily.path(day.format("YYYY-MM-DD"))); const lines = note ? await this.owner.taskLines(note) : [];
       return { done: lines.filter(line => line.marker.toLowerCase() === "x").length, total: lines.length };
@@ -315,6 +323,10 @@ export class OrganizedInspectorView extends ItemView {
       row.addEventListener("click", () => { this.selectedDate = key; this.calendarMode = "Day"; void this.render().catch(report); });
     });
   }
+  private async openNote(notePath: string): Promise<void> {
+    const note = this.owner.repo.file(notePath); if (!note) throw new Error("The note that kept this time was renamed or removed.");
+    await this.app.workspace.getLeaf(false).openFile(note);
+  }
   private plainTaskRow(host: HTMLElement, line: TaskLine, path: string): void {
     const status = line.marker.toLowerCase() === "x" ? "completed" : line.marker === "-" ? "canceled" : line.marker === "/" ? "in_progress" : "open";
     const row = host.createDiv({ cls: "organized-list-card organized-day-task", attr: { "data-status": status } });
@@ -326,7 +338,9 @@ export class OrganizedInspectorView extends ItemView {
     const date = this.selectedDate; const day = moment(date, "YYYY-MM-DD");
     this.rangeNav(host, day.format("ddd, MMM D, YYYY"), "Previous day", "Next day",
       () => { this.selectedDate = day.clone().add(1, "day").format("YYYY-MM-DD"); }, () => { this.selectedDate = day.clone().subtract(1, "day").format("YYYY-MM-DD"); });
-    const tasks = await this.owner.repo.list(); const now = Date.now(); const blocks = blocksOn(tasks, date, now);
+    const tasks = await this.owner.repo.list(); const now = Date.now();
+    const retired = new Map((await this.owner.service.retiredWork(date, date)).map(item => [item.task.id, item]));
+    const blocks = blocksOn([...tasks, ...[...retired.values()].map(item => item.task)], date, now);
     const note = this.owner.repo.file(this.owner.service.daily.path(date)); const lines = note ? await this.owner.taskLines(note) : [];
     const linked = new Map(tasks.map(task => [task.id, task]));
     if (generation !== this.renderId) return;
@@ -354,7 +368,9 @@ export class OrganizedInspectorView extends ItemView {
       const part = grid.createEl("button", { cls: "organized-block", attr: { type: "button", "data-status": this.shownStatus(block.task), "aria-label": `${title}, ${range}${block.running ? ", running" : ""}`, title: `${title} · ${range}` } });
       part.setCssProps({ "--organized-top": String((block.startMin - from * 60) / span * 100), "--organized-height": String((block.endMin - block.startMin) / span * 100), "--organized-lane": String(block.lane), "--organized-lanes": String(block.lanes) });
       part.createSpan({ cls: "organized-block-title", text: title }); if (block.endMin - block.startMin >= 30) part.createSpan({ cls: "organized-block-time", text: range });
-      part.addEventListener("click", () => { void this.openFromCalendar(block.task.id).catch(report); });
+      // A retired task has no task note: open the daily note that kept its time instead.
+      const kept = retired.get(block.task.id);
+      part.addEventListener("click", () => { void (kept ? this.openNote(kept.path) : this.openFromCalendar(block.task.id)).catch(report); });
     }
     const minutes = new Date(now).getHours() * 60 + new Date(now).getMinutes();
     if (date === localDate() && minutes >= from * 60 && minutes <= to * 60) { const nowLine = grid.createDiv({ cls: "organized-now-line", attr: { "aria-hidden": "true" } }); nowLine.setCssProps({ "--organized-at": String((minutes - from * 60) / span * 100) }); }
@@ -395,7 +411,7 @@ export class OrganizedInspectorView extends ItemView {
     const file = this.owner.repo.file(this.owner.repo.taskPath(id))!; const body = splitNote(await this.owner.repo.readText(file)).body;
     const details = host.createDiv({ cls: "organized-task-details" });
     await this.moduleCard(details, file.path, id, "Description", noteSection(body, "Description"));
-    if (task.priority !== "none" || this.module === "Priority") this.select(this.card(details, "Priority", "flag"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.repo.update(id, t => ({ ...t, priority: value as Task["priority"] })); this.owner.refresh(); }); });
+    if (task.priority !== "none" || this.module === "Priority") this.select(this.card(details, "Priority", "flag"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.service.setPriority(id, value as Task["priority"], this.owner.context?.line.id === id ? this.owner.context : undefined); this.owner.refresh(); }); });
     if (task.scheduled || this.module === "Schedule") this.button(this.card(details, "Schedule", "calendar"), task.scheduled ?? "Choose date", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined))).open(); });
     if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || this.module === "Timer") {
       const timer = this.card(details, "Timer", "timer"); timer.createDiv({ cls: "organized-timer-value", text: `${Math.floor(elapsed(task) / 60)} min${task.time_tracking_started_at ? " · running" : ""}` });

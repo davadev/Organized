@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting, SettingDefinitionItem } from "obsidian";
 import type Organized from "./main";
-import { DISPLAY_PROPERTIES, DisplayProperty, path, settingsFrom, visibleFolder } from "./model";
+import { DISPLAY_PROPERTIES, DisplayProperty, path, RETENTION_DETAILS, RetentionDetail, settingsFrom, visibleFolder } from "./model";
 import { report } from "./service";
 
 export const PROPERTY_LABELS: Record<DisplayProperty, string> = {
@@ -45,6 +45,10 @@ export class OrganizedSettingsTab extends PluginSettingTab {
               this.owner.settings.taskRetentionDays = days; this.owner.saveSettings();
             });
           });
+        }),
+        row("What retired tasks keep", "Applies when the retention above turns a task into a regular checkbox. Title only keeps just the checkbox. Add description writes it as a quote under the checkbox. Add everything also keeps ideas, questions, sources and the time you worked, so older daily notes stay informative and the Day and Week views can still draw that time.", setting => {
+          setting.addDropdown(d => d.addOption("title", "Keep the title only").addOption("description", "Add description if available").addOption("all", "Add everything (description, notes and time worked)")
+            .setValue(this.owner.settings.retentionDetail).onChange(value => { if (RETENTION_DETAILS.includes(value as RetentionDetail)) { this.owner.settings.retentionDetail = value as RetentionDetail; this.owner.saveSettings(); } }));
         }),
       ] },
       { type: "group", heading: "Daily notes", items: [

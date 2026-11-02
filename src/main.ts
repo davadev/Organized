@@ -67,7 +67,7 @@ export default class Organized extends Plugin {
         } }));
         this.registerEvent(this.app.vault.on("rename", (file, oldPath) => { this.service.forget(oldPath); if (file instanceof TFile) void this.service.index(file).then(() => this.refresh()).catch(report); }));
         this.registerEvent(this.app.vault.on("delete", file => { this.service.forget(file.path); this.refresh(); }));
-        void this.run(() => this.migrateProjects());
+        void this.run(async () => { await this.migrateProjects(); await this.markProjectNotes(); });
         this.registerEvent(this.app.workspace.on("file-open", file => { this.followCursor(); if (file) void this.run(() => this.service.reconcile(file)); }));
       });
       this.loaded = true;
@@ -116,6 +116,12 @@ export default class Organized extends Plugin {
       }); });
     }
     new Notice(fragment, 15000);
+  }
+  /** One-time: project notes made before the marker existed get `organized_type: project`, so the picker can list only them. */
+  async markProjectNotes(): Promise<void> {
+    if (this.settings.projectNotesMarked || !this.safety.writable) return;
+    const marked = await this.service.markProjects(); this.settings.projectNotesMarked = true; this.saveSettings(false);
+    if (marked) new Notice(`${marked} project note${marked === 1 ? "" : "s"} marked with organized_type: project so they can be listed when linking projects.`, 12000);
   }
   private remapKnownProjects(moved: { from: string; to: string }[]): void {
     const target = new Map(moved.map(m => [m.from, m.to]));
@@ -297,7 +303,7 @@ export default class Organized extends Plugin {
     else await this.run(() => this.service.marker(context, marker));
   }
   pickProjects(task: Task, context?: Context): void {
-    new ProjectPicker(this.app, this.app.vault.getMarkdownFiles().filter(f => !this.repo.isTaskRecord(f.path)).map(f => f.path), task.projects, notes => this.run(async () => { await this.service.projects(task.id, notes); this.rememberProjects(notes); if (context) await this.service.clean(context); }), this.repo.projectFolder()).open();
+    new ProjectPicker(this.app, this.repo.projectNotes(), task.projects, notes => this.run(async () => { await this.service.projects(task.id, notes); this.rememberProjects(notes); if (context) await this.service.clean(context); }), this.repo.projectFolder()).open();
   }
   async saveModule(id: string, section: NoteSection, text: string): Promise<void> {
     const file = this.repo.file(this.repo.taskPath(id)); if (!file) throw new Error("Task note is missing.");

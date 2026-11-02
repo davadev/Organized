@@ -224,7 +224,7 @@ describe('compact calendar and contextual task inspector', () => {
     const task = await repo.create('Daily habit'); await repo.update(task.id, t => ({ ...t, recurring: true, starred: true }));
     await view.render(); owner.selectedTaskId = task.id; view.tab = 'Projects'; await view.render(); expect(view.contentEl.textContent).not.toContain('done · today');
     await add(today, `- [x] Daily habit <!--organized:${task.id}-->\n- [X] Other <!--organized:otherotherother-->`);
-    await view.render(); const row = view.contentEl.querySelector('.organized-list-card')!; expect(row.querySelector('.organized-list-status')?.textContent).toBe('done · today'); expect(row.getAttribute('data-status')).toBe('completed'); expect(row.querySelector('.organized-status-dot')).toBeNull();
+    await view.render(); const row = view.contentEl.querySelector('.organized-list-card')!; expect(row.querySelector('.organized-list-status')?.getAttribute('aria-label')).toBe('done · today'); expect(row.querySelector('.organized-list-status')?.textContent).toBe(''); expect(row.getAttribute('data-status')).toBe('completed'); expect(row.querySelector('.organized-status-dot')).toBeNull();
     view.tab = 'Task'; await view.render(); const status = view.contentEl.querySelector<HTMLSelectElement>('select[aria-label="Status"]')!;
     expect(status.value).toBe('completed'); expect(Array.from(status.options).find(o => o.value === 'completed')?.text).toBe('done · today'); expect((await repo.read(task.id)).status).toBe('open');
     status.value = 'open'; status.dispatchEvent(new Event('change')); await flush(); expect(texts.get(today)).toContain(`- [ ] Daily habit <!--organized:${task.id}-->`);
@@ -361,5 +361,33 @@ describe('compact calendar and contextual task inspector', () => {
     view.selectedDate = '2026-03-06'; await view.render(); expect(view.contentEl.textContent).toContain('There is no daily note for this day yet.'); expect(button(view.contentEl, 'Create daily note')).toBeTruthy();
     head().click(); await flush(); expect(owner.settings.dayTasksCollapsed).toBe(false); view.selectedDate = '2026-03-04'; await view.render(); expect(rows()).toBe(3);
     view.selectedDate = '2026-03-05'; await view.render(); expect(view.contentEl.textContent).toContain("No tasks in this day's note.");
+  });
+  it('shows one status icon per card, with the word only as a label', async () => {
+    const { view, repo, owner } = await fixture(); const statuses = ['open', 'in_progress', 'completed', 'canceled'] as const;
+    for (const status of statuses) { const task = await repo.create(`Is ${status}`); await repo.update(task.id, t => ({ ...t, status, projects: ['P.md'] })); }
+    const starred = await repo.create('Starred'); await repo.update(starred.id, t => ({ ...t, starred: true, priority: 'high', projects: ['P.md'] }));
+    const dated = await repo.create('Dated'); await repo.update(dated.id, t => ({ ...t, scheduled: '2026-03-09', projects: ['P.md'] })); const hidden = await repo.create('Hidden date'); await repo.update(hidden.id, t => ({ ...t, scheduled: '2026-03-09', projects: ['P.md'] }));
+    const fav = await repo.create('Only star'); await repo.update(fav.id, t => ({ ...t, starred: true, projects: ['P.md'] }));
+    view.tab = 'Projects'; view.selectedProject = 'P.md'; await view.render(); await flush(); expect(card(view, 'Dated').querySelector('.organized-list-date')?.textContent).toBe('2026-03-09'); expect(card(view, 'Only star').querySelector('.organized-list-star')).toBeTruthy();
+    owner.settings.showScheduledDate = false; await view.render(); await flush(); expect(card(view, 'Hidden date').querySelector('.organized-list-meta')).toBeNull(); owner.settings.showScheduledDate = true; await view.render(); await flush();
+    const icons = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-list-status')); expect(icons.map(icon => icon.getAttribute('aria-label'))).toEqual(expect.arrayContaining(['open', 'in progress', 'completed', 'canceled']));
+    for (const icon of icons) { expect(icon.textContent).toBe(''); expect(icon.getAttribute('role')).toBe('img'); expect(icon.getAttribute('title')).toBe(icon.getAttribute('aria-label')); }
+    expect(view.contentEl.querySelector('.organized-list-meta')?.textContent).toContain('high'); expect(card(view, 'Is open').querySelector('.organized-list-meta')).toBeNull();
+  });
+  it('draws time kept in daily notes by retired tasks and opens that note from the block', async () => {
+    const { view, add, service, files, h: _h } = await fixture() as any; vi.setSystemTime(new Date(2026, 2, 4, 15, 0, 0));
+    const note: any = await add(service.daily.path('2026-03-05'), '- [x] Retired plan\n  - Worked 2026-03-04: 09:00–10:00 (1 h)\n');
+    const open = vi.fn(async () => undefined); (view.app.workspace.getLeaf as any).mockReturnValue({ openFile: open });
+    view.selectedDate = '2026-03-04'; view.calendarMode = 'Day'; await view.render(); const block = view.contentEl.querySelector('.organized-block') as HTMLElement; expect(block.getAttribute('aria-label')).toBe('Retired plan, 09:00–10:00');
+    block.click(); await flush(); expect(open).toHaveBeenCalledWith(note);
+    view.calendarMode = 'Week'; await view.render(); expect(view.contentEl.querySelectorAll('.organized-week-block')).toHaveLength(1); view.calendarMode = 'Day'; await view.render();
+    files.delete(note.path); (view.contentEl.querySelector('.organized-block') as HTMLElement).click(); await flush(); expect(open).toHaveBeenCalledTimes(1);
+  });
+  it('reorders the note list when the priority is changed in the side panel', async () => {
+    const { view, repo, add, owner } = await fixture(); const low = await repo.create('Low one'); const target = await repo.create('Target');
+    await repo.update(low.id, t => ({ ...t, priority: 'low' })); const note: any = await add('Daily/2026-03-04.md', `- [ ] Low one <!--organized:${low.id}-->\n- [ ] Target <!--organized:${target.id}-->`);
+    owner.selectedTaskId = target.id; view.tab = 'Task'; await view.render(); choose(view, 'Add details', 'Priority'); await flush(); choose(view, 'Priority', 'high'); for (let i = 0; i < 8; i++) await flush();
+    expect((await repo.read(target.id)).priority).toBe('high'); expect((await owner.repo.readText(note)).split('\n')[0]).toContain('Target');
+    const { parseTasks } = await import('../codec'); const text = await owner.repo.readText(note); owner.context = { file: note, line: parseTasks(text).find(t => t.id === target.id)! } as any; choose(view, 'Priority', 'low'); for (let i = 0; i < 8; i++) await flush(); expect((await repo.read(target.id)).priority).toBe('low'); expect((await owner.repo.readText(note)).split('\n')[0]).toContain('Target');
   });
 });

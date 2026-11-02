@@ -194,11 +194,11 @@ describe('plugin lifecycle and user-only editor actions', () => {
     await plugin.repo.update(task.id, t => ({ ...t, projects: ['Plan.md', 'Other/Plan.md'] })); plugin.settings.knownProjects = ['Kept.md', 'Plan.md', 'Ghost.md'];
     plugin.safety.writable = false; await plugin.migrateProjects(); expect(h.texts.has('Plan.md')).toBe(true); expect(plugin.settings.projectsMigrated).toBe(false); plugin.safety.writable = true;
     Notice.instances.length = 0; h.layout[0](); await flush(); await vi.advanceTimersByTimeAsync(0); await flush();
-    expect(h.texts.get(`${folder}/Plan.md`)).toBe('plan'); expect(plugin.settings.projectsMigrated).toBe(true); expect(plugin.settings.knownProjects).toEqual([`${folder}/Kept.md`, `${folder}/Plan.md`, 'Ghost.md']);
+    expect(h.texts.get(`${folder}/Plan.md`)).toContain('plan'); expect(h.texts.get(`${folder}/Plan.md`)).toContain('organized_type: project'); expect(plugin.settings.projectNotesMarked).toBe(true); expect(plugin.settings.projectsMigrated).toBe(true); expect(plugin.settings.knownProjects).toEqual([`${folder}/Kept.md`, `${folder}/Plan.md`, 'Ghost.md']);
     const notice = Notice.instances.find(n => String(n.message instanceof DocumentFragment ? n.message.textContent : n.message).includes('Projects moved'))!; const text = (notice.message as DocumentFragment).textContent!;
     expect(text).toContain('2 project notes moved'); expect(text).toContain('1 skipped'); expect(text).toContain('Other/Plan.md');
     const undoButton = (notice.message as DocumentFragment).querySelector('button')!; undoButton.click(); await flush(); await vi.advanceTimersByTimeAsync(0); await flush();
-    expect(h.texts.get('Plan.md')).toBe('plan'); expect(plugin.settings.knownProjects).toEqual(['Kept.md', 'Plan.md', 'Ghost.md']); expect(Notice.instances.at(-1)?.message).toBe('Project notes moved back.');
+    expect(h.texts.get('Plan.md')).toContain('plan'); expect(plugin.settings.knownProjects).toEqual(['Kept.md', 'Plan.md', 'Ghost.md']); expect(Notice.instances.at(-1)?.message).toBe('Project notes moved back.');
     Notice.instances.length = 0; await plugin.migrateProjects(); expect(Notice.instances).toHaveLength(0); expect(h.texts.has('Plan.md')).toBe(true);
   });
   it('stays quiet when there is nothing to migrate and reports undo conflicts', async () => {
@@ -275,5 +275,13 @@ describe('plugin lifecycle and user-only editor actions', () => {
     edit(''); h.texts.set(file.path, editor.getValue()); await vi.advanceTimersByTimeAsync(1000); await flush(); expect(rename).not.toHaveBeenCalled();
     editor.setValue(line); h.texts.set(file.path, line); edit('Keep'); edit('Kee'); edit('Keep'); await vi.advanceTimersByTimeAsync(1000); await flush(); expect(rename).not.toHaveBeenCalled();
     editor.setValue(line); h.texts.set(file.path, line); edit('Pending'); plugin.onunload(); await vi.advanceTimersByTimeAsync(2000); await flush(); expect(rename).not.toHaveBeenCalled();
+  });
+  it('marks old project notes once, only when writes are allowed, and says nothing when there are none', async () => {
+    const { h, plugin } = await loaded(); const task = await plugin.repo.create('Linked'); await h.add('Old.md', 'old'); await plugin.repo.update(task.id, t => ({ ...t, projects: ['Old.md'] }));
+    plugin.safety.writable = false; await plugin.markProjectNotes(); expect(plugin.settings.projectNotesMarked).toBe(false); expect(h.texts.get('Old.md')).toBe('old'); plugin.safety.writable = true;
+    plugin.settings.projectNotesMarked = false; Notice.instances.length = 0; await plugin.markProjectNotes(); expect(h.texts.get('Old.md')).toContain('organized_type: project'); expect(Notice.instances.at(-1)?.message).toContain('1 project note marked');
+    Notice.instances.length = 0; await plugin.markProjectNotes(); expect(Notice.instances).toHaveLength(0);
+    plugin.settings.projectNotesMarked = false; await plugin.markProjectNotes(); expect(Notice.instances).toHaveLength(0); expect(plugin.settings.projectNotesMarked).toBe(true);
+    await h.add('Two.md'); await h.add('Three.md'); plugin.settings.knownProjects = ['Two.md', 'Three.md']; plugin.settings.projectNotesMarked = false; await plugin.markProjectNotes(); expect(Notice.instances.at(-1)?.message).toContain('2 project notes marked');
   });
 });

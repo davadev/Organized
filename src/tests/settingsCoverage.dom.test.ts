@@ -11,7 +11,7 @@ describe('settings completeness and validation', () => {
   it('renders every setting in classic and modern hosts, validates changes before save', () => {
     const h = harness(); const owner = { settings: { ...DEFAULT_SETTINGS, displayProperties: [] }, saveSettings: vi.fn() } as any;
     const tab = new OrganizedSettingsTab(h.app, owner); Setting.instances.length = 0; tab.display();
-    expect(Setting.instances.filter(s => s.controls.length)).toHaveLength(10 + DISPLAY_PROPERTIES.length - 1);
+    expect(Setting.instances.filter(s => s.controls.length)).toHaveLength(11 + DISPLAY_PROPERTIES.length - 1);
     const controls = (name: string) => Setting.instances.find(s => s.nameText === name)!.controls[0];
     const type = (control: any, value: string) => { control.inputEl.value = value; control.inputEl.dispatchEvent(new Event('input')); };
     type(controls('Task folder'), 'Work'); expect(owner.settings.taskFolder).toBe('Work'); type(controls('Task folder'), '.tasks'); expect(owner.settings.taskFolder).toBe('Work'); expect(Notice.instances.at(-1)?.message).toContain('visible');
@@ -21,6 +21,7 @@ describe('settings completeness and validation', () => {
     type(controls('Completed/canceled task retention (days)'), '45'); expect(owner.settings.taskRetentionDays).toBe(45); type(controls('Completed/canceled task retention (days)'), '-2'); expect(owner.settings.taskRetentionDays).toBe(45); type(controls('Completed/canceled task retention (days)'), '1.5'); expect(owner.settings.taskRetentionDays).toBe(45); type(controls('Completed/canceled task retention (days)'), ''); expect(owner.settings.taskRetentionDays).toBe(45);
     controls('Auto-forward unfinished tasks').toggle(); expect(owner.settings.autoForward).toBe(false);
     const select = (name: string, value: string) => { const c = controls(name); c.selectEl.value = value; c.selectEl.dispatchEvent(new Event('change')); };
+    select('What retired tasks keep', 'all'); expect(owner.settings.retentionDetail).toBe('all'); select('What retired tasks keep', 'bogus'); expect(owner.settings.retentionDetail).toBe('all'); select('What retired tasks keep', 'description'); expect(owner.settings.retentionDetail).toBe('description');
     select('Missing sections', 'ask'); expect(owner.settings.missingSection).toBe('ask'); select('Missing sections', 'recreate'); expect(owner.settings.missingSection).toBe('recreate');
     select('Priority sort scope', 'none'); expect(owner.settings.sortScope).toBe('none');
     controls('Show scheduled date link').toggle(); expect(owner.settings.showScheduledDate).toBe(false); controls('Show scheduled date link').toggle(); expect(owner.settings.showScheduledDate).toBe(true);
