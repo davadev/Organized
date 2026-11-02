@@ -97,6 +97,8 @@ export default class Organized extends Plugin {
   setDayTasksCollapsed(collapsed: boolean): void { this.settings.dayTasksCollapsed = collapsed; this.saveSettings(false); }
   /** Whether the Task tab's note list leaves out done tasks. */
   setHideDoneTasks(hide: boolean): void { this.settings.hideDoneTasks = hide; this.saveSettings(false); }
+  /** Whether the Projects tab leaves out done and canceled tasks (on by default; the lists span all time). */
+  setHideClosedProjects(hide: boolean): void { this.settings.hideClosedProjects = hide; this.saveSettings(false); }
   /** Collapsed task-tab headings persist until the user expands them again. */
   setHeadingCollapsed(notePath: string, key: string, collapsed: boolean): void {
     const keys = (this.settings.collapsedHeadings[notePath] ?? []).filter(k => k !== key); if (collapsed) keys.push(key);

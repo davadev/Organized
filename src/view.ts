@@ -19,6 +19,8 @@ export const CALENDAR_MODES = ["Month", "Week", "Day"] as const;
 export type CalendarMode = typeof CALENDAR_MODES[number];
 const pad = (value: number): string => String(value).padStart(2, "0");
 const clock = (minutes: number): string => `${pad(Math.floor(minutes / 60) % 24)}:${pad(Math.floor(minutes % 60))}`;
+/** Rows drawn before a long list asks to be expanded. */
+const LIST_LIMIT = 50;
 const STATUS_ICONS: Record<Task["status"], string> = { open: "circle", in_progress: "play", completed: "check", canceled: "x" };
 export class OrganizedInspectorView extends ItemView {
   tab: Tab = "Calendar";
@@ -34,6 +36,7 @@ export class OrganizedInspectorView extends ItemView {
   private renderId = 0;
   private placed = "";
   private sessionsOpen = false;
+  private expandedLists = new Set<string>();
   private scrolledModule = "";
   private doneToday = new Set<string>();
   private markdown = this.addChild(new Component());
@@ -532,6 +535,12 @@ export class OrganizedInspectorView extends ItemView {
     if (!favorites.length) section.createDiv({ cls: "organized-empty", text: "No favorites yet. Use [*] on a task or star it in the Task tab." });
     for (const task of favorites) this.taskRow(section, task, () => this.chooseTask(task, "Favorites"));
   }
+  /** Draws a long list a page at a time: the first rows, then one button that shows the rest. */
+  private limited(host: HTMLElement, tasks: Task[], key: string, draw: (task: Task) => void): void {
+    const all = this.expandedLists.has(key);
+    for (const task of all ? tasks : tasks.slice(0, LIST_LIMIT)) draw(task);
+    if (!all && tasks.length > LIST_LIMIT) this.button(host, `Show all ${tasks.length}`, () => { this.expandedLists.add(key); return this.render(); }).addClass("organized-show-more");
+  }
   async projects(host: HTMLElement, generation: number): Promise<void> {
     const tasks = byPriority(await this.owner.repo.list()); await this.loadDoneToday();
     if (generation !== this.renderId) return;
@@ -546,16 +555,24 @@ export class OrganizedInspectorView extends ItemView {
     for (const project of projects) picker.createEl("option", { text: this.projectLabel(project), value: project }); picker.value = this.selectedProject;
     picker.addEventListener("change", () => { this.selectedProject = picker.value; picker.blur(); void this.render().catch(report); });
     if (projects.length) this.colorPickers(projectSection, projects);
-    const shown = tasks.filter(t => t.status !== "canceled" && t.projects.length && (!this.selectedProject || t.projects.includes(this.selectedProject)));
-    if (!shown.length) projectSection.createDiv({ cls: "organized-empty", text: this.selectedProject ? `No tasks linked to ${this.projectLabel(this.selectedProject)}.` : "No project links yet. Use [j] on a task to link its project or topic note." });
-    for (const task of shown) this.taskRow(projectSection, task, () => choose(task));
-    const canceled = tasks.filter(t => t.status === "canceled");
+    // The lists cover every task ever linked, so done and canceled ones are hidden unless asked for, and long lists stop at a page until expanded.
+    const hide = this.owner.settings.hideClosedProjects;
+    const head = projectSection.querySelector<HTMLElement>(".organized-section-head")!;
+    const toggle = this.iconButton(head, hide ? "Show done and canceled tasks" : "Hide done and canceled tasks", hide ? "eye-off" : "eye", () => { this.owner.setHideClosedProjects(!hide); return this.render(); });
+    toggle.setAttribute("aria-pressed", String(hide)); toggle.addClass("organized-hide-done"); head.insertBefore(toggle, head.querySelector(".organized-count"));
+    const linkedTasks = tasks.filter(t => t.status !== "canceled" && t.projects.length && (!this.selectedProject || t.projects.includes(this.selectedProject)));
+    const shown = hide ? linkedTasks.filter(t => this.shownStatus(t) !== "completed") : linkedTasks;
+    const canceled = tasks.filter(t => t.status === "canceled"); const hidden = linkedTasks.length - shown.length + (hide ? canceled.length : 0);
+    if (!linkedTasks.length) projectSection.createDiv({ cls: "organized-empty", text: this.selectedProject ? `No tasks linked to ${this.projectLabel(this.selectedProject)}.` : "No project links yet. Use [j] on a task to link its project or topic note." });
+    this.limited(projectSection, shown, "projects", task => { this.taskRow(projectSection, task, () => choose(task)); });
+    if (hide && hidden) projectSection.createDiv({ cls: "organized-empty", text: `${hidden} done or canceled task${hidden === 1 ? "" : "s"} hidden.` });
+    if (hide) return;
     const canceledSection = this.section(host, "Canceled", canceled.length);
     if (!canceled.length) canceledSection.createDiv({ cls: "organized-empty", text: "No canceled tasks." });
-    for (const task of canceled) {
+    this.limited(canceledSection, canceled, "canceled", task => {
       const row = this.taskRow(canceledSection, task, () => choose(task));
       const actions = row.createDiv({ cls: "organized-list-actions" });
       this.button(actions, "Restore", () => this.owner.run(() => this.owner.service.status(task.id, "open")));
-    }
+    });
   }
 }
