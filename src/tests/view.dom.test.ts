@@ -282,7 +282,7 @@ describe('compact calendar and contextual task inspector', () => {
     for (const [task, status] of [[open, 'open'], [active, 'in_progress'], [done, 'completed'], [canceled, 'canceled']] as const) await repo.update(task.id, t => ({ ...t, status, starred: true }));
     view.tab = 'Favorites'; await view.render(); const statuses = () => Array.from(view.contentEl.querySelectorAll('.organized-list-card')).map(card => card.getAttribute('data-status'));
     expect(statuses().sort()).toEqual(['completed', 'in_progress', 'open']); view.tab = 'Projects'; await view.render(); expect(statuses()).toEqual(['canceled']);
-    for (const [task, status] of [[done, 'completed'], [active, 'in_progress']] as const) { owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); expect(view.contentEl.querySelector('.organized-task-hero')?.getAttribute('data-status')).toBe(status); }
+    for (const [task, status] of [[done, 'completed'], [active, 'in_progress']] as const) { owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); expect(view.contentEl.querySelector('.organized-task-hero')?.getAttribute('data-status')).toBe(status); expect(view.contentEl.querySelector('.organized-status-dot')).toBeNull(); expect(view.contentEl.querySelector('.organized-status-icon')?.getAttribute('data-status')).toBe(status); expect(view.contentEl.querySelectorAll('.organized-eyebrow button').length).toBe(1); }
   });
   it('shows the Calendar, Task, Projects and Favorites tabs as labelled icon buttons', async () => {
     const { view } = await fixture(); await view.render();
@@ -456,5 +456,10 @@ describe('compact calendar and contextual task inspector', () => {
   it('opens the task, not an editor, from a running block', async () => {
     const { owner, view, repo } = await fixture(); vi.setSystemTime(new Date(2026, 2, 4, 15, 0, 0)); const task = await repo.create('Running work'); await repo.update(task.id, t => ({ ...t, status: 'in_progress', time_tracking_started_at: new Date(2026, 2, 4, 14, 0).toISOString() }));
     view.selectedDate = '2026-03-04'; view.calendarMode = 'Day'; await view.render(); const before = Modal.instances.length; (view.contentEl.querySelector('.organized-block') as HTMLElement).click(); await flush(); expect(Modal.instances.length).toBe(before); expect(owner.selectedTaskId).toBe(task.id);
+  });
+  it('shows done today with a calendar tick in the header and keeps the way back on the eyebrow row', async () => {
+    const { owner, view, repo, service, add } = await fixture(); const task = await repo.create('Habit'); await repo.update(task.id, t => ({ ...t, recurring: true })); await add(service.daily.path(localDate()), `- [x] Habit <!--organized:${task.id}-->`);
+    owner.selectedTaskId = task.id; view.origin = 'Favorites'; view.tab = 'Task'; await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-status-icon')?.getAttribute('data-icon')).toBe('calendar-check');
+    const eyebrow = view.contentEl.querySelector('.organized-eyebrow')!; expect(eyebrow.textContent).toContain('From favorites'); expect(eyebrow.querySelector('.organized-back')?.textContent).toBe('Back to favorites');
   });
 });
