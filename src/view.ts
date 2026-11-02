@@ -6,7 +6,7 @@ import type Organized from "./main";
 import { elapsed, localDate, PRIORITIES, Section, STATUSES, Task, WorkSession } from "./model";
 import { byPriority, report } from "./service";
 import { DatePicker, SessionModal, TaskPicker } from "./modals";
-import { lengthOf } from "./sessions";
+import { lengthOf, lengthOfSeconds, seconds } from "./sessions";
 import { NoteSection, NOTE_SECTIONS, noteLoose, noteSection, parseTasks, TaskLine } from "./codec";
 import { splitNote } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
@@ -33,6 +33,7 @@ export class OrganizedInspectorView extends ItemView {
   referencesOpen = false;
   private renderId = 0;
   private placed = "";
+  private sessionsOpen = false;
   private scrolledModule = "";
   private doneToday = new Set<string>();
   private markdown = this.addChild(new Component());
@@ -352,6 +353,18 @@ export class OrganizedInspectorView extends ItemView {
       row.addEventListener("click", () => { this.selectedDate = key; this.calendarMode = "Day"; void this.render().catch(report); });
     });
   }
+  /** Every recorded session, newest first and grouped by day with the day's total, folded away by default because the list grows quickly. */
+  private sessionList(host: HTMLElement, task: Task): void {
+    const box = host.createEl("details", { cls: "organized-sessions" }); box.open = this.sessionsOpen;
+    box.createEl("summary", { text: `Sessions (${task.work_sessions.length})` }); box.addEventListener("toggle", () => { this.sessionsOpen = box.open; });
+    const clock = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    const days = new Map<string, WorkSession[]>();
+    for (const session of [...task.work_sessions].sort((a, b) => Date.parse(b.start) - Date.parse(a.start))) { const day = localDate(new Date(session.start)); days.set(day, [...(days.get(day) ?? []), session]); }
+    for (const [day, sessions] of days) {
+      box.createDiv({ cls: "organized-session-day", text: `${day} · ${lengthOfSeconds(sessions.reduce((sum, session) => sum + seconds(session), 0))}` });
+      for (const session of sessions) this.button(box, `${clock(new Date(session.start))}–${clock(new Date(session.end))} · ${lengthOf(session)}`, () => this.editSession(task, session, day)).addClass("organized-session-row");
+    }
+  }
   /** Adds a block of time to a task, or edits/deletes a recorded one. */
   private editSession(task: Task, session: WorkSession | null, date: string): void {
     const at = (time: string) => new Date(`${date}T${time}:00`).toISOString();
@@ -468,10 +481,7 @@ export class OrganizedInspectorView extends ItemView {
       const timer = this.card(details, "Timer", "timer"); timer.createDiv({ cls: "organized-timer-value", text: `${Math.floor(elapsed(task) / 60)} min${task.time_tracking_started_at ? " · running" : ""}` });
       this.button(timer, task.time_tracking_started_at ? "Stop timer" : "Start timer", () => this.owner.run(() => this.owner.service.status(id, task.time_tracking_started_at ? "open" : "in_progress", this.owner.context ?? undefined)));
       this.button(timer, "Add time", () => this.editSession(task, null, localDate()));
-      for (const session of [...task.work_sessions].reverse().slice(0, 5)) {
-        const start = new Date(session.start); const end = new Date(session.end); const clock = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-        this.button(timer, `${localDate(start)} · ${clock(start)}–${clock(end)} · ${lengthOf(session)}`, () => this.editSession(task, session, localDate(start))).addClass("organized-session-row");
-      }
+      if (task.work_sessions.length) this.sessionList(timer, task);
     }
     if (task.recurring || task.recurrence_periods.length || this.module === "Recurring") {
       const recurring = this.card(details, "Recurring", "repeat");
