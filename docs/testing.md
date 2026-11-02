@@ -89,3 +89,4 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Delete the only task of a project and confirm the project is still listed.
 - In the Task tab with the cursor off any task, confirm headings appear, collapse/expand on click, and stay collapsed after reopening the inspector or restarting Obsidian.
 - Forward several tasks from one heading into a new daily note and confirm there are no blank lines between them.
+- Select a task from the editor, press the list button in the Task tab header, and confirm the cursor moves to its heading and the note overview appears.

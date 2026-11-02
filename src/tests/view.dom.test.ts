@@ -250,4 +250,22 @@ describe('compact calendar and contextual task inspector', () => {
     await click('Home'); await click('Deep'); expect(owner.settings.collapsedHeadings).toEqual({});
     const blank: any = await add('Blank.md', '#\n- [ ] Z'); setActive(blank); await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-heading-text')?.textContent).toBe('Untitled heading');
   });
+  it('returns from a task to the note overview by moving the cursor off task lines', async () => {
+    const { owner, view, repo, add, setActive, clearActive, files } = await fixture(); const task = await repo.create('Linked');
+    const tasksOnly: any = await add('Tasks.md', `- [ ] Linked <!--organized:${task.id}-->\n- [ ] Other`);
+    const back = () => view.contentEl.querySelector<HTMLElement>('.organized-note-overview')!;
+    const open = async (file: any, text: string, line: number) => { const editor = setActive(file, text); editor.setCursor({ line, ch: 0 }); owner.followCursor(); await view.render(); await flush(); return editor; };
+    view.tab = 'Task';
+    const withHeading: any = await add('Daily/Day.md', `Intro\n# Work\n\n- [ ] Linked <!--organized:${task.id}-->\n- [ ] Other`);
+    let editor = await open(withHeading, `Intro\n# Work\n\n- [ ] Linked <!--organized:${task.id}-->\n- [ ] Other`, 3);
+    expect(owner.selectedTaskId).toBe(task.id); expect(view.contentEl.querySelector('.organized-task-title')).toBeTruthy(); expect(back().getAttribute('aria-label')).toBe('All tasks in this note');
+    back().click(); await flush(); expect(editor.getCursor().line).toBe(1); expect(owner.selectedTaskId).toBeNull(); expect(view.contentEl.querySelector('.organized-task-title')).toBeNull(); expect(view.contentEl.querySelector('.organized-heading-row')).toBeTruthy();
+    const noHeading: any = await add('Prose.md', `Prose\n\n- [ ] Linked <!--organized:${task.id}-->`);
+    editor = await open(noHeading, `Prose\n\n- [ ] Linked <!--organized:${task.id}-->`, 2); back().click(); await flush(); expect(editor.getCursor().line).toBe(1); expect(owner.selectedTaskId).toBeNull();
+    const below: any = await add('Below.md', `- [ ] Linked <!--organized:${task.id}-->\n- [ ] Other\n\nEnd`);
+    editor = await open(below, `- [ ] Linked <!--organized:${task.id}-->\n- [ ] Other\n\nEnd`, 0); back().click(); await flush(); expect(editor.getCursor().line).toBe(2); expect(owner.selectedTaskId).toBeNull();
+    editor = await open(tasksOnly, `- [ ] Linked <!--organized:${task.id}-->\n- [ ] Other`, 0); back().click(); await flush(); expect(editor.getCursor().line).toBe(0); expect(owner.selectedTaskId).toBeNull();
+    files.delete(tasksOnly.path); clearActive(); owner.selectedTaskId = task.id; await view.render(); back().click(); await flush(); expect(owner.selectedTaskId).toBeNull();
+    owner.selectedTaskId = task.id; view.origin = 'Projects / favorites'; await view.render(); expect(view.contentEl.querySelector('.organized-note-overview')).toBeNull();
+  });
 });

@@ -117,6 +117,20 @@ export class OrganizedInspectorView extends ItemView {
     else box.createDiv({ cls: "organized-muted", text: "Add context, details or links." });
     this.button(box, `${text ? "Edit" : "Add"} ${section.toLowerCase()}`, () => { this.editingModule = section; this.module = section; return this.render(); });
   }
+  /** Moves the editor cursor off every task line, which is what switches the Task tab back to the note overview. */
+  private async showNoteTasks(): Promise<void> {
+    const source = this.owner.taskSourceEditor();
+    if (source) {
+      const text = source.editor.getValue(); const taskLines = new Set(parseTasks(text).map(t => t.line)); const lines = text.split("\n");
+      const cursor = source.editor.getCursor().line; const free = (line: number) => !taskLines.has(line);
+      const above = Array.from({ length: cursor + 1 }, (_, i) => cursor - i).filter(free);
+      const target = above.find(line => /^ {0,3}#{1,6}(?:\s|$)/.test(lines[line])) ?? above[0] ?? Array.from({ length: lines.length - cursor }, (_, i) => cursor + i).find(free);
+      if (target !== undefined) source.editor.setCursor({ line: target, ch: 0 });
+    }
+    this.owner.context = null; this.owner.selectedTaskId = null;
+    this.module = ""; this.editingModule = ""; this.editingTitle = false;
+    await this.render();
+  }
   private async focusNoteTask(editor: Editor, file: TFile, line: TaskLine, selectedId: string | null): Promise<void> {
     const resolved = await this.owner.service.resolve({ file, line });
     editor.focus(); editor.setCursor({ line: resolved.line.line, ch: Math.max(0, resolved.line.raw.indexOf("] ") + 2) });
@@ -239,6 +253,7 @@ export class OrganizedInspectorView extends ItemView {
     const hero = host.createDiv({ cls: "organized-task-hero" });
     const eyebrow = hero.createDiv({ cls: "organized-eyebrow" });
     this.statusDot(eyebrow, task); eyebrow.createSpan({ text: this.origin === "Editor cursor" ? "From editor" : "From projects" });
+    if (this.origin === "Editor cursor") this.iconButton(eyebrow, "All tasks in this note", "list", () => this.showNoteTasks()).addClass("organized-note-overview");
     if (this.origin !== "Editor cursor") this.button(hero, "Back to projects", () => { this.tab = "Projects"; return this.render(); }).addClass("organized-back");
     const header = hero.createDiv({ cls: "organized-task-header" });
     if (this.editingTitle) {
