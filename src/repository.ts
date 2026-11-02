@@ -6,6 +6,9 @@ export function splitNote(text: string): { frontmatter: Record<string, unknown>;
   const match = /^---\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)(?:\r?\n|$)/.exec(text);
   return match ? { frontmatter: object(parseYaml(match[1])), body: text.slice(match[0].length) } : { frontmatter: {}, body: text };
 }
+/** Frontmatter that marks a note as a project note; the picker lists only these. */
+export const PROJECT_KEY = "organized_type";
+export const PROJECT_FRONTMATTER = `---\n${PROJECT_KEY}: project\n---\n\n`;
 export class Repository {
   private tail: Promise<unknown> = Promise.resolve();
   constructor(readonly app: App, readonly settings: () => Settings, readonly activeEditor: () => { file: TFile; editor: Editor } | null) {}
@@ -28,6 +31,16 @@ export class Repository {
         try { await this.app.vault.createFolder(current); } catch (error) { if (!this.app.vault.getAbstractFileByPath(current)) throw error; }
       }
     }
+  }
+  /** Project notes by frontmatter, answered from Obsidian's metadata cache so the picker reads no files. */
+  projectNotes(): string[] {
+    return this.app.vault.getMarkdownFiles().filter(f => this.app.metadataCache.getFileCache(f)?.frontmatter?.[PROJECT_KEY] === "project").map(f => f.path);
+  }
+  /** Adds the project marker to a note, keeping every other property; a note that already has it is not written. */
+  async markProject(file: TFile): Promise<boolean> {
+    if (splitNote(await this.readText(file)).frontmatter[PROJECT_KEY] === "project") return false;
+    await this.app.fileManager.processFrontMatter(file, (raw: Record<string, unknown>) => { raw[PROJECT_KEY] = "project"; });
+    return true;
   }
   async ensure(notePath: string, content = ""): Promise<TFile> {
     notePath = path(notePath); const existing = this.file(notePath); if (existing) return existing;

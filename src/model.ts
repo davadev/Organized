@@ -24,6 +24,9 @@ export interface Task {
 }
 export const DISPLAY_PROPERTIES = ["status", "priority", "scheduled", "created", "time_tracked_seconds", "recurring", "starred", "projects", "movement_history", "sources", "notes"] as const;
 export type DisplayProperty = typeof DISPLAY_PROPERTIES[number];
+/** What a retired task leaves in the note: its title only, plus its description, or everything worth keeping (description and time worked). */
+export const RETENTION_DETAILS = ["title", "description", "all"] as const;
+export type RetentionDetail = typeof RETENTION_DETAILS[number];
 export interface Settings {
   taskFolder: string; dailyFolder: string; dailyFormat: string; autoForward: boolean;
   missingSection: "recreate" | "ask";
@@ -35,12 +38,14 @@ export interface Settings {
   knownProjects: string[];
   collapsedHeadings: Record<string, string[]>;
   projectsMigrated: boolean;
+  projectNotesMarked: boolean;
+  retentionDetail: RetentionDetail;
   dayTasksCollapsed: boolean;
 }
 export const DEFAULT_SETTINGS: Settings = {
   taskFolder: "Tasks", dailyFolder: "Daily", dailyFormat: "YYYY-MM-DD", autoForward: true,
   missingSection: "recreate", sortScope: "list", displayProperties: [], showScheduledDate: true, taskRetentionDays: 0,
-  dailyTemplate: "", knownProjects: [], collapsedHeadings: {}, projectsMigrated: false, dayTasksCollapsed: false,
+  dailyTemplate: "", knownProjects: [], collapsedHeadings: {}, projectsMigrated: false, projectNotesMarked: false, retentionDetail: "title", dayTasksCollapsed: false,
 };
 export function object(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -82,7 +87,7 @@ export function settingsFrom(value: unknown): Settings {
   s.taskRetentionDays = Number.isInteger(v.taskRetentionDays) && Number(v.taskRetentionDays) >= 0 && Number(v.taskRetentionDays) <= 36500 ? Number(v.taskRetentionDays) : 0;
   try { if (typeof v.dailyTemplate === "string" && v.dailyTemplate.trim()) { const template = path(v.dailyTemplate); if (template.endsWith(".md")) s.dailyTemplate = template; } } catch { /* Invalid persisted paths use safe defaults. */ }
   s.knownProjects = [...new Set(strings(v.knownProjects).filter(p => { try { return path(p) === p && p.endsWith(".md"); } catch { return false; } }))];
-  s.projectsMigrated = v.projectsMigrated === true; s.dayTasksCollapsed = v.dayTasksCollapsed === true;
+  s.projectsMigrated = v.projectsMigrated === true; s.projectNotesMarked = v.projectNotesMarked === true; s.retentionDetail = member(v.retentionDetail, RETENTION_DETAILS, "title"); s.dayTasksCollapsed = v.dayTasksCollapsed === true;
   s.collapsedHeadings = {};
   for (const [notePath, keys] of Object.entries(object(v.collapsedHeadings))) { const kept = [...new Set(strings(keys))]; if (kept.length) s.collapsedHeadings[notePath] = kept; }
   return s;

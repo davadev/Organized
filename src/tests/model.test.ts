@@ -14,8 +14,10 @@ describe("task model and persisted settings", () => {
   it("normalizes hand-edited and legacy settings repeatedly", () => {
     expect(settingsFrom(null)).toEqual(DEFAULT_SETTINGS);
     expect(settingsFrom({ taskFolder: "../bad", dailyFolder: "/bad", dailyFormat: "x", autoForward: "yes", missingSection: "bad", sortScope: "bad", displayProperties: ["notes", 5, "secret"] })).toEqual({ ...DEFAULT_SETTINGS, displayProperties: ["notes"] });
-    const valid = { taskFolder: "Work", dailyFolder: "", dailyFormat: "YYYY/MM/DD", autoForward: false, missingSection: "ask", sortScope: "section", displayProperties: ["status"], showScheduledDate: true, taskRetentionDays: 45, dailyTemplate: "Templates/Daily.md", knownProjects: ["A.md", "B/C.md"], collapsedHeadings: { "Daily/Today.md": ["[{\"level\":2}]"] }, projectsMigrated: true, dayTasksCollapsed: true };
+    const valid = { taskFolder: "Work", dailyFolder: "", dailyFormat: "YYYY/MM/DD", autoForward: false, missingSection: "ask", sortScope: "section", displayProperties: ["status"], showScheduledDate: true, taskRetentionDays: 45, dailyTemplate: "Templates/Daily.md", knownProjects: ["A.md", "B/C.md"], collapsedHeadings: { "Daily/Today.md": ["[{\"level\":2}]"] }, projectsMigrated: true, projectNotesMarked: true, retentionDetail: "all", dayTasksCollapsed: true };
     for (const projectsMigrated of ["yes", 1, undefined]) expect(settingsFrom({ ...valid, projectsMigrated, dayTasksCollapsed: projectsMigrated }).projectsMigrated).toBe(false);
+    for (const projectNotesMarked of ["yes", 1, undefined]) expect(settingsFrom({ ...valid, projectNotesMarked }).projectNotesMarked).toBe(false);
+    for (const retentionDetail of ["everything", 1, undefined]) expect(settingsFrom({ ...valid, retentionDetail }).retentionDetail).toBe("title");
     for (const dayTasksCollapsed of ["yes", 1, undefined]) expect(settingsFrom({ ...valid, dayTasksCollapsed }).dayTasksCollapsed).toBe(false);
     expect(settingsFrom({ ...valid, collapsedHeadings: { "Daily/Today.md": ["[{\"level\":2}]", "[{\"level\":2}]", 5], "Empty.md": [], "Bad.md": "x" } })).toEqual(valid); expect(settingsFrom({ collapsedHeadings: [1] }).collapsedHeadings).toEqual({});
     expect(settingsFrom({ ...valid, knownProjects: ["A.md", "A.md", "../x.md", "plain", 5, "B/C.md"] })).toEqual(valid);

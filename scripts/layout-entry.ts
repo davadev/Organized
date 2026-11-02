@@ -28,7 +28,7 @@ const owner: any = {
   assertWritable() {}, run: async (fn: () => unknown) => fn(), contextFor: () => null,
   pickProjects() {}, saveModule: async () => undefined, refresh() {},
   repo: { projectFolder: () => 'Tasks/Projects', list: async () => [browseTask, doneTask, activeTask, canceledTask], file: (path: string) => path.startsWith('Tasks/') || path.startsWith('Daily/2026-03') ? { path } : null, read: async () => task, taskPath: () => 'Tasks/task1234.md', readText: async () => note },
-   service: { daily: { path: (d: string) => `Daily/${d}.md`, open: async () => null }, refs: async () => [], reconcile: async () => undefined, resolve: async (context: any) => ({ text: noteTasksDoc, line: context.line }) },
+   service: { daily: { path: (d: string) => `Daily/${d}.md`, open: async () => null }, refs: async () => [], retiredWork: async () => [], reconcile: async () => undefined, resolve: async (context: any) => ({ text: noteTasksDoc, line: context.line }) },
    taskSourceEditor: () => ({ editor: noteTasksEditor, file: noteTasksFile }), taskLines: async () => parseTasks(noteTasksDoc),
 };
 const view = new OrganizedInspectorView({ app } as any, owner);

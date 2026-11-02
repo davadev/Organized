@@ -75,6 +75,11 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Tap/activate a linked task and confirm the editor focuses the matching line while the Task tab shows its details. Regular todos should move the cursor and offer **Attach/create task**; orphaned IDs should offer repair.
 - Open the inspector with no recent Markdown editor and verify the Task tab gives a helpful empty-state message.
 
+## Project notes and retired-task details
+- Link a project with `[j]`: the picker lists only notes with `organized_type: project`; a new note is created in `<task folder>/Projects/` with that property. After updating, existing project notes get the property once (a notice reports how many), keeping their other properties.
+- Set retention to a few days, choose *Add everything*, track time on a task, complete it and open today's daily note after expiry: the latest daily note shows the description as a quote and `- Worked …` lines under a plain checkbox, and the Day/Week views still show the block.
+- Change a task's priority in the side panel with *Current task list* sorting: the list in the note reorders.
+
 ## Completed-task retention
 
 - Verify **Keep completed tasks (days)** defaults to `0`; blank, negative, fractional and over-limit values are rejected, and `0` disables cleanup.
