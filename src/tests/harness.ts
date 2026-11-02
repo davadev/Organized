@@ -47,7 +47,7 @@ export function harness() {
       on, onLayoutReady: (fn: () => void) => layout.push(fn),
       getActiveViewOfType: vi.fn((type: unknown) => type === MarkdownView && active ? { file: active.file, editor: active.editor, getMode: () => 'source' } : null),
       getLeaf: vi.fn(() => ({ openFile: vi.fn(async () => undefined) })),
-      getRightLeaf: vi.fn(() => null as any), getLeavesOfType: vi.fn(() => [] as any[]), revealLeaf: vi.fn(async () => undefined),
+      getMostRecentLeaf: vi.fn(() => null as any), getRightLeaf: vi.fn(() => null as any), getLeavesOfType: vi.fn(() => [] as any[]), revealLeaf: vi.fn(async () => undefined),
     },
   };
   let settings: Settings = { ...DEFAULT_SETTINGS, displayProperties: [] };
