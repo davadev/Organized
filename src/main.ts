@@ -30,6 +30,7 @@ export default class Organized extends Plugin {
   private settingsRaw: Record<string, unknown> = {};
   private saveTail: Promise<unknown> = Promise.resolve();
   private loaded = false;
+  private unloaded = false;
   async onload(): Promise<void> {
     try {
       const adapter = this.app.vault.adapter; const crashPath = crashStatePath(this.manifest, this.app.vault.configDir);
@@ -39,6 +40,8 @@ export default class Organized extends Plugin {
       this.safety = new DataSafety(adapter, this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`, this.manifest.version, message => { new Notice(message, 12000); });
       await this.safety.prepare();
       this.settingsRaw = object(await this.loadData()); this.settings = settingsFrom(this.settingsRaw.settings ?? this.settingsRaw);
+      // Disabled while the awaits above were pending: onunload already ran, so registering now would leak handlers and timers into a dead plugin.
+      if (this.unloaded) return;
       this.repo = new Repository(this.app, () => this.settings, () => this.activeEditor());
       this.service = new TaskService(this.repo, () => this.refresh(), (message, heading, confirmLabel) => this.confirm(message, heading, confirmLabel));
       this.registerView(VIEW_TYPE, leaf => new OrganizedInspectorView(leaf, this));
@@ -77,7 +80,7 @@ export default class Organized extends Plugin {
     } catch (error) { report(error); throw error; }
   }
   onunload(): void {
-    this.loaded = false; for (const timer of this.titleTimers.values()) window.clearTimeout(timer); this.titleTimers.clear();
+    this.loaded = false; this.unloaded = true; for (const timer of this.titleTimers.values()) window.clearTimeout(timer); this.titleTimers.clear();
     void writeCrashState(this.app.vault.adapter, crashStatePath(this.manifest, this.app.vault.configDir), DEFAULT_CRASH_STATE);
   }
   assertWritable(): void { if (!this.safety.writable) throw new Error("Writes paused to protect newer/unreadable settings. Restore a compatible backup or update Organized."); }
@@ -215,7 +218,9 @@ export default class Organized extends Plugin {
     if (context.line.id && !duplicate && this.repo.file(this.repo.taskPath(context.line.id))) throw new Error("Task already linked. Use duplicate as new task for a fresh identity.");
     const captured = editor.getValue(); const selection = editor.listSelections();
     this.pickerOpen = true;
-    const picker = new TaskPicker(this.app, duplicate ? [] : await this.repo.list(), async choice => {
+    // A failed read must not leave editor handling disabled for good.
+    const tasks = duplicate ? [] : await this.repo.list().catch((error: unknown) => { this.pickerOpen = false; throw error; });
+    const picker = new TaskPicker(this.app, tasks, async choice => {
       if (isKeepAsTodo(choice)) return;
       await this.run(async () => {
         if (this.activeEditor()?.editor !== editor || editor.getValue() !== captured || JSON.stringify(editor.listSelections()) !== JSON.stringify(selection)) throw new Error("Editor changed while the picker was open. Line preserved; invoke attach/create to retry.");
