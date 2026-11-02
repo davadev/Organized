@@ -65,6 +65,7 @@ export default class Organized extends Plugin {
         } }));
         this.registerEvent(this.app.vault.on("rename", (file, oldPath) => { this.service.forget(oldPath); if (file instanceof TFile) void this.service.index(file).then(() => this.refresh()).catch(report); }));
         this.registerEvent(this.app.vault.on("delete", file => { this.service.forget(file.path); this.refresh(); }));
+        void this.run(() => this.migrateProjects());
         this.registerEvent(this.app.workspace.on("file-open", file => { if (file) void this.run(() => this.service.reconcile(file)); }));
       });
       this.loaded = true;
@@ -93,6 +94,28 @@ export default class Organized extends Plugin {
     const keys = (this.settings.collapsedHeadings[notePath] ?? []).filter(k => k !== key); if (collapsed) keys.push(key);
     const next = { ...this.settings.collapsedHeadings }; if (keys.length) next[notePath] = keys; else delete next[notePath];
     this.settings.collapsedHeadings = next; this.saveSettings(false);
+  }
+  /** One-time move of already linked project notes into the project folder, announced with an Undo. */
+  async migrateProjects(): Promise<void> {
+    if (this.settings.projectsMigrated || !this.safety.writable) return;
+    const result = await this.service.migrateProjects();
+    this.settings.projectsMigrated = true; this.remapKnownProjects(result.moved);
+    if (!result.moved.length && !result.skipped.length) return;
+    const fragment = createFragment(); const notice = fragment.createDiv({ cls: "organized-notice" });
+    notice.createDiv({ cls: "organized-notice-title", text: "Projects moved into the task folder" });
+    notice.createDiv({ cls: "organized-notice-detail", text: `${result.moved.length} project note${result.moved.length === 1 ? "" : "s"} moved to ${this.repo.projectFolder()}${result.skipped.length ? ` · ${result.skipped.length} skipped because the destination exists or the move failed: ${result.skipped.join(", ")}` : ""}.` });
+    if (result.moved.length) {
+      const undo = notice.createEl("button", { text: "Undo", cls: "organized-notice-undo" });
+      undo.addEventListener("click", () => { void this.run(async () => {
+        const back = result.moved.map(m => ({ from: m.to, to: m.from })); const reverted = await this.service.moveProjects(back);
+        this.remapKnownProjects(reverted.moved); new Notice(reverted.skipped.length ? `Some projects could not move back: ${reverted.skipped.join(", ")}` : "Project notes moved back.");
+      }); });
+    }
+    new Notice(fragment, 15000);
+  }
+  private remapKnownProjects(moved: { from: string; to: string }[]): void {
+    const target = new Map(moved.map(m => [m.from, m.to]));
+    this.settings.knownProjects = [...new Set(this.settings.knownProjects.map(p => target.get(p) ?? p))]; this.saveSettings(false);
   }
   /** Remembers project notes so they stay listed after their last task is deleted. */
   rememberProjects(projects: string[]): void {
@@ -230,7 +253,7 @@ export default class Organized extends Plugin {
     else await this.run(() => this.service.marker(context, marker));
   }
   pickProjects(task: Task, context?: Context): void {
-    new ProjectPicker(this.app, this.app.vault.getMarkdownFiles().filter(f => !f.path.startsWith(`${this.settings.taskFolder}/`)).map(f => f.path), task.projects, notes => this.run(async () => { await this.service.projects(task.id, notes); this.rememberProjects(notes); if (context) await this.service.clean(context); })).open();
+    new ProjectPicker(this.app, this.app.vault.getMarkdownFiles().filter(f => !this.repo.isTaskRecord(f.path)).map(f => f.path), task.projects, notes => this.run(async () => { await this.service.projects(task.id, notes); this.rememberProjects(notes); if (context) await this.service.clean(context); }), this.repo.projectFolder()).open();
   }
   async saveModule(id: string, section: NoteSection, text: string): Promise<void> {
     const file = this.repo.file(this.repo.taskPath(id)); if (!file) throw new Error("Task note is missing.");

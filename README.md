@@ -37,7 +37,7 @@ Identity and recurrence comments stay hidden in Live Preview, including the line
 | `[-]` | Reversible cancellation; recurring dates cancel independently |
 | `[*]` | Toggle favorite |
 | `[s]` | Open the Sources section for inline Markdown references (URLs/Obsidian links, optional labels/citations) |
-| `[j]` | Multi-select project/topic notes; create missing selected root notes |
+| `[j]` | Multi-select project/topic notes; missing selected notes are created in `<task folder>/Projects/` |
 | `[r]` | Toggle recurrence in existing/current/future and subsequently created daily notes; clear after success |
 
 Only the markers above act. Every other character, including the old action letters `[i]`, `[I]`, `[?]`, `["]`, `[b]` and `[f]` and the theme glyphs `[d]`, `[p]`, `[k]`, `[l]`, `[S]`, `[c]`, `[w]`, `[u]`, `[D]`, `[P]`, `[M]`, is **formatting only**: it shows its icon and never changes metadata or storage. Use them freely to style a todo without side effects. Things-style glyphs are bundled, so the Things theme is not required.

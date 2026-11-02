@@ -278,4 +278,20 @@ describe("repository and explicit task actions", () => {
     await h.service.daily.ensure('2026-01-04'); expect(h.texts.get('Daily/2026-01-04.md')).toBe(''); expect(Notice.instances.at(-1)?.message).toContain('Templates/Missing.md');
     h.setSettings({ dailyTemplate: '' }); await h.service.daily.ensure('2026-01-05'); expect(h.texts.get('Daily/2026-01-05.md')).toBe('');
   });
+  it('keeps project notes out of task-record scans and moves linked projects into the project folder without overwriting', async () => {
+    const h = harness(); const folder = h.repo.projectFolder(); expect(folder).toBe('Tasks/Projects'); expect(h.repo.isTaskRecord('Tasks/abc.md')).toBe(true); expect(h.repo.isTaskRecord(`${folder}/Plan.md`)).toBe(false); expect(h.repo.isTaskRecord('Plan.md')).toBe(false);
+    const a = await h.repo.create('A'); const b = await h.repo.create('B'); await h.add('Plan.md', `- [ ] A <!--organized:${a.id}-->`); await h.add('Area/Reading.md'); await h.add('Area/Plan.md'); await h.add(`${folder}/Inside.md`, `- [ ] B <!--organized:${b.id}-->`);
+    await h.repo.update(a.id, t => ({ ...t, projects: ['Plan.md', 'Area/Reading.md', 'Gone.md'] })); await h.repo.update(b.id, t => ({ ...t, projects: ['Area/Plan.md', `${folder}/Inside.md`, 'Plan.md'] }));
+    expect((await h.repo.list()).map(t => t.id)).toHaveLength(2); expect((await h.repo.occurrences(b.id)).map(o => o.file.path)).toEqual([`${folder}/Inside.md`]);
+    const unrelated = await h.repo.create('Unrelated'); await h.repo.update(unrelated.id, t => ({ ...t, projects: ['Area/Plan.md'] }));
+    h.setSettings({ knownProjects: ['Area/Reading.md', 'Orphan.md'] });
+    const result = await h.service.migrateProjects();
+    expect(result.moved).toEqual([{ from: 'Plan.md', to: `${folder}/Plan.md` }, { from: 'Area/Reading.md', to: `${folder}/Reading.md` }]); expect(result.skipped).toEqual(['Area/Plan.md']);
+    expect(h.texts.has('Plan.md')).toBe(false); expect(h.texts.get(`${folder}/Plan.md`)).toContain(a.id); expect(h.texts.has('Area/Plan.md')).toBe(true);
+    expect((await h.repo.read(a.id)).projects).toEqual([`${folder}/Plan.md`, `${folder}/Reading.md`, 'Gone.md']); expect((await h.repo.read(b.id)).projects).toEqual(['Area/Plan.md', `${folder}/Inside.md`, `${folder}/Plan.md`]);
+    expect(await h.service.migrateProjects()).toEqual({ moved: [], skipped: ['Area/Plan.md'] });
+    const back = await h.service.moveProjects(result.moved.map(m => ({ from: m.to, to: m.from }))); expect(back.skipped).toEqual([]); expect(h.texts.has('Plan.md')).toBe(true); expect((await h.repo.read(a.id)).projects).toEqual(['Plan.md', 'Area/Reading.md', 'Gone.md']);
+    h.raw.fileManager.renameFile.mockRejectedValueOnce(Error('locked')); expect((await h.service.moveProjects([{ from: 'Plan.md', to: `${folder}/Plan.md` }])).skipped).toEqual(['Plan.md']);
+    await h.service.convertTodos(h.repo.file(`${folder}/Inside.md`)!).catch(() => undefined);
+  });
 });
