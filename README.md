@@ -1,6 +1,74 @@
 # Organized
 
-Markdown-backed tasks with Things-style shortcuts, daily-note scheduling and a calendar/task/projects inspector. No service, telemetry or proprietary task database.
+**Your daily note stays your daily note. Organized gives its todos a memory.**
+
+Many of us run our day from a daily note: a few checkboxes, some notes, done. That works until a todo needs more than a checkbox: it is unfinished and should show up again tomorrow, it matters more than the rest, it belongs to a project, it needs a deadline, a few notes, or a timer. Organized adds exactly that, without moving your work out of Markdown. No service, telemetry or proprietary task database.
+
+## Why use it
+
+- **Unfinished work follows you.** Open today's daily note and yesterday's open todos are already there. Nothing is copied by hand and nothing silently disappears.
+- **A todo can grow when it needs to.** Priority, a scheduled date, a description, sources, notes, a recurrence, projects, tracked time: each one is added only when you ask for it.
+- **It is still your Markdown.** A todo is a normal `- [ ]` line in a normal note. The details live in a plain note file, so search, links, sync and backups work as they always did.
+- **Keyboard first.** Type a letter in the checkbox (`[!]`, `[<]`, `[/]` ...) and the todo does that. No menus required.
+
+## Use as little or as much as you like
+
+Organized does not ask you to adopt a system. Stay at the first level forever, or grow into the next one on the day you need it.
+
+| Level | What you do | What you get |
+|---|---|---|
+| **1. Forwarder** | Write todos in your daily note as usual. Change nothing else. | Unfinished tasks carry over to the next day automatically; the old line is marked as forwarded so history stays honest. |
+| **2. Organised** | Press `[!]` for priority, `[<]` to schedule for a date, `[*]` to favourite. | The daily note sorts by priority and keeps what you are working on at the top; scheduled tasks arrive on their day. |
+| **3. Full workflow** | Add a description, sources and notes, attach projects, repeat tasks, start a timer, turn a todo into a standalone note. | A calendar with the time you really spent, project pages with Open / In progress / Done, recurring routines, and notes that came from todos. |
+
+```mermaid
+flowchart LR
+    A["Write a todo in<br/>today's daily note"] --> B{"Finished<br/>today?"}
+    B -- yes --> C["[x] Done"]
+    B -- no --> D["Tomorrow's daily note<br/>gets it automatically"]
+    D --> B
+    A -. "only when needed" .-> E["Priority / schedule"]
+    A -. "only when needed" .-> F["Description / sources / notes"]
+    A -. "only when needed" .-> G["Projects / recurrence / timer"]
+    F -. "grows into" .-> H["Standalone note"]
+```
+
+## Simple on purpose
+
+The Task view does not show every field a todo can hold. A task shows its title and status first. Everything else sits behind one **Add details** menu, and optional sections such as sources or notes stay hidden until they hold something. The idea is that a todo should cost nothing until you decide it deserves more, so you only ever see what you chose to use. An empty form with twenty fields is how a todo list turns into chores.
+
+## How it fits Obsidian
+
+Obsidian's strength is that your notes are plain files you own. Organized is built to leave that intact.
+
+- **Files over apps.** Every task is a Markdown note (`Tasks/<id>.md`) with standard YAML. Uninstall the plugin and you keep every task, readable in any editor.
+- **Daily notes are the home base.** Organized works with your existing daily-note setup, folder, filename format and template. It does not replace them or hide them behind its own screen.
+- **Links, not silos.** A todo can become a note, belong to project notes, and cite sources, all with ordinary wiki links and properties that Search, Graph, Bases and other plugins can use.
+- **Local and quiet.** No account, no server, no tracking. It runs on desktop and mobile.
+- **Composable.** Organized adds behaviour to the Markdown you already write; it does not ask you to leave it.
+
+```mermaid
+flowchart TB
+    subgraph You["What you write"]
+        D["Daily note<br/>- [ ] todo"]
+    end
+    subgraph Files["Plain files in your vault"]
+        T["Tasks/&lt;id&gt;.md<br/>YAML + notes"]
+        P["Project notes<br/>Open / In progress / Done"]
+        N["Standalone notes"]
+    end
+    subgraph View["Side panel"]
+        C["Calendar"]
+        K["Task"]
+        J["Projects"]
+    end
+    D <--> T
+    T --> P
+    T --> N
+    T --> K
+    D --> C
+    P --> J
+```
 
 ## Try the beta
 
