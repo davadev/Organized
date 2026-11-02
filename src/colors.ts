@@ -3,7 +3,8 @@ export const COLOR = /^#[0-9a-fA-F]{6}$/;
 export function validColor(value: unknown): value is string { return typeof value === "string" && COLOR.test(value); }
 
 const toLinear = (c: number): number => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-const toGamma = (c: number): number => c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055;
+/** Only called with channels already held inside 0..1 at a mid lightness, so the linear toe of the curve never applies. */
+const toGamma = (c: number): number => 1.055 * c ** (1 / 2.4) - 0.055;
 /** A colour as lightness, chroma and hue in OKLCH, where equal lightness and chroma look equally strong whatever the hue. */
 export function oklchOf(color: string): { l: number; c: number; h: number } {
   const [r, g, b] = [1, 3, 5].map(at => toLinear(parseInt(color.slice(at, at + 2), 16) / 255));
