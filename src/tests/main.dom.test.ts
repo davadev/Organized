@@ -24,6 +24,11 @@ function update(before: string, after: string, userEvent: string | null = 'input
   const transaction = startState.update({ changes: { from: 0, to: before.length, insert: after }, annotations: userEvent ? Transaction.userEvent.of(userEvent) : [] });
   return { startState, state: transaction.state, transactions: [transaction], changes: transaction.changes, docChanged: before !== after, selectionSet } as any;
 }
+function replaceAt(before: string, from: number, to: number, insert: string, userEvent: string | null = null) {
+  const startState = EditorState.create({ doc: before });
+  const transaction = startState.update({ changes: { from, to, insert }, annotations: userEvent ? Transaction.userEvent.of(userEvent) : [] });
+  return { startState, state: transaction.state, transactions: [transaction], changes: transaction.changes, docChanged: true, selectionSet: false } as any;
+}
 describe('plugin lifecycle and user-only editor actions', () => {
   it('invalidates projections only for task metadata, today or affected indexed references', async () => {
     const { h, plugin } = await loaded(); h.layout[0](); const task = await plugin.repo.create('Selected'); plugin.selectedTaskId = task.id;
@@ -221,5 +226,23 @@ describe('plugin lifecycle and user-only editor actions', () => {
     h.setActive(second); h.events['file-open'][0](second); expect(render).toHaveBeenCalledTimes(2); expect(plugin.taskSourceEditor()?.file).toBe(second);
     h.clearActive(); h.raw.workspace.getMostRecentLeaf.mockReturnValue({ view: Object.assign(new MarkdownView(), { file: first, editor: { getValue: () => '' } }) } as any);
     plugin.followCursor(); expect(render).toHaveBeenCalledTimes(3); plugin.followCursor(); expect(render).toHaveBeenCalledTimes(3);
+  });
+  it('propagates a checkbox ticked in Live Preview even without a user event or cursor on its line', async () => {
+    const { h, plugin } = await loaded(); const task = await plugin.repo.create('Clean'); const other = await plugin.repo.create('Other');
+    const open = `Intro\n- [ ] Clean <!--organized:${task.id}-->\n- [x] Other <!--organized:${other.id}-->\n- [ ] Plain`; const file: any = await h.add('Daily.md', open);
+    const status = vi.spyOn(plugin.service, 'status').mockResolvedValue(); const trigger = vi.spyOn(plugin, 'trigger').mockResolvedValue();
+    const tick = (text: string, line: number, insert: string, event: string | null) => { const index = text.split('\n').slice(0, line).join('\n').length + (line ? 1 : 0) + text.split('\n')[line].indexOf('[') + 1; return { index, next: text.slice(0, index) + insert + text.slice(index + 1), event }; };
+    const editor = h.setActive(file, open); editor.setCursor({ line: 0, ch: 0 });
+    let step = tick(open, 1, 'x', null); editor.setValue(step.next); plugin.onEditorUpdate(replaceAt(open, step.index, step.index + 1, 'x')); await flush();
+    expect(status).toHaveBeenCalledTimes(1); expect(status).toHaveBeenLastCalledWith(task.id, 'completed', expect.objectContaining({ file }));
+    const ticked = step.next; step = tick(ticked, 1, ' ', 'select.pointer'); editor.setValue(step.next); plugin.onEditorUpdate(replaceAt(ticked, step.index, step.index + 1, ' ', 'select.pointer')); await flush();
+    expect(status).toHaveBeenCalledTimes(2); expect(status).toHaveBeenLastCalledWith(task.id, 'open', expect.anything());
+    step = tick(open, 2, ' ', null); editor.setValue(step.next); plugin.onEditorUpdate(replaceAt(open, step.index, step.index + 1, ' ')); await flush(); expect(status).toHaveBeenLastCalledWith(other.id, 'open', expect.anything());
+    status.mockClear(); const no = (text: string, from: number, to: number, insert: string, event: string | null = null) => { editor.setValue(text.slice(0, from) + insert + text.slice(to)); plugin.onEditorUpdate(replaceAt(text, from, to, insert, event)); };
+    const plainIndex = open.indexOf('[ ] Plain') + 1; no(open, plainIndex, plainIndex + 1, 'x'); await flush();
+    const inProgress = open.indexOf('[ ] Clean') + 1; no(open, inProgress, inProgress + 1, '/'); await flush();
+    no(open, inProgress, inProgress + 1, 'xx'); await flush(); no(open, 0, 0, 'z'); await flush();
+    no(`- [x] Same <!--organized:${task.id}-->`, 3, 4, 'X'); await flush(); expect(status).not.toHaveBeenCalled();
+    editor.setCursor({ line: 1, ch: 3 }); const typed = open.indexOf('[ ] Clean') + 1; no(open, typed, typed + 1, 'x', 'input.type'); await flush(); expect(trigger).toHaveBeenCalledOnce(); expect(status).not.toHaveBeenCalled();
   });
 });
