@@ -88,18 +88,18 @@ try {
       if (tab === 'Favorites') {
         const sections = await page.locator('.organized-section-title').allTextContents();
         if (sections.join(',') !== 'Favorites') throw Error(`Favorites tab lost its section: ${sections.join(',')}`);
-        // Cards are filled with their project colour; the status is shown by the icon alone: done and in progress are green, open is gray.
-        const cards = await page.evaluate(() => { const read = status => { const card = document.querySelector(`.organized-list-card[data-status="${status}"]`); if (!card) return null; const icon = card.querySelector('.organized-list-status'); return { icon: icon ? getComputedStyle(icon).color : null, image: getComputedStyle(card).backgroundImage, project: card.hasAttribute('data-project') }; }; return { open: read('open'), completed: read('completed'), active: read('in_progress') }; });
+        // Cards are filled by status (done and in progress green, in progress stronger; open neutral) and the icons follow.
+        const cards = await page.evaluate(() => { const read = status => { const card = document.querySelector(`.organized-list-card[data-status="${status}"]`); if (!card) return null; const icon = card.querySelector('.organized-list-status'); return { icon: icon ? getComputedStyle(icon).color : null, fill: getComputedStyle(card).backgroundColor }; }; return { open: read('open'), completed: read('completed'), active: read('in_progress') }; });
         if (!cards.open || !cards.completed || !cards.active) throw Error(`Favorites tab is missing status cards: ${JSON.stringify(cards)}`);
         if (cards.completed.icon !== cards.active.icon || cards.open.icon === cards.completed.icon) throw Error(`Done and in-progress icons must share the green and open must differ: ${JSON.stringify(cards)}`);
-        if (![cards.open, cards.completed, cards.active].some(card => card.project && card.image.includes('gradient'))) throw Error(`No card is filled with its project colour: ${JSON.stringify(cards)}`);
+        if (cards.open.fill === cards.completed.fill || cards.open.fill === cards.active.fill || cards.completed.fill === cards.active.fill) throw Error(`Cards are not filled by status: ${JSON.stringify(cards)}`);
       }
       if (tab === 'Projects') {
         const sections = await page.locator('.organized-section-title').allTextContents();
         if (sections.join(',') !== 'Projects,Canceled') throw Error(`Projects tab lost its sections: ${sections.join(',')}`);
         if (await page.locator('.organized-list-card').count() < 2) throw Error('Projects tab did not render task cards');
-        const stripes = await page.evaluate(() => Array.from(document.querySelectorAll('.organized-list-card[data-project] .organized-list-open')).map(el => getComputedStyle(el).borderInlineStartColor));
-        if (!stripes.length || stripes.some(stripe => stripe === 'rgba(0, 0, 0, 0)')) throw Error(`Project cards lost their colour stripe: ${stripes}`);
+        const chips = await page.evaluate(() => Array.from(document.querySelectorAll('.organized-chip[data-project]')).map(chip => ({ color: getComputedStyle(chip).color, plain: getComputedStyle(document.querySelector('.organized-list-title')).color, fill: getComputedStyle(chip).backgroundColor })));
+        if (!chips.length || chips.some(chip => chip.color === chip.plain || chip.fill === 'rgba(0, 0, 0, 0)')) throw Error(`Project labels lost their colour: ${JSON.stringify(chips)}`);
         if (await page.locator('.organized-list-meta .organized-status-dot').count()) throw Error('Task rows still show a status dot next to their tinted card');
         if (await page.locator('.organized-view .setting-item').count()) throw Error('Projects tab exposed a native settings row');
       }

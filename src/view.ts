@@ -1,7 +1,7 @@
 import { Component, ItemView, WorkspaceLeaf, TFile, setIcon } from "obsidian";
 import type { Editor } from "obsidian";
 import { moment } from "./moment";
-import { softTint } from "./colors";
+import { softTint, TEXT_LIGHTNESS } from "./colors";
 import type Organized from "./main";
 import { elapsed, localDate, PRIORITIES, Section, STATUSES, Task } from "./model";
 import { byPriority, report } from "./service";
@@ -105,7 +105,7 @@ export class OrganizedInspectorView extends ItemView {
     return host.createSpan({ cls: "organized-status-dot", attr: { "data-status": this.shownStatus(task), "aria-hidden": "true" } });
   }
   private taskRow(host: HTMLElement, task: Task, action: () => Promise<unknown> | void): HTMLElement {
-    const row = host.createDiv({ cls: "organized-list-card", attr: { "data-status": this.shownStatus(task) } }); this.tint(row, task);
+    const row = host.createDiv({ cls: "organized-list-card", attr: { "data-status": this.shownStatus(task) } }); 
     // A real button cannot contain links; this focusable card keeps both usable.
     const open = row.createDiv({ cls: "organized-list-open", attr: { role: "button", tabindex: "0" } });
     const activate = () => { try { const result = action(); if (result) void result.catch(report); } catch (error) { report(error); } };
@@ -129,7 +129,7 @@ export class OrganizedInspectorView extends ItemView {
     }
     if (task.projects.length) {
       const chips = open.createDiv({ cls: "organized-chips" });
-      for (const project of task.projects.slice(0, 2)) chips.createSpan({ cls: "organized-chip", text: this.projectLabel(project) });
+      for (const project of task.projects.slice(0, 2)) this.projectChip(chips, project);
       if (task.projects.length > 2) chips.createSpan({ cls: "organized-chip", text: `+${task.projects.length - 2}` });
     }
     return row;
@@ -231,6 +231,11 @@ export class OrganizedInspectorView extends ItemView {
       input.addEventListener("change", () => { void this.owner.run(() => this.owner.service.setProjectColor(project, input.value)); });
       if (current) this.button(row, "Clear", () => this.owner.run(() => this.owner.service.setProjectColor(project, null))).addClass("organized-color-clear");
     }
+  }
+  /** The project's name as a small label, in the project's colour when it has one. */
+  private projectChip(host: HTMLElement, project: string): void {
+    const chip = host.createSpan({ cls: "organized-chip", text: this.projectLabel(project) }); const color = this.owner.repo.projectColor(project); if (!color) return;
+    chip.setAttribute("data-project", ""); chip.setCssProps({ "--organized-project-rgb": softTint(color), "--organized-project-text": softTint(color, TEXT_LIGHTNESS.light), "--organized-project-text-dark": softTint(color, TEXT_LIGHTNESS.dark) });
   }
   private projectLabel(project: string): string {
     const folder = `${this.owner.repo.projectFolder()}/`;

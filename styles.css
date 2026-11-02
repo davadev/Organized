@@ -154,19 +154,20 @@
   .organized-view {
     --organized-edge-done: color-mix(in oklab, var(--color-green) 70%, var(--organized-card));
     --organized-card-done: color-mix(in oklab, var(--organized-card), var(--color-green) 13%);
-    --organized-card-active: color-mix(in oklab, var(--organized-card), var(--interactive-accent) 11%);
+    --organized-card-active: color-mix(in oklab, var(--organized-card), var(--color-green) 20%);
   }
   .theme-dark .organized-view {
     --organized-card-done: color-mix(in oklab, var(--organized-card), var(--color-green) 17%);
-    --organized-card-active: color-mix(in oklab, var(--organized-card), var(--interactive-accent) 15%);
+    --organized-card-active: color-mix(in oklab, var(--organized-card), var(--color-green) 26%);
   }
 }
 .organized-task-hero[data-status="completed"] { background: var(--organized-card-done); }
 .organized-task-hero[data-status="in_progress"] { background: var(--organized-card-active); }
-/* The project colour (softened to one lightness and chroma in the view) fills a card faintly and is its left stripe; the status is shown by the icon alone. */
-.organized-view { --organized-wash: .09; --organized-block-wash: .3; }
-.theme-dark .organized-view { --organized-wash: .15; --organized-block-wash: .38; }
-.organized-list-card[data-project] { background: linear-gradient(rgb(var(--organized-project-rgb) / var(--organized-wash)), rgb(var(--organized-project-rgb) / var(--organized-wash))), var(--organized-card); }
+/* Task cards are coloured by status: done and in progress are green (in progress stronger), open stays neutral. The project colour only appears on the project label and in the calendar. */
+.organized-view { --organized-block-wash: .3; }
+.theme-dark .organized-view { --organized-block-wash: .38; }
+.organized-list-card[data-status="completed"] { background: var(--organized-card-done); }
+.organized-list-card[data-status="in_progress"] { background: var(--organized-card-active); }
 .organized-colors { margin-block: 6px; font-size: var(--font-ui-small); }
 .organized-colors summary { color: var(--text-muted); cursor: pointer; }
 .organized-color-row { display: flex; align-items: center; gap: 8px; margin-block: 4px; min-inline-size: 0; }
@@ -176,7 +177,9 @@
 .organized-color-input::-moz-color-swatch { border: 0; border-radius: calc(var(--radius-s, 5px) - 1px); }
 .organized-view .organized-panel button.organized-color-clear { flex: 0 0 auto; block-size: auto; min-block-size: 0; margin: 0; padding: 2px 10px; font-size: var(--font-ui-smaller, 12px); box-shadow: none; }
 .organized-color-name { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.organized-view .organized-panel .organized-list-card[data-project] .organized-list-open { border-inline-start-color: rgb(var(--organized-project-rgb)); }
+.organized-view .organized-panel .organized-list-card[data-status="completed"] .organized-list-open, .organized-view .organized-panel .organized-list-card[data-status="in_progress"] .organized-list-open { border-inline-start-color: var(--organized-edge-done); }
+.organized-chip[data-project] { border-color: rgb(var(--organized-project-rgb) / .55); background: rgb(var(--organized-project-rgb) / .2); color: rgb(var(--organized-project-text)); }
+.theme-dark .organized-chip[data-project] { color: rgb(var(--organized-project-text-dark)); }
 .organized-task-hero[data-status="completed"] { border-inline-start-color: var(--organized-edge-done); }
 .organized-task-hero[data-status="canceled"] { border-inline-start-color: var(--background-modifier-border-hover); }
 .organized-list-card[data-status="completed"] .organized-list-title { color: var(--text-muted); }
