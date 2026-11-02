@@ -106,9 +106,6 @@ export class OrganizedInspectorView extends ItemView {
     return lines.length === 1 ? { file: note, line: lines[0] } : undefined;
   }
   private shownStatus(task: Task): Task["status"] { return task.recurring && task.status === "open" && this.doneToday.has(task.id) ? "completed" : task.status; }
-  private statusDot(host: HTMLElement, task: Task): HTMLElement {
-    return host.createSpan({ cls: "organized-status-dot", attr: { "data-status": this.shownStatus(task), "aria-hidden": "true" } });
-  }
   private taskRow(host: HTMLElement, task: Task, action: () => Promise<unknown> | void): HTMLElement {
     const row = host.createDiv({ cls: "organized-list-card", attr: { "data-status": this.shownStatus(task) } }); 
     // A real button cannot contain links; this focusable card keeps both usable.
@@ -438,10 +435,11 @@ export class OrganizedInspectorView extends ItemView {
     const task = await this.owner.repo.read(id); await this.loadDoneToday();
     if (generation !== this.renderId) return;
     const hero = host.createDiv({ cls: "organized-task-hero", attr: { "data-status": this.shownStatus(task) } });
+    // One row: where the task was opened from, then the way back (or the note overview when opened from the editor).
     const eyebrow = hero.createDiv({ cls: "organized-eyebrow" });
-    this.statusDot(eyebrow, task); eyebrow.createSpan({ text: this.origin === "Editor cursor" ? "From editor" : this.origin === "Calendar" ? "From calendar" : this.origin === "Favorites" ? "From favorites" : "From projects" });
+    eyebrow.createSpan({ text: this.origin === "Editor cursor" ? "From editor" : this.origin === "Calendar" ? "From calendar" : this.origin === "Favorites" ? "From favorites" : "From projects" });
     if (this.origin === "Editor cursor") this.iconButton(eyebrow, "All tasks in this note", "list", () => this.showNoteTasks()).addClass("organized-note-overview");
-    if (this.origin !== "Editor cursor") this.button(hero, this.origin === "Calendar" ? "Back to calendar" : this.origin === "Favorites" ? "Back to favorites" : "Back to projects", () => { this.tab = this.origin === "Calendar" ? "Calendar" : this.origin === "Favorites" ? "Favorites" : "Projects"; return this.render(); }).addClass("organized-back");
+    else this.button(eyebrow, this.origin === "Calendar" ? "Back to calendar" : this.origin === "Favorites" ? "Back to favorites" : "Back to projects", () => { this.tab = this.origin === "Calendar" ? "Calendar" : this.origin === "Favorites" ? "Favorites" : "Projects"; return this.render(); }).addClass("organized-back");
     const header = hero.createDiv({ cls: "organized-task-header" });
     if (this.editingTitle) {
       const input = header.createEl("input", { cls: "organized-title-input", type: "text", attr: { "aria-label": "Task title" } }); input.value = task.title;
@@ -456,7 +454,8 @@ export class OrganizedInspectorView extends ItemView {
     }
     const star = this.iconButton(header, "Favorite", "star", () => this.owner.run(async () => { await this.owner.repo.update(id, t => ({ ...t, starred: !t.starred })); this.owner.refresh(); })); star.setAttribute("aria-pressed", String(task.starred));
     const toolbar = hero.createDiv({ cls: "organized-task-toolbar" });
-    const status = toolbar.createDiv({ cls: "organized-status-field" }); this.statusDot(status, task);
+    const status = toolbar.createDiv({ cls: "organized-status-field" });
+    const shown = this.shownStatus(task); setIcon(status.createSpan({ cls: "organized-status-icon", attr: { "data-status": shown, "aria-hidden": "true" } }), task.recurring && shown === "completed" ? "calendar-check" : STATUS_ICONS[task.status]);
     const statusSelect = this.select(status, "Status", this.shownStatus(task), STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(async () => this.owner.service.status(id, value as Task["status"], this.owner.context?.line.id === id ? this.owner.context : task.recurring ? await this.todayContext(id) : undefined)); });
     if (task.recurring) statusSelect.options[STATUSES.indexOf("completed")].text = "done · today";
     const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Description", "Idea", "Question", "Sources", "Notes"], value => { this.module = value; this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
