@@ -3,12 +3,15 @@ import type { Task } from "./model";
 export interface Block { task: Task; startMin: number; endMin: number; running: boolean; lane: number; lanes: number }
 export const DEFAULT_HOURS: readonly [number, number] = [8, 18];
 
+/** A block is drawn at least this tall (see `.organized-block`), so a shorter run still occupies this much of the grid and must not share a column with the next one. */
+export const MIN_DRAWN_MINUTES = 36;
+const drawnEnd = (block: Block): number => Math.max(block.endMin, block.startMin + MIN_DRAWN_MINUTES);
 function minutesInto(ms: number, start: Date, end: Date): number {
   if (ms <= start.getTime()) return 0;
   if (ms >= end.getTime()) return 1440;
   const at = new Date(ms); return at.getHours() * 60 + at.getMinutes() + at.getSeconds() / 60;
 }
-/** Overlapping blocks share the width of the day: each gets a column and the number of columns in its group. */
+/** Overlapping blocks (as drawn, including the minimum height) share the width of the day: each gets a column and the number of columns in its group. */
 export function assignLanes(blocks: Block[]): Block[] {
   const sorted = [...blocks].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
   let group: Block[] = []; let groupEnd = -1; const laneEnds: number[] = [];
@@ -16,7 +19,7 @@ export function assignLanes(blocks: Block[]): Block[] {
   for (const block of sorted) {
     if (block.startMin >= groupEnd) close();
     let lane = laneEnds.findIndex(end => end <= block.startMin); if (lane < 0) lane = laneEnds.length;
-    laneEnds[lane] = block.endMin; block.lane = lane; group.push(block); groupEnd = Math.max(groupEnd, block.endMin);
+    laneEnds[lane] = drawnEnd(block); block.lane = lane; group.push(block); groupEnd = Math.max(groupEnd, drawnEnd(block));
   }
   close();
   return sorted;
@@ -41,6 +44,6 @@ export function blocksOn(tasks: Task[], date: string, now: number): Block[] {
 /** Whole hours to draw: the usual working day, widened when a block falls outside it. */
 export function hourRange(blocks: Block[], [from, to]: readonly [number, number] = DEFAULT_HOURS): [number, number] {
   const first = blocks.length ? Math.min(from, Math.floor(Math.min(...blocks.map(b => b.startMin)) / 60)) : from;
-  const last = blocks.length ? Math.max(to, Math.ceil(Math.max(...blocks.map(b => b.endMin)) / 60)) : to;
+  const last = blocks.length ? Math.max(to, Math.min(24, Math.ceil(Math.max(...blocks.map(drawnEnd)) / 60))) : to;
   return [first, last];
 }

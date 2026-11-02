@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix the Day view hiding a task that started right after a very short run: a block is drawn at least as tall as its title, so the next task now sits beside it in its own column instead of on top of it. Tasks running at the same time were already shown side by side; the hour range also grows so a short block near the end of the day is not cut off.
 - Fix pressing Enter at the end of a linked todo in the editor carrying the task's hidden ID to the new line: the original task lost its link and the new todo inherited the wrong one. The caret now steps past the hidden ID comments first, so the new line is a clean todo.
 - Editing the text of a linked todo in a note now renames the task once you pause typing (about 0.8 s), so the Task tab, Projects, Day view and every other occurrence show the new title. Previously only renaming from the side panel did that.
 - The task list in the Calendar's Day view can be folded away: tap the **Tasks** heading to collapse or expand it. The choice is remembered, and a long list no longer pushes the time grid off screen.
