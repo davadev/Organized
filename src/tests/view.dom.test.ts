@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { softTint } from '../colors';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Organized from '../main';
 import { OrganizedInspectorView, VIEW_TYPE } from '../view';
@@ -398,15 +399,15 @@ describe('compact calendar and contextual task inspector', () => {
     owner.rememberProjects([blue.path, `${folder}/Plain.md`]);
     view.tab = 'Projects'; await view.render(); await flush();
     for (let n = 0; n < 6; n++) await flush();
-    const blueCard = card(view, 'Blue task'); expect(blueCard.hasAttribute('data-project')).toBe(true); expect(blueCard.style.getPropertyValue('--organized-project-rgb')).toBe('59 130 246'); expect(blueCard.getAttribute('data-status')).toBe('completed'); expect(card(view, 'Gray task').hasAttribute('data-project')).toBe(false);
+    const blueCard = card(view, 'Blue task'); expect(blueCard.hasAttribute('data-project')).toBe(true); expect(blueCard.style.getPropertyValue('--organized-project-rgb')).toBe(softTint('#3b82f6')); expect(blueCard.getAttribute('data-status')).toBe('completed'); expect(card(view, 'Gray task').hasAttribute('data-project')).toBe(false);
     const rows = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-color-row')); expect(rows.map(row => row.querySelector('.organized-color-name')!.textContent)).toEqual(['Blue', 'Plain']);
     const inputs = rows.map(row => row.querySelector<HTMLInputElement>('input[type=color]')!); expect(inputs.map(input => input.value)).toEqual(['#3b82f6', '#808080']); expect(rows[0].querySelector('.organized-color-clear')).toBeTruthy(); expect(rows[1].querySelector('.organized-color-clear')).toBeNull();
     inputs[1].value = '#22c55e'; inputs[1].dispatchEvent(new Event('change')); for (let n = 0; n < 6; n++) await flush(); expect(repo.projectColor(`${folder}/Plain.md`)).toBe('#22c55e');
     (rows[0].querySelector('.organized-color-clear') as HTMLElement).click(); for (let n = 0; n < 6; n++) await flush(); expect(repo.projectColor(blue.path)).toBeNull();
     await repo.update(tinted.id, t => ({ ...t, status: 'completed' })); await service.setProjectColor(blue.path, '#ef4444');
     view.tab = 'Calendar'; view.calendarMode = 'Day'; view.selectedDate = '2026-03-04'; await view.render(); const blocks = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-block'));
-    expect(blocks.map(b => [b.querySelector('.organized-block-title')!.textContent, b.style.getPropertyValue('--organized-project-rgb'), b.getAttribute('data-status')]).sort()).toEqual([['Blue task', '239 68 68', 'completed'], ['Gray task', '34 197 94', 'open']]);
-    view.calendarMode = 'Week'; await view.render(); expect(Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-week-block')).map(b => b.style.getPropertyValue('--organized-project-rgb')).sort()).toEqual(['239 68 68', '34 197 94']);
+    expect(blocks.map(b => [b.querySelector('.organized-block-title')!.textContent, b.style.getPropertyValue('--organized-project-rgb'), b.getAttribute('data-status')]).sort()).toEqual([['Blue task', softTint('#ef4444'), 'completed'], ['Gray task', softTint('#22c55e'), 'open']].sort());
+    view.calendarMode = 'Week'; await view.render(); expect(Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-week-block')).map(b => b.style.getPropertyValue('--organized-project-rgb')).sort()).toEqual([softTint('#ef4444'), softTint('#22c55e')].sort());
     const none = await repo.create('No project'); await repo.update(none.id, t => ({ ...t, work_sessions: [{ start: new Date(2026, 2, 4, 12, 0).toISOString(), end: new Date(2026, 2, 4, 13, 0).toISOString() }] })); view.calendarMode = 'Day'; await view.render(); const plainBlock = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-block')).find(b => b.textContent!.includes('No project')); expect(plainBlock?.hasAttribute('data-project')).toBe(false);
   });
 });
