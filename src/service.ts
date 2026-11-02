@@ -1,9 +1,9 @@
 import { Notice, TFile } from "obsidian";
-import { insertTask, parseTasks, RECURRING_MARKER, removeUnique, replaceTask, sortTasks, TaskLine, taskText } from "./codec";
+import { insertTask, moveTask, parseTasks, PROJECT_SECTIONS, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, Status, Task, WorkSession } from "./model";
 import { seconds } from "./sessions";
-import { PROJECT_FRONTMATTER, Repository, splitNote } from "./repository";
+import { projectTemplate, Repository, splitNote } from "./repository";
 import { parseWorked, retiredLines } from "./retention";
 
 export interface Change { file: TFile; before: string; after: string }
@@ -111,6 +111,7 @@ export class TaskService {
       const old = candidates[0]; await this.edit(old.file, old.text, removeUnique(old.text, id), changes);
     } catch { new Notice("Previous scheduled occurrence is missing, ambiguous or changed. Preserved existing lines; use the references list to repair."); }
   }
+  private isProjectFile(file: TFile): boolean { return this.repo.isProjectNote(file) || file.path.startsWith(`${this.repo.projectFolder()}/`); }
   async status(id: string, status: Status, context?: Context): Promise<void> {
     const task = await this.repo.update(id, t => setStatus(t, status));
     const marker = task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.time_tracking_started_at ? "/" : " ";
@@ -124,6 +125,8 @@ export class TaskService {
         const occurrenceMarker = task.recurring && date ? (status === "completed" ? "x" : status === "canceled" ? "-" : status === "in_progress" ? "/" : " ") : marker;
         after = replaceTask(after, line, { marker: occurrenceMarker });
       }
+      // In a project note the line also moves to the heading for the new status.
+      if (occurrence.tasks.length === 1 && this.isProjectFile(occurrence.file)) after = moveTask(after, id, PROJECT_SECTIONS[task.status]);
       await this.edit(occurrence.file, occurrence.text, after);
     }
     this.changed();
@@ -248,8 +251,10 @@ export class TaskService {
   async projects(id: string, projects: string[]): Promise<void> {
     const task = await this.repo.read(id);
     for (const notePath of projects) {
-      const file = await this.repo.ensure(notePath, PROJECT_FRONTMATTER); await this.repo.markProject(file);
-      await this.insert(file, { ...task, daily_note_section_path: [] }, task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.time_tracking_started_at ? "/" : " ", false);
+      const file = await this.repo.ensure(notePath, projectTemplate()); await this.repo.markProject(file);
+      // A linked task lands under the heading for its status, so the project reads as open / in progress / done.
+      const section = sectionNamed(await this.repo.readText(file), PROJECT_SECTIONS[task.status]);
+      await this.insert(file, { ...task, daily_note_section_path: section }, task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.time_tracking_started_at ? "/" : " ", false);
     }
     for (const removed of task.projects.filter(p => !projects.includes(p))) {
       const file = this.repo.file(removed);

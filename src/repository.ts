@@ -1,7 +1,7 @@
 import { App, Editor, TFile, parseYaml, stringifyYaml } from "obsidian";
 import { validColor } from "./colors";
-import { makeId, newTask, object, path, Task, taskFrom, Settings } from "./model";
-import { parseTasks, TaskLine } from "./codec";
+import { localDate, makeId, newTask, object, path, Task, taskFrom, Settings, validDate } from "./model";
+import { parseTasks, PROJECT_SECTIONS, TaskLine } from "./codec";
 
 export function splitNote(text: string): { frontmatter: Record<string, unknown>; body: string } {
   const match = /^---\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)(?:\r?\n|$)/.exec(text);
@@ -11,7 +11,14 @@ export function splitNote(text: string): { frontmatter: Record<string, unknown>;
 export const PROJECT_KEY = "organized_type";
 /** Optional `#rrggbb` colour of a project note, shown on its tasks in the side panel and the calendar. */
 export const COLOR_KEY = "organized_color";
-export const PROJECT_FRONTMATTER = `---\n${PROJECT_KEY}: project\n---\n\n`;
+/** The day a project started, `YYYY-MM-DD`. Set automatically; an `organized_end` date is reserved for later and not used yet. */
+export const START_KEY = "organized_start";
+/** A start date as stored: `YYYY-MM-DD` text, or a Date when a YAML reader turned the bare date into one. */
+const hasStart = (value: unknown): boolean => validDate(value) || (value instanceof Date && Number.isFinite(value.getTime()));
+/** A new project note: frontmatter marking it, dating its start, and one heading per status that linked tasks move between. */
+export function projectTemplate(today = localDate()): string {
+  return `---\n${PROJECT_KEY}: project\n${START_KEY}: ${today}\n---\n\n## ${PROJECT_SECTIONS.open}\n\n## ${PROJECT_SECTIONS.in_progress}\n\n## ${PROJECT_SECTIONS.completed}\n`;
+}
 export class Repository {
   private tail: Promise<unknown> = Promise.resolve();
   constructor(readonly app: App, readonly settings: () => Settings, readonly activeEditor: () => { file: TFile; editor: Editor } | null) {}
@@ -52,13 +59,15 @@ export class Repository {
   async setProjectColor(file: TFile, color: string | null): Promise<void> {
     if (color !== null && !validColor(color)) throw new Error("Use a colour such as #3b82f6.");
     await this.app.fileManager.processFrontMatter(file, (raw: Record<string, unknown>) => {
-      raw[PROJECT_KEY] = "project"; if (color === null) delete raw[COLOR_KEY]; else raw[COLOR_KEY] = color.toLowerCase();
+      raw[PROJECT_KEY] = "project"; if (!hasStart(raw[START_KEY])) raw[START_KEY] = localDate(); if (color === null) delete raw[COLOR_KEY]; else raw[COLOR_KEY] = color.toLowerCase();
     });
   }
   /** Adds the project marker to a note, keeping every other property; a note that already has it is not written. */
-  async markProject(file: TFile): Promise<boolean> {
-    if (splitNote(await this.readText(file)).frontmatter[PROJECT_KEY] === "project") return false;
-    await this.app.fileManager.processFrontMatter(file, (raw: Record<string, unknown>) => { raw[PROJECT_KEY] = "project"; });
+  /** Makes a note a project note and dates its start (today) unless it already has both; a note that has them is not written. */
+  async markProject(file: TFile, today = localDate()): Promise<boolean> {
+    const properties = splitNote(await this.readText(file)).frontmatter;
+    if (properties[PROJECT_KEY] === "project" && hasStart(properties[START_KEY])) return false;
+    await this.app.fileManager.processFrontMatter(file, (raw: Record<string, unknown>) => { raw[PROJECT_KEY] = "project"; if (!hasStart(raw[START_KEY])) raw[START_KEY] = today; });
     return true;
   }
   async ensure(notePath: string, content = ""): Promise<TFile> {
