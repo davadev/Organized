@@ -97,3 +97,4 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Start a task timer (set In Progress), wait over a minute, stop it, and confirm a block appears in the Calendar tab's Day and Week views; a running timer shows a block ending now.
 - Open Day for a date without a daily note and confirm browsing creates nothing and **Create daily note** works; tap a block or task to open it and use **Back to calendar**.
 - Check Week and Day at phone width, in dark mode and with a large system font.
+- In the Day view, collapse the **Tasks** heading, switch days and restart Obsidian; confirm it stays collapsed until expanded.

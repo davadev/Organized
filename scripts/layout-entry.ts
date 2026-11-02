@@ -23,7 +23,7 @@ const noteTasksFile = { path: 'Daily/Today.md' } as any;
 const noteTasksEditor = { focus() {}, setCursor() {} } as any;
 const app: any = { workspace: { getLeaf: () => ({ openFile: async () => undefined }) } };
 const owner: any = {
-  app, selectedTaskId: task.id, context: null, settings: { ...DEFAULT_SETTINGS, displayProperties: [] }, revision: 0, rememberProjects: () => undefined,
+  app, selectedTaskId: task.id, context: null, settings: { ...DEFAULT_SETTINGS, displayProperties: [] }, revision: 0, rememberProjects: () => undefined, setDayTasksCollapsed(value: boolean) { owner.settings.dayTasksCollapsed = value; },
   saveSettings() {}, onEditorUpdate() {}, deleteTask: async () => undefined,
   assertWritable() {}, run: async (fn: () => unknown) => fn(), contextFor: () => null,
   pickProjects() {}, saveModule: async () => undefined, refresh() {},

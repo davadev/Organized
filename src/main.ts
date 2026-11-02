@@ -90,6 +90,8 @@ export default class Organized extends Plugin {
       this.assertWritable(); await this.saveData({ ...this.settingsRaw, schemaVersion: 1, writerVersion: this.manifest.version, settings: { ...object(this.settingsRaw.settings), ...this.settings } }); if (refresh) this.refresh();
     }).catch(report);
   }
+  /** Whether the Day view's task list is folded away; kept so a long list stays out of the way. */
+  setDayTasksCollapsed(collapsed: boolean): void { this.settings.dayTasksCollapsed = collapsed; this.saveSettings(false); }
   /** Collapsed task-tab headings persist until the user expands them again. */
   setHeadingCollapsed(notePath: string, key: string, collapsed: boolean): void {
     const keys = (this.settings.collapsedHeadings[notePath] ?? []).filter(k => k !== key); if (collapsed) keys.push(key);

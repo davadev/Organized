@@ -350,4 +350,16 @@ describe('compact calendar and contextual task inspector', () => {
     const staleDay = view.render(); view.calendarMode = 'Month'; await view.render(); release([]); await staleDay; expect(view.contentEl.querySelector('.organized-day-grid')).toBeNull(); expect(view.contentEl.querySelector('.organized-calendar')).toBeTruthy();
     list.mockImplementationOnce(() => new Promise(resolve => { release = resolve; })); view.calendarMode = 'Week'; const staleWeek = view.render(); view.calendarMode = 'Month'; await view.render(); release([]); await staleWeek; expect(view.contentEl.querySelector('.organized-week')).toBeNull();
   });
+  it('folds the day task list away, remembers it, and still offers to create a missing note', async () => {
+    const { owner, view, repo, add, service } = await fixture(); const task = await repo.create('Linked');
+    await add(service.daily.path('2026-03-04'), `- [ ] Linked <!--organized:${task.id}-->\n- [ ] Plain\n- [x] Done`); view.calendarMode = 'Day'; view.selectedDate = '2026-03-04'; await view.render();
+    const head = () => view.contentEl.querySelector<HTMLElement>('.organized-section-fold')!; const rows = () => view.contentEl.querySelectorAll('.organized-day-task').length;
+    expect(rows()).toBe(3); expect(head().getAttribute('aria-expanded')).toBe('true'); expect(head().querySelector('.organized-count')!.textContent).toBe('3'); expect(owner.settings.dayTasksCollapsed).toBe(false);
+    head().click(); await flush(); expect(owner.settings.dayTasksCollapsed).toBe(true); expect(rows()).toBe(0); expect(head().getAttribute('aria-expanded')).toBe('false'); expect(head().querySelector('.organized-count')!.textContent).toBe('3');
+    await view.render(); expect(rows()).toBe(0); expect(view.contentEl.querySelector('.organized-day-grid') === null).toBe(true);
+    await add(service.daily.path('2026-03-05'), ''); view.selectedDate = '2026-03-05'; await view.render(); expect(view.contentEl.textContent).not.toContain("No tasks in this day's note.");
+    view.selectedDate = '2026-03-06'; await view.render(); expect(view.contentEl.textContent).toContain('There is no daily note for this day yet.'); expect(button(view.contentEl, 'Create daily note')).toBeTruthy();
+    head().click(); await flush(); expect(owner.settings.dayTasksCollapsed).toBe(false); view.selectedDate = '2026-03-04'; await view.render(); expect(rows()).toBe(3);
+    view.selectedDate = '2026-03-05'; await view.render(); expect(view.contentEl.textContent).toContain("No tasks in this day's note.");
+  });
 });

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The task list in the Calendar's Day view can be folded away: tap the **Tasks** heading to collapse or expand it. The choice is remembered, and a long list no longer pushes the time grid off screen.
 - The Calendar tab has **Month / Week / Day** views. **Day** lists that day's tasks on top (tinted by status) and draws the time each task was In Progress on an hour grid; **Week** shows seven day rows with done/total task counts and a thin timeline of tracked time. Tap a block or task to open it (a Back to calendar button returns), tap a week row to open that day. Browsing never creates a daily note; a missing one offers **Create daily note**.
 - Tasks now record each timer run of a minute or more as a work session (`work_sessions` in the task's frontmatter, newest 500 kept) when you stop it, complete, cancel or reopen the task. Time blocks therefore appear only for time tracked after updating this version; a timer that is still running is drawn live up to now.
 - The side panel's Calendar, Task and Projects tabs are now square icon buttons (calendar, checklist, folder) aligned to the right, with the names kept as tooltips and screen-reader labels. This frees room for more tabs later.
