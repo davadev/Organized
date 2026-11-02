@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- You can now select and copy text in the side panel: task titles, descriptions, notes, sources and list rows. Obsidian disables text selection in plugin views; read-only content opts back in, while buttons and controls stay unselectable.
+
 - Dependency updates: js-yaml 5.5.0, knip 6.42 and the upload-artifact action 7.0.2.
 
 - Dependency updates: vitest and coverage 5.0.5, happy-dom, @lezer/markdown, moment, playwright 1.64.1, stylelint, js-yaml 5 and the setup-node and upload-artifact actions. The `obsidian` typings stay on 1.13.1 because 1.14 needs newer CodeMirror packages than the app bundles.

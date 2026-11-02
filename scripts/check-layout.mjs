@@ -47,6 +47,7 @@ try {
         const cards = await page.locator('.organized-card-title').allTextContents();
         if (cards[0] !== 'Description' || !cards.includes('Sources') || await page.locator('.organized-view .setting-item').count()) throw Error(`Task inspector lost its description-first cards: ${cards.join(',')}`);
         if (!(await page.locator('.organized-task-hero .organized-task-title').count())) throw Error('Task inspector is missing its titled hero');
+        const selectable = await page.evaluate(() => [...document.querySelectorAll('.organized-task-title, .organized-task-notes')].map(el => getComputedStyle(el).userSelect)); if (!selectable.length || selectable.some(v => v !== 'text')) throw Error(`${engine}: task title and notes must stay selectable, got ${selectable}`);
         if (!(await page.locator('.organized-task-actions .organized-danger').count())) throw Error('Task inspector is missing its delete action');
         if (await page.locator('.organized-task-details').count() !== 1) throw Error('Task properties are fragmented instead of grouped into one details surface');
       }
