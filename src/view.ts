@@ -3,7 +3,7 @@ import type { Editor } from "obsidian";
 import { moment } from "./moment";
 import { rgbOf, softTint } from "./colors";
 import type Organized from "./main";
-import { elapsed, localDate, PRIORITIES, Section, STATUSES, Task, WorkSession } from "./model";
+import { elapsed, localDate, PRIORITIES, Section, STATUS_ICONS, STATUSES, Task, WorkSession } from "./model";
 import { byPriority, report } from "./service";
 import { DatePicker, SessionModal, TaskPicker } from "./modals";
 import { lengthOf, lengthOfSeconds, seconds } from "./sessions";
@@ -21,7 +21,6 @@ const pad = (value: number): string => String(value).padStart(2, "0");
 const clock = (minutes: number): string => `${pad(Math.floor(minutes / 60) % 24)}:${pad(Math.floor(minutes % 60))}`;
 /** Rows drawn before a long list asks to be expanded. */
 const LIST_LIMIT = 50;
-const STATUS_ICONS: Record<Task["status"], string> = { open: "circle", in_progress: "play", completed: "check", canceled: "x" };
 export class OrganizedInspectorView extends ItemView {
   tab: Tab = "Calendar";
   calendarMode: CalendarMode = "Month";

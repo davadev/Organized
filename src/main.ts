@@ -6,13 +6,15 @@ import { DEFAULT_SETTINGS, elapsed, localDate, object, Settings, Task } from "./
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
 import { Context, report, TaskService } from "./service";
-import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, PriorityPicker, ProjectPicker, TaskPicker } from "./modals";
+import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, TaskPicker } from "./modals";
 import { OrganizedInspectorView, VIEW_TYPE } from "./view";
 import { OrganizedSettingsTab } from "./settings";
 import { editorExtension, reading, refreshEditor } from "./render";
 import { crashStatePath, decideOnLoad, DEFAULT_CRASH_STATE, readCrashState, writeCrashState } from "./crashGuard";
 import { DataSafety } from "./safety";
 
+/** The plugin counts as started with the app when it loads within this many milliseconds of the page starting. */
+const ONBOARDING_START_WINDOW_MS = 45_000;
 export default class Organized extends Plugin {
   settings: Settings = { ...DEFAULT_SETTINGS };
   repo!: Repository;
@@ -51,6 +53,7 @@ export default class Organized extends Plugin {
       this.addCommand({ id: "attach-task", name: "Attach/create task (or repair missing link)", editorCallback: (editor, view) => { if (view.file) void this.pickTask(editor, view.file).catch(report); } });
       this.addCommand({ id: "duplicate-task", name: "Duplicate as new task", editorCallback: (editor, view) => { if (view.file) void this.pickTask(editor, view.file, true).catch(report); } });
       this.addCommand({ id: "convert-todos", name: "Convert unchecked todos to tasks", editorCallback: (_editor, view) => { if (view.file) void this.convertTodos(view.file).catch(report); } });
+      this.addCommand({ id: "show-onboarding", name: "Show onboarding card", callback: () => { this.showOnboarding(false); } });
       this.addCommand({ id: "undo", name: "Undo last recurrence/auto-forward batch", callback: () => { void this.service.undo().catch(report); } });
       this.addCommand({ id: "restore-settings", name: "Restore compatible settings backup (restart required)", callback: () => { void this.confirm("Queue the newest compatible settings backup for restoration on next restart? Task Markdown will not change.").then(yes => yes ? this.safety.queueCompatibleRestore() : undefined).catch(report); } });
       this.registerEditorExtension(editorExtension(this));
@@ -72,6 +75,7 @@ export default class Organized extends Plugin {
         // The colour is read from the metadata cache, which updates a moment after the note is written.
         this.registerEvent(this.app.metadataCache.on("changed", file => { if (this.repo.isProjectNote(file)) this.refresh(); }));
         this.registerEvent(this.app.vault.on("delete", file => { this.service.forget(file.path); this.refresh(); }));
+        this.maybeShowOnboarding();
         void this.run(async () => { await this.migrateProjects(); await this.markProjectNotes(); });
         this.registerEvent(this.app.workspace.on("file-open", file => { this.followCursor(); if (file) void this.run(() => this.service.reconcile(file)); }));
       });
@@ -97,6 +101,16 @@ export default class Organized extends Plugin {
     }).catch(report);
   }
   /** Whether the Day view's task list is folded away; kept so a long list stays out of the way. */
+  /** Plugins load within seconds of the page starting; a later load is an update applied while the person works, which must not be interrupted. */
+  startedRecently = (): boolean => performance.now() < ONBOARDING_START_WINDOW_MS;
+  /** Open the onboarding card once, after a real start, when writes are allowed. Nothing is written until it closes. */
+  maybeShowOnboarding(): void {
+    if (!this.loaded || this.settings.onboardingSeen || !this.safety.writable || !this.startedRecently()) return;
+    this.showOnboarding(true);
+  }
+  showOnboarding(remember: boolean): void {
+    new OnboardingModal(this.app, () => { if (remember && !this.settings.onboardingSeen) { this.settings.onboardingSeen = true; this.saveSettings(false); } }).open();
+  }
   setDayTasksCollapsed(collapsed: boolean): void { this.settings.dayTasksCollapsed = collapsed; this.saveSettings(false); }
   /** Whether the Task tab's note list leaves out done tasks. */
   setHideDoneTasks(hide: boolean): void { this.settings.hideDoneTasks = hide; this.saveSettings(false); }

@@ -165,19 +165,20 @@
 .organized-count { min-inline-size: 20px; padding: 1px 6px; border: 1px solid var(--background-modifier-border); border-radius: 999px; background: var(--background-secondary); color: var(--text-muted); font-size: 11px; font-weight: 500; text-align: center; font-variant-numeric: tabular-nums; }
 .organized-list-card { border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m, 8px); background: var(--organized-card); overflow: hidden; }
 /* Task status colours. Open stays neutral so unfinished work stands out by contrast; done is a faint green wash with a green edge, in progress takes the accent of the theme. Plain colours first, for a WebView that cannot mix colours. */
-.organized-view {
+.organized-view, .organized-welcome-figure {
+  --organized-card: var(--background-secondary);
   --organized-edge-done: var(--color-green);
   --organized-edge-active: var(--interactive-accent);
   --organized-card-done: var(--organized-card);
   --organized-card-active: var(--organized-card);
 }
 @supports (color: color-mix(in oklab, red, blue)) {
-  .organized-view {
+  .organized-view, .organized-welcome-figure {
     --organized-edge-done: color-mix(in oklab, var(--color-green) 70%, var(--organized-card));
     --organized-card-done: color-mix(in oklab, var(--organized-card), var(--color-green) 9%);
     --organized-card-active: color-mix(in oklab, var(--organized-card), var(--color-green) 17%);
   }
-  .theme-dark .organized-view {
+  .theme-dark .organized-view, .theme-dark .organized-welcome-figure {
     --organized-card-done: color-mix(in oklab, var(--organized-card), var(--color-green) 13%);
     --organized-card-active: color-mix(in oklab, var(--organized-card), var(--color-green) 24%);
   }
@@ -298,6 +299,39 @@ body.is-mobile .modal-container.organized-modal-host { overflow-y: auto; }
 .organized-task-line .organized-checkbox::after { display: none; }
 .organized-glyph[data-marker=">"], .organized-task-line .organized-checkbox[data-organized-marker=">"] { transform: rotate(90deg); }
 
+/* Onboarding card: figures are drawn from the panel's own elements; decoration only. */
+.organized-welcome-progress { display: flex; gap: 6px; margin-block-end: 10px; }
+.organized-welcome-dot { inline-size: 8px; block-size: 8px; border-radius: 999px; background: var(--background-modifier-border); }
+.organized-welcome-dot[aria-current="step"] { background: var(--interactive-accent); }
+.organized-modal-window .organized-onboarding h3.organized-welcome-title { margin: 0 0 6px; font-size: 16px; font-weight: 600; line-height: 1.35; }
+.organized-modal-window .organized-onboarding .organized-welcome-text { color: var(--text-muted); line-height: 1.5; overflow-wrap: anywhere; }
+.organized-welcome-figure { margin-block: 4px 0; padding: 10px; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m, 8px); background: var(--background-primary); overflow: hidden; min-inline-size: 0; pointer-events: none; user-select: none; -webkit-user-select: none; }
+.organized-welcome-figure .organized-welcome-fig-note { display: flex; flex-direction: column; gap: 6px; flex: 1 1 0; min-inline-size: 0; }
+.organized-welcome-fig-line { display: flex; align-items: center; gap: 8px; min-inline-size: 0; color: var(--text-normal); font-size: var(--font-ui-small, 13px); overflow-wrap: anywhere; }
+.organized-welcome-fig-line.is-forwarded { color: var(--text-faint); }
+.organized-welcome-fig-box { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; inline-size: 16px; block-size: 16px; border: 1.5px solid var(--text-faint); border-radius: 4px; color: var(--text-muted); font-size: 10px; font-weight: 600; line-height: 1; }
+.organized-welcome-fig-box[data-marker="x"] { border-color: var(--color-green, #2f9e44); background: var(--color-green, #2f9e44); color: var(--text-on-accent, #fff); }
+.organized-welcome-fig-box svg { inline-size: 11px; block-size: 11px; }
+.organized-welcome-fig-days { display: flex; align-items: center; gap: 10px; }
+.organized-welcome-fig-arrow { display: inline-flex; flex: 0 0 auto; color: var(--text-muted); }
+.organized-welcome-fig-arrow svg { inline-size: 18px; block-size: 18px; }
+.organized-welcome-fig-caption { color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.organized-welcome-figure .organized-list-open { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-inline-start: 3px solid var(--organized-edge-done); }
+.organized-welcome-figure .organized-list-priority.priority-high { color: var(--color-red, #d64545); }
+.organized-welcome-figure .organized-list-star { display: inline-flex; color: var(--interactive-accent); }
+.organized-welcome-figure .organized-list-star svg { inline-size: 12px; block-size: 12px; }
+.organized-welcome-fig-add { margin-block-start: 8px; padding: 8px 10px; border: 1px dashed var(--background-modifier-border-hover, var(--background-modifier-border)); border-radius: var(--radius-s, 5px); color: var(--text-muted); font-size: var(--font-ui-small, 13px); }
+.organized-welcome-fig-keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 8px 12px; }
+.organized-welcome-fig-key { display: flex; align-items: center; gap: 8px; min-inline-size: 0; color: var(--text-normal); font-size: var(--font-ui-small, 13px); }
+.organized-welcome-fig-cap { flex: 0 0 auto; min-inline-size: 2.4rem; padding: 2px 6px; border: 1px solid var(--background-modifier-border); border-block-end-width: 2px; border-radius: var(--radius-s, 5px); background: var(--background-secondary); color: var(--text-normal); font-family: var(--font-monospace, monospace); font-size: 12px; text-align: center; }
+.organized-welcome-fig-day { --organized-hour-size: calc(var(--font-ui-small, 13px) * 2.6); position: relative; margin-inline-start: 2.8rem; margin-block: 4px; block-size: calc(4 * var(--organized-hour-size)); }
+.organized-welcome-fig-hour { position: absolute; inset-inline-start: 0; inline-size: 100%; inset-block-start: calc(var(--organized-at, 0) * 1%); border-block-start: 1px solid var(--background-modifier-border); }
+.organized-welcome-fig-hour-label { position: absolute; inset-inline-end: 100%; inset-block-start: 0; padding-inline-end: 8px; transform: translateY(-50%); color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.organized-welcome-fig-block { position: absolute; display: flex; align-items: flex-start; overflow: hidden; padding: 2px 6px; border: 1px solid var(--background-modifier-border); border-inline-start: 3px solid var(--interactive-accent); border-radius: var(--radius-s, 5px); background: var(--organized-card-active); color: var(--text-normal); font-size: 11px; font-weight: 600;
+  inset-block-start: calc(var(--organized-top, 0) * 1%); block-size: calc(var(--organized-height, 0) * 1%);
+  inset-inline-start: calc(var(--organized-lane, 0) / var(--organized-lanes, 1) * 100%); inline-size: calc(100% / var(--organized-lanes, 1) - 2px); }
+.organized-welcome-fig-block[data-status="completed"] { border-inline-start-color: var(--organized-edge-done); background: var(--organized-card-done); color: var(--text-muted); }
+.organized-welcome-fig-block-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Bundled Things/Minimal checkbox artwork.
 # Third-party notices
 

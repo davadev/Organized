@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS, newTask } from '../src/model';
 import { editorExtension } from '../src/render';
 import { Setting, editorLivePreviewField } from '../src/tests/__mocks__/obsidian';
 import { OrganizedSettingsTab } from '../src/settings';
-import { DatePicker, NoteConversionModal, SessionModal } from '../src/modals';
+import { DatePicker, NoteConversionModal, OnboardingModal, SessionModal } from '../src/modals';
 import { parseTasks } from '../src/codec';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
@@ -34,7 +34,7 @@ const owner: any = {
 const view = new OrganizedInspectorView({ app } as any, owner);
 const root = document.querySelector('#app')!; root.appendChild(view.contentEl);
 let editor: EditorView | null = null;
-let modal: DatePicker | SessionModal | NoteConversionModal | null = null;
+let modal: DatePicker | SessionModal | NoteConversionModal | OnboardingModal | null = null;
 (window as any).scene = async (tab: string) => {
   editor?.destroy(); editor = null; modal?.close(); modal = null; root.replaceChildren();
   if (tab === 'Settings' || tab === 'LegacySettings') {
@@ -60,6 +60,10 @@ let modal: DatePicker | SessionModal | NoteConversionModal | null = null;
   } else if (tab === 'NoteModal') {
     modal = new NoteConversionModal(app, { title: 'A task title that stays readable at phone widths', folders: ['Notes', 'Ideas'], folder: 'Notes', templates: ['Templates/Idea note.md'], exists: path => path === 'Notes/A task title that stays readable at phone widths.md', convert: async () => undefined });
     modal.open();
+  } else if (tab.startsWith('Onboarding')) {
+    // OnboardingN shows step N (1-based): the longest step text and every figure are checked, not just the first page.
+    const card = new OnboardingModal(app, () => undefined); modal = card; card.open();
+    (card as any).index = Number(tab.slice('Onboarding'.length)) - 1; (card as any).draw();
   } else if (tab === 'NoteTasks') {
     owner.selectedTaskId = null; view.module = ''; view.editingTitle = false; view.tab = 'Task';
     root.appendChild(view.contentEl); await view.render();

@@ -5,7 +5,7 @@ import Organized from "../main";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
 import { harness } from "./harness";
 import { MarkdownView, Modal, Notice, TFolder } from "./__mocks__/obsidian";
-import { ConfirmModal, DatePicker, KEEP_AS_TODO, NoteConversionModal, PriorityPicker, ProjectPicker, TaskPicker } from "../modals";
+import { ConfirmModal, DatePicker, KEEP_AS_TODO, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, TaskPicker } from "../modals";
 import { parseTasks } from "../codec";
 import { OrganizedInspectorView, VIEW_TYPE } from "../view";
 import { localDate } from '../model';
@@ -52,7 +52,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
   });
   it('registers capabilities only, defers vault-create handling and cleans durable crash state', async () => {
     const { h, plugin, stub } = await loaded();
-    expect(stub.commands).toHaveLength(6); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
+    expect(stub.commands).toHaveLength(7); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
     const factory = stub.views.get(VIEW_TYPE); expect(factory({ app: h.app })).toBeInstanceOf(OrganizedInspectorView);
     h.layout[0](); expect(h.events.create).toHaveLength(1);
     const created = vi.spyOn(plugin.service, 'onDailyCreated').mockResolvedValue(); const index = vi.spyOn(plugin.service, 'index').mockResolvedValue(); const reconcile = vi.spyOn(plugin.service, 'reconcile').mockResolvedValue(); const refresh = vi.spyOn(plugin, 'refresh').mockImplementation(() => undefined);
@@ -318,5 +318,30 @@ describe('lifecycle and picker races', () => {
     expect(convert).toHaveBeenCalledWith(task.id, { folder: 'Ideas', tags: [], template: null, clash: 'new' }, expect.objectContaining({ file: daily })); expect(h.texts.get('Ideas/Idea todo.md')).toBe(''); expect(h.texts.get(daily.path)).toBe('- [[Ideas/Idea todo]]'); expect(plugin.selectedTaskId).toBeNull(); expect(plugin.context).toBeNull(); expect(plugin.settings.noteFolder).toBe('Ideas');
     const timed = await plugin.repo.create('Timed todo'); await plugin.repo.update(timed.id, t => ({ ...t, work_sessions: [{ start: '2026-03-04T09:00:00.000Z', end: '2026-03-04T09:42:00.000Z' }], time_tracked_seconds: 2520 })); plugin.convertToNote(await plugin.repo.read(timed.id)); expect((Modal.instances.at(-1) as any).contentEl.textContent).toContain('42 min of tracked time'); (Modal.instances.at(-1) as any).close();
     const other = await plugin.repo.create('Panel task'); plugin.selectedTaskId = 'someone-else'; const fake: any = { module: 'x', editingModule: 'y', editingTitle: true, render: async () => undefined }; vi.spyOn(plugin, 'eachView').mockImplementation(cb => cb(fake)); plugin.convertToNote(other); const panel = Modal.instances.at(-1) as unknown as NoteConversionModal; Array.from(panel.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Create note')!.click(); await flush(); await vi.advanceTimersByTimeAsync(0); await flush(); expect(plugin.selectedTaskId).toBe('someone-else'); expect([fake.module, fake.editingModule, fake.editingTitle]).toEqual(['', '', false]); expect(h.texts.has('Ideas/Panel task.md')).toBe(true);
+  });
+});
+describe('onboarding card at startup', () => {
+  const cards = () => Modal.instances.filter(m => m instanceof OnboardingModal) as OnboardingModal[];
+  it('opens once after layout-ready, writes nothing until it closes, then never again', async () => {
+    Modal.instances.length = 0; const { h, plugin, stub } = await loaded(); const before = JSON.stringify(stub.settingsRaw);
+    expect(cards()).toHaveLength(0); h.layout[0](); expect(cards()).toHaveLength(1); await flush();
+    expect(plugin.settings.onboardingSeen).toBe(false); expect(JSON.stringify(stub.settingsRaw)).toBe(before);
+    cards()[0].close(); await flush(); expect(plugin.settings.onboardingSeen).toBe(true);
+    const saved = (await plugin.loadData()).settings; expect(saved.onboardingSeen).toBe(true);
+    const second = await loaded(); (second.plugin as any).settings.onboardingSeen = true; second.h.layout[0](); expect(cards()).toHaveLength(1);
+  });
+  it('stays quiet when the plugin loaded late, writes are paused or the card was already seen', async () => {
+    Modal.instances.length = 0;
+    const late = await loaded(); late.stub.startedRecently = () => false; late.h.layout[0](); expect(cards()).toHaveLength(0);
+    const paused = await loaded(); paused.stub.safety = { writable: false }; paused.h.layout[0](); expect(cards()).toHaveLength(0);
+    const seen = await loaded(); seen.plugin.settings.onboardingSeen = true; seen.h.layout[0](); expect(cards()).toHaveLength(0);
+    const real = await loaded(); expect(real.plugin.startedRecently()).toBe(true);
+    vi.spyOn(performance, 'now').mockReturnValue(60_000); expect(real.plugin.startedRecently()).toBe(false); vi.restoreAllMocks();
+  });
+  it('the command and the Settings button reopen it without changing the flag', async () => {
+    Modal.instances.length = 0; const { plugin, stub } = await loaded(); plugin.settings.onboardingSeen = true;
+    stub.commands.find((c: any) => c.id === 'show-onboarding').callback(); expect(cards()).toHaveLength(1); cards()[0].close(); await flush();
+    expect(plugin.settings.onboardingSeen).toBe(true);
+    plugin.settings.onboardingSeen = false; stub.commands.find((c: any) => c.id === 'show-onboarding').callback(); cards()[1].close(); await flush(); expect(plugin.settings.onboardingSeen).toBe(false);
   });
 });

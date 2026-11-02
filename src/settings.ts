@@ -92,6 +92,9 @@ export class OrganizedSettingsTab extends PluginSettingTab {
           this.owner.settings.displayProperties = value ? [...this.owner.settings.displayProperties, property] : this.owner.settings.displayProperties.filter(p => p !== property); this.owner.saveSettings();
         }));
       })) },
+      { type: "group", heading: "Help", items: [
+        row("Onboarding card", "A short tour of the idea behind Organized. It also appears once after you first start the plugin.", setting => { setting.addButton(b => b.setButtonText("Show").onClick(() => this.owner.showOnboarding(false))); }),
+      ] },
     ];
   }
 }

@@ -78,6 +78,10 @@ flowchart TB
     P --> J
 ```
 
+## First run
+
+The first time Organized starts it shows a short **onboarding card**: six steps with small illustrations about the idea behind the plugin. Skip it whenever you like; it appears once. Reopen it with the command **Organized: Show onboarding card** or the **Onboarding card** button in **Settings → Organized → Help**.
+
 ## Try the beta
 
 Use a **test vault**. In BRAT, add **`davadev/Organized`** and select the beta release. Alternatively download `main.js`, `manifest.json`, `styles.css` from the same GitHub release into `<test vault>/.obsidian/plugins/organized/`, then restart and enable Organized.
