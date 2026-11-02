@@ -8,7 +8,7 @@ import { installObsidianDom } from './__mocks__/obsidianDom';
 import { Notice, Modal } from './__mocks__/obsidian';
 import { localDate } from '../model';
 import { moment } from '../moment';
-import { DatePicker, TaskPicker } from '../modals';
+import { DatePicker, SessionModal, TaskPicker } from '../modals';
 import { parseTasks } from '../codec';
 
 installObsidianDom();
@@ -327,7 +327,7 @@ describe('compact calendar and contextual task inspector', () => {
     expect(blocks[0].getAttribute('aria-label')).toBe('Night shift, 00:00–06:30'); expect(blocks[1].getAttribute('aria-label')).toBe('Write plan, 09:00–10:30'); expect(blocks[3].getAttribute('aria-label')).toBe('Review plan, 15:00–15:30, running'); expect(blocks[2].querySelector('.organized-block-time')).toBeNull(); expect(blocks[1].querySelector('.organized-block-time')!.textContent).toBe('09:00–10:30');
     expect(blocks[1].getAttribute('data-status')).toBe('completed'); expect([blocks[1], blocks[2]].map(block => block.style.getPropertyValue('--organized-lanes'))).toEqual(['2', '2']);
     const labels = Array.from(view.contentEl.querySelectorAll('.organized-hour-label')).map(l => l.textContent); expect(labels[0]).toBe('00:00'); expect(labels.at(-1)).toBe('18:00'); expect(view.contentEl.querySelector('.organized-now-line')).toBeTruthy();
-    blocks[1].click(); await flush(); expect(owner.selectedTaskId).toBe(a.id); expect(view.tab).toBe('Task'); expect(view.origin).toBe('Calendar'); expect(view.contentEl.textContent).toContain('From calendar');
+    blocks[1].click(); await flush(); const sessionModal = Modal.instances.at(-1) as unknown as SessionModal; expect(sessionModal.titleEl.textContent).toBe('Edit time worked'); Array.from(sessionModal.contentEl.querySelectorAll<HTMLButtonElement>('button')).find(b => b.textContent === 'Open task')!.click(); await flush(); expect(owner.selectedTaskId).toBe(a.id); expect(view.tab).toBe('Task'); expect(view.origin).toBe('Calendar'); expect(view.contentEl.textContent).toContain('From calendar');
     button(view.contentEl, 'Back to calendar').click(); await flush(); expect(view.tab).toBe('Calendar'); expect(view.contentEl.querySelector('.organized-day-grid')).toBeTruthy();
     view.contentEl.querySelectorAll<HTMLElement>('.organized-day-task .organized-list-open')[0].click(); await flush(); expect(owner.selectedTaskId).toBe(a.id); view.origin = 'Projects / favorites'; await view.render(); button(view.contentEl, 'Back to projects').click(); await flush(); expect(view.tab).toBe('Projects');
   });
@@ -436,5 +436,25 @@ describe('compact calendar and contextual task inspector', () => {
     host.scrollTop = 120; await view.render(); expect(host.scrollTop).toBe(120);
     owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); expect(host.scrollTop).toBe(0); host.scrollTop = 90; await view.render(); expect(host.scrollTop).toBe(90);
     const other = await repo.create('Another'); owner.selectedTaskId = other.id; await view.render(); expect(host.scrollTop).toBe(0);
+  });
+  it('adds, edits and deletes time worked from the Day view and the Task tab', async () => {
+    const { owner, view, repo } = await fixture(); vi.setSystemTime(new Date(2026, 2, 4, 15, 0, 0)); const task = await repo.create('Deep work'); const other = await repo.create('Canceled work');
+    await repo.update(other.id, t => ({ ...t, status: 'canceled' })); const first = { start: new Date(2026, 2, 4, 9, 0).toISOString(), end: new Date(2026, 2, 4, 10, 0).toISOString() };
+    await repo.update(task.id, t => ({ ...t, work_sessions: [first], time_tracked_seconds: 3600 }));
+    view.selectedDate = '2026-03-04'; view.calendarMode = 'Day'; await view.render(); const plus = () => button(view.contentEl, 'Add time worked'); expect(plus().classList.contains('organized-head-action')).toBe(true); expect(plus().nextElementSibling?.classList.contains('organized-count')).toBe(true);
+    plus().click(); await flush(); const picker = Modal.instances.at(-1) as unknown as TaskPicker; expect(picker.getSuggestions('').map((t: any) => t.title)).toEqual(['Deep work']); await picker.choose('typed text' as any); expect(Modal.instances.at(-1)).toBe(picker as any);
+    await picker.choose(task); const modal = Modal.instances.at(-1) as unknown as SessionModal; expect(modal.contentEl.querySelector('input[type=datetime-local]')!.getAttribute('aria-label')).toBe('Start'); expect((modal.contentEl.querySelector('input[type=datetime-local]') as HTMLInputElement).value).toBe('2026-03-04T09:00');
+    const [start, end] = Array.from(modal.contentEl.querySelectorAll<HTMLInputElement>('input[type=datetime-local]')); start.value = '2026-03-04T12:00'; end.value = '2026-03-04T13:30'; start.dispatchEvent(new Event('input')); end.dispatchEvent(new Event('input'));
+    Array.from(modal.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Save')!.click(); for (let n = 0; n < 6; n++) await flush(); let saved = await repo.read(task.id); expect(saved.work_sessions).toHaveLength(2); expect(saved.time_tracked_seconds).toBe(3600 + 5400);
+    await view.render(); const blocks = () => Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-block')); expect(blocks()).toHaveLength(2);
+    blocks()[1].click(); await flush(); const editor = Modal.instances.at(-1) as unknown as SessionModal; const [from, to] = Array.from(editor.contentEl.querySelectorAll<HTMLInputElement>('input[type=datetime-local]')); expect(from.value).toBe('2026-03-04T12:00'); to.value = '2026-03-04T14:00'; to.dispatchEvent(new Event('input'));
+    Array.from(editor.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Save')!.click(); for (let n = 0; n < 6; n++) await flush(); saved = await repo.read(task.id); expect(saved.work_sessions[1].end).toBe(new Date(2026, 2, 4, 14, 0).toISOString()); expect(saved.time_tracked_seconds).toBe(3600 + 7200);
+    owner.selectedTaskId = task.id; view.tab = 'Task'; view.module = 'Timer'; await view.render(); const rows = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-session-row')); expect(rows.map(r => r.textContent)).toEqual(['2026-03-04 · 12:00–14:00 · 2 h', '2026-03-04 · 09:00–10:00 · 1 h']);
+    button(view.contentEl, 'Add time').click(); await flush(); const added = Modal.instances.at(-1) as unknown as SessionModal; expect(added.titleEl.textContent).toBe('Add time worked'); expect((added.contentEl.querySelector('input[type=datetime-local]') as HTMLInputElement).value).toBe(`${localDate()}T09:00`); added.close();
+    rows[1].click(); await flush(); const old = Modal.instances.at(-1) as unknown as SessionModal; Array.from(old.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Delete')!.click(); for (let n = 0; n < 6; n++) await flush(); saved = await repo.read(task.id); expect(saved.work_sessions).toHaveLength(1); expect(saved.time_tracked_seconds).toBe(7200);
+  });
+  it('opens the task, not an editor, from a running block', async () => {
+    const { owner, view, repo } = await fixture(); vi.setSystemTime(new Date(2026, 2, 4, 15, 0, 0)); const task = await repo.create('Running work'); await repo.update(task.id, t => ({ ...t, status: 'in_progress', time_tracking_started_at: new Date(2026, 2, 4, 14, 0).toISOString() }));
+    view.selectedDate = '2026-03-04'; view.calendarMode = 'Day'; await view.render(); const before = Modal.instances.length; (view.contentEl.querySelector('.organized-block') as HTMLElement).click(); await flush(); expect(Modal.instances.length).toBe(before); expect(owner.selectedTaskId).toBe(task.id);
   });
 });

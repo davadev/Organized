@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS, newTask } from '../src/model';
 import { editorExtension } from '../src/render';
 import { Setting, editorLivePreviewField } from '../src/tests/__mocks__/obsidian';
 import { OrganizedSettingsTab } from '../src/settings';
-import { DatePicker } from '../src/modals';
+import { DatePicker, SessionModal } from '../src/modals';
 import { parseTasks } from '../src/codec';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
@@ -34,7 +34,7 @@ const owner: any = {
 const view = new OrganizedInspectorView({ app } as any, owner);
 const root = document.querySelector('#app')!; root.appendChild(view.contentEl);
 let editor: EditorView | null = null;
-let modal: DatePicker | null = null;
+let modal: DatePicker | SessionModal | null = null;
 (window as any).scene = async (tab: string) => {
   editor?.destroy(); editor = null; modal?.close(); modal = null; root.replaceChildren();
   if (tab === 'Settings' || tab === 'LegacySettings') {
@@ -53,6 +53,9 @@ let modal: DatePicker | null = null;
     editor = new EditorView({ state: EditorState.create({ doc, selection: { anchor: 0 }, extensions: [EditorView.lineWrapping, ...(tab === 'Source' ? [] : [editorLivePreviewField]), editorExtension(owner)] }), parent: root });
   } else if (tab === 'ScheduleModal') {
     modal = new DatePicker(app, '2026-01-01', async () => undefined);
+    modal.open();
+  } else if (tab === 'SessionModal') {
+    modal = new SessionModal(app, { heading: 'Edit time worked', taskTitle: 'A task title that stays readable at phone widths', start: new Date(2026, 2, 4, 9, 0).toISOString(), end: new Date(2026, 2, 4, 10, 30).toISOString(), save: async () => undefined, remove: async () => undefined, openTask: async () => undefined });
     modal.open();
   } else if (tab === 'NoteTasks') {
     owner.selectedTaskId = null; view.module = ''; view.editingTitle = false; view.tab = 'Task';

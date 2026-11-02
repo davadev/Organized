@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Time can now be logged and corrected by hand. In the Calendar's Day view the **Time** heading has a **+** button: pick a task, then set a start and an end (date and time, so work across midnight is fine) and see the length as you type. Tapping a block opens the same form to change it, delete it, or **Open task** (a block for a timer that is still running opens the task instead). The Task tab's Timer card has **Add time** and lists the five latest sessions to edit. Manual changes keep the task's total tracked time in step; the form refuses an end before the start, sessions under a minute or over 24 hours, and time in the future.
 - Fix opening a task from a Day view block (or any other tab) leaving the panel scrolled past its tab bar, so the tabs and the "Back to calendar" button were out of sight. A new tab or task now starts at the top; re-rendering the same page keeps your scroll position.
 - Quieter task cards: the project label is now a small dot in the project's colour followed by its name in muted text (instead of a solid block), so the title leads and the colour is an accent. Done cards have a fainter green wash and no left stripe; only an in-progress card keeps the green stripe and a stronger wash, so the two states read differently without another colour.
 - Fix the project colour pickers on mobile, where the native control stretched into tall pills ignoring its size. Each colour is now a 22 px square swatch with the native picker laid invisibly over it, so a tap still opens the picker and the swatch updates as you choose.

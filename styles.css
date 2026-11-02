@@ -40,7 +40,7 @@
 .organized-view .organized-panel button.organized-button:focus-visible, .organized-view .organized-control:focus-visible, .organized-view input:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 1px; }
 .organized-view .organized-panel button.organized-icon-button { flex: 0 0 36px; inline-size: 36px; padding: 6px; border-color: transparent; }
 .organized-icon-button svg, .organized-card-icon svg { inline-size: 16px; block-size: 16px; }
-.organized-view .organized-panel button.organized-icon-button.organized-hide-done { flex: 0 0 28px; inline-size: 28px; block-size: 28px; min-block-size: 0; margin: 0; margin-inline-start: auto; padding: 4px; }
+.organized-view .organized-panel button.organized-icon-button.organized-hide-done, .organized-view .organized-panel button.organized-icon-button.organized-head-action { flex: 0 0 28px; inline-size: 28px; block-size: 28px; min-block-size: 0; margin: 0; margin-inline-start: auto; padding: 4px; }
 .organized-view .organized-panel button[aria-pressed="true"].organized-icon-button { color: var(--interactive-accent); background: var(--background-secondary); }
 .organized-calendar-nav { display: grid; grid-template-columns: 36px minmax(0, 1fr) 36px auto; align-items: center; gap: 2px; }
 .organized-calendar-nav h3 { margin: 0; color: var(--text-normal); font-size: 15px; font-weight: 600; text-align: center; line-height: 1.3; }
@@ -496,3 +496,7 @@ SOFTWARE.
   .organized-modal-window .organized-modal { max-block-size: calc(70dvh - env(safe-area-inset-bottom, 0px)); }
   .organized-modal-window .organized-project-results, .organized-project-results { max-block-size: 45dvh; }
 }
+
+.organized-view .organized-panel button.organized-session-row { justify-content: flex-start; inline-size: 100%; block-size: auto; min-block-size: 0; margin-block-start: 4px; padding: 4px 8px; font-size: var(--font-ui-smaller, 12px); font-variant-numeric: tabular-nums; text-align: start; }
+.organized-session-task { font-weight: 600; }
+.organized-session-problem { color: var(--text-error, var(--color-red)); }

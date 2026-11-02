@@ -1,0 +1,28 @@
+import { MIN_SESSION_SECONDS, WorkSession } from "./model";
+
+const pad = (n: number): string => String(n).padStart(2, "0");
+/** An ISO instant as the local `YYYY-MM-DDTHH:mm` a datetime-local field takes. */
+export function localInput(iso: string): string {
+  const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+/** A datetime-local value (local time) as an ISO instant, or null when it is not a valid date and time. */
+export function isoFromInput(value: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}:00`); return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+export const MAX_SESSION_HOURS = 24;
+/** Why a session cannot be saved, or null. Time cannot be logged in the future: a running timer records that. */
+export function sessionProblem(start: string | null, end: string | null, now = Date.now()): string | null {
+  if (!start || !end) return "Enter both a start and an end.";
+  const from = Date.parse(start); const to = Date.parse(end);
+  if (to <= from) return "The end must be after the start.";
+  if (to - from < MIN_SESSION_SECONDS * 1000) return "A session must be at least a minute long.";
+  if (to - from > MAX_SESSION_HOURS * 3600000) return `A session can be at most ${MAX_SESSION_HOURS} hours; split longer work.`;
+  if (to > now + 60000) return "Time cannot be logged in the future.";
+  return null;
+}
+export const seconds = (session: WorkSession): number => Math.max(0, Math.round((Date.parse(session.end) - Date.parse(session.start)) / 1000));
+/** `1 h 20 min`, for the length shown while editing. */
+export function lengthOf(session: WorkSession): string {
+  const minutes = Math.round(seconds(session) / 60); return minutes >= 60 ? `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ""}` : `${minutes} min`;
+}

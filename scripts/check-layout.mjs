@@ -26,7 +26,7 @@ try {
   for (const width of [240, 320, 360, 390, 412, 768].filter(width => scale === 1 || width <= 412)) for (const dark of [false, true]) for (const rtl of [false, true]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(({ dark, rtl }) => { document.body.className = `${dark ? 'theme-dark' : 'theme-light'} is-mobile`; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, { dark, rtl });
-    for (const tab of ['Calendar', 'Week', 'Day', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Favorites', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'Eof']) {
+    for (const tab of ['Calendar', 'Week', 'Day', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Favorites', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'SessionModal', 'Eof']) {
       await page.evaluate(tab => window.scene(tab), tab);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       if (overflow) throw Error(`${engine}: horizontal overflow at ${width}${scale === 1 ? '' : ` with ${scale}x text`}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
@@ -65,6 +65,8 @@ try {
         if (day.labels.some(inside => !inside)) throw Error('Day hour labels leave the panel'); if (day.width < 120) throw Error(`Day grid is too narrow to read: ${day.width}px at ${width}`);
         const glyphs = await page.evaluate(() => [...document.querySelectorAll('.organized-block')].map(block => { const icon = block.querySelector('.organized-block-status'); if (!icon) return null; const b = block.getBoundingClientRect(); const i = icon.getBoundingClientRect(); return { inside: i.width > 0 && i.height > 0 && i.left >= b.left && i.right <= b.right + 0.5 && i.top >= b.top && i.bottom <= b.bottom + 0.5, name: icon.getAttribute('data-icon') }; }));
         if (glyphs.length < 4 || glyphs.some(glyph => !glyph || !glyph.inside || !glyph.name)) throw Error(`Day blocks lost their status icon or it leaves the block: ${JSON.stringify(glyphs)}`);
+        const add = await page.evaluate(() => { const button = document.querySelector('.organized-head-action[aria-label="Add time worked"]'); if (!button) return null; const b = button.getBoundingClientRect(); const head = button.closest('.organized-section-head').getBoundingClientRect(); return { w: Math.round(b.width), h: Math.round(b.height), inside: b.left >= head.left && b.right <= head.right + 1 }; });
+        if (!add || !add.inside || add.w > 44 || add.h > 44) throw Error(`Day view lacks a compact Add time button: ${JSON.stringify(add)}`);
         if (day.tasks < 2 || day.firstTask >= day.gridTop) throw Error('Day view does not list its tasks above the time grid');
         const fold = await page.evaluate(() => { const head = document.querySelector('.organized-section-fold'); if (!head) return null; const box = head.getBoundingClientRect(); return { expanded: head.getAttribute('aria-expanded'), height: box.height, width: box.width, host: document.querySelector('.organized-panel').getBoundingClientRect().width }; });
         if (!fold || fold.expanded !== 'true' || fold.height > 44 || fold.width < fold.host - 2) throw Error(`Day task list has no compact, full-width fold button: ${JSON.stringify(fold)}`);
@@ -116,6 +118,15 @@ try {
         if (box.width > width - 8) throw Error(`Schedule modal overflows its ${width}px host: ${box.width}`);
         const title = await page.locator('.organized-modal-window .modal-title').innerText(); if (title !== 'Schedule task') throw Error(`Schedule modal title regressed: ${title}`);
         const button = page.locator('.organized-modal-window .modal-content button'); if (!(await button.isVisible())) throw Error('Schedule modal action is hidden');
+      }
+      if (tab === 'SessionModal') {
+        const window = page.locator('.organized-modal-window'); const box = await window.boundingBox(); if (!box) throw Error('Session modal is not visible');
+        if (box.y > 96 || box.width > width - 8) throw Error(`Session modal is misplaced: ${JSON.stringify(box)} at ${width}`);
+        const fields = await page.evaluate(() => Array.from(document.querySelectorAll('.organized-modal-window input[type=datetime-local]')).map(input => { const b = input.getBoundingClientRect(); const w = document.querySelector('.organized-modal-window').getBoundingClientRect(); return b.left >= w.left - 1 && b.right <= w.right + 1; }));
+        if (fields.length !== 2 || fields.some(inside => !inside)) throw Error(`Session fields leave the modal: ${fields}`);
+        const buttons = await page.locator('.organized-modal-window .modal-content button').allTextContents(); if (buttons.join(',') !== 'Save,Open task,Delete') throw Error(`Session modal actions regressed: ${buttons}`);
+        const clipped = await page.evaluate(() => { const w = document.querySelector('.organized-modal-window').getBoundingClientRect(); return Array.from(document.querySelectorAll('.organized-modal-window .modal-content button')).filter(b => { const r = b.getBoundingClientRect(); return r.right > w.right + 1 || r.left < w.left - 1 || r.bottom > w.bottom + 1; }).map(b => b.textContent); });
+        if (clipped.length) throw Error(`Session modal actions are clipped at ${width}px: ${clipped}`);
       }
       if (tab.endsWith('Settings')) {
         if (await page.locator('.setting-item .setting-item').count()) throw Error('Settings are nested inside a native setting row');

@@ -1,5 +1,6 @@
 import { App, Component, Modal, Setting, SuggestModal } from "obsidian";
-import { path, PRIORITIES, Priority, Task, validDate } from "./model";
+import { path, PRIORITIES, Priority, Task, validDate, WorkSession } from "./model";
+import { isoFromInput, lengthOf, localInput, sessionProblem } from "./sessions";
 import { report } from "./service";
 import { renderMarkdownLinks } from "./markdown";
 
@@ -19,13 +20,13 @@ export function isKeepAsTodo(value: TaskChoice): value is typeof KEEP_AS_TODO {
 
 export class TaskPicker extends SuggestModal<TaskChoice> {
   readonly markdown = new Component();
-  constructor(app: App, readonly tasks: Task[], readonly choose: (choice: TaskChoice) => Promise<void>, query = "", readonly allowTodo = false) {
+  constructor(app: App, readonly tasks: Task[], readonly choose: (choice: TaskChoice) => Promise<void>, query = "", readonly allowTodo = false, readonly allowCreate = true) {
     super(app); this.markdown.load(); decorate(this); this.setPlaceholder("Find an existing task or create a new one"); this.inputEl.value = query;
   }
   onClose(): void { super.onClose(); this.markdown.unload(); }
   getSuggestions(query: string): TaskChoice[] {
     const q = query.trim(); const matches = this.tasks.filter(t => t.title.toLocaleLowerCase().includes(q.toLocaleLowerCase()));
-    return [...(this.allowTodo ? [KEEP_AS_TODO] : []), ...matches, ...(q ? [q] : [])];
+    return [...(this.allowTodo ? [KEEP_AS_TODO] : []), ...matches, ...(q && this.allowCreate ? [q] : [])];
   }
   renderSuggestion(value: TaskChoice, el: HTMLElement): void {
     el.addClass("organized-suggestion");
@@ -95,6 +96,40 @@ export class ProjectPicker extends Modal {
     search.addEventListener("input", paint); paint();
     new Setting(this.contentEl).addButton(b => b.setButtonText("Save links").setCta().onClick(() => { this.close(); void this.save([...this.selected]).catch(report); }));
     search.focus();
+  }
+  onClose(): void { this.contentEl.empty(); }
+}
+
+export interface SessionEdit {
+  heading: string; taskTitle: string; start: string; end: string;
+  save: (session: WorkSession) => Promise<void>; remove?: () => Promise<void>; openTask?: () => Promise<void>;
+}
+/** Adds or edits one block of time worked: the task, a start and an end, with the length shown as you type. */
+export class SessionModal extends Modal {
+  constructor(app: App, readonly edit: SessionEdit, readonly now = () => Date.now()) { super(app); decorate(this); }
+  onOpen(): void {
+    this.titleEl.setText(this.edit.heading); this.contentEl.addClass("organized-modal");
+    this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-task", text: this.edit.taskTitle });
+    const field = (label: string, iso: string) => {
+      this.contentEl.createEl("label", { cls: "organized-modal-label", text: label });
+      const input = this.contentEl.createEl("input", { type: "datetime-local", attr: { "aria-label": label } }); input.value = localInput(iso); return input;
+    };
+    const start = field("Start", this.edit.start); const end = field("End", this.edit.end);
+    const note = this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-note", attr: { role: "status" } });
+    const read = () => ({ start: isoFromInput(start.value), end: isoFromInput(end.value) });
+    const paint = () => {
+      const { start: from, end: to } = read(); const problem = sessionProblem(from, to, this.now());
+      note.setText(problem ?? `Length: ${lengthOf({ start: from!, end: to! })}`); note.toggleClass("organized-session-problem", problem !== null);
+    };
+    start.addEventListener("input", paint); end.addEventListener("input", paint); paint();
+    const actions = new Setting(this.contentEl);
+    actions.addButton(b => b.setButtonText("Save").setCta().onClick(() => {
+      const { start: from, end: to } = read(); const problem = sessionProblem(from, to, this.now()); if (problem) { paint(); return; }
+      this.close(); void this.edit.save({ start: from!, end: to! }).catch(report);
+    }));
+    if (this.edit.openTask) { const open = this.edit.openTask; actions.addButton(b => b.setButtonText("Open task").onClick(() => { this.close(); void open().catch(report); })); }
+    if (this.edit.remove) { const remove = this.edit.remove; actions.addButton(b => { b.setButtonText("Delete").onClick(() => { this.close(); void remove().catch(report); }); b.buttonEl.addClass("mod-warning"); }); }
+    start.focus();
   }
   onClose(): void { this.contentEl.empty(); }
 }
