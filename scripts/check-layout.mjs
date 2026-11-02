@@ -85,9 +85,11 @@ try {
         const sections = await page.locator('.organized-section-title').allTextContents();
         if (sections.join(',') !== 'Favorites,Projects,Canceled') throw Error(`Projects tab lost its sections: ${sections.join(',')}`);
         if (await page.locator('.organized-list-card').count() < 2) throw Error('Projects tab did not render task cards');
-        const fills = await page.evaluate(() => { const fill = status => { const card = document.querySelector(`.organized-list-card[data-status="${status}"]`); return card ? getComputedStyle(card).backgroundColor : null; }; return { open: fill('open'), completed: fill('completed'), active: fill('in_progress') }; });
-        if (!fills.open || !fills.completed || !fills.active) throw Error(`Projects tab is missing status cards: ${JSON.stringify(fills)}`);
-        if (new Set([fills.open, fills.completed, fills.active]).size !== 3) throw Error(`Task status colours are not distinct: ${JSON.stringify(fills)}`);
+        // Cards are filled with their project colour and outlined by status: the fill must differ from the neutral card, the outlines must differ by status.
+        const cards = await page.evaluate(() => { const read = status => { const card = document.querySelector(`.organized-list-card[data-status="${status}"]`); if (!card) return null; const style = getComputedStyle(card); return { border: style.borderTopColor, image: style.backgroundImage, project: card.hasAttribute('data-project') }; }; return { open: read('open'), completed: read('completed'), active: read('in_progress') }; });
+        if (!cards.open || !cards.completed || !cards.active) throw Error(`Projects tab is missing status cards: ${JSON.stringify(cards)}`);
+        if (new Set([cards.open.border, cards.completed.border, cards.active.border]).size !== 3) throw Error(`Task status outlines are not distinct: ${JSON.stringify(cards)}`);
+        if (![cards.open, cards.completed, cards.active].some(card => card.project && card.image.includes('gradient'))) throw Error(`No card is filled with its project colour: ${JSON.stringify(cards)}`);
         const edges = await page.evaluate(() => ['completed', 'in_progress'].map(status => getComputedStyle(document.querySelector(`.organized-list-card[data-status="${status}"] .organized-list-open`)).borderInlineStartColor));
         if (edges.some(edge => edge === 'rgba(0, 0, 0, 0)') || edges[0] === edges[1]) throw Error(`Status edge colours are missing or identical: ${edges}`);
         if (await page.locator('.organized-list-meta .organized-status-dot').count()) throw Error('Task rows still show a status dot next to their tinted card');

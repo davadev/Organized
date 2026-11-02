@@ -1,4 +1,5 @@
 import { App, Editor, TFile, parseYaml, stringifyYaml } from "obsidian";
+import { validColor } from "./colors";
 import { makeId, newTask, object, path, Task, taskFrom, Settings } from "./model";
 import { parseTasks, TaskLine } from "./codec";
 
@@ -8,6 +9,8 @@ export function splitNote(text: string): { frontmatter: Record<string, unknown>;
 }
 /** Frontmatter that marks a note as a project note; the picker lists only these. */
 export const PROJECT_KEY = "organized_type";
+/** Optional `#rrggbb` colour of a project note, shown on its tasks in the side panel and the calendar. */
+export const COLOR_KEY = "organized_color";
 export const PROJECT_FRONTMATTER = `---\n${PROJECT_KEY}: project\n---\n\n`;
 export class Repository {
   private tail: Promise<unknown> = Promise.resolve();
@@ -33,8 +36,24 @@ export class Repository {
     }
   }
   /** Project notes by frontmatter, answered from Obsidian's metadata cache so the picker reads no files. */
-  projectNotes(): string[] {
-    return this.app.vault.getMarkdownFiles().filter(f => this.app.metadataCache.getFileCache(f)?.frontmatter?.[PROJECT_KEY] === "project").map(f => f.path);
+  isProjectNote(file: TFile): boolean { return this.app.metadataCache.getFileCache(file)?.frontmatter?.[PROJECT_KEY] === "project"; }
+  projectNotes(): string[] { return this.app.vault.getMarkdownFiles().filter(f => this.isProjectNote(f)).map(f => f.path); }
+  /** The colour of a project note, from Obsidian's metadata cache; null when unset or not a valid `#rrggbb`. */
+  projectColor(notePath: string): string | null {
+    const file = this.file(notePath); const value: unknown = file ? this.app.metadataCache.getFileCache(file)?.frontmatter?.[COLOR_KEY] : undefined;
+    return validColor(value) ? value.toLowerCase() : null;
+  }
+  /** A task takes the colour of its first coloured project. */
+  taskColor(task: Task): string | null {
+    for (const project of task.projects) { const color = this.projectColor(project); if (color) return color; }
+    return null;
+  }
+  /** Sets or clears a project's colour, keeping every other property and marking the note as a project note. */
+  async setProjectColor(file: TFile, color: string | null): Promise<void> {
+    if (color !== null && !validColor(color)) throw new Error("Use a colour such as #3b82f6.");
+    await this.app.fileManager.processFrontMatter(file, (raw: Record<string, unknown>) => {
+      raw[PROJECT_KEY] = "project"; if (color === null) delete raw[COLOR_KEY]; else raw[COLOR_KEY] = color.toLowerCase();
+    });
   }
   /** Adds the project marker to a note, keeping every other property; a note that already has it is not written. */
   async markProject(file: TFile): Promise<boolean> {

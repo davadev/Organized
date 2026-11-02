@@ -43,7 +43,7 @@ export function harness() {
       }),
       trashFile: vi.fn(async (file: TFile) => { texts.delete(file.path); files.delete(file.path); }),
     },
-    metadataCache: { getFileCache: (file: TFile) => ({ frontmatter: texts.has(file.path) ? splitNote(texts.get(file.path)!).frontmatter : undefined }) },
+    metadataCache: { on, getFileCache: (file: TFile) => ({ frontmatter: texts.has(file.path) ? splitNote(texts.get(file.path)!).frontmatter : undefined }) },
     workspace: {
       on, onLayoutReady: (fn: () => void) => layout.push(fn),
       getActiveViewOfType: vi.fn((type: unknown) => type === MarkdownView && active ? { file: active.file, editor: active.editor, getMode: () => 'source' } : null),
