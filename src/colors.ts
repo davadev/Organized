@@ -19,14 +19,17 @@ function srgbOf(l: number, c: number, h: number): number[] {
 }
 /** Lightness and chroma range every project colour is drawn with, so projects look like one family. The hue is kept; lightness follows the pick halfway inside a narrow band, because a yellow forced to the lightness of a blue turns olive. */
 export const SOFT = { lightness: 0.74, follow: 0.5, lowest: 0.66, highest: 0.88, minChroma: 0.07, maxChroma: 0.13, grayBelow: 0.025 };
-/** Lightness for coloured text: dark enough to read on a light theme, light enough on a dark one. */
-export const TEXT_LIGHTNESS = { light: 0.42, dark: 0.84 };
 /** The picked colour as space-separated `r g b` channels for CSS `rgb(r g b / alpha)`, drawn in the shared lightness band and a moderate chroma. A gray pick stays gray. */
-export function softTint(color: string, fixedLightness?: number): string {
+export function softTint(color: string): string {
   const { l: picked, c, h } = oklchOf(color); const gray = c < SOFT.grayBelow;
-  const lightness = fixedLightness ?? Math.min(SOFT.highest, Math.max(SOFT.lowest, SOFT.lightness + SOFT.follow * (picked - SOFT.lightness)));
+  const lightness = Math.min(SOFT.highest, Math.max(SOFT.lowest, SOFT.lightness + SOFT.follow * (picked - SOFT.lightness)));
   const chroma = gray ? c : Math.min(SOFT.maxChroma, Math.max(SOFT.minChroma, c));
   const rgb = srgbOf(lightness, chroma, h);
   // Inside the lightness band and chroma range every hue fits the screen's gamut to within rounding; clamping only guards the last bit.
   return rgb.map(v => Math.round(Math.max(0, toGamma(Math.min(1, Math.max(0, v)))) * 255)).join(" ");
+}
+/** A project label: the picked colour itself, opaque, so it stays saturated on top of any card, with dark or white text for whichever reads better. */
+export function labelColors(color: string): { background: string; text: string } {
+  const channels = [1, 3, 5].map(at => parseInt(color.slice(at, at + 2), 16));
+  return { background: channels.join(" "), text: oklchOf(color).l > 0.68 ? "26 26 26" : "255 255 255" };
 }
