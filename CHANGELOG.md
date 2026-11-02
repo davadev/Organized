@@ -2,9 +2,15 @@
 
 ## Unreleased
 
+- **Breaking:** action markers no longer share letters with theme icons. Use `[a]` description, `[e]` idea, `[q]` question, `[s]` sources, `[j]` projects and `[r]` recurring. `[i]`, `[I]`, `[?]`, `["]`, `[b]` and `[f]` are now formatting only (icon, no action), as is every other letter.
+- Show a recurring task whose occurrence is ticked today as **done · today** in task lists and the Task tab; its stored status stays open so it recurs.
+- Description, idea, question, sources and notes autosave while typing and on blur, and the editor now matches the rendered text instead of showing heavy borders.
+- Remember notes once used as projects so a project stays listed after its last task is deleted (notes that no longer exist are dropped).
+- Remove the large blank gap above each setting control on phones: the label area no longer reserves a fixed 180px of height.
+- New **Daily-note template** setting: daily notes created by Organized start from the template instead of empty headings.
 - Make Markdown links in task titles and task-note sections open reliably from the inspector.
 - Group task details into one shared surface and tighten narrow-screen Settings rows to remove excess whitespace.
-- Keep recurring `[f]` task occurrences out of automatic forwarding.
+- Keep recurring `[r]` task occurrences out of automatic forwarding.
 - Make the mobile checkbox toolbar open the task picker reliably when it inserts a new blank todo, while leaving pasted checkboxes untouched.
 - Browse task lines from the current note in the Task tab when the cursor is elsewhere; selecting a linked task jumps the editor cursor to it.
 - Configure retention in days for completed/canceled task notes; expired linked todos become ordinary checkboxes before task files are moved to Obsidian's trash.

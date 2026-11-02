@@ -89,7 +89,7 @@ describe("repository and explicit task actions", () => {
   });
   it("recurring occurrences are independent, generated idempotently and undoable without deleting notes", async () => {
     const h = harness(); const task = await h.repo.create('Repeat'); const today = localDate(); const tomorrow = nextDate(today);
-    const file: any = await h.add(`Daily/${today}.md`, `# Work\n- [f] Repeat <!--organized:${task.id}-->`); await h.add(`Daily/${tomorrow}.md`);
+    const file: any = await h.add(`Daily/${today}.md`, `# Work\n- [r] Repeat <!--organized:${task.id}-->`); await h.add(`Daily/${tomorrow}.md`);
     const context = { file, line: parseTasks(await h.repo.readText(file))[0] };
     await h.service.recurrence(task.id, context); expect((await h.repo.read(task.id)).recurring).toBe(true); expect(h.texts.get(`Daily/${tomorrow}.md`)).toContain('<!--organized:repeat-->');
     const current = { file, line: parseTasks(await h.repo.readText(file))[0] };
@@ -113,10 +113,10 @@ describe("repository and explicit task actions", () => {
   it("auto-forwards latest unfinished occurrences once, respects settings, recurring/completed/future schedules", async () => {
     const h = harness(); const task = await h.repo.create('Carry');
     const recurringMarker = await h.repo.create('Recurring by marker');
-    await h.add('Daily/2020-01-01.md', `- [ ] Carry <!--organized:${task.id}-->\n- [f] Recurring <!--organized:${recurringMarker.id}-->`); await h.add('Daily/2020-01-03.md', `# Work\n- [ ] Carry <!--organized:${task.id}-->`);
+    await h.add('Daily/2020-01-01.md', `- [ ] Carry <!--organized:${task.id}-->\n- [r] Recurring <!--organized:${recurringMarker.id}-->`); await h.add('Daily/2020-01-03.md', `# Work\n- [ ] Carry <!--organized:${task.id}-->`);
     const today: any = await h.add(`Daily/${localDate()}.md`);
     h.setSettings({ autoForward: false }); await h.service.reconcile(today); expect(h.texts.get(today.path)).toBe('');
-    h.setSettings({ autoForward: true }); await h.service.reconcile(today); expect(h.texts.get(today.path)).toContain(task.id); expect(h.texts.get(today.path)).not.toContain(recurringMarker.id); expect(h.texts.get('Daily/2020-01-01.md')).toContain('[f] Recurring'); expect(h.texts.get('Daily/2020-01-03.md')).toContain('[>]'); expect(h.texts.get('Daily/2020-01-01.md')).toContain('[ ] Carry');
+    h.setSettings({ autoForward: true }); await h.service.reconcile(today); expect(h.texts.get(today.path)).toContain(task.id); expect(h.texts.get(today.path)).not.toContain(recurringMarker.id); expect(h.texts.get('Daily/2020-01-01.md')).toContain('[r] Recurring'); expect(h.texts.get('Daily/2020-01-03.md')).toContain('[>]'); expect(h.texts.get('Daily/2020-01-01.md')).toContain('[ ] Carry');
     await h.service.reconcile(today); expect(parseTasks(h.texts.get(today.path)!)).toHaveLength(1); await h.service.undo(); expect(h.texts.get(today.path)).not.toContain(task.id);
     const other = harness(); const record = await other.repo.create('Future'); await other.repo.update(record.id, t => ({ ...t, scheduled: '2099-01-01' }));
     await other.add('Daily/2020-01-01.md', `- [ ] Future <!--organized:${record.id}-->\n- [x] Done <!--organized:done1234-->\n- [ ] Broken <!--organized:broken12-->`);
@@ -253,7 +253,7 @@ describe("repository and explicit task actions", () => {
     for (const marker of ['*', '*', '/', 'x', 'X', '-', ' ', 'k']) await h.service.marker(fresh(), marker);
     expect((await h.repo.read(task.id)).starred).toBe(false); expect((await h.repo.read(task.id)).status).toBe('open');
     await h.service.marker(fresh(), '>'); expect((await h.repo.read(task.id)).scheduled).toBe(nextDate(localDate()));
-    await h.service.marker(fresh(), 'f'); expect((await h.repo.read(task.id)).recurring).toBe(true);
+    await h.service.marker(fresh(), 'r'); expect((await h.repo.read(task.id)).recurring).toBe(true);
     await h.service.marker({ file, line: parseTasks('- [k] Visual')[0] }, 'k'); expect((await h.repo.list())).toHaveLength(1);
     await expect(h.service.priority({ file, line: parseTasks('- [!] Plain')[0] }, 'low')).rejects.toThrow();
     report(Error('Visible')); report('String error'); expect(Notice.instances.at(-1)?.message).toContain('String error');
@@ -264,5 +264,18 @@ describe("repository and explicit task actions", () => {
     expect(h.service.daily.path('2026-01-02')).toBe('2026/01/02.md'); expect(h.service.daily.date('2026/01/02.md')).toBe('2026-01-02'); expect(h.service.daily.date('2026/1/2.md')).toBeNull(); expect(h.service.daily.date('2026/02/30.md')).toBeNull(); expect(h.service.daily.date('other.txt')).toBeNull();
     expect(() => h.service.daily.path('bad')).toThrow(); await h.service.daily.open(); expect(h.raw.workspace.getLeaf).toHaveBeenCalled();
     h.setSettings({ dailyFolder: 'Daily' }); expect(h.service.daily.date('Other/2026/01/02.md')).toBeNull();
+  });
+  it("creates daily notes from the configured template and reuses its headings when scheduling", async () => {
+    const h = harness(); await h.add('Templates/Daily.md', '# {{title}}\n{{date:dddd}} {{ date }} {{date:YYYY}}\n\n## Todos\n\n## Log\n');
+    h.setSettings({ dailyTemplate: 'Templates/Daily.md', dailyFormat: 'YYYY/MM/DD' });
+    const file = await h.service.daily.ensure('2026-01-02');
+    expect(h.texts.get(file.path)).toBe('# 02\nFriday 2026-01-02 2026\n\n## Todos\n\n## Log\n');
+    h.raw.vault.create.mockClear(); await h.texts.set(file.path, 'edited'); expect(await h.service.daily.ensure('2026-01-02')).toBe(file); expect(h.texts.get(file.path)).toBe('edited'); expect(h.raw.vault.create).not.toHaveBeenCalled();
+    h.setSettings({ dailyFormat: 'YYYY-MM-DD' });
+    const task = await h.repo.create('Scheduled'); await h.service.scheduleTask(task.id, '2026-01-03');
+    const text = h.texts.get('Daily/2026-01-03.md')!; expect(text).toContain('# 2026-01-03'); expect(text).toContain(`- [ ] Scheduled <!--organized:${task.id}-->`);
+    h.setSettings({ dailyTemplate: 'Templates/Missing.md' }); Notice.instances.length = 0;
+    await h.service.daily.ensure('2026-01-04'); expect(h.texts.get('Daily/2026-01-04.md')).toBe(''); expect(Notice.instances.at(-1)?.message).toContain('Templates/Missing.md');
+    h.setSettings({ dailyTemplate: '' }); await h.service.daily.ensure('2026-01-05'); expect(h.texts.get('Daily/2026-01-05.md')).toBe('');
   });
 });

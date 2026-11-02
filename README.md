@@ -6,7 +6,7 @@ Markdown-backed tasks with Things-style shortcuts, daily-note scheduling and a c
 
 Use a **test vault**. In BRAT, add **`davadev/Organized`** and select the beta release. Alternatively download `main.js`, `manifest.json`, `styles.css` from the same GitHub release into `<test vault>/.obsidian/plugins/organized/`, then restart and enable Organized.
 
-Open **Settings → Organized** and match **Daily-note folder** and **Filename format** to your daily-note setup. Core configuration is not read through undocumented APIs. Task files default to `Tasks/` (visible Markdown, not a hidden `.tasks` directory).
+Open **Settings → Organized** and match **Daily-note folder** and **Filename format** to your daily-note setup. Core configuration is not read through undocumented APIs. Set **Daily-note template** to a note such as `Templates/Daily.md` so daily notes Organized creates (for example when scheduling to a new date) start from it; `{{date}}`, `{{date:FORMAT}}` and `{{title}}` are filled in. Task files default to `Tasks/` (visible Markdown, not a hidden `.tasks` directory).
 
 **Auto-forward is on by default.** Opening today's daily note carries the latest unfinished non-recurring tasks forward, updates their schedule and marks prior occurrences forwarded; it does not create today's note on a timer. Recurring `[f]` occurrences are skipped because recurrence creates their next daily-note occurrence. Turn auto-forward off in settings if unwanted. A formatted batch summary offers Undo. **Show scheduled date link** controls date links globally and is on by default.
 
@@ -32,15 +32,15 @@ Identity and recurrence comments stay hidden in Live Preview, including the line
 | `[>]` | Forward to tomorrow; daily origin stays gray, undated origin stays active |
 | `[/]` | Start durable wall-clock timer; complete or clear to stop/log |
 | `[!]` | High/medium/low/none priority, constrained sort, then clear |
-| `[i]`, `[I]`, `[?]` | Open description/idea/question inspector section for inline editing, then clear |
+| `[a]`, `[e]`, `[q]` | Open description/idea/question inspector section for inline editing (autosaves), then clear |
 | `[x]`, `[ ]` | Complete/reopen; stop active timer idempotently |
 | `[-]` | Reversible cancellation; recurring dates cancel independently |
 | `[*]` | Toggle favorite |
-| `["]` | Open the Sources section for inline Markdown references (URLs/Obsidian links, optional labels/citations) |
-| `[b]` | Multi-select project/topic notes; create missing selected root notes |
-| `[f]` | Toggle recurrence in existing/current/future and subsequently created daily notes; clear after success |
+| `[s]` | Open the Sources section for inline Markdown references (URLs/Obsidian links, optional labels/citations) |
+| `[j]` | Multi-select project/topic notes; create missing selected root notes |
+| `[r]` | Toggle recurrence in existing/current/future and subsequently created daily notes; clear after success |
 
-`[k]`, `[l]`, `[S]`, `[p]`, `[c]`, `[w]`, `[u]`, `[d]`, `[D]`, `[P]`, `[M]` are **visual-only**. They never trigger metadata or secret storage. Things-style glyphs are bundled, so the Things theme is not required.
+Only the markers above act. Every other character, including the old action letters `[i]`, `[I]`, `[?]`, `["]`, `[b]` and `[f]` and the theme glyphs `[d]`, `[p]`, `[k]`, `[l]`, `[S]`, `[c]`, `[w]`, `[u]`, `[D]`, `[P]`, `[M]`, is **formatting only**: it shows its icon and never changes metadata or storage. Use them freely to style a todo without side effects. Things-style glyphs are bundled, so the Things theme is not required.
 
 Historical daily checkboxes remain historical. Non-recurring status changes propagate to today/future daily notes and undated/project references, not prior days. Recurring dates are independent; disabling recurrence removes only uniquely identified generated future copies. Multiple tasks may have running timers; no background writes or ticking process is required.
 

@@ -14,7 +14,9 @@ describe("task model and persisted settings", () => {
   it("normalizes hand-edited and legacy settings repeatedly", () => {
     expect(settingsFrom(null)).toEqual(DEFAULT_SETTINGS);
     expect(settingsFrom({ taskFolder: "../bad", dailyFolder: "/bad", dailyFormat: "x", autoForward: "yes", missingSection: "bad", sortScope: "bad", displayProperties: ["notes", 5, "secret"] })).toEqual({ ...DEFAULT_SETTINGS, displayProperties: ["notes"] });
-    const valid = { taskFolder: "Work", dailyFolder: "", dailyFormat: "YYYY/MM/DD", autoForward: false, missingSection: "ask", sortScope: "section", displayProperties: ["status"], showScheduledDate: true, taskRetentionDays: 45 };
+    const valid = { taskFolder: "Work", dailyFolder: "", dailyFormat: "YYYY/MM/DD", autoForward: false, missingSection: "ask", sortScope: "section", displayProperties: ["status"], showScheduledDate: true, taskRetentionDays: 45, dailyTemplate: "Templates/Daily.md", knownProjects: ["A.md", "B/C.md"] };
+    expect(settingsFrom({ ...valid, knownProjects: ["A.md", "A.md", "../x.md", "plain", 5, "B/C.md"] })).toEqual(valid);
+    for (const dailyTemplate of ["../x.md", "Template", "  ", 5]) expect(settingsFrom({ dailyTemplate }).dailyTemplate).toBe("");
     expect(settingsFrom(valid)).toEqual(valid); expect(settingsFrom(settingsFrom(valid))).toEqual(valid);
     for (const taskRetentionDays of [-1, 1.5, "2", 36501]) expect(settingsFrom({ taskRetentionDays }).taskRetentionDays).toBe(0);
     for (const format of ["YYYY-MM", "YYYY-DD", "MM-DD", "YYYY/MM/DD?", "YYYY/../MM/DD"]) expect(settingsFrom({ dailyFormat: format }).dailyFormat).toBe(DEFAULT_SETTINGS.dailyFormat);

@@ -62,6 +62,12 @@ export class OrganizedSettingsTab extends PluginSettingTab {
             if (validated.dailyFormat === value) { this.owner.settings = validated; this.owner.saveSettings(); }
           }));
         }),
+        row("Daily-note template", "Optional note whose content starts every daily note Organized creates, for example Templates/Daily.md. Supports {{date}}, {{date:FORMAT}} and {{title}}. Leave empty for blank notes.", setting => {
+          setting.addText(t => t.setValue(this.owner.settings.dailyTemplate).onChange(value => {
+            const validated = settingsFrom({ ...this.owner.settings, dailyTemplate: value });
+            if (validated.dailyTemplate === value.trim()) { this.owner.settings = validated; this.owner.saveSettings(); }
+          }));
+        }),
       ] },
       { type: "group", heading: "Task behavior", items: [
         row("Auto-forward unfinished tasks", "On by default: opening today's daily note carries unfinished tasks forward, with an Undo summary.", setting => {

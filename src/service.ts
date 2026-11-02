@@ -1,5 +1,5 @@
 import { Notice, TFile } from "obsidian";
-import { insertTask, parseTasks, removeUnique, replaceTask, sortTasks, TaskLine, taskText } from "./codec";
+import { insertTask, parseTasks, RECURRING_MARKER, removeUnique, replaceTask, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, Movement, nextDate, PRIORITIES, Priority, setStatus, Status, Task } from "./model";
 import { Repository } from "./repository";
@@ -182,7 +182,7 @@ export class TaskService {
     }
     const present = new Set(parseTasks(await this.repo.readText(file)).map(t => t.id)); const changes: Change[] = []; let skipped = 0;
     for (const [id, occurrence] of latest) {
-       // The [f] marker is a recurrence instruction, not an unfinished task to carry forward.
+       // The [r] marker is a recurrence instruction, not an unfinished task to carry forward.
        if (present.has(id) || ![" ", "/", ">", "<"].includes(occurrence.line.marker)) continue;
       try {
         const task = await this.repo.read(id);
@@ -286,7 +286,7 @@ export class TaskService {
     if (marker === ">") await this.schedule(context, nextDate(localDate()), "forward");
     else if ([" ", "x", "X", "/", "-"].includes(marker)) await this.status(id, marker === "x" || marker === "X" ? "completed" : marker === "/" ? "in_progress" : marker === "-" ? "canceled" : "open", context);
     else if (marker === "*") { await this.repo.update(id, t => ({ ...t, starred: !t.starred })); this.changed(); }
-    else if (marker === "f") await this.recurrence(id, context);
+    else if (marker === RECURRING_MARKER) await this.recurrence(id, context);
   }
 }
 export function report(error: unknown): void { new Notice(`Organized: ${error instanceof Error ? error.message : String(error)}`, 10000); }

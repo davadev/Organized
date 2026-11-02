@@ -7,6 +7,11 @@ export const ID = /<!--organized:([a-zA-Z0-9_-]{8,80})-->/g;
 const TASK = /^(\s*(?:[-+*]|\d+[.)]) \[)([^\]])(\] )(.*)$/;
 export const NOTE_SECTIONS = ["Description", "Idea", "Question", "Sources", "Notes"] as const;
 export type NoteSection = typeof NOTE_SECTIONS[number];
+/** Markers that act when typed. Any other letter is formatting only, so themes can style it freely. */
+export const SECTION_MARKERS: Record<string, NoteSection> = { a: "Description", e: "Idea", q: "Question", s: "Sources" };
+export const PROJECT_MARKER = "j";
+export const RECURRING_MARKER = "r";
+export const ACTION_MARKERS = `<>/!xX-*${Object.keys(SECTION_MARKERS).join("")}${PROJECT_MARKER}${RECURRING_MARKER}`;
 const SECTION_HEADINGS: Record<NoteSection, string[]> = {
   Description: ["Description", "Information"], Idea: ["Idea"], Question: ["Question"], Sources: ["Sources"], Notes: ["Notes"],
 };

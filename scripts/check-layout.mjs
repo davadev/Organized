@@ -7,7 +7,7 @@ const engine = process.argv[2] === 'webkit' ? 'webkit' : 'chromium';
 const bundle = await build({ entryPoints: ['scripts/layout-entry.ts'], bundle: true, write: false, format: 'esm', target: 'es2022', alias: { obsidian: resolve('src/tests/__mocks__/obsidian.ts') } });
 const browser = await ({ chromium, webkit }[engine]).launch({ headless: true });
 const css = await readFile('styles.css', 'utf8');
-const hostCss = `body { margin: 0; font: 14px system-ui; --text-normal: #222; --text-muted: #666; --text-faint: #777; --background-primary: #fff; --background-secondary: #eee; --background-modifier-border: #ccc; --interactive-accent: #6755c5; --text-on-accent: #fff; --font-ui-small: 13px; --font-ui-smaller: 11px; --size-4-1: 4px; --size-4-2: 8px; --size-4-3: 12px; } body.theme-dark { --text-normal: #ddd; --text-muted: #aaa; --text-faint: #999; --background-primary: #202020; --background-secondary: #303030; --background-modifier-border: #555; background: #202020; color: #ddd; } button, input, select, textarea { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); color: var(--text-normal); font: inherit; } button { cursor: pointer; } .setting-item { display: flex; justify-content: space-between; padding-block: 8px; }`;
+const hostCss = `*, *::before, *::after { box-sizing: border-box; } body { margin: 0; font: 14px system-ui; --text-normal: #222; --text-muted: #666; --text-faint: #777; --background-primary: #fff; --background-secondary: #eee; --background-modifier-border: #ccc; --interactive-accent: #6755c5; --text-on-accent: #fff; --font-ui-small: 13px; --font-ui-smaller: 11px; --size-4-1: 4px; --size-4-2: 8px; --size-4-3: 12px; } body.theme-dark { --text-normal: #ddd; --text-muted: #aaa; --text-faint: #999; --background-primary: #202020; --background-secondary: #303030; --background-modifier-border: #555; background: #202020; color: #ddd; } button, input, select, textarea { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); color: var(--text-normal); font: inherit; } button { cursor: pointer; } .setting-item { display: flex; justify-content: space-between; padding-block: 8px; }`;
 await mkdir('test-results', { recursive: true });
 try {
   const page = await browser.newPage(); const errors = []; page.on('pageerror', e => errors.push(e.message));
@@ -15,7 +15,7 @@ try {
   await page.addStyleTag({ content: hostCss + css });
   // Reproduce hostile mobile host defaults from the reported screenshots,
   // rather than testing only an unstyled desktop DOM.
-  await page.addStyleTag({ content: '.is-mobile button { border-radius: 999px; padding: 18px 24px; font-size: 20px; box-shadow: 0 2px 4px #0005; } .setting-item-name { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; } .setting-item-control input[type=checkbox] { inline-size: 50px; block-size: 28px; } .setting-item-control { flex-shrink: 0; }' });
+  await page.addStyleTag({ content: '.is-mobile button { border-radius: 999px; padding: 18px 24px; font-size: 20px; box-shadow: 0 2px 4px #0005; } .setting-item-name { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; } .setting-item-control input[type=checkbox] { inline-size: 50px; block-size: 28px; } .setting-item-control { flex-shrink: 0; } .is-mobile .setting-item { display: flex; flex-direction: column; }' });
   await page.addScriptTag({ content: bundle.outputFiles[0].text, type: 'module' });
   await page.waitForFunction(() => typeof window.scene === 'function');
   for (const width of [240, 320, 390, 768]) for (const dark of [false, true]) for (const rtl of [false, true]) {
@@ -44,9 +44,9 @@ try {
       }
       if (tab === 'InlineEditor') {
         const field = page.locator('.organized-inline-editor'); if (await field.count() !== 1) throw Error('Inline editor field is missing');
-        const save = page.locator('.organized-inline-actions .organized-save'); if (await save.count() !== 1) throw Error('Inline editor is missing Save');
-        const fieldBox = await field.boundingBox(), saveBox = await save.boundingBox(); if (!fieldBox || !saveBox) throw Error('Inline editor is not visible');
-        if (saveBox.y + saveBox.height > fieldBox.y) throw Error('Inline editor Save is below the keyboard-prone field');
+        if (await page.locator('.organized-inline-actions').count()) throw Error('Inline editor still shows Save/Cancel actions; it autosaves');
+        const fieldBox = await field.boundingBox(); if (!fieldBox) throw Error('Inline editor is not visible');
+        if (await field.evaluate(el => getComputedStyle(el).borderTopWidth) !== '0px') throw Error('Inline editor draws its own border instead of matching the rendered text');
         if (fieldBox.width > width) throw Error(`Inline editor overflows its ${width}px host: ${fieldBox.width}`);
       }
       if (tab === 'Projects') {
@@ -69,11 +69,13 @@ try {
         const clipped = await page.locator('.organized-setting-row .setting-item-name').evaluateAll(elements => elements.some(el => el.scrollWidth > el.clientWidth + 1));
         if (clipped) throw Error(`Unreadable clipped setting labels at ${width}`);
         if (width <= 390) {
-          const gap = await page.locator('.organized-setting-row').first().evaluate(row => {
+          const gap = await page.locator('.organized-setting-row').evaluateAll(rows => Math.max(...rows.map(row => {
             const info = row.querySelector('.setting-item-info')?.getBoundingClientRect();
             const control = row.querySelector('.setting-item-control')?.getBoundingClientRect();
             return info && control ? control.top - info.bottom : 0;
-          });
+          })));
+          const padded = await page.locator('.organized-setting-row .setting-item-info').evaluateAll(infos => infos.some(info => info.getBoundingClientRect().height > [...info.children].reduce((sum, child) => sum + child.getBoundingClientRect().height, 0) + 16));
+          if (padded) throw Error(`Mobile settings label area is taller than its text (wasted space) at width ${width}`);
           if (gap > 48) throw Error(`Mobile settings control is separated from its label by ${gap}px at width ${width}`);
         }
       }

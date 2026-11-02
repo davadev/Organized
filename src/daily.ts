@@ -1,4 +1,4 @@
-import { TFile } from "obsidian";
+import { Notice, TFile } from "obsidian";
 import { moment } from "./moment";
 import type { Repository } from "./repository";
 import { localDate, Settings, validDate } from "./model";
@@ -20,7 +20,18 @@ export class DailyNotes {
   files(): { file: TFile; date: string }[] {
     return this.repo.app.vault.getMarkdownFiles().flatMap(file => { const date = this.date(file.path); return date ? [{ file, date }] : []; });
   }
-  async ensure(date: string): Promise<TFile> { return this.repo.ensure(this.path(date)); }
+  async ensure(date: string): Promise<TFile> {
+    const notePath = this.path(date); const existing = this.repo.file(notePath); if (existing) return existing;
+    return this.repo.ensure(notePath, await this.template(date));
+  }
+  /** Content for a new daily note; a missing template falls back to a blank note rather than blocking scheduling. */
+  private async template(date: string): Promise<string> {
+    const configured = this.settings().dailyTemplate; if (!configured) return "";
+    const file = this.repo.file(configured);
+    if (!file) { new Notice(`Organized: daily-note template ${configured} was not found; created a blank note.`); return ""; }
+    const day = moment(date, "YYYY-MM-DD", true); const title = day.format(this.settings().dailyFormat).split("/").at(-1)!;
+    return (await this.repo.readText(file)).replace(/\{\{\s*(date|title)\s*(?::([^}]*?))?\s*\}\}/gi, (_match, kind: string, format?: string) => kind.toLowerCase() === "title" ? title : day.format(format || "YYYY-MM-DD"));
+  }
   async open(date = localDate()): Promise<TFile> {
     const file = await this.ensure(date); await this.repo.app.workspace.getLeaf(false).openFile(file); return file;
   }

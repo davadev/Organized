@@ -48,9 +48,13 @@ describe('compact calendar and contextual task inspector', () => {
     await view.render(); expect(scroll).toHaveBeenCalledOnce();
     button(view.contentEl, 'Add description').click(); await flush(); expect(view.editingModule).toBe('Description');
     const field = view.contentEl.querySelector<HTMLTextAreaElement>('textarea[aria-label="Description"]')!; expect(field).toBeTruthy();
-    field.value = 'Saved description'; const save = vi.spyOn(owner, 'saveModule').mockResolvedValue(); button(view.contentEl, 'Save').click(); await flush(); expect(save).toHaveBeenCalledWith(task.id, 'Description', 'Saved description'); expect(view.editingModule).toBe('');
-    await view.render(); button(view.contentEl, 'Add description').click(); await flush(); const discarded = view.contentEl.querySelector<HTMLTextAreaElement>('textarea[aria-label="Description"]')!; discarded.value = 'Discarded';
-    button(view.contentEl, 'Cancel').click(); await flush(); expect(view.editingModule).toBe(''); expect(view.contentEl.querySelector('.organized-inline-editor')).toBeNull();
+    const save = vi.spyOn(owner, 'saveModule').mockResolvedValue(); expect(view.contentEl.querySelector('.organized-inline-actions')).toBeNull();
+    field.value = 'Saved'; field.dispatchEvent(new Event('input')); field.value = 'Saved description'; field.dispatchEvent(new Event('input')); await vi.advanceTimersByTimeAsync(799); expect(save).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1); expect(save).toHaveBeenCalledOnce(); expect(save).toHaveBeenCalledWith(task.id, 'Description', 'Saved description'); expect(view.editingModule).toBe('Description');
+    field.blur(); await flush(); expect(save).toHaveBeenCalledOnce(); expect(view.editingModule).toBe(''); expect(view.contentEl.querySelector('.organized-inline-editor')).toBeNull();
+    await view.render(); button(view.contentEl, 'Add description').click(); await flush(); const typed = view.contentEl.querySelector<HTMLTextAreaElement>('textarea[aria-label="Description"]')!; typed.value = 'Flushed on blur'; typed.dispatchEvent(new Event('input'));
+    typed.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' })); expect(view.editingModule).toBe('Description'); typed.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await flush(); expect(save).toHaveBeenLastCalledWith(task.id, 'Description', 'Flushed on blur'); expect(view.editingModule).toBe('');
+    await vi.advanceTimersByTimeAsync(1000); expect(save).toHaveBeenCalledTimes(2);
     choose(view, 'Add details', 'Idea'); await flush(); expect(view.module).toBe('Idea'); expect(view.editingModule).toBe('Idea'); expect(view.contentEl.querySelector('textarea[aria-label="Idea"]')).toBeTruthy();
     (document.activeElement as HTMLElement | null)?.blur(); choose(view, 'Add details', ''); await flush(); expect(titles(view)).toEqual(['Description']);
     view.module = 'Unknown'; await view.render(); expect(titles(view)).toEqual(['Description']);
@@ -84,7 +88,7 @@ describe('compact calendar and contextual task inspector', () => {
     await repo.write(file, before, before + 'Loose notes\n## Information\nOnly information\n## Idea\nAn idea\n## Question\nA question\n## Sources\nhttps://example.com\n## Notes\nMore notes\n');
     await repo.update(task.id, t => ({ ...t, movement_history: [{ id: 'move', kind: 'forward', source: 'manual', from: '2026-01-01', to: '2026-01-02', at: '2026-01-01T00:00:00Z' }] })); owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render();
     expect(titles(view)).toEqual(['Description', 'Idea', 'Question', 'Sources', 'Notes']); expect(view.contentEl.textContent!.match(/Only information/g)).toHaveLength(1); expect(view.contentEl.textContent).toContain('Loose notes'); expect(view.contentEl.querySelector('details')!.open).toBe(false);
-    for (const [label, heading] of [['description', 'Description'], ['idea', 'Idea'], ['question', 'Question'], ['sources', 'Sources'], ['notes', 'Notes']]) { button(view.contentEl, `Edit ${label}`).click(); await flush(); expect(view.contentEl.querySelector(`textarea[aria-label="${heading}"]`)).toBeTruthy(); button(view.contentEl, 'Cancel').click(); await flush(); expect(view.editingModule).toBe(''); }
+    for (const [label, heading] of [['description', 'Description'], ['idea', 'Idea'], ['question', 'Question'], ['sources', 'Sources'], ['notes', 'Notes']]) { button(view.contentEl, `Edit ${label}`).click(); await flush(); const editor = view.contentEl.querySelector<HTMLTextAreaElement>(`textarea[aria-label="${heading}"]`)!; expect(editor).toBeTruthy(); editor.blur(); await flush(); expect(view.editingModule).toBe(''); }
     const refs = Array.from(view.contentEl.querySelectorAll('details')).at(-1)!; refs.open = true; refs.dispatchEvent(new Event('toggle')); await flush(); expect(view.contentEl.textContent).toContain('No references found'); refs.open = false; refs.dispatchEvent(new Event('toggle')); expect(view.referencesOpen).toBe(false);
   });
   it('sorts project/favorite browsing, restores cancellation and clears stale module selection', async () => {
@@ -189,7 +193,7 @@ describe('compact calendar and contextual task inspector', () => {
     const { owner, view, repo } = await fixture(); view.tab = 'Projects'; await view.render();
     expect(Array.from(view.contentEl.querySelectorAll('.organized-empty')).map(el => el.textContent)).toEqual([
       'No favorites yet. Use [*] on a task or star it in the Task tab.',
-      'No project links yet. Use [b] on a task to link its project or topic note.',
+      'No project links yet. Use [j] on a task to link its project or topic note.',
       'No canceled tasks.',
     ]);
     view.selectedProject = 'Missing.md'; await view.render(); expect(view.contentEl.textContent).toContain('No tasks linked to Missing.md.');
@@ -204,5 +208,30 @@ describe('compact calendar and contextual task inspector', () => {
     vi.spyOn(repo, 'list').mockImplementationOnce(() => new Promise(r => { done = r; })); view.tab = 'Projects'; const browse = view.render(); view.tab = 'Calendar'; await view.render(); done([]); await browse; expect(view.tab).toBe('Calendar');
     vi.spyOn(owner.service, 'refs').mockImplementationOnce(() => new Promise(r => { done = r; })); view.tab = 'Task'; const pending = view.render(); await flush(); view.tab = 'Calendar'; await view.render(); done([]); await pending; expect(view.tab).toBe('Calendar');
     vi.spyOn(owner.service, 'refs').mockImplementationOnce(() => new Promise(r => { done = r; })); view.tab = 'Task'; const closed = view.render(); await flush(); view.contentEl.querySelector('details')!.open = false; done([]); await closed; expect(view.contentEl.textContent).not.toContain('No references found');
+  });
+  it('keeps projects listed after their last task is deleted and drops notes that no longer exist', async () => {
+    const { owner, view, repo, add, files, texts } = await fixture(); await add('Project.md'); await add('Gone.md');
+    const task = await repo.create('Only'); await repo.update(task.id, t => ({ ...t, projects: ['Project.md', 'Gone.md'] }));
+    view.tab = 'Projects'; await view.render(); expect(owner.settings.knownProjects).toEqual(['Project.md', 'Gone.md']);
+    const file = repo.file(repo.taskPath(task.id))!; files.delete(file.path); texts.delete(file.path); files.delete('Gone.md');
+    await view.render(); const picker = view.contentEl.querySelector<HTMLSelectElement>('#organized-project-filter')!;
+    expect(Array.from(picker.options).map(o => o.value)).toEqual(['', 'Project.md']);
+    expect(view.contentEl.textContent).toContain('No project links yet.'); owner.rememberProjects(['Project.md']); expect(owner.settings.knownProjects).toEqual(['Project.md', 'Gone.md']);
+  });
+  it('shows a recurring task as done today when today\'s occurrence is ticked, and targets only today when changed', async () => {
+    const { owner, view, repo, service, add, texts, files } = await fixture(); const today = service.daily.path(localDate());
+    const task = await repo.create('Daily habit'); await repo.update(task.id, t => ({ ...t, recurring: true, starred: true }));
+    await view.render(); owner.selectedTaskId = task.id; view.tab = 'Projects'; await view.render(); expect(view.contentEl.textContent).not.toContain('done · today');
+    await add(today, `- [x] Daily habit <!--organized:${task.id}-->\n- [X] Other <!--organized:otherotherother-->`);
+    await view.render(); const row = view.contentEl.querySelector('.organized-list-card')!; expect(row.querySelector('.organized-list-status')?.textContent).toBe('done · today'); expect(row.querySelector('.organized-status-dot')?.getAttribute('data-status')).toBe('completed');
+    view.tab = 'Task'; await view.render(); const status = view.contentEl.querySelector<HTMLSelectElement>('select[aria-label="Status"]')!;
+    expect(status.value).toBe('completed'); expect(Array.from(status.options).find(o => o.value === 'completed')?.text).toBe('done · today'); expect((await repo.read(task.id)).status).toBe('open');
+    status.value = 'open'; status.dispatchEvent(new Event('change')); await flush(); expect(texts.get(today)).toContain(`- [ ] Daily habit <!--organized:${task.id}-->`);
+    await view.render(); expect(view.contentEl.querySelector<HTMLSelectElement>('select[aria-label="Status"]')!.value).toBe('open');
+    const plain = await repo.create('Plain'); owner.selectedTaskId = plain.id; await view.render(); const plainStatus = view.contentEl.querySelector<HTMLSelectElement>('select[aria-label="Status"]')!; expect(Array.from(plainStatus.options).map(o => o.text)).toContain('completed');
+    texts.set(today, `- [ ] Habit <!--organized:${task.id}-->\n- [ ] Habit <!--organized:${task.id}-->`); owner.selectedTaskId = task.id; await view.render();
+    const twice = view.contentEl.querySelector<HTMLSelectElement>('select[aria-label="Status"]')!; twice.value = 'completed'; twice.dispatchEvent(new Event('change')); await flush(); expect(texts.get(today)).toContain('[ ] Habit');
+    files.delete(today); texts.delete(today); await view.render(); expect(view.contentEl.querySelector<HTMLSelectElement>('select[aria-label="Status"]')!.value).toBe('open');
+    const noNote = view.contentEl.querySelector<HTMLSelectElement>('select[aria-label="Status"]')!; noNote.value = 'completed'; noNote.dispatchEvent(new Event('change')); await flush(); expect((await repo.read(task.id)).status).toBe('open');
   });
 });

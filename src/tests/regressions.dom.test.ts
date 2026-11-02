@@ -65,7 +65,7 @@ describe('conflict and structural regression cases', () => {
     const fragment = Notice.instances.at(-1)!.message as DocumentFragment; fragment.querySelector<HTMLButtonElement>('button')!.click(); for (let i = 0; i < 50; i++) await Promise.resolve(); expect((await h.repo.read(task.id)).recurring).toBe(true);
   });
   it('reports recurrence conflicts with usable Undo instead of abandoning the successful part of a batch', async () => {
-    const h = harness(); const task = await h.repo.create('Repeat'); const source: any = await h.add('Origin.md', `- [f] Repeat <!--organized:${task.id}-->`); const context = { file: source, line: parseTasks(h.texts.get(source.path)!)[0] };
+    const h = harness(); const task = await h.repo.create('Repeat'); const source: any = await h.add('Origin.md', `- [r] Repeat <!--organized:${task.id}-->`); const context = { file: source, line: parseTasks(h.texts.get(source.path)!)[0] };
     await h.add('Daily/2099-01-01.md'); await h.add('Daily/2099-01-02.md');
     h.raw.vault.process.mockImplementationOnce(async () => { h.texts.set(source.path, 'Concurrent source change'); throw Error('concurrent destination'); });
     await h.service.recurrence(task.id, context); expect(h.texts.get('Daily/2099-01-01.md')).toBe(''); expect(h.texts.get('Daily/2099-01-02.md')).toContain(task.id); expect(h.texts.get(source.path)).toBe('Concurrent source change'); expect((Notice.instances.at(-1)?.message as DocumentFragment).textContent).toContain('preserved for repair');
