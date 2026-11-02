@@ -26,13 +26,13 @@ try {
   for (const width of [240, 320, 360, 390, 412, 768].filter(width => scale === 1 || width <= 412)) for (const dark of [false, true]) for (const rtl of [false, true]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(({ dark, rtl }) => { document.body.className = `${dark ? 'theme-dark' : 'theme-light'} is-mobile`; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, { dark, rtl });
-    for (const tab of ['Calendar', 'Week', 'Day', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'Eof']) {
+    for (const tab of ['Calendar', 'Week', 'Day', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Favorites', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'Eof']) {
       await page.evaluate(tab => window.scene(tab), tab);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       if (overflow) throw Error(`${engine}: horizontal overflow at ${width}${scale === 1 ? '' : ` with ${scale}x text`}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
       const tabs = await page.evaluate(() => { const list = document.querySelector('.organized-tabs'); const host = document.querySelector('.organized-view'); if (!list || !host) return null; const box = list.getBoundingClientRect(); const hostBox = host.getBoundingClientRect(); const rtl = getComputedStyle(host).direction === 'rtl'; const buttons = [...list.querySelectorAll('button')].map(button => { const b = button.getBoundingClientRect(); return [b.width, b.height, button.getAttribute('aria-label'), button.hasAttribute('data-icon')]; }); return { buttons, gap: rtl ? box.left - hostBox.left : hostBox.right - box.right }; });
       if (tabs) {
-        if (tabs.buttons.length !== 3 || tabs.buttons.some(([w, h, label, icon]) => w !== h || w > 44 || !label || !icon)) throw Error(`Tabs are not square labelled icon buttons: ${JSON.stringify(tabs.buttons)}`);
+        if (tabs.buttons.length !== 4 || tabs.buttons.some(([w, h, label, icon]) => w !== h || w > 44 || !label || !icon)) throw Error(`Tabs are not square labelled icon buttons: ${JSON.stringify(tabs.buttons)}`);
         if (tabs.gap > 24) throw Error(`Tabs are not aligned to the inline end of the panel: ${tabs.gap}px away at ${width}`);
       }
       const clippedButtons = await page.evaluate(() => [...document.querySelectorAll('.organized-view button')].filter(button => button.clientWidth > 0 && button.scrollWidth > button.clientWidth + 1).map(button => button.textContent.trim() || button.className));
@@ -85,15 +85,19 @@ try {
         if (await field.evaluate(el => getComputedStyle(el).borderTopWidth) !== '0px') throw Error('Inline editor draws its own border instead of matching the rendered text');
         if (fieldBox.width > width) throw Error(`Inline editor overflows its ${width}px host: ${fieldBox.width}`);
       }
+      if (tab === 'Favorites') {
+        const sections = await page.locator('.organized-section-title').allTextContents();
+        if (sections.join(',') !== 'Favorites') throw Error(`Favorites tab lost its section: ${sections.join(',')}`);
+        // Cards are filled with their project colour; the status is shown by the icon alone: done and in progress are green, open is gray.
+        const cards = await page.evaluate(() => { const read = status => { const card = document.querySelector(`.organized-list-card[data-status="${status}"]`); if (!card) return null; const icon = card.querySelector('.organized-list-status'); return { icon: icon ? getComputedStyle(icon).color : null, image: getComputedStyle(card).backgroundImage, project: card.hasAttribute('data-project') }; }; return { open: read('open'), completed: read('completed'), active: read('in_progress') }; });
+        if (!cards.open || !cards.completed || !cards.active) throw Error(`Favorites tab is missing status cards: ${JSON.stringify(cards)}`);
+        if (cards.completed.icon !== cards.active.icon || cards.open.icon === cards.completed.icon) throw Error(`Done and in-progress icons must share the green and open must differ: ${JSON.stringify(cards)}`);
+        if (![cards.open, cards.completed, cards.active].some(card => card.project && card.image.includes('gradient'))) throw Error(`No card is filled with its project colour: ${JSON.stringify(cards)}`);
+      }
       if (tab === 'Projects') {
         const sections = await page.locator('.organized-section-title').allTextContents();
-        if (sections.join(',') !== 'Favorites,Projects,Canceled') throw Error(`Projects tab lost its sections: ${sections.join(',')}`);
+        if (sections.join(',') !== 'Projects,Canceled') throw Error(`Projects tab lost its sections: ${sections.join(',')}`);
         if (await page.locator('.organized-list-card').count() < 2) throw Error('Projects tab did not render task cards');
-        // Cards are filled with their project colour; the status is shown by the icon alone, so the icon colours must differ.
-        const cards = await page.evaluate(() => { const read = status => { const card = document.querySelector(`.organized-list-card[data-status="${status}"]`); if (!card) return null; const icon = card.querySelector('.organized-list-status'); return { icon: icon ? getComputedStyle(icon).color : null, image: getComputedStyle(card).backgroundImage, project: card.hasAttribute('data-project') }; }; return { open: read('open'), completed: read('completed'), active: read('in_progress') }; });
-        if (!cards.open || !cards.completed || !cards.active) throw Error(`Projects tab is missing status cards: ${JSON.stringify(cards)}`);
-        if (new Set([cards.open.icon, cards.completed.icon, cards.active.icon]).size !== 3) throw Error(`Task status icon colours are not distinct: ${JSON.stringify(cards)}`);
-        if (![cards.open, cards.completed, cards.active].some(card => card.project && card.image.includes('gradient'))) throw Error(`No card is filled with its project colour: ${JSON.stringify(cards)}`);
         const stripes = await page.evaluate(() => Array.from(document.querySelectorAll('.organized-list-card[data-project] .organized-list-open')).map(el => getComputedStyle(el).borderInlineStartColor));
         if (!stripes.length || stripes.some(stripe => stripe === 'rgba(0, 0, 0, 0)')) throw Error(`Project cards lost their colour stripe: ${stripes}`);
         if (await page.locator('.organized-list-meta .organized-status-dot').count()) throw Error('Task rows still show a status dot next to their tinted card');

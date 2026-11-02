@@ -40,7 +40,7 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 ## Third-beta verification (2026-10-31)
 
 - 118 behavioral/policy tests; all 13 shipped TypeScript files retain 100% statements, branches, functions and lines.
-- Projects checks cover Favorites/Projects/Canceled sections, counts, labeled filtering and empty states. Task checks cover the hero, status dots, favorite/date/project metadata and the confirmed delete action, including occurrence removal, host trash and selection cleanup.
+- Projects checks cover Projects/Canceled sections and a separate Favorites tab (star icon), counts, labeled filtering and empty states. Task checks cover the hero, status dots, favorite/date/project metadata and the confirmed delete action, including occurrence removal, host trash and selection cleanup.
 - The information modal joins the Chromium/WebKit matrix at 240, 320, 390 and 768 pixels in light/dark and LTR/RTL. Checks enforce shared modal chrome, title integrity, an unclipped editor and no host-width overflow; the overflow canary now uses a sized host so a zero-height scene cannot mask it.
 - Build, typed lint, CSS lint, dead-code checks and cloud lint parity passed. These remain shim-based checks, not live Obsidian or real-device certification.
 
