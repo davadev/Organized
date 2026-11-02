@@ -94,7 +94,7 @@ describe('compact calendar and contextual task inspector', () => {
     const refs = Array.from(view.contentEl.querySelectorAll('details')).at(-1)!; refs.open = true; refs.dispatchEvent(new Event('toggle')); await flush(); expect(view.contentEl.textContent).toContain('No references found'); refs.open = false; refs.dispatchEvent(new Event('toggle')); expect(view.referencesOpen).toBe(false);
   });
   it('sorts project/favorite browsing, restores cancellation and clears stale module selection', async () => {
-    const { owner, view, repo } = await fixture(); const low = await repo.create('Low'); const high = await repo.create('High'); const canceled = await repo.create('Canceled'); const plain = await repo.create('Plain');
+    const { owner, view, repo } = await fixture(); owner.settings.hideClosedProjects = false; const low = await repo.create('Low'); const high = await repo.create('High'); const canceled = await repo.create('Canceled'); const plain = await repo.create('Plain');
     await repo.update(plain.id, t => ({ ...t, projects: ['Project.md'] }));
     await repo.update(low.id, t => ({ ...t, priority: 'low', starred: true, projects: ['Project.md'] })); await repo.update(high.id, t => ({ ...t, priority: 'high', starred: true, projects: ['Project.md', 'Reading list.md', 'Extra.md'], scheduled: '2026-01-02' })); await repo.update(canceled.id, t => ({ ...t, status: 'canceled' }));
     view.tab = 'Projects'; await view.render();
@@ -194,7 +194,7 @@ describe('compact calendar and contextual task inspector', () => {
     const staleFailure = view.render(); await flush(); await view.render(); rejectTask(Error('removed')); await staleFailure;
   });
   it('renders empty project sections and deletes the selected task after confirmation', async () => {
-    const { owner, view, repo } = await fixture(); view.tab = 'Favorites'; await view.render(); expect(view.contentEl.querySelector('.organized-empty')?.textContent).toBe('No favorites yet. Use [*] on a task or star it in the Task tab.'); view.tab = 'Projects'; await view.render();
+    const { owner, view, repo } = await fixture(); owner.settings.hideClosedProjects = false; view.tab = 'Favorites'; await view.render(); expect(view.contentEl.querySelector('.organized-empty')?.textContent).toBe('No favorites yet. Use [*] on a task or star it in the Task tab.'); view.tab = 'Projects'; await view.render();
     expect(Array.from(view.contentEl.querySelectorAll('.organized-empty')).map(el => el.textContent)).toEqual([
       'No project links yet. Use [j] on a task to link its project or topic note.',
       'No canceled tasks.',
@@ -278,7 +278,7 @@ describe('compact calendar and contextual task inspector', () => {
     expect(Array.from(view.contentEl.querySelectorAll<HTMLOptionElement>('#organized-project-filter option')).map(o => o.text)).toContain('Plan');
   });
   it('marks task cards and the task header with their status for colouring', async () => {
-    const { owner, view, repo } = await fixture(); const open = await repo.create('Open one'); const active = await repo.create('Active one'); const done = await repo.create('Done one'); const canceled = await repo.create('Canceled one');
+    const { owner, view, repo } = await fixture(); owner.settings.hideClosedProjects = false; const open = await repo.create('Open one'); const active = await repo.create('Active one'); const done = await repo.create('Done one'); const canceled = await repo.create('Canceled one');
     for (const [task, status] of [[open, 'open'], [active, 'in_progress'], [done, 'completed'], [canceled, 'canceled']] as const) await repo.update(task.id, t => ({ ...t, status, starred: true }));
     view.tab = 'Favorites'; await view.render(); const statuses = () => Array.from(view.contentEl.querySelectorAll('.organized-list-card')).map(card => card.getAttribute('data-status'));
     expect(statuses().sort()).toEqual(['completed', 'in_progress', 'open']); view.tab = 'Projects'; await view.render(); expect(statuses()).toEqual(['canceled']);
@@ -365,7 +365,7 @@ describe('compact calendar and contextual task inspector', () => {
     view.selectedDate = '2026-03-05'; await view.render(); expect(view.contentEl.textContent).toContain("No tasks in this day's note.");
   });
   it('shows one status icon per card, with the word only as a label', async () => {
-    const { view, repo, owner } = await fixture(); const statuses = ['open', 'in_progress', 'completed', 'canceled'] as const;
+    const { view, repo, owner } = await fixture(); owner.settings.hideClosedProjects = false; const statuses = ['open', 'in_progress', 'completed', 'canceled'] as const;
     for (const status of statuses) { const task = await repo.create(`Is ${status}`); await repo.update(task.id, t => ({ ...t, status, projects: ['P.md'] })); }
     const starred = await repo.create('Starred'); await repo.update(starred.id, t => ({ ...t, starred: true, priority: 'high', projects: ['P.md'] }));
     const dated = await repo.create('Dated'); await repo.update(dated.id, t => ({ ...t, scheduled: '2026-03-09', projects: ['P.md'] })); const hidden = await repo.create('Hidden date'); await repo.update(hidden.id, t => ({ ...t, scheduled: '2026-03-09', projects: ['P.md'] }));
@@ -393,7 +393,7 @@ describe('compact calendar and contextual task inspector', () => {
     const { parseTasks } = await import('../codec'); const text = await owner.repo.readText(note); owner.context = { file: note, line: parseTasks(text).find(t => t.id === target.id)! } as any; choose(view, 'Priority', 'low'); for (let i = 0; i < 8; i++) await flush(); expect((await repo.read(target.id)).priority).toBe('low'); expect((await owner.repo.readText(note)).split('\n')[0]).toContain('Target');
   });
   it('fills cards and calendar blocks with the project colour, gray without one, and sets colours from the Projects tab', async () => {
-    const { view, repo, add, owner, service } = await fixture(); vi.setSystemTime(new Date(2026, 2, 4, 15, 0, 0)); const folder = repo.projectFolder();
+    const { view, repo, add, owner, service } = await fixture(); owner.settings.hideClosedProjects = false; vi.setSystemTime(new Date(2026, 2, 4, 15, 0, 0)); const folder = repo.projectFolder();
     const blue: any = await add(`${folder}/Blue.md`, '---\norganized_type: project\norganized_color: "#3b82f6"\n---\n'); await add(`${folder}/Plain.md`, '---\norganized_type: project\n---\n');
     const tinted = await repo.create('Blue task'); const gray = await repo.create('Gray task'); const session = [{ start: new Date(2026, 2, 4, 9, 0).toISOString(), end: new Date(2026, 2, 4, 10, 0).toISOString() }];
     await repo.update(tinted.id, t => ({ ...t, projects: [blue.path], status: 'completed', work_sessions: session })); await repo.update(gray.id, t => ({ ...t, projects: [`${folder}/Plain.md`], work_sessions: session }));
@@ -471,6 +471,25 @@ describe('compact calendar and contextual task inspector', () => {
     expect(Array.from(box().querySelectorAll('.organized-session-row')).map(el => el.textContent)).toEqual(['13:00–14:15 · 1 h 15 min', '09:00–09:30 · 30 min', '08:00–08:45 · 45 min', '09:00–10:00 · 1 h']);
     box().open = true; box().dispatchEvent(new Event('toggle')); await view.render(); await flush(); expect(box().open).toBe(true); box().open = false; box().dispatchEvent(new Event('toggle')); await view.render(); await flush(); expect(box().open).toBe(false);
     const none = await repo.create('Fresh'); await repo.update(none.id, t => ({ ...t, time_tracked_seconds: 60 })); owner.selectedTaskId = none.id; await view.render(); await flush(); expect(view.contentEl.querySelector('details.organized-sessions')).toBeNull();
+  });
+  it('hides done and canceled tasks in the Projects tab by default, shows them on request and remembers the choice', async () => {
+    const { owner, view, repo } = await fixture(); const open = await repo.create('Still open'); const done = await repo.create('Finished'); const gone = await repo.create('Dropped'); const habit = await repo.create('Habit');
+    await repo.update(open.id, t => ({ ...t, projects: ['P.md'] })); await repo.update(done.id, t => ({ ...t, status: 'completed', projects: ['P.md'] })); await repo.update(gone.id, t => ({ ...t, status: 'canceled', projects: ['P.md'] }));
+    const titlesNow = () => Array.from(view.contentEl.querySelectorAll('.organized-list-title')).map(el => el.textContent); const toggle = () => view.contentEl.querySelector<HTMLButtonElement>('.organized-hide-done')!; const sections = () => Array.from(view.contentEl.querySelectorAll('.organized-section-title')).map(el => el.textContent);
+    expect(owner.settings.hideClosedProjects).toBe(true); view.tab = 'Projects'; await view.render(); await flush();
+    expect(titlesNow()).toEqual(['Still open']); expect(sections()).toEqual(['Projects']); expect(view.contentEl.textContent).toContain('2 done or canceled tasks hidden.'); expect(toggle().getAttribute('aria-pressed')).toBe('true'); expect(toggle().getAttribute('aria-label')).toBe('Show done and canceled tasks'); expect(toggle().getAttribute('data-icon')).toBe('eye-off'); expect(toggle().nextElementSibling?.classList.contains('organized-count')).toBe(true);
+    toggle().click(); await flush(); await flush(); expect(owner.settings.hideClosedProjects).toBe(false); expect(titlesNow().sort()).toEqual(['Dropped', 'Finished', 'Still open']); expect(sections()).toEqual(['Projects', 'Canceled']); expect(toggle().getAttribute('aria-pressed')).toBe('false'); expect(toggle().getAttribute('data-icon')).toBe('eye'); expect(view.contentEl.textContent).not.toContain('hidden.');
+    toggle().click(); await flush(); await flush(); expect(owner.settings.hideClosedProjects).toBe(true);
+    await repo.update(open.id, t => ({ ...t, status: 'completed' })); await view.render(); await flush(); expect(titlesNow()).toEqual([]); expect(view.contentEl.textContent).toContain('3 done or canceled tasks hidden.'); expect(view.contentEl.textContent).not.toContain('No tasks linked');
+    await repo.update(habit.id, t => ({ ...t, projects: ['Q.md'], status: 'completed' })); view.selectedProject = 'Q.md'; await view.render(); await flush(); expect(view.contentEl.textContent).toContain('2 done or canceled tasks hidden.'); await repo.update(habit.id, t => ({ ...t, status: 'open' })); await view.render(); await flush(); expect(titlesNow()).toEqual(['Habit']);
+    for (const id of [open.id, done.id, gone.id, habit.id]) await repo.update(id, t => ({ ...t, status: 'completed' })); await repo.update(gone.id, t => ({ ...t, status: 'canceled' })); view.selectedProject = ''; await view.render(); await flush(); expect(view.contentEl.textContent).toContain('4 done or canceled tasks hidden.');
+    const solo = await fixture(); const one = await solo.repo.create('One hidden'); await solo.repo.update(one.id, t => ({ ...t, status: 'canceled' })); solo.view.tab = 'Projects'; await solo.view.render(); await flush(); expect(solo.view.contentEl.textContent).toContain('1 done or canceled task hidden.');
+  });
+  it('stops long Projects lists at a page and shows the rest on request', async () => {
+    const { owner, view, repo } = await fixture(); owner.settings.hideClosedProjects = false;
+    for (let n = 0; n < 53; n++) { const task = await repo.create(`Linked ${String(n).padStart(2, '0')}`); await repo.update(task.id, t => ({ ...t, projects: ['Big.md'], status: n < 52 ? 'canceled' : 'open' })); }
+    view.tab = 'Projects'; await view.render(); await flush(); const rows = () => view.contentEl.querySelectorAll('.organized-list-card').length; const more = () => Array.from(view.contentEl.querySelectorAll<HTMLButtonElement>('.organized-show-more'));
+    expect(rows()).toBe(1 + 50); expect(more().map(b => b.textContent)).toEqual(['Show all 52']); more()[0].click(); await flush(); await flush(); expect(rows()).toBe(53); expect(more()).toHaveLength(0);
   });
   it('puts away the note keyboard when the panel shows on a phone, but never touches dialogs, the panel or a tablet', async () => {
     const { view, events } = await fixture(); await view.onOpen();
