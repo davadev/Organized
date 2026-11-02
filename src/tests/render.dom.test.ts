@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorState, StateField } from '@codemirror/state';
 import { DecorationSet, EditorView } from '@codemirror/view';
 import Organized from '../main';
-import { editorExtension, stepPastComments, GLYPHS, icon, projection, reading, refreshEditor } from '../render';
+import { editorExtension, hasRichProperties, stepPastComments, GLYPHS, icon, projection, reading, refreshEditor } from '../render';
 import { Component, editorLivePreviewField, MarkdownRenderChild } from './__mocks__/obsidian';
 import { installObsidianDom } from './__mocks__/obsidianDom';
 import { harness } from './harness';
@@ -97,5 +97,18 @@ describe('read-only projections and bundled visual markers', () => {
     const middle = at(8); stepPastComments(middle); expect(middle.state.selection.main.head).toBe(8); middle.destroy();
     const ranged = at(visibleEnd, 4); stepPastComments(ranged); expect(ranged.state.selection.main.head).toBe(4); ranged.destroy();
     const done = at(doc.indexOf('\n')); stepPastComments(done); expect(done.state.selection.main.head).toBe(doc.indexOf('\n')); done.destroy();
+  });
+  it('puts short properties inline beside the title and rich ones on their own row, and refreshes every open note', async () => {
+    const { owner, task } = await fixture(); const field = (editorExtension(owner) as any[])[0] as StateField<DecorationSet>; const doc = `- [ ] Rendered <!--organized:${task.id}-->\n- [ ] ordinary`;
+    const decoration = () => { let found: any; EditorState.create({ doc, selection: { anchor: doc.length }, extensions: [editorLivePreviewField, field] }).field(field).between(0, doc.length, (_f, _t, d) => { found = d; }); return found; };
+    owner.settings.displayProperties = ['priority']; expect(hasRichProperties(owner)).toBe(false); expect(decoration().spec.block).toBe(false); expect(decoration().spec.widget.toDOM().tagName).toBe('SPAN'); expect(decoration().spec.widget.eq(decoration().spec.widget)).toBe(true);
+    owner.settings.displayProperties = ['priority', 'notes']; expect(hasRichProperties(owner)).toBe(true); expect(decoration().spec.block).toBe(true); expect(decoration().spec.widget.toDOM().tagName).toBe('DIV');
+    owner.settings.displayProperties = ['sources']; expect(hasRichProperties(owner)).toBe(true);
+  });
+  it('places reading-mode properties beside the title, before a nested list, and below for rich ones', async () => {
+    const { owner, task } = await fixture(); const text = `- [ ] Parent <!--organized:${task.id}-->\n  - child`; const context: any = { sourcePath: 'Note.md', getSectionInfo: () => ({ text, lineStart: 0, lineEnd: 1 }), addChild: (c: any) => c.load() };
+    const list = () => { const host = createDiv(); const item = host.createEl('ul').createEl('li', { cls: 'task-list-item' }); item.createEl('input', { type: 'checkbox' }); item.createSpan({ text: 'Parent' }); item.createEl('ul').createEl('li', { text: 'child' }); return { host, item }; };
+    owner.settings.displayProperties = ['priority']; const inline = list(); await reading(owner, inline.host, context); const span = inline.item.querySelector('.organized-properties')!; expect(span.tagName).toBe('SPAN'); expect(span.nextElementSibling?.tagName).toBe('UL');
+    owner.settings.displayProperties = ['notes']; const rich = list(); await reading(owner, rich.host, context); expect(rich.item.querySelector('.organized-properties')!.tagName).toBe('DIV'); expect(rich.item.lastElementChild?.classList.contains('organized-properties')).toBe(true);
   });
 });

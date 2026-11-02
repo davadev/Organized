@@ -284,4 +284,9 @@ describe('plugin lifecycle and user-only editor actions', () => {
     plugin.settings.projectNotesMarked = false; await plugin.markProjectNotes(); expect(Notice.instances).toHaveLength(0); expect(plugin.settings.projectNotesMarked).toBe(true);
     await h.add('Two.md'); await h.add('Three.md'); plugin.settings.knownProjects = ['Two.md', 'Three.md']; plugin.settings.projectNotesMarked = false; await plugin.markProjectNotes(); expect(Notice.instances.at(-1)?.message).toContain('2 project notes marked');
   });
+  it('refreshes every open markdown note, not only the focused one, and ignores views without an editor', async () => {
+    const { h, plugin } = await loaded(); const a: any = { dispatch: vi.fn() }; const b: any = { dispatch: vi.fn() };
+    const view = (cm: any) => Object.assign(Object.create(MarkdownView.prototype), { editor: { cm } }); h.raw.workspace.getLeavesOfType.mockImplementation(((type: string) => type === 'markdown' ? [{ view: view(a) }, { view: view(b) }, { view: view(undefined) }, { view: {} }] : []) as any);
+    plugin.refresh(); expect(a.dispatch).toHaveBeenCalledOnce(); expect(b.dispatch).toHaveBeenCalledOnce(); h.raw.workspace.getLeavesOfType.mockReturnValue([] as any);
+  });
 });
