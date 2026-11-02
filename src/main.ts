@@ -88,6 +88,12 @@ export default class Organized extends Plugin {
       this.assertWritable(); await this.saveData({ ...this.settingsRaw, schemaVersion: 1, writerVersion: this.manifest.version, settings: { ...object(this.settingsRaw.settings), ...this.settings } }); if (refresh) this.refresh();
     }).catch(report);
   }
+  /** Collapsed task-tab headings persist until the user expands them again. */
+  setHeadingCollapsed(notePath: string, key: string, collapsed: boolean): void {
+    const keys = (this.settings.collapsedHeadings[notePath] ?? []).filter(k => k !== key); if (collapsed) keys.push(key);
+    const next = { ...this.settings.collapsedHeadings }; if (keys.length) next[notePath] = keys; else delete next[notePath];
+    this.settings.collapsedHeadings = next; this.saveSettings(false);
+  }
   /** Remembers project notes so they stay listed after their last task is deleted. */
   rememberProjects(projects: string[]): void {
     const added = projects.filter(p => !this.settings.knownProjects.includes(p)); if (!added.length) return;

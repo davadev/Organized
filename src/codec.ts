@@ -83,6 +83,11 @@ export function replaceTask(text: string, task: TaskLine, updates: Parameters<ty
   const lines = text.split("\n"); if (lines[task.line] !== task.raw) throw new Error("Task line changed. Retry from its current position.");
   lines[task.line] = taskText(task, updates); return lines.join("\n");
 }
+/** Index just after the last non-blank line before `end`, so appended items sit directly under existing ones. */
+function afterContent(lines: string[], end: number, floor: number): number {
+  let at = end; while (at > floor && lines[at - 1].trim() === "") at--;
+  return at;
+}
 export function insertTask(text: string, line: string, section: Section[]): { text: string; missing: boolean } {
   const newline = text.includes("\r\n") ? "\r\n" : "\n";
   const lines = text.split(/\r?\n/); let insert = -1;
@@ -92,7 +97,12 @@ export function insertTask(text: string, line: string, section: Section[]): { te
     insert = headings[0]?.line ?? lines.length;
   } else {
     const found = headings.find(h => JSON.stringify(h.section) === JSON.stringify(section));
-    if (found) insert = headings.find(h => h.line > found.line && h.section[h.section.length - 1].level <= section[section.length - 1].level)?.line ?? lines.length;
+    if (found) {
+      const end = headings.find(h => h.line > found.line && h.section[h.section.length - 1].level <= section[section.length - 1].level)?.line ?? lines.length;
+      insert = afterContent(lines, end, found.line + 1);
+      // A heading with nothing under it keeps its blank separator above the new item.
+      if (insert === found.line + 1 && insert < end) insert++;
+    }
   }
   if (insert < 0) {
     let parent: { line: number; section: Section[] } | undefined;
@@ -103,8 +113,11 @@ export function insertTask(text: string, line: string, section: Section[]): { te
       const existing = headings.filter(h => h.section.length === depth + 1 && h.section[depth].text === desired.text && h.section[depth].level === desired.level && JSON.stringify(h.section.slice(0, depth)) === JSON.stringify(section.slice(0, depth))).length;
       for (let ordinal = existing; ordinal <= desired.ordinal; ordinal++) generated.push(`${"#".repeat(desired.level)} ${desired.text}`, "");
     }
-    const at = parent ? headings.find(h => h.line > parent.line && h.section[h.section.length - 1].level <= parent.section[parent.section.length - 1].level)?.line ?? lines.length : lines.length;
-    lines.splice(at, 0, "", ...generated, line, "");
+    const end = parent ? headings.find(h => h.line > parent.line && h.section[h.section.length - 1].level <= parent.section[parent.section.length - 1].level)?.line ?? lines.length : lines.length;
+    // A trailing newline stays the last thing in the file; blank lines are added only where they separate blocks.
+    const at = afterContent(lines, end === lines.length && lines[end - 1] === "" ? end - 1 : end, 0);
+    const block = [...(at > 0 ? [""] : []), ...generated, line, ...(at < lines.length && lines[at].trim() !== "" ? [""] : at === lines.length ? [""] : [])];
+    lines.splice(at, 0, ...block);
     return { text: lines.join(newline), missing: true };
   }
   lines.splice(insert, 0, line); return { text: lines.join(newline), missing: false };

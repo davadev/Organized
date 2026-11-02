@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add an **All tasks in this note** button to the task view that moves the editor cursor off the task and returns the Task tab to the note's task overview.
+- The Task tab's current-note list now shows the headings tasks sit under, nested by level. Click a heading to collapse or expand it; collapsed headings stay collapsed across restarts until you expand them.
+- Tasks forwarded or scheduled into a daily note are placed directly under the previous task in their heading instead of after a blank line, and no longer add extra blank lines at the top of a new note.
 - **Breaking:** action markers no longer share letters with theme icons. Use `[a]` description, `[e]` idea, `[q]` question, `[s]` sources, `[j]` projects and `[r]` recurring. `[i]`, `[I]`, `[?]`, `["]`, `[b]` and `[f]` are now formatting only (icon, no action), as is every other letter.
 - Show a recurring task whose occurrence is ticked today as **done · today** in task lists and the Task tab; its stored status stays open so it recurs.
 - Description, idea, question, sources and notes autosave while typing and on blur, and the editor now matches the rendered text instead of showing heavy borders.
