@@ -27,7 +27,7 @@ const owner: any = {
   saveSettings() {}, onEditorUpdate() {}, deleteTask: async () => undefined,
   assertWritable() {}, run: async (fn: () => unknown) => fn(), contextFor: () => null,
   pickProjects() {}, saveModule: async () => undefined, refresh() {},
-  repo: { projectFolder: () => 'Tasks/Projects', list: async () => [browseTask, doneTask, activeTask, canceledTask], file: (path: string) => path.startsWith('Tasks/') || path.startsWith('Daily/2026-03') ? { path } : null, read: async () => task, taskPath: () => 'Tasks/task1234.md', readText: async () => note },
+  repo: { projectFolder: () => 'Tasks/Projects', taskColor: (t: any) => t.projects?.length ? '#3b82f6' : null, projectColor: () => '#3b82f6', list: async () => [browseTask, doneTask, activeTask, canceledTask], file: (path: string) => path.startsWith('Tasks/') || path.startsWith('Daily/2026-03') ? { path } : null, read: async () => task, taskPath: () => 'Tasks/task1234.md', readText: async () => note },
    service: { daily: { path: (d: string) => `Daily/${d}.md`, open: async () => null }, refs: async () => [], retiredWork: async () => [], reconcile: async () => undefined, resolve: async (context: any) => ({ text: noteTasksDoc, line: context.line }) },
    taskSourceEditor: () => ({ editor: noteTasksEditor, file: noteTasksFile }), taskLines: async () => parseTasks(noteTasksDoc),
 };

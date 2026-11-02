@@ -1,6 +1,7 @@
 import { Component, ItemView, WorkspaceLeaf, TFile, setIcon } from "obsidian";
 import type { Editor } from "obsidian";
 import { moment } from "./moment";
+import { rgbOf } from "./colors";
 import type Organized from "./main";
 import { elapsed, localDate, PRIORITIES, Section, STATUSES, Task } from "./model";
 import { byPriority, report } from "./service";
@@ -103,7 +104,7 @@ export class OrganizedInspectorView extends ItemView {
     return host.createSpan({ cls: "organized-status-dot", attr: { "data-status": this.shownStatus(task), "aria-hidden": "true" } });
   }
   private taskRow(host: HTMLElement, task: Task, action: () => Promise<unknown> | void): HTMLElement {
-    const row = host.createDiv({ cls: "organized-list-card", attr: { "data-status": this.shownStatus(task) } });
+    const row = host.createDiv({ cls: "organized-list-card", attr: { "data-status": this.shownStatus(task) } }); this.tint(row, task);
     // A real button cannot contain links; this focusable card keeps both usable.
     const open = row.createDiv({ cls: "organized-list-open", attr: { role: "button", tabindex: "0" } });
     const activate = () => { try { const result = action(); if (result) void result.catch(report); } catch (error) { report(error); } };
@@ -214,6 +215,22 @@ export class OrganizedInspectorView extends ItemView {
     }
   }
   /** Project notes in the project folder show by name; others keep their path. */
+  /** Paints an element with the colour of the task's project; without a coloured project it stays gray (blocks) or neutral (cards). */
+  private tint(el: HTMLElement, task: Task): void {
+    const color = this.owner.repo.taskColor(task); if (!color) return;
+    el.setAttribute("data-project", ""); el.setCssProps({ "--organized-project-rgb": rgbOf(color) });
+  }
+  /** One colour picker per project, folded away by default; the colour lives in the project note's frontmatter. */
+  private colorPickers(host: HTMLElement, projects: string[]): void {
+    const box = host.createEl("details", { cls: "organized-colors" }); box.createEl("summary", { text: "Project colors" });
+    for (const project of projects) {
+      const row = box.createDiv({ cls: "organized-color-row" }); const current = this.owner.repo.projectColor(project);
+      const input = row.createEl("input", { type: "color", cls: "organized-color-input", attr: { "aria-label": `Color of ${this.projectLabel(project)}` } }); input.value = current ?? "#808080";
+      row.createSpan({ cls: "organized-color-name", text: this.projectLabel(project) });
+      input.addEventListener("change", () => { void this.owner.run(() => this.owner.service.setProjectColor(project, input.value)); });
+      if (current) this.button(row, "Clear", () => this.owner.run(() => this.owner.service.setProjectColor(project, null))).addClass("organized-color-clear");
+    }
+  }
   private projectLabel(project: string): string {
     const folder = `${this.owner.repo.projectFolder()}/`;
     return (project.startsWith(folder) ? project.slice(folder.length) : project).replace(/\.md$/, "");
@@ -316,7 +333,7 @@ export class OrganizedInspectorView extends ItemView {
       const track = row.createDiv({ cls: "organized-week-track" });
       for (const block of blocks[i]) {
         const left = (block.startMin - from * 60) / ((to - from) * 60) * 100; const width = (block.endMin - block.startMin) / ((to - from) * 60) * 100;
-        const part = track.createSpan({ cls: "organized-week-block", attr: { "data-status": this.shownStatus(block.task) } });
+        const part = track.createSpan({ cls: "organized-week-block", attr: { "data-status": this.shownStatus(block.task) } }); this.tint(part, block.task);
         part.setCssProps({ "--organized-start": String(left), "--organized-width": String(width) });
       }
       row.createSpan({ cls: "organized-week-count", text: total ? `${done}/${total}` : "–" });
@@ -366,6 +383,7 @@ export class OrganizedInspectorView extends ItemView {
     for (const block of blocks) {
       const title = block.task.title; const range = `${clock(block.startMin)}–${block.endMin >= 1440 ? "24:00" : clock(block.endMin)}`;
       const part = grid.createEl("button", { cls: "organized-block", attr: { type: "button", "data-status": this.shownStatus(block.task), "aria-label": `${title}, ${range}${block.running ? ", running" : ""}`, title: `${title} · ${range}` } });
+      this.tint(part, block.task);
       part.setCssProps({ "--organized-top": String((block.startMin - from * 60) / span * 100), "--organized-height": String((block.endMin - block.startMin) / span * 100), "--organized-lane": String(block.lane), "--organized-lanes": String(block.lanes) });
       part.createSpan({ cls: "organized-block-title", text: title }); if (block.endMin - block.startMin >= 30) part.createSpan({ cls: "organized-block-time", text: range });
       // A retired task has no task note: open the daily note that kept its time instead.
@@ -471,6 +489,7 @@ export class OrganizedInspectorView extends ItemView {
     picker.createEl("option", { text: "All projects", value: "" });
     for (const project of projects) picker.createEl("option", { text: this.projectLabel(project), value: project }); picker.value = this.selectedProject;
     picker.addEventListener("change", () => { this.selectedProject = picker.value; picker.blur(); void this.render().catch(report); });
+    if (projects.length) this.colorPickers(projectSection, projects);
     const shown = tasks.filter(t => t.status !== "canceled" && t.projects.length && (!this.selectedProject || t.projects.includes(this.selectedProject)));
     if (!shown.length) projectSection.createDiv({ cls: "organized-empty", text: this.selectedProject ? `No tasks linked to ${this.projectLabel(this.selectedProject)}.` : "No project links yet. Use [j] on a task to link its project or topic note." });
     for (const task of shown) this.taskRow(projectSection, task, () => choose(task));

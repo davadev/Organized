@@ -279,6 +279,10 @@ export class TaskService {
     const pairs = [...linked].filter(p => !p.startsWith(`${folder}/`) && this.repo.file(p)).map(from => ({ from, to: path(`${folder}/${from.split("/").at(-1)!}`) }));
     return this.moveProjects(pairs);
   }
+  async setProjectColor(notePath: string, color: string | null): Promise<void> {
+    const file = this.repo.file(notePath); if (!file) throw new Error("The project note was renamed or removed.");
+    await this.repo.setProjectColor(file, color); this.changed();
+  }
   /** Gives every project note that predates the project marker its frontmatter: linked ones, remembered ones and anything already in the project folder. */
   async markProjects(): Promise<number> {
     const folder = this.repo.projectFolder();

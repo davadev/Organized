@@ -289,4 +289,9 @@ describe('plugin lifecycle and user-only editor actions', () => {
     const view = (cm: any) => Object.assign(Object.create(MarkdownView.prototype), { editor: { cm } }); h.raw.workspace.getLeavesOfType.mockImplementation(((type: string) => type === 'markdown' ? [{ view: view(a) }, { view: view(b) }, { view: view(undefined) }, { view: {} }] : []) as any);
     plugin.refresh(); expect(a.dispatch).toHaveBeenCalledOnce(); expect(b.dispatch).toHaveBeenCalledOnce(); h.raw.workspace.getLeavesOfType.mockReturnValue([] as any);
   });
+  it('repaints when a project note changes, not for other notes', async () => {
+    const { h, plugin } = await loaded(); h.layout[0](); await flush(); await vi.advanceTimersByTimeAsync(0); await flush(); const spy = vi.spyOn(plugin, 'refresh').mockImplementation(() => undefined); const projectNote: any = await h.add('Proj.md', '---\norganized_type: project\n---\n'); const other: any = await h.add('Other.md', 'x');
+    for (const fn of h.events['changed'] ?? []) { fn(other); expect(spy).not.toHaveBeenCalled(); fn(projectNote); expect(spy).toHaveBeenCalledOnce(); }
+    expect(h.events['changed']?.length).toBeGreaterThan(0);
+  });
 });

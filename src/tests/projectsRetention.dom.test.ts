@@ -104,3 +104,15 @@ describe("changing a priority from outside the note reorders its list", () => {
     const gone = await setup(); await gone.h.service.setPriority((await gone.h.repo.create("Unlisted")).id, "low"); expect(gone.order()).toEqual(["Low one", "Mid one", "Target"]);
   });
 });
+
+describe("project colours in frontmatter", () => {
+  it("saves a colour as #rrggbb next to the marker, reads it back, validates, clears it and picks the first coloured project for a task", async () => {
+    const h = harness(); const folder = h.repo.projectFolder(); const a: any = await h.add(`${folder}/A.md`, "---\ntags: [x]\n---\nbody"); await h.add(`${folder}/B.md`, PROJECT_FRONTMATTER); await h.add(`${folder}/Bad.md`, "---\norganized_color: blue\n---\n");
+    await h.service.setProjectColor(a.path, "#3B82F6"); expect(h.texts.get(a.path)).toContain("organized_color: '#3b82f6'"); expect(h.texts.get(a.path)).toContain("organized_type: project"); expect(h.texts.get(a.path)).toContain("tags"); expect(h.changed).toHaveBeenCalled();
+    expect(h.repo.projectColor(a.path)).toBe("#3b82f6"); expect(h.repo.projectColor(`${folder}/B.md`)).toBeNull(); expect(h.repo.projectColor(`${folder}/Bad.md`)).toBeNull(); expect(h.repo.projectColor("Missing.md")).toBeNull();
+    const task = { ...(await h.repo.create("T")), projects: [`${folder}/B.md`, a.path, `${folder}/Bad.md`] }; expect(h.repo.taskColor(task)).toBe("#3b82f6"); expect(h.repo.taskColor({ ...task, projects: [`${folder}/B.md`] })).toBeNull(); expect(h.repo.taskColor({ ...task, projects: [] })).toBeNull();
+    await expect(h.service.setProjectColor(a.path, "blue")).rejects.toThrow("#3b82f6"); await expect(h.service.setProjectColor("Missing.md", "#000000")).rejects.toThrow("renamed or removed");
+    await h.service.setProjectColor(a.path, null); expect(h.texts.get(a.path)).not.toContain("organized_color"); expect(h.repo.projectColor(a.path)).toBeNull();
+    const plain: any = await h.add("Plain.md", "plain"); await h.service.setProjectColor(plain.path, "#000000"); expect(h.repo.isProjectNote(plain)).toBe(true);
+  });
+});

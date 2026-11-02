@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Projects can have a colour. The **Projects** tab has a folded **Project colors** list with a colour picker per project (and Clear); the colour is stored in the project note's frontmatter as `organized_color: "#rrggbb"`. Task cards in the side panel are filled with their project's colour (the first coloured project of a task), and the Day view blocks and Week view bars use it too; without a coloured project, calendar blocks are gray and cards stay neutral.
+- The status colour moved from the card fill to its outline: open stays neutral, in progress takes your accent, done is green, canceled is muted. The same applies to the blocks in the Day and Week views.
 - Fix rendered task properties disappearing from the todo your cursor is on, which made the list jump as you clicked between tasks. The line being edited keeps its properties, and moving the cursor no longer redraws them.
 - Rendered task properties (such as priority) now sit to the right of the title instead of on a row below, which kept lists short; notes and sources, being whole Markdown blocks, still get their own row. Applies in Live Preview and reading view.
 - Switching a rendered property on or off now updates every open note at once; before, the note only changed after you clicked into it (the settings dialog had the focus).
