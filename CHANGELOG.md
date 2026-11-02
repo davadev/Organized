@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed the task ID flashing in Live Preview while a marker is being retyped (for example `[/]` to `[>]`): the hidden ID comment now stays hidden on any line, even when it briefly stops parsing as a task.
+
 - Sorting (when on) now keeps what you are doing at the top: a task that is in progress moves to the top of its list, and forwarded (`>`) and scheduled (`<`) lines are ranked as no priority, so a high-priority task you pushed to another day no longer sits at the top of today's list. The list re-sorts when a task is started or stopped, and when it is forwarded or scheduled, as well as when its priority changes.
 - **Make a standalone note.** Type `[n]` in a linked todo, or press **Make standalone note** on the Task tab: choose a folder (remembered), optional tags and an optional template, and a note titled after the todo is created holding the description, then Sources and Notes. The todo becomes a single link to the note (in your link style); its other copies are removed and its task note goes to the trash. A title that is not a valid filename is cleaned up, and when a note of that name exists you can create a numbered one or link the existing note, which is never modified. Nothing is changed if the folder or template is invalid.
 - Fix a description with sub-headings being cut short: a `## Heading` inside the description used to end it, moving the rest into Notes. Only the next section heading (Description, Sources, Notes) ends a section now. Headings in the panel's rendered Markdown are also in proportion to the card (a little larger than the text, not the size of a page title), and wide tables, code and images scroll or shrink inside the card.
