@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Project labels on task cards are now the project's colour itself, opaque and saturated, with white or dark text for whichever reads better, so they sit clearly on top of the status colour instead of blending into it.
+- The Task tab's note list has an eye button by the note's title to hide or show done tasks. Hidden tasks are left out of the list and of the heading counts, a line says how many are hidden, and the choice is remembered.
 - Task cards in the side panel are coloured by status again: done and in-progress tasks get a green wash and edge (in progress stronger), open stays neutral, canceled stays faded. The project colour now appears only as the colour of the project's name label on the card (a tinted chip, readable in light and dark themes). The calendar keeps the project colour for its Day blocks and Week bars.
 - Favorites have their own tab (a star icon, after Projects) instead of sitting above the projects; the Projects tab now lists projects and canceled tasks. Opening a task from Favorites offers **Back to favorites**.
 - In-progress tasks use the same green status icon as done ones (the shapes still differ: a play triangle and a tick), on cards and Day blocks.

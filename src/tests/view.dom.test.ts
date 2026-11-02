@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { softTint, TEXT_LIGHTNESS } from '../colors';
+import { labelColors, softTint } from '../colors';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Organized from '../main';
 import { OrganizedInspectorView, VIEW_TYPE } from '../view';
@@ -401,7 +401,7 @@ describe('compact calendar and contextual task inspector', () => {
     view.tab = 'Projects'; await view.render(); await flush();
     for (let n = 0; n < 6; n++) await flush();
     const blueCard = card(view, 'Blue task'); expect(blueCard.hasAttribute('data-project')).toBe(false); expect(blueCard.getAttribute('data-status')).toBe('completed');
-    const blueChip = blueCard.querySelector<HTMLElement>('.organized-chip')!; expect(blueChip.textContent).toBe('Blue'); expect(blueChip.hasAttribute('data-project')).toBe(true); expect(blueChip.style.getPropertyValue('--organized-project-rgb')).toBe(softTint('#3b82f6')); expect(blueChip.style.getPropertyValue('--organized-project-text')).toBe(softTint('#3b82f6', TEXT_LIGHTNESS.light)); expect(blueChip.style.getPropertyValue('--organized-project-text-dark')).toBe(softTint('#3b82f6', TEXT_LIGHTNESS.dark));
+    const blueChip = blueCard.querySelector<HTMLElement>('.organized-chip')!; expect(blueChip.textContent).toBe('Blue'); expect(blueChip.hasAttribute('data-project')).toBe(true); expect(blueChip.style.getPropertyValue('--organized-chip-bg')).toBe(labelColors('#3b82f6').background); expect(blueChip.style.getPropertyValue('--organized-chip-fg')).toBe(labelColors('#3b82f6').text);
     expect(card(view, 'Gray task').querySelector('.organized-chip')!.hasAttribute('data-project')).toBe(false);
     const rows = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-color-row')); expect(rows.map(row => row.querySelector('.organized-color-name')!.textContent)).toEqual(['Blue', 'Plain']);
     const inputs = rows.map(row => row.querySelector<HTMLInputElement>('input[type=color]')!); expect(inputs.map(input => input.value)).toEqual(['#3b82f6', '#808080']); expect(rows[0].querySelector('.organized-color-clear')).toBeTruthy(); expect(rows[1].querySelector('.organized-color-clear')).toBeNull();
@@ -416,5 +416,17 @@ describe('compact calendar and contextual task inspector', () => {
   });
   it('draws nothing for a Favorites render that a newer render has replaced', async () => {
     const { view } = await fixture(); await view.render(); const host = createDiv(); await view.favorites(host, -1); expect(host.childElementCount).toBe(0);
+  });
+  it('hides done tasks from the note list on request, keeps counts honest and remembers the choice', async () => {
+    const { owner: realOwner, view, repo, add } = await fixture(); const owner: any = realOwner; const a = await repo.create('Linked done'); const b = await repo.create('Linked open'); await repo.update(a.id, t => ({ ...t, status: 'completed' }));
+    const note: any = await add('Daily/2026-03-04.md', `# Work\n- [x] Linked done <!--organized:${a.id}-->\n- [ ] Linked open <!--organized:${b.id}-->\n- [x] Plain done\n- [ ] Plain open\n## Later\n- [X] Only done\n- [ ] Broken <!--organized:missingmissing-->\n- [x] Broken done <!--organized:othermissing1-->`);
+    const editor = { getValue: () => owner.repo.app.vault && '', getCursor: () => ({ line: 0, ch: 0 }) } as any; owner.taskSourceEditor = () => ({ editor, file: note }); owner.taskLines = async (file: any) => parseTasks(await repo.readText(file));
+    owner.selectedTaskId = null; view.tab = 'Task'; await view.render(); await flush(); const count = () => view.contentEl.querySelector('.organized-section .organized-count')!.textContent; const rows = () => Array.from(view.contentEl.querySelectorAll('.organized-list-title')).map(el => el.textContent);
+    const toggle = () => view.contentEl.querySelector<HTMLButtonElement>('.organized-hide-done')!; expect(count()).toBe('7'); expect(toggle().getAttribute('aria-pressed')).toBe('false'); expect(toggle().getAttribute('aria-label')).toBe('Hide done tasks'); expect(toggle().getAttribute('data-icon')).toBe('eye'); expect(rows()).toContain('Plain done');
+    expect(toggle().nextElementSibling?.classList.contains('organized-count')).toBe(true);
+    toggle().click(); await flush(); await flush(); expect(owner.settings.hideDoneTasks).toBe(true); expect(count()).toBe('3'); expect(rows()).toEqual(expect.arrayContaining(['Linked open', 'Plain open', 'Broken'])); expect(rows()).not.toContain('Plain done'); expect(rows()).not.toContain('Linked done'); expect(rows()).not.toContain('Only done');
+    expect(toggle().getAttribute('aria-pressed')).toBe('true'); expect(toggle().getAttribute('aria-label')).toBe('Show done tasks'); expect(toggle().getAttribute('data-icon')).toBe('eye-off'); expect(view.contentEl.textContent).toContain('4 done tasks hidden.'); expect(view.contentEl.querySelectorAll('.organized-heading-row .organized-count')[1]?.textContent).toBe('1');
+    toggle().click(); await flush(); await flush(); expect(owner.settings.hideDoneTasks).toBe(false); expect(count()).toBe('7');
+    const one = await add('Daily/2026-03-05.md', '- [x] Solo done\n- [ ] Solo open'); owner.taskSourceEditor = () => ({ editor, file: one }); owner.settings.hideDoneTasks = true; await view.render(); await flush(); expect(view.contentEl.textContent).toContain('1 done task hidden.');
   });
 });

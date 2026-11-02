@@ -1,7 +1,7 @@
 import { Component, ItemView, WorkspaceLeaf, TFile, setIcon } from "obsidian";
 import type { Editor } from "obsidian";
 import { moment } from "./moment";
-import { softTint, TEXT_LIGHTNESS } from "./colors";
+import { labelColors, softTint } from "./colors";
 import type Organized from "./main";
 import { elapsed, localDate, PRIORITIES, Section, STATUSES, Task } from "./model";
 import { byPriority, report } from "./service";
@@ -183,12 +183,20 @@ export class OrganizedInspectorView extends ItemView {
     const source = this.owner.taskSourceEditor();
     if (!source) { host.createEl("p", { text: "Open a Markdown note to browse its tasks here." }); return; }
     const lines = await this.owner.taskLines(source.file); await this.loadDoneToday();
+    // Read every linked task first: whether a line is done decides what is listed, and the headings' counts must match.
+    const tasks = new Map<string, Task | null>(await Promise.all(lines.filter(line => line.id).map(async line => [line.id!, await this.owner.repo.read(line.id!).catch(() => null)] as const)));
     if (generation !== this.renderId) return;
+    const hideDone = this.owner.settings.hideDoneTasks;
+    const isDone = (line: TaskLine) => { const task = line.id ? tasks.get(line.id) : null; return task ? this.shownStatus(task) === "completed" : line.marker.toLowerCase() === "x"; };
+    const visible = hideDone ? lines.filter(line => !isDone(line)) : lines; const doneHidden = lines.length - visible.length;
     const name = source.file.path.split("/").at(-1)!.replace(/\.md$/i, "");
-    const list = this.section(host, name, lines.length); list.addClass("organized-grouped");
+    const list = this.section(host, name, visible.length); list.addClass("organized-grouped");
+    const head = list.querySelector<HTMLElement>(".organized-section-head")!;
+    const toggle = this.iconButton(head, hideDone ? "Show done tasks" : "Hide done tasks", hideDone ? "eye-off" : "eye", () => { this.owner.setHideDoneTasks(!hideDone); return this.render(); });
+    toggle.setAttribute("aria-pressed", String(hideDone)); toggle.addClass("organized-hide-done"); head.insertBefore(toggle, head.querySelector(".organized-count"));
     if (!lines.length) { list.createDiv({ cls: "organized-empty", text: "No tasks in this note yet." }); return; }
     let shown: Section[] = []; let hidden = 0;
-    for (const line of lines) {
+    for (const line of visible) {
       // Emit headings this line enters; a collapsed ancestor hides everything beneath it.
       let common = 0; while (common < shown.length && common < line.section.length && sameHeading(shown[common], line.section[common])) common++;
       if (common < hidden) hidden = 0;
@@ -196,26 +204,19 @@ export class OrganizedInspectorView extends ItemView {
         if (hidden) break;
         const key = JSON.stringify(line.section.slice(0, depth + 1));
         const collapsed = this.owner.settings.collapsedHeadings[source.file.path]?.includes(key) === true;
-        this.headingRow(list, source.file.path, line.section[depth], depth, key, collapsed, lines.filter(l => JSON.stringify(l.section.slice(0, depth + 1)) === key).length);
+        this.headingRow(list, source.file.path, line.section[depth], depth, key, collapsed, visible.filter(l => JSON.stringify(l.section.slice(0, depth + 1)) === key).length);
         if (collapsed) hidden = depth + 1;
       }
       shown = line.section;
       if (hidden) continue;
       // Tasks sit one level inside the heading that owns them.
       const indent = (row: HTMLElement) => { row.addClass("organized-indented"); row.setCssProps({ "--organized-depth": String(line.section.length) }); };
-      if (line.id) {
-        try {
-          const task = await this.owner.repo.read(line.id);
-          if (generation !== this.renderId) return;
-          indent(this.taskRow(list, task, () => this.focusNoteTask(source.editor, source.file, line, task.id)));
-        } catch {
-          if (generation !== this.renderId) return;
-          indent(this.noteTaskRow(list, source.file, source.editor, line, "Linked task unavailable"));
-        }
-      } else indent(this.noteTaskRow(list, source.file, source.editor, line, "Regular todo"));
+      const task = line.id ? tasks.get(line.id) : null;
+      if (task) indent(this.taskRow(list, task, () => this.focusNoteTask(source.editor, source.file, line, task.id)));
+      else indent(this.noteTaskRow(list, source.file, source.editor, line, line.id ? "Linked task unavailable" : "Regular todo"));
     }
+    if (doneHidden) list.createDiv({ cls: "organized-empty", text: `${doneHidden} done task${doneHidden === 1 ? "" : "s"} hidden.` });
   }
-  /** Project notes in the project folder show by name; others keep their path. */
   /** Paints an element with the colour of the task's project; without a coloured project it stays gray (blocks) or neutral (cards). */
   private tint(el: HTMLElement, task: Task): void {
     const color = this.owner.repo.taskColor(task); if (!color) return;
@@ -235,8 +236,9 @@ export class OrganizedInspectorView extends ItemView {
   /** The project's name as a small label, in the project's colour when it has one. */
   private projectChip(host: HTMLElement, project: string): void {
     const chip = host.createSpan({ cls: "organized-chip", text: this.projectLabel(project) }); const color = this.owner.repo.projectColor(project); if (!color) return;
-    chip.setAttribute("data-project", ""); chip.setCssProps({ "--organized-project-rgb": softTint(color), "--organized-project-text": softTint(color, TEXT_LIGHTNESS.light), "--organized-project-text-dark": softTint(color, TEXT_LIGHTNESS.dark) });
+    const { background, text } = labelColors(color); chip.setAttribute("data-project", ""); chip.setCssProps({ "--organized-chip-bg": background, "--organized-chip-fg": text });
   }
+  /** Project notes in the project folder show by name; others keep their path. */
   private projectLabel(project: string): string {
     const folder = `${this.owner.repo.projectFolder()}/`;
     return (project.startsWith(folder) ? project.slice(folder.length) : project).replace(/\.md$/, "");
