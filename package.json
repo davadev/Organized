@@ -1,5 +1,7 @@
 {
   "scripts": {
+    "screenshots": "node scripts/render-screenshots.mjs",
+    "check:screenshots": "node scripts/render-screenshots.mjs --check",
     "check:layout": "node scripts/check-layout.mjs chromium",
     "check:webkit": "node scripts/check-layout.mjs webkit",
     "check:identity": "node scripts/check-identity.mjs",

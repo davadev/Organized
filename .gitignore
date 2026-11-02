@@ -7,4 +7,3 @@ dev-vault/.obsidian/
 dev-vault/*
 !dev-vault/Welcome.md
 test-results/
-resources/screenshots/*.png
