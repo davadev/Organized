@@ -160,7 +160,7 @@ export class OrganizedInspectorView extends ItemView {
     const lines = await this.owner.taskLines(source.file); await this.loadDoneToday();
     if (generation !== this.renderId) return;
     const name = source.file.path.split("/").at(-1)!.replace(/\.md$/i, "");
-    const list = this.section(host, name, lines.length);
+    const list = this.section(host, name, lines.length); list.addClass("organized-grouped");
     if (!lines.length) { list.createDiv({ cls: "organized-empty", text: "No tasks in this note yet." }); return; }
     let shown: Section[] = []; let hidden = 0;
     for (const line of lines) {
@@ -176,16 +176,18 @@ export class OrganizedInspectorView extends ItemView {
       }
       shown = line.section;
       if (hidden) continue;
+      // Tasks sit one level inside the heading that owns them.
+      const indent = (row: HTMLElement) => { row.addClass("organized-indented"); row.setCssProps({ "--organized-depth": String(line.section.length) }); };
       if (line.id) {
         try {
           const task = await this.owner.repo.read(line.id);
           if (generation !== this.renderId) return;
-          this.taskRow(list, task, () => this.focusNoteTask(source.editor, source.file, line, task.id));
+          indent(this.taskRow(list, task, () => this.focusNoteTask(source.editor, source.file, line, task.id)));
         } catch {
           if (generation !== this.renderId) return;
-          this.noteTaskRow(list, source.file, source.editor, line, "Linked task unavailable");
+          indent(this.noteTaskRow(list, source.file, source.editor, line, "Linked task unavailable"));
         }
-      } else this.noteTaskRow(list, source.file, source.editor, line, "Regular todo");
+      } else indent(this.noteTaskRow(list, source.file, source.editor, line, "Regular todo"));
     }
   }
   private headingRow(host: HTMLElement, notePath: string, heading: Section, depth: number, key: string, collapsed: boolean, count: number): void {
