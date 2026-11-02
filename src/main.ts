@@ -20,6 +20,7 @@ export default class Organized extends Plugin {
   safety!: DataSafety;
   context: Context | null = null;
   selectedTaskId: string | null = null;
+  private shownNote: string | null = null;
   private lastNoteEditor: { editor: Editor; file: TFile } | null = null;
   revision = 0;
   readonly projectionListeners = new Set<() => void>();
@@ -66,7 +67,7 @@ export default class Organized extends Plugin {
         this.registerEvent(this.app.vault.on("rename", (file, oldPath) => { this.service.forget(oldPath); if (file instanceof TFile) void this.service.index(file).then(() => this.refresh()).catch(report); }));
         this.registerEvent(this.app.vault.on("delete", file => { this.service.forget(file.path); this.refresh(); }));
         void this.run(() => this.migrateProjects());
-        this.registerEvent(this.app.workspace.on("file-open", file => { if (file) void this.run(() => this.service.reconcile(file)); }));
+        this.registerEvent(this.app.workspace.on("file-open", file => { this.followCursor(); if (file) void this.run(() => this.service.reconcile(file)); }));
       });
       this.loaded = true;
       this.registerInterval(window.setTimeout(() => { void writeCrashState(adapter, crashPath, DEFAULT_CRASH_STATE); }, 30000));
@@ -141,18 +142,20 @@ export default class Organized extends Plugin {
     return line ? { file, line } : null;
   }
   followCursor(): void {
+    // The task list shows the note in the main area, so switching notes must repaint it even when no task is selected on either side.
+    const note = this.taskSourceEditor()?.file.path ?? null; const noteChanged = note !== this.shownNote; this.shownNote = note;
     const active = this.activeEditor();
     // Focusing the inspector is not leaving the selected task. Only an actual
     // Markdown editor cursor change can replace its context.
-    if (!active) return;
-    this.lastNoteEditor = active;
+    if (!active) { if (noteChanged) this.eachView(view => { void view.render().catch(report); }); return; }
     const next = this.current(active.editor, active.file);
     const changed = (next?.line.id ?? null) !== (this.context?.line.id ?? null);
     this.context = next;
-    if (changed) {
-      this.selectedTaskId = next?.line.id ?? null;
-      this.eachView(view => { view.origin = "Editor cursor"; view.module = ""; view.editingModule = ""; view.editingTitle = false; void view.render().catch(report); });
-    }
+    if (changed) this.selectedTaskId = next?.line.id ?? null;
+    if (changed || noteChanged) this.eachView(view => {
+      if (changed) { view.origin = "Editor cursor"; view.module = ""; view.editingModule = ""; view.editingTitle = false; }
+      void view.render().catch(report);
+    });
   }
   eachView(callback: (view: OrganizedInspectorView) => void): void {
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) if (leaf.view instanceof OrganizedInspectorView) callback(leaf.view);

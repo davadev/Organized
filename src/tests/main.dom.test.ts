@@ -212,4 +212,14 @@ describe('plugin lifecycle and user-only editor actions', () => {
     recent.mockReturnValue({ view: Object.assign(new MarkdownView(), { file: null, editor }) } as any); expect(plugin.taskSourceEditor()).toEqual({ editor, file });
     recent.mockReturnValue(null); h.files.delete(file.path); expect(plugin.taskSourceEditor()).toBeNull();
   });
+  it('repaints the task list when the note changes even if no task is selected before or after, and on file-open', async () => {
+    const { h, plugin } = await loaded(); h.layout[0]();
+    const first: any = await h.add('Recovery.md', '- [ ] Plain one'); const second: any = await h.add('Daily.md', 'Intro\n- [ ] Plain two');
+    const view = new OrganizedInspectorView({ app: h.app } as any, plugin); const render = vi.spyOn(view, 'render').mockResolvedValue(); h.raw.workspace.getLeavesOfType.mockReturnValue([{ view }]);
+    h.setActive(first); view.tab = 'Task'; view.module = 'Idea'; plugin.followCursor(); expect(render).toHaveBeenCalledTimes(1); expect(view.module).toBe('Idea');
+    plugin.followCursor(); expect(render).toHaveBeenCalledTimes(1);
+    h.setActive(second); h.events['file-open'][0](second); expect(render).toHaveBeenCalledTimes(2); expect(plugin.taskSourceEditor()?.file).toBe(second);
+    h.clearActive(); h.raw.workspace.getMostRecentLeaf.mockReturnValue({ view: Object.assign(new MarkdownView(), { file: first, editor: { getValue: () => '' } }) } as any);
+    plugin.followCursor(); expect(render).toHaveBeenCalledTimes(3); plugin.followCursor(); expect(render).toHaveBeenCalledTimes(3);
+  });
 });
