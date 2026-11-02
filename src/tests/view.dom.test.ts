@@ -491,4 +491,16 @@ describe('compact calendar and contextual task inspector', () => {
     view.tab = 'Projects'; await view.render(); await flush(); const rows = () => view.contentEl.querySelectorAll('.organized-list-card').length; const more = () => Array.from(view.contentEl.querySelectorAll<HTMLButtonElement>('.organized-show-more'));
     expect(rows()).toBe(1 + 50); expect(more().map(b => b.textContent)).toEqual(['Show all 52']); more()[0].click(); await flush(); await flush(); expect(rows()).toBe(53); expect(more()).toHaveLength(0);
   });
+  it('puts away the note keyboard when the panel shows on a phone, but never touches dialogs, the panel or a tablet', async () => {
+    const { view, events } = await fixture(); await view.onOpen();
+    const note = document.body.createDiv({ cls: 'cm-editor' }); const editable = note.createDiv({ attr: { contenteditable: 'true', tabindex: '0' } }); const dialog = document.body.createDiv({ cls: 'modal-container' }); const field = dialog.createEl('input'); const inside = view.contentEl.createEl('input');
+    const focused = () => document.activeElement; editable.focus(); expect(focused()).toBe(editable);
+    for (const event of ['layout-change', 'active-leaf-change']) { for (const fn of events[event] ?? []) fn(); } expect(focused()).toBe(editable);
+    document.body.classList.add('is-phone'); view.contentEl.style.display = 'none'; for (const fn of events['layout-change'] ?? []) fn(); expect(focused()).toBe(editable); view.contentEl.style.display = '';
+    for (const fn of events['layout-change'] ?? []) fn(); expect(focused()).not.toBe(editable); editable.focus(); for (const fn of events['active-leaf-change'] ?? []) fn(); expect(focused()).not.toBe(editable);
+    editable.focus(); view.contentEl.dispatchEvent(new Event('pointerdown')); expect(focused()).not.toBe(editable);
+    field.focus(); for (const fn of events['layout-change'] ?? []) fn(); expect(focused()).toBe(field); inside.focus(); view.dismissKeyboard(); expect(focused()).toBe(inside);
+    const plain = document.body.createEl('button'); plain.focus(); view.dismissKeyboard(); expect(focused()).toBe(plain); (document.activeElement as HTMLElement).blur(); view.dismissKeyboard();
+    expect(events['layout-change']?.length).toBeGreaterThan(0); expect(events['active-leaf-change']?.length).toBeGreaterThan(0); document.body.classList.remove('is-phone');
+  });
 });

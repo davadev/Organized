@@ -44,7 +44,18 @@ export class OrganizedInspectorView extends ItemView {
   getViewType(): string { return VIEW_TYPE; }
   getDisplayText(): string { return "Organized"; }
   getIcon(): string { return "calendar-check"; }
-  onOpen(): Promise<void> { return this.render(); }
+  onOpen(): Promise<void> {
+    // On a phone the panel is a drawer over the note, so a keyboard the note left up only hides the panel.
+    this.registerEvent(this.app.workspace.on("layout-change", () => this.dismissKeyboard()));
+    this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.dismissKeyboard()));
+    this.contentEl.addEventListener("pointerdown", () => this.dismissKeyboard(), { capture: true });
+    this.dismissKeyboard(); return this.render();
+  }
+  /** Puts away the note's keyboard while the panel is showing on a phone; an input in a dialog or in the panel itself is left alone. */
+  dismissKeyboard(): void {
+    const doc = this.contentEl.doc; if (!doc.body.hasClass("is-phone") || !this.contentEl.isShown()) return;
+    const active = doc.activeElement; if (active instanceof HTMLElement && active.closest(".cm-editor") && !this.contentEl.contains(active)) active.blur();
+  }
   onClose(): Promise<void> { this.renderId++; this.removeChild(this.markdown); this.contentEl.empty(); return Promise.resolve(); }
   async render(): Promise<void> {
     const generation = ++this.renderId; const host = this.contentEl;

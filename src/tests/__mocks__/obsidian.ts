@@ -22,6 +22,7 @@ export class Component {
   cleanups: (() => void)[] = [];
   children: Component[] = [];
   register(fn: () => void) { this.cleanups.push(fn); }
+  registerEvent(_ref: unknown): void {}
   addChild<T extends Component>(child: T): T { this.children.push(child); child.load(); return child; }
   removeChild(child: Component) { this.children.splice(this.children.indexOf(child), 1); child.unload(); return child; }
   load() {}
