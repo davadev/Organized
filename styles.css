@@ -3,6 +3,7 @@
   --organized-card: var(--background-secondary);
   padding: var(--size-4-3);
   padding-block-end: calc(5.5rem + var(--mobile-navbar-height, 0px) + env(safe-area-inset-bottom, 0px));
+  overflow-x: hidden;
   overflow-y: auto;
   min-inline-size: 0;
   color: var(--text-normal);
@@ -17,9 +18,9 @@
 .organized-settings .setting-item-description { margin-block-start: 2px; line-height: 1.4; }
 .organized-settings .setting-item-description:empty { display: none; }
 .organized-view *, .organized-modal * { box-sizing: border-box; min-inline-size: 0; }
-.organized-tabs { display: flex; gap: 3px; padding: 3px; margin-block-end: 20px; border-radius: var(--radius-m, 8px); background: var(--background-secondary); }
+.organized-tabs { display: flex; flex-wrap: wrap; gap: 3px; padding: 3px; margin-block-end: 20px; border-radius: var(--radius-m, 8px); background: var(--background-secondary); }
 .organized-view .organized-tabs button.organized-tab {
-  flex: 1; min-block-size: 36px; block-size: auto; margin: 0; padding: 6px;
+  flex: 1 1 auto; min-inline-size: max-content; min-block-size: 36px; block-size: auto; margin: 0; padding: 6px;
   border: 0; border-radius: var(--radius-s, 5px); background: transparent;
   box-shadow: none; font-size: 13px; font-weight: 500; color: var(--text-muted);
 }
@@ -106,6 +107,32 @@
 .organized-section-title { margin: 0; color: var(--text-normal); font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
 .organized-count { min-inline-size: 20px; padding: 1px 6px; border: 1px solid var(--background-modifier-border); border-radius: 999px; background: var(--background-secondary); color: var(--text-muted); font-size: 11px; font-weight: 500; text-align: center; font-variant-numeric: tabular-nums; }
 .organized-list-card { border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m, 8px); background: var(--organized-card); overflow: hidden; }
+/* Task status colours. Open stays neutral so unfinished work stands out by contrast; done is a faint green wash with a green edge, in progress takes the accent of the theme. Plain colours first, for a WebView that cannot mix colours. */
+.organized-view {
+  --organized-edge-done: var(--color-green);
+  --organized-edge-active: var(--interactive-accent);
+  --organized-card-done: var(--organized-card);
+  --organized-card-active: var(--organized-card);
+}
+@supports (color: color-mix(in oklab, red, blue)) {
+  .organized-view {
+    --organized-edge-done: color-mix(in oklab, var(--color-green) 70%, var(--organized-card));
+    --organized-card-done: color-mix(in oklab, var(--organized-card), var(--color-green) 13%);
+    --organized-card-active: color-mix(in oklab, var(--organized-card), var(--interactive-accent) 11%);
+  }
+  .theme-dark .organized-view {
+    --organized-card-done: color-mix(in oklab, var(--organized-card), var(--color-green) 17%);
+    --organized-card-active: color-mix(in oklab, var(--organized-card), var(--interactive-accent) 15%);
+  }
+}
+.organized-list-card[data-status="completed"], .organized-task-hero[data-status="completed"] { background: var(--organized-card-done); }
+.organized-list-card[data-status="in_progress"], .organized-task-hero[data-status="in_progress"] { background: var(--organized-card-active); }
+.organized-view .organized-panel .organized-list-card[data-status="completed"] .organized-list-open { border-inline-start-color: var(--organized-edge-done); }
+.organized-view .organized-panel .organized-list-card[data-status="in_progress"] .organized-list-open { border-inline-start-color: var(--organized-edge-active); }
+.organized-task-hero[data-status="completed"] { border-inline-start-color: var(--organized-edge-done); }
+.organized-task-hero[data-status="canceled"] { border-inline-start-color: var(--background-modifier-border-hover); }
+.organized-list-card[data-status="completed"] .organized-list-title { color: var(--text-muted); }
+.organized-list-card[data-status="canceled"] .organized-list-title { color: var(--text-faint); text-decoration: line-through; }
 .organized-view .organized-panel .organized-list-open { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 6px; inline-size: 100%; padding: 12px; border: 0; border-inline-start: 3px solid transparent; border-radius: 0; background: transparent; color: var(--text-normal); text-align: start; cursor: pointer; }
 .organized-view .organized-panel .organized-list-open:hover { border-inline-start-color: var(--interactive-accent); background: var(--background-modifier-hover); }
 .organized-view .organized-panel .organized-list-open:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: -2px; }
@@ -143,14 +170,14 @@
   .organized-view { --organized-card: color-mix(in srgb, var(--background-secondary), var(--interactive-accent) 3%); }
 }
 .organized-task-notes, .organized-rich-property { white-space: normal; overflow-wrap: anywhere; }
-.organized-modal { max-block-size: calc(80dvh - env(safe-area-inset-bottom, 0px)); overflow-y: auto; }
+.organized-modal { max-block-size: 80vh; overflow-y: auto; }
 .modal-container.organized-modal-host { align-items: flex-start; padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px)); }
 body.is-mobile .modal-container.organized-modal-host { overflow-y: auto; }
-.organized-modal-window { inline-size: min(92vw, 460px); max-inline-size: 92vw; max-block-size: calc(100dvh - 32px); display: flex; flex-direction: column; border: 1px solid var(--background-modifier-border); border-block-start: 3px solid var(--interactive-accent); border-radius: var(--radius-m, 8px); box-shadow: var(--shadow-l, 0 12px 32px #0003); padding: 0; }
+.organized-modal-window { inline-size: min(92vw, 460px); max-inline-size: 92vw; max-block-size: calc(100vh - 32px); display: flex; flex-direction: column; border: 1px solid var(--background-modifier-border); border-block-start: 3px solid var(--interactive-accent); border-radius: var(--radius-m, 8px); box-shadow: var(--shadow-l, 0 12px 32px #0003); padding: 0; }
 .organized-modal-window .modal-title { margin: 0; padding: 14px 16px 0; color: var(--text-normal); font-size: 16px; font-weight: 600; line-height: 1.4; }
 .organized-modal-window .modal-content { padding: 12px 16px 16px; overflow-y: auto; min-block-size: 0; }
 .organized-modal-window .modal-content p { margin-block: 0 12px; }
-.organized-modal-window .organized-modal { max-block-size: calc(70dvh - env(safe-area-inset-bottom, 0px)); overflow-y: auto; }
+.organized-modal-window .organized-modal { max-block-size: 70vh; overflow-y: auto; }
 .organized-modal-window .organized-modal-label { display: block; margin-block: 2px 6px; color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .organized-modal-window .organized-modal input:not([type="checkbox"]), .organized-modal-window .organized-modal textarea { inline-size: 100%; min-block-size: 44px; padding: 8px 10px; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s, 5px); background: var(--background-primary); color: var(--text-normal); box-shadow: none; font: inherit; font-size: 14px; }
 .organized-modal-window .organized-modal input:not([type="checkbox"]):focus, .organized-modal-window .organized-modal textarea:focus { border-color: var(--interactive-accent); outline: 2px solid var(--interactive-accent); outline-offset: 1px; }
@@ -163,12 +190,12 @@ body.is-mobile .modal-container.organized-modal-host { overflow-y: auto; }
 .organized-modal-window .modal-content button.mod-cta { border-color: var(--interactive-accent); background: var(--interactive-accent); color: var(--text-on-accent); }
 .organized-modal-window .modal-content button.mod-cta:hover { background: var(--interactive-accent-hover, var(--interactive-accent)); }
 .organized-modal-window .modal-content button.mod-warning { border-color: transparent; background: var(--background-modifier-error); color: var(--text-on-accent); }
-.organized-modal-window .organized-project-results { display: flex; flex-direction: column; gap: 2px; margin-block: 10px; max-block-size: 45dvh; overflow-y: auto; }
+.organized-modal-window .organized-project-results { display: flex; flex-direction: column; gap: 2px; margin-block: 10px; max-block-size: 45vh; overflow-y: auto; }
 .organized-modal-window .organized-project-choice { display: flex; align-items: center; gap: var(--size-4-2); min-block-size: 44px; padding-inline: 6px; border-radius: var(--radius-s, 5px); overflow-wrap: anywhere; }
 .organized-modal-window .organized-project-choice:hover { background: var(--background-modifier-hover); }
 .organized-modal-window .organized-suggestion-title { color: var(--text-normal); font-size: 14px; }
 .organized-modal-window .organized-suggestion-meta { color: var(--text-muted); font-size: 11px; }
-.organized-project-results { max-block-size: 45dvh; overflow-y: auto; }
+.organized-project-results { max-block-size: 45vh; overflow-y: auto; }
 .organized-project-choice { display: flex; align-items: center; gap: var(--size-4-2); min-block-size: 44px; overflow-wrap: anywhere; }
 .organized-suggestion { padding-block: var(--size-4-2); min-block-size: 44px; }
 .organized-suggestion-keep { border-block-end: 1px solid var(--background-modifier-border); }
@@ -410,3 +437,10 @@ SOFTWARE.
 .organized-glyph[data-marker="M"], .organized-task-line .organized-checkbox[data-organized-marker="M"] { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' width='16' height='16'%3E%3Cpath d='M5.45 5.154A4.25 4.25 0 0 0 9.25 7.5h1.378a2.251 2.251 0 1 1 0 1.5H9.25A5.734 5.734 0 0 1 5 7.123v3.505a2.25 2.25 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.95-.218ZM4.25 13.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm8.5-4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM5 3.25a.75.75 0 1 0 0 .005V3.25Z'%3E%3C/path%3E%3C/svg%3E"); }
 .organized-glyph[data-marker="D"], .organized-task-line .organized-checkbox[data-organized-marker="D"] { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' width='16' height='16'%3E%3Cpath d='M3.25 1A2.25 2.25 0 0 1 4 5.372v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.251 2.251 0 0 1 3.25 1Zm9.5 14a2.25 2.25 0 1 1 0-4.5 2.25 2.25 0 0 1 0 4.5ZM2.5 3.25a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0ZM3.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm9.5 0a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM14 7.5a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Zm0-4.25a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Z'%3E%3C/path%3E%3C/svg%3E"); }
 .organized-glyph[data-marker="/"], .organized-task-line .organized-checkbox[data-organized-marker="/"] { border: 1px solid currentColor; background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
+/* Dynamic viewport units follow the mobile browser bars; a WebView without them (older Android) keeps the plain vh limits above. */
+@supports (max-block-size: 1dvh) {
+  .organized-modal { max-block-size: calc(80dvh - env(safe-area-inset-bottom, 0px)); }
+  .organized-modal-window { max-block-size: calc(100dvh - 32px); }
+  .organized-modal-window .organized-modal { max-block-size: calc(70dvh - env(safe-area-inset-bottom, 0px)); }
+  .organized-modal-window .organized-project-results, .organized-project-results { max-block-size: 45dvh; }
+}

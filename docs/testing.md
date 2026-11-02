@@ -92,3 +92,5 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Select a task from the editor, press the list button in the Task tab header, and confirm the cursor moves to its heading and the note overview appears.
 - With project notes linked from outside the task folder, update and restart; confirm they move into `Tasks/Projects/`, links in other notes still work, the notice lists any skipped name conflicts, and Undo moves them back.
 - Link a task to a new project with `[j]` and confirm the note is created in `Tasks/Projects/`.
+- Confirm task cards show a green wash when done, accent when in progress, neutral when open, in light and dark themes.
+- On Android with the system font set to large, confirm the side panel does not slide sideways, the Calendar/Task/Projects tabs are readable, and dialogs fit the screen.
