@@ -17,6 +17,7 @@ export class TaskService {
   readonly daily: DailyNotes;
   private references: Map<string, Set<string>> | null = null;
   private referenceBuild: Promise<void> | null = null;
+  private indexing = new Map<string, number>();
   private reconciled = "";
   private retentionReconciled = "";
   undoChanges: Change[] = [];
@@ -325,23 +326,32 @@ export class TaskService {
     return result;
   }
   async refs(id: string): Promise<string[]> {
-    if (!this.references) {
-      this.references = new Map();
-      this.referenceBuild = (async () => { for (const file of this.repo.app.vault.getMarkdownFiles()) await this.index(file); })();
-    }
-    await this.referenceBuild; const task = await this.repo.read(id); const today = localDate();
-    return [...(this.references.get(id) ?? [])].filter(p => this.repo.file(p) && (!task.recurring || !this.daily.date(p) || this.daily.date(p) === today))
+    // An edit or deletion can reset the index while it builds; rebuild rather than answer from a half-built or dropped one.
+    let map: Map<string, Set<string>>;
+    do {
+      if (!this.references) {
+        this.references = new Map();
+        this.referenceBuild = (async () => { for (const file of this.repo.app.vault.getMarkdownFiles()) await this.index(file); })();
+      }
+      map = this.references; await this.referenceBuild;
+    } while (map !== this.references);
+    const task = await this.repo.read(id); const today = localDate();
+    return [...(map.get(id) ?? [])].filter(p => this.repo.file(p) && (!task.recurring || !this.daily.date(p) || this.daily.date(p) === today))
       .sort((a, b) => Number(this.daily.date(b) === today) - Number(this.daily.date(a) === today) || a.localeCompare(b));
   }
+  /** Re-reads one note into the index. Only the newest read of a note counts, and a read that outlives a reset or `forget` is dropped. */
   async index(file: TFile): Promise<void> {
-    if (!this.references) return;
-    this.forget(file.path);
-    for (const task of parseTasks(await this.repo.readText(file))) if (task.id) {
-      const refs = this.references.get(task.id) ?? new Set<string>(); refs.add(file.path); this.references.set(task.id, refs);
+    const map = this.references; if (!map) return;
+    const ticket = (this.indexing.get(file.path) ?? 0) + 1; this.indexing.set(file.path, ticket);
+    const text = await this.repo.readText(file);
+    if (this.references !== map || this.indexing.get(file.path) !== ticket) return;
+    this.forget(file.path); this.indexing.set(file.path, ticket);
+    for (const task of parseTasks(text)) if (task.id) {
+      const refs = map.get(task.id) ?? new Set<string>(); refs.add(file.path); map.set(task.id, refs);
     }
   }
   hasReference(id: string | null, notePath: string): boolean { return id !== null && this.references?.get(id)?.has(notePath) === true; }
-  forget(notePath: string): void { if (this.references) for (const refs of this.references.values()) refs.delete(notePath); }
+  forget(notePath: string): void { this.indexing.delete(notePath); if (this.references) for (const refs of this.references.values()) refs.delete(notePath); }
   async convertTodos(file: TFile): Promise<void> {
     if (this.repo.isTaskRecord(file.path)) throw new Error("Choose a regular note, not a task note.");
     const text = await this.repo.readText(file);
@@ -349,6 +359,8 @@ export class TaskService {
     if (!todos.length) { new Notice("No unchecked todos to convert in this note."); return; }
     const count = `${todos.length} unchecked todo${todos.length === 1 ? "" : "s"}`;
     if (!(await this.confirm(`Convert ${count} in ${file.path} into Organized tasks?`, "Convert todos", "Convert"))) return;
+    // The note may change while the prompt is open; check before creating task notes that a stale write would orphan.
+    if (await this.repo.readText(file) !== text) throw new Error(`${file.path} changed while confirming; preserved. Retry the action.`);
     const lines = text.split("\n");
     for (const todo of todos) {
       const task = await this.repo.create(todo.title);

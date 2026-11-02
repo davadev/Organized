@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed rare races in the references list (a note edited or a task deleted while the list loaded could error or show stale notes) and in converting todos (editing the note while the confirmation was open could leave unlinked task notes).
 - The Timer card's session list is now a foldable **Sessions (N)** section, closed by default (it remembers being opened), and lists every session newest first, grouped by day with each day's total. Before, it showed only the five latest in a fixed list.
 - Project notes are now organised by status. A new project note starts with **Open**, **In progress** and **Done** headings, and a task linked to the project is written under the heading for its status; when the task's status changes (from the panel, the editor or a checkbox) its line in the project note moves to the matching heading, with **Canceled** added when needed. Headings you already have are reused (any level, any capitalisation), and an older note without them gets the headings added at the end the first time a status changes. Existing lines are not rearranged until their task changes.
 - Project notes record when they started: `organized_start: YYYY-MM-DD` in the frontmatter, set automatically for new projects and, once on update, for every existing project note (to the update date). An end date (`organized_end`) is reserved for later and is not used yet.
