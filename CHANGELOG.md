@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix opening a task from a Day view block (or any other tab) leaving the panel scrolled past its tab bar, so the tabs and the "Back to calendar" button were out of sight. A new tab or task now starts at the top; re-rendering the same page keeps your scroll position.
 - Quieter task cards: the project label is now a small dot in the project's colour followed by its name in muted text (instead of a solid block), so the title leads and the colour is an accent. Done cards have a fainter green wash and no left stripe; only an in-progress card keeps the green stripe and a stronger wash, so the two states read differently without another colour.
 - Fix the project colour pickers on mobile, where the native control stretched into tall pills ignoring its size. Each colour is now a 22 px square swatch with the native picker laid invisibly over it, so a tap still opens the picker and the swatch updates as you choose.
 - Project labels on task cards are now the project's colour itself, opaque and saturated, with white or dark text for whichever reads better, so they sit clearly on top of the status colour instead of blending into it.

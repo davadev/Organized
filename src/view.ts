@@ -31,6 +31,7 @@ export class OrganizedInspectorView extends ItemView {
   editingTitle = false;
   referencesOpen = false;
   private renderId = 0;
+  private placed = "";
   private scrolledModule = "";
   private doneToday = new Set<string>();
   private markdown = this.addChild(new Component());
@@ -58,6 +59,9 @@ export class OrganizedInspectorView extends ItemView {
     else if (this.tab === "Task") await this.task(panel, generation);
     else if (this.tab === "Projects") await this.projects(panel, generation);
     else await this.favorites(panel, generation);
+    // Switching tab or task starts at the top: the panel keeps its scroll offset across renders, so a long Day view left the new page scrolled past its tab bar.
+    const place = this.tab === "Task" ? `Task:${this.owner.selectedTaskId}` : this.tab;
+    if (generation === this.renderId && place !== this.placed) { this.placed = place; host.scrollTop = 0; }
   }
   button(host: HTMLElement, label: string, action: () => Promise<unknown> | void): HTMLButtonElement {
     const b = host.createEl("button", { cls: "organized-button", text: label, attr: { type: "button" } }); b.addEventListener("click", () => { try { const result = action(); if (result) void result.catch(report); } catch (error) { report(error); } }); return b;
