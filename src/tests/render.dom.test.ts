@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorState, StateField } from '@codemirror/state';
 import { DecorationSet, EditorView } from '@codemirror/view';
 import Organized from '../main';
-import { editorExtension, GLYPHS, icon, projection, reading, refreshEditor } from '../render';
+import { editorExtension, stepPastComments, GLYPHS, icon, projection, reading, refreshEditor } from '../render';
 import { Component, editorLivePreviewField, MarkdownRenderChild } from './__mocks__/obsidian';
 import { installObsidianDom } from './__mocks__/obsidianDom';
 import { harness } from './harness';
@@ -88,5 +88,14 @@ describe('read-only projections and bundled visual markers', () => {
     const view = new EditorView({ state, parent: createDiv() }); expect(view.dom.textContent).not.toContain(task.id); expect(view.dom.textContent).not.toContain('organized:repeat'); expect(view.state.doc.toString()).toBe(doc);
     const atomic = state.facet(EditorView.atomicRanges)[0]; expect(atomic(view).size).toBe(2); expect(atomic({ plugin: () => null } as any).size).toBe(0); view.destroy();
     const source = new EditorView({ state: EditorState.create({ doc, extensions: editorExtension(owner) }), parent: createDiv() }); expect(source.dom.textContent).toContain(task.id); source.destroy();
+  });
+  it('moves the caret past trailing identity comments before Enter, and leaves other positions alone', async () => {
+    const { owner, task } = await fixture(); vi.spyOn(owner, 'onEditorUpdate').mockImplementation(() => undefined);
+    const doc = `- [ ] Test task <!--organized:${task.id}--> <!--organized:repeat-->\n- [ ] Other`; const visibleEnd = '- [ ] Test task'.length;
+    const at = (anchor: number, head = anchor) => new EditorView({ state: EditorState.create({ doc, selection: { anchor, head }, extensions: editorExtension(owner) }), parent: createDiv() });
+    const end = at(visibleEnd); expect(stepPastComments(end)).toBe(false); expect(end.state.selection.main.head).toBe(doc.indexOf('\n')); end.destroy();
+    const middle = at(8); stepPastComments(middle); expect(middle.state.selection.main.head).toBe(8); middle.destroy();
+    const ranged = at(visibleEnd, 4); stepPastComments(ranged); expect(ranged.state.selection.main.head).toBe(4); ranged.destroy();
+    const done = at(doc.indexOf('\n')); stepPastComments(done); expect(done.state.selection.main.head).toBe(doc.indexOf('\n')); done.destroy();
   });
 });
