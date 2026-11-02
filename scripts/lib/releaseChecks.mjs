@@ -136,10 +136,22 @@ export function attestStepProblem(workflowText, subjects = ["main.js", "manifest
 
 const SEMVER = String.raw`\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?`;
 
-/** Does a shell command create or push a SemVer release tag? Used by the PreToolUse hook. */
-export function isReleaseTagCommand(command) {
+/**
+ * Classify a shell command for the PreToolUse hook:
+ *   "block-release-cmd"  gh release create|upload|edit|delete (release.yml publishes; never by hand)
+ *   "block-push-tags"    git push --tags / --follow-tags (could publish a tag from an unreviewed commit; push ONE tag by name)
+ *   "needs-check"        creates or pushes a SemVer tag (git tag [-a -m msg] X.Y.Z, git push origin X.Y.Z, HEAD:refs/tags/X.Y.Z)
+ *   "allow"              anything else (including git tag -d)
+ * A hook matches command TEXT only; it is a seatbelt, the release workflow is the real gate.
+ */
+export function classifyReleaseCommand(command) {
   const c = String(command ?? "");
-  const creates = new RegExp(String.raw`\bgit\s+tag\s+(?:-[a-zA-Z]+\s+)*${SEMVER}\b`).test(c);
-  const pushes = new RegExp(String.raw`\bgit\s+push\b[^\n;&|]*\s(?:refs/tags/)?${SEMVER}\b`).test(c) || /\bgit\s+push\b[^\n;&|]*--tags\b/.test(c);
-  return creates || pushes;
+  if (/\bgh\s+release\s+(?:create|upload|edit|delete)\b/.test(c)) return "block-release-cmd";
+  if (/\bgit\s+push\b[^\n;&|]*--(?:follow-)?tags\b/.test(c)) return "block-push-tags";
+  const creates = new RegExp(String.raw`\bgit\s+tag\b(?![^\n;&|]*\s-[a-zA-Z]*d\b)[^\n;&|]*\s${SEMVER}(?=\s|$|["';&|])`).test(c);
+  const pushes = new RegExp(String.raw`\bgit\s+push\b[^\n;&|]*[\s:](?:refs/tags/)?${SEMVER}(?=\s|$|["';&|])`).test(c);
+  return creates || pushes ? "needs-check" : "allow";
 }
+
+/** Does a shell command create or push a SemVer release tag? */
+export const isReleaseTagCommand = (command) => classifyReleaseCommand(command) === "needs-check";
