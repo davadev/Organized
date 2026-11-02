@@ -90,3 +90,5 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - In the Task tab with the cursor off any task, confirm headings appear, collapse/expand on click, and stay collapsed after reopening the inspector or restarting Obsidian.
 - Forward several tasks from one heading into a new daily note and confirm there are no blank lines between them.
 - Select a task from the editor, press the list button in the Task tab header, and confirm the cursor moves to its heading and the note overview appears.
+- With project notes linked from outside the task folder, update and restart; confirm they move into `Tasks/Projects/`, links in other notes still work, the notice lists any skipped name conflicts, and Undo moves them back.
+- Link a task to a new project with `[j]` and confirm the note is created in `Tasks/Projects/`.

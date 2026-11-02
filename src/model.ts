@@ -29,11 +29,12 @@ export interface Settings {
   dailyTemplate: string;
   knownProjects: string[];
   collapsedHeadings: Record<string, string[]>;
+  projectsMigrated: boolean;
 }
 export const DEFAULT_SETTINGS: Settings = {
   taskFolder: "Tasks", dailyFolder: "Daily", dailyFormat: "YYYY-MM-DD", autoForward: true,
   missingSection: "recreate", sortScope: "list", displayProperties: [], showScheduledDate: true, taskRetentionDays: 0,
-  dailyTemplate: "", knownProjects: [], collapsedHeadings: {},
+  dailyTemplate: "", knownProjects: [], collapsedHeadings: {}, projectsMigrated: false,
 };
 export function object(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -75,6 +76,7 @@ export function settingsFrom(value: unknown): Settings {
   s.taskRetentionDays = Number.isInteger(v.taskRetentionDays) && Number(v.taskRetentionDays) >= 0 && Number(v.taskRetentionDays) <= 36500 ? Number(v.taskRetentionDays) : 0;
   try { if (typeof v.dailyTemplate === "string" && v.dailyTemplate.trim()) { const template = path(v.dailyTemplate); if (template.endsWith(".md")) s.dailyTemplate = template; } } catch { /* Invalid persisted paths use safe defaults. */ }
   s.knownProjects = [...new Set(strings(v.knownProjects).filter(p => { try { return path(p) === p && p.endsWith(".md"); } catch { return false; } }))];
+  s.projectsMigrated = v.projectsMigrated === true;
   s.collapsedHeadings = {};
   for (const [notePath, keys] of Object.entries(object(v.collapsedHeadings))) { const kept = [...new Set(strings(keys))]; if (kept.length) s.collapsedHeadings[notePath] = kept; }
   return s;

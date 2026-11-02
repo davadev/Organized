@@ -75,7 +75,7 @@ export class ConfirmModal extends Modal {
 }
 export class ProjectPicker extends Modal {
   readonly selected: Set<string>;
-  constructor(app: App, readonly notes: string[], selected: string[], readonly save: (notes: string[]) => Promise<void>) { super(app); decorate(this); this.selected = new Set(selected); }
+  constructor(app: App, readonly notes: string[], selected: string[], readonly save: (notes: string[]) => Promise<void>, readonly folder = "") { super(app); decorate(this); this.selected = new Set(selected); }
   onOpen(): void {
     this.titleEl.setText("Link projects or topics"); this.contentEl.addClass("organized-modal");
     this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Find or create a root note" });
@@ -84,7 +84,7 @@ export class ProjectPicker extends Modal {
     const paint = () => {
       results.empty(); const query = search.value.trim();
       const notes = new Set([...this.notes, ...this.selected].filter(n => n.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
-      if (query && !query.includes("/")) { try { notes.add(`${path(query.replace(/\.md$/, ""))}.md`); } catch { /* Invalid drafts cannot be selected. */ } }
+      if (query && !query.includes("/")) { try { notes.add(path(`${this.folder ? `${this.folder}/` : ""}${query.replace(/\.md$/, "")}.md`)); } catch { /* Invalid drafts cannot be selected. */ } }
       for (const note of notes) {
         const label = results.createEl("label", { cls: "organized-project-choice" });
         const input = label.createEl("input", { type: "checkbox" }); input.checked = this.selected.has(note);

@@ -62,6 +62,7 @@ describe("native task, date, source and project modals", () => {
     input.value = '../bad'; input.dispatchEvent(new Event('input')); expect(modal.contentEl.querySelectorAll('input[type=checkbox]')).toHaveLength(0);
     input.value = 'bad?'; input.dispatchEvent(new Event('input')); expect(modal.contentEl.querySelectorAll('input[type=checkbox]')).toHaveLength(0);
     modal.contentEl.querySelector('button')!.click(); await flush(); expect(save).toHaveBeenCalledWith(['Selected.md', 'New.md']); expect(h.files.size).toBe(0);
+    const filed = new ProjectPicker(h.app, [], [], save, 'Tasks/Projects'); filed.open(); const filedInput = filed.contentEl.querySelector('input[type=search]') as HTMLInputElement; filedInput.value = 'Plan.md'; filedInput.dispatchEvent(new Event('input')); expect(filed.contentEl.textContent).toContain('Tasks/Projects/Plan.md (create)'); filed.close();
     const failed = new ProjectPicker(h.app, [], [], async () => { throw Error('project failure'); }); failed.open(); failed.contentEl.querySelector('button')!.click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain('project failure');
   });
 });

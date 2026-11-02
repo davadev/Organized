@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- New project notes are created in `<task folder>/Projects/` instead of the vault root. On first launch of this version, notes already linked as projects are moved there automatically (Obsidian updates links to them); a summary notice offers Undo and reports any note skipped because a same-named note already exists in the destination. Project notes in that folder are treated as ordinary notes, not task records.
 - Add an **All tasks in this note** button to the task view that moves the editor cursor off the task and returns the Task tab to the note's task overview.
 - The Task tab's current-note list now shows the headings tasks sit under, nested by level. Click a heading to collapse or expand it; collapsed headings stay collapsed across restarts until you expand them.
 - Tasks forwarded or scheduled into a daily note are placed directly under the previous task in their heading instead of after a blank line, and no longer add extra blank lines at the top of a new note.

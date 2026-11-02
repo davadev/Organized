@@ -37,6 +37,10 @@ export function harness() {
       processFrontMatter: vi.fn(async (file: TFile, fn: (fm: Record<string, unknown>) => void) => {
         const { frontmatter, body } = splitNote(texts.get(file.path)!); fn(frontmatter); texts.set(file.path, `---\n${stringifyYaml(frontmatter)}---\n${body}`);
       }),
+      renameFile: vi.fn(async (file: TFile, to: string) => {
+        if (files.has(to)) throw new Error("Exists"); const text = texts.get(file.path)!; files.delete(file.path); texts.delete(file.path);
+        file.path = to; file.name = to.split("/").pop()!; file.basename = file.name.replace(/\.md$/, ""); files.set(to, file); texts.set(to, text);
+      }),
       trashFile: vi.fn(async (file: TFile) => { texts.delete(file.path); files.delete(file.path); }),
     },
     workspace: {
