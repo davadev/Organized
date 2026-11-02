@@ -4,7 +4,7 @@ import { EditorState, Transaction } from "@codemirror/state";
 import Organized from "../main";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
 import { harness } from "./harness";
-import { Modal, Notice } from "./__mocks__/obsidian";
+import { MarkdownView, Modal, Notice } from "./__mocks__/obsidian";
 import { ConfirmModal, DatePicker, KEEP_AS_TODO, PriorityPicker, ProjectPicker, TaskPicker } from "../modals";
 import { parseTasks } from "../codec";
 import { OrganizedInspectorView, VIEW_TYPE } from "../view";
@@ -202,5 +202,14 @@ describe('plugin lifecycle and user-only editor actions', () => {
     await plugin.migrateProjects(); const notice = Notice.instances.at(-1)!; await h.add('Plan.md'); (notice.message as DocumentFragment).querySelector('button')!.click(); await flush(); await vi.advanceTimersByTimeAsync(0); await flush();
     expect(Notice.instances.at(-1)?.message).toContain('Some projects could not move back'); expect(h.texts.has(`${folder}/Plan.md`)).toBe(true);
     plugin.settings.projectsMigrated = false; plugin.settings.knownProjects = []; const only = await h.add('Solo.md'); await plugin.repo.update(task.id, t => ({ ...t, projects: ['Solo.md'] })); h.files.set(`${folder}/Solo.md`, only); Notice.instances.length = 0; await plugin.migrateProjects(); expect(Notice.instances.at(-1)?.message).toBeTruthy();
+  });
+  it('finds the open note for the task list even when no editor event has fired and the panel has focus', async () => {
+    const { h, plugin } = await loaded(); const file: any = await h.add('Daily/Today.md', '# Work\n- [ ] A'); const editor: any = { getValue: () => '# Work\n- [ ] A', getCursor: () => ({ line: 0, ch: 0 }) };
+    const recent = h.raw.workspace.getMostRecentLeaf; expect(plugin.taskSourceEditor()).toBeNull();
+    const view = Object.assign(new MarkdownView(), { file, editor }); recent.mockReturnValue({ view } as any);
+    expect(plugin.taskSourceEditor()).toEqual({ editor, file });
+    recent.mockReturnValue({ view: { file, editor } } as any); expect(plugin.taskSourceEditor()).toEqual({ editor, file });
+    recent.mockReturnValue({ view: Object.assign(new MarkdownView(), { file: null, editor }) } as any); expect(plugin.taskSourceEditor()).toEqual({ editor, file });
+    recent.mockReturnValue(null); h.files.delete(file.path); expect(plugin.taskSourceEditor()).toBeNull();
   });
 });

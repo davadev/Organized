@@ -125,10 +125,15 @@ export default class Organized extends Plugin {
   activeEditor(): { editor: Editor; file: TFile } | null {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView); return view?.file && view.getMode() === "source" ? { editor: view.editor, file: view.file } : null;
   }
+  /** The note last used in the main area, even when the side panel has focus or the note was opened before any editor event. */
+  private recentEditor(): { editor: Editor; file: TFile } | null {
+    const view = this.app.workspace.getMostRecentLeaf()?.view;
+    return view instanceof MarkdownView && view.file ? { editor: view.editor, file: view.file } : null;
+  }
   taskSourceEditor(): { editor: Editor; file: TFile } | null {
-    const active = this.activeEditor(); if (active) this.lastNoteEditor = active;
+    const current = this.activeEditor() ?? this.recentEditor(); if (current) this.lastNoteEditor = current;
     if (this.lastNoteEditor && !this.repo.file(this.lastNoteEditor.file.path)) this.lastNoteEditor = null;
-    return active ?? this.lastNoteEditor;
+    return this.lastNoteEditor;
   }
   async taskLines(file: TFile): Promise<TaskLine[]> { return parseTasks(await this.repo.readText(file)); }
   current(editor: Editor, file: TFile): Context | null {
