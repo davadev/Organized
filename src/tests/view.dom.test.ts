@@ -430,4 +430,11 @@ describe('compact calendar and contextual task inspector', () => {
     toggle().click(); await flush(); await flush(); expect(owner.settings.hideDoneTasks).toBe(false); expect(count()).toBe('7');
     const one = await add('Daily/2026-03-05.md', '- [x] Solo done\n- [ ] Solo open'); owner.taskSourceEditor = () => ({ editor, file: one }); owner.settings.hideDoneTasks = true; await view.render(); await flush(); expect(view.contentEl.textContent).toContain('1 done task hidden.');
   });
+  it('starts a new tab or task at the top but keeps the scroll position while re-rendering the same page', async () => {
+    const { view, owner, repo } = await fixture(); const task = await repo.create('Scrolled'); await view.render(); const host = view.contentEl;
+    host.scrollTop = 300; view.tab = 'Projects'; await view.render(); expect(host.scrollTop).toBe(0);
+    host.scrollTop = 120; await view.render(); expect(host.scrollTop).toBe(120);
+    owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); expect(host.scrollTop).toBe(0); host.scrollTop = 90; await view.render(); expect(host.scrollTop).toBe(90);
+    const other = await repo.create('Another'); owner.selectedTaskId = other.id; await view.render(); expect(host.scrollTop).toBe(0);
+  });
 });
