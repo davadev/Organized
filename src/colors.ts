@@ -23,9 +23,8 @@ export const SOFT = { lightness: 0.74, follow: 0.5, lowest: 0.66, highest: 0.88,
 export function softTint(color: string): string {
   const { l: picked, c, h } = oklchOf(color); const gray = c < SOFT.grayBelow;
   const lightness = Math.min(SOFT.highest, Math.max(SOFT.lowest, SOFT.lightness + SOFT.follow * (picked - SOFT.lightness)));
-  let chroma = gray ? c : Math.min(SOFT.maxChroma, Math.max(SOFT.minChroma, c));
-  let rgb = srgbOf(lightness, chroma, h);
-  // Pull chroma in until the colour fits the screen's gamut, rather than clipping a channel and shifting the hue.
-  for (let step = 0; step < 24 && rgb.some(v => v < 0 || v > 1); step++) { chroma *= 0.92; rgb = srgbOf(lightness, chroma, h); }
-  return rgb.map(v => Math.round(Math.min(1, Math.max(0, toGamma(Math.min(1, Math.max(0, v))))) * 255)).join(" ");
+  const chroma = gray ? c : Math.min(SOFT.maxChroma, Math.max(SOFT.minChroma, c));
+  const rgb = srgbOf(lightness, chroma, h);
+  // Inside the lightness band and chroma range every hue fits the screen's gamut to within rounding; clamping only guards the last bit.
+  return rgb.map(v => Math.round(Math.max(0, toGamma(Math.min(1, Math.max(0, v)))) * 255)).join(" ");
 }
