@@ -183,4 +183,24 @@ describe('plugin lifecycle and user-only editor actions', () => {
     const trigger = vi.spyOn(plugin, 'trigger').mockResolvedValue(); editor.setValue('- [/] Existing <!--organized:task1234-->'); plugin.onEditorUpdate(update('', editor.getValue())); await flush(); expect(trigger).toHaveBeenCalledOnce();
     const confirm = vi.spyOn(plugin, 'confirm').mockResolvedValue(false); const status = vi.spyOn(plugin.service, 'status').mockResolvedValue(); const old = editor.getValue(); editor.setValue('ordinary prose'); plugin.onEditorUpdate(update(old, editor.getValue())); await flush(); expect(confirm).toHaveBeenCalledOnce(); expect(status).not.toHaveBeenCalled();
   });
+  it('migrates linked projects once after layout ready, announces it with an undo, and never moves anything when writes are paused', async () => {
+    const { h, plugin } = await loaded(); const folder = plugin.repo.projectFolder();
+    const task = await plugin.repo.create('Linked'); await h.add('Plan.md', 'plan'); await h.add('Other/Plan.md'); await h.add('Kept.md');
+    await plugin.repo.update(task.id, t => ({ ...t, projects: ['Plan.md', 'Other/Plan.md'] })); plugin.settings.knownProjects = ['Kept.md', 'Plan.md', 'Ghost.md'];
+    plugin.safety.writable = false; await plugin.migrateProjects(); expect(h.texts.has('Plan.md')).toBe(true); expect(plugin.settings.projectsMigrated).toBe(false); plugin.safety.writable = true;
+    Notice.instances.length = 0; h.layout[0](); await flush(); await vi.advanceTimersByTimeAsync(0); await flush();
+    expect(h.texts.get(`${folder}/Plan.md`)).toBe('plan'); expect(plugin.settings.projectsMigrated).toBe(true); expect(plugin.settings.knownProjects).toEqual([`${folder}/Kept.md`, `${folder}/Plan.md`, 'Ghost.md']);
+    const notice = Notice.instances.find(n => String(n.message instanceof DocumentFragment ? n.message.textContent : n.message).includes('Projects moved'))!; const text = (notice.message as DocumentFragment).textContent!;
+    expect(text).toContain('2 project notes moved'); expect(text).toContain('1 skipped'); expect(text).toContain('Other/Plan.md');
+    const undoButton = (notice.message as DocumentFragment).querySelector('button')!; undoButton.click(); await flush(); await vi.advanceTimersByTimeAsync(0); await flush();
+    expect(h.texts.get('Plan.md')).toBe('plan'); expect(plugin.settings.knownProjects).toEqual(['Kept.md', 'Plan.md', 'Ghost.md']); expect(Notice.instances.at(-1)?.message).toBe('Project notes moved back.');
+    Notice.instances.length = 0; await plugin.migrateProjects(); expect(Notice.instances).toHaveLength(0); expect(h.texts.has('Plan.md')).toBe(true);
+  });
+  it('stays quiet when there is nothing to migrate and reports undo conflicts', async () => {
+    const { h, plugin } = await loaded(); Notice.instances.length = 0; await plugin.migrateProjects(); expect(plugin.settings.projectsMigrated).toBe(true); expect(Notice.instances).toHaveLength(0);
+    const task = await plugin.repo.create('Linked'); const folder = plugin.repo.projectFolder(); await h.add('Plan.md'); plugin.settings.projectsMigrated = false; await plugin.repo.update(task.id, t => ({ ...t, projects: ['Plan.md'] }));
+    await plugin.migrateProjects(); const notice = Notice.instances.at(-1)!; await h.add('Plan.md'); (notice.message as DocumentFragment).querySelector('button')!.click(); await flush(); await vi.advanceTimersByTimeAsync(0); await flush();
+    expect(Notice.instances.at(-1)?.message).toContain('Some projects could not move back'); expect(h.texts.has(`${folder}/Plan.md`)).toBe(true);
+    plugin.settings.projectsMigrated = false; plugin.settings.knownProjects = []; const only = await h.add('Solo.md'); await plugin.repo.update(task.id, t => ({ ...t, projects: ['Solo.md'] })); h.files.set(`${folder}/Solo.md`, only); Notice.instances.length = 0; await plugin.migrateProjects(); expect(Notice.instances.at(-1)?.message).toBeTruthy();
+  });
 });

@@ -1,7 +1,7 @@
 import { Notice, TFile } from "obsidian";
 import { insertTask, parseTasks, RECURRING_MARKER, removeUnique, replaceTask, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
-import { localDate, makeId, Movement, nextDate, PRIORITIES, Priority, setStatus, Status, Task } from "./model";
+import { localDate, makeId, Movement, nextDate, path, PRIORITIES, Priority, setStatus, Status, Task } from "./model";
 import { Repository } from "./repository";
 
 export interface Change { file: TFile; before: string; after: string }
@@ -233,6 +233,29 @@ export class TaskService {
     }
     await this.repo.update(id, t => ({ ...t, projects })); this.changed();
   }
+  /** Renames project notes and rewrites every task that links them; targets that already exist are skipped, never overwritten. */
+  async moveProjects(pairs: { from: string; to: string }[]): Promise<{ moved: { from: string; to: string }[]; skipped: string[] }> {
+    const moved: { from: string; to: string }[] = []; const skipped: string[] = [];
+    for (const pair of pairs) {
+      const file = this.repo.file(pair.from);
+      if (!file || this.repo.file(pair.to)) { skipped.push(pair.from); continue; }
+      try { await this.repo.folders(pair.to); await this.repo.app.fileManager.renameFile(file, pair.to); moved.push(pair); } catch { skipped.push(pair.from); }
+    }
+    const target = new Map(moved.map(pair => [pair.from, pair.to]));
+    if (target.size) for (const task of await this.repo.list()) {
+      if (!task.projects.some(project => target.has(project))) continue;
+      await this.repo.update(task.id, current => ({ ...current, projects: [...new Set(current.projects.map(project => target.get(project) ?? project))] }));
+    }
+    this.references = null; this.changed();
+    return { moved, skipped };
+  }
+  /** Moves every linked project note that is outside the project folder into it. */
+  async migrateProjects(): Promise<{ moved: { from: string; to: string }[]; skipped: string[] }> {
+    const folder = this.repo.projectFolder();
+    const linked = new Set([...(await this.repo.list()).flatMap(t => t.projects), ...this.repo.settings().knownProjects]);
+    const pairs = [...linked].filter(p => !p.startsWith(`${folder}/`) && this.repo.file(p)).map(from => ({ from, to: path(`${folder}/${from.split("/").at(-1)!}`) }));
+    return this.moveProjects(pairs);
+  }
   async refs(id: string): Promise<string[]> {
     if (!this.references) {
       this.references = new Map();
@@ -252,7 +275,7 @@ export class TaskService {
   hasReference(id: string | null, notePath: string): boolean { return id !== null && this.references?.get(id)?.has(notePath) === true; }
   forget(notePath: string): void { if (this.references) for (const refs of this.references.values()) refs.delete(notePath); }
   async convertTodos(file: TFile): Promise<void> {
-    if (file.path.startsWith(`${this.repo.settings().taskFolder}/`)) throw new Error("Choose a regular note, not a task note.");
+    if (this.repo.isTaskRecord(file.path)) throw new Error("Choose a regular note, not a task note.");
     const text = await this.repo.readText(file);
     const todos = parseTasks(text).filter(t => !t.id && t.marker === " " && t.title);
     if (!todos.length) { new Notice("No unchecked todos to convert in this note."); return; }

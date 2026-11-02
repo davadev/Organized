@@ -104,7 +104,7 @@ export class OrganizedInspectorView extends ItemView {
     if (task.starred) { const star = meta.createSpan({ cls: "organized-list-star", attr: { "aria-label": "Favorite" } }); setIcon(star, "star"); }
     if (task.projects.length) {
       const chips = open.createDiv({ cls: "organized-chips" });
-      for (const project of task.projects.slice(0, 2)) chips.createSpan({ cls: "organized-chip", text: project.replace(/\.md$/, "") });
+      for (const project of task.projects.slice(0, 2)) chips.createSpan({ cls: "organized-chip", text: this.projectLabel(project) });
       if (task.projects.length > 2) chips.createSpan({ cls: "organized-chip", text: `+${task.projects.length - 2}` });
     }
     return row;
@@ -189,6 +189,11 @@ export class OrganizedInspectorView extends ItemView {
         }
       } else indent(this.noteTaskRow(list, source.file, source.editor, line, "Regular todo"));
     }
+  }
+  /** Project notes in the project folder show by name; others keep their path. */
+  private projectLabel(project: string): string {
+    const folder = `${this.owner.repo.projectFolder()}/`;
+    return (project.startsWith(folder) ? project.slice(folder.length) : project).replace(/\.md$/, "");
   }
   private headingRow(host: HTMLElement, notePath: string, heading: Section, depth: number, key: string, collapsed: boolean, count: number): void {
     const row = host.createEl("button", { cls: "organized-heading-row", attr: { type: "button", "aria-expanded": String(!collapsed) } });
@@ -290,7 +295,7 @@ export class OrganizedInspectorView extends ItemView {
       if (task.recurrence_periods.length) recurring.createDiv({ cls: "organized-muted", text: `${task.recurrence_periods[0].start} → ${task.recurring ? "active" : task.recurrence_periods[task.recurrence_periods.length - 1].stop}` });
     }
     if (task.projects.length || this.module === "Projects") {
-      const projects = this.card(details, "Projects", "folder"); for (const project of task.projects) projects.createDiv({ text: project });
+      const projects = this.card(details, "Projects", "folder"); for (const project of task.projects) projects.createDiv({ text: this.projectLabel(project) });
       this.button(projects, "Link projects or topics", () => this.owner.pickProjects(task));
     }
     const loose = noteLoose(body);
@@ -336,10 +341,10 @@ export class OrganizedInspectorView extends ItemView {
     field.createEl("label", { cls: "organized-field-label", text: "Filter by project", attr: { for: "organized-project-filter" } });
     const picker = field.createEl("select", { cls: "organized-control", attr: { id: "organized-project-filter", "aria-label": "Choose project" } });
     picker.createEl("option", { text: "All projects", value: "" });
-    for (const project of projects) picker.createEl("option", { text: project, value: project }); picker.value = this.selectedProject;
+    for (const project of projects) picker.createEl("option", { text: this.projectLabel(project), value: project }); picker.value = this.selectedProject;
     picker.addEventListener("change", () => { this.selectedProject = picker.value; picker.blur(); void this.render().catch(report); });
     const shown = tasks.filter(t => t.status !== "canceled" && t.projects.length && (!this.selectedProject || t.projects.includes(this.selectedProject)));
-    if (!shown.length) projectSection.createDiv({ cls: "organized-empty", text: this.selectedProject ? `No tasks linked to ${this.selectedProject}.` : "No project links yet. Use [j] on a task to link its project or topic note." });
+    if (!shown.length) projectSection.createDiv({ cls: "organized-empty", text: this.selectedProject ? `No tasks linked to ${this.projectLabel(this.selectedProject)}.` : "No project links yet. Use [j] on a task to link its project or topic note." });
     for (const task of shown) this.taskRow(projectSection, task, () => choose(task));
     const canceled = tasks.filter(t => t.status === "canceled");
     const canceledSection = this.section(host, "Canceled", canceled.length);

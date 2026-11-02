@@ -79,7 +79,7 @@ describe('compact calendar and contextual task inspector', () => {
     choose(view, 'Add details', 'Timer'); await flush(); button(view.contentEl, 'Start timer').click(); await flush(); expect((await repo.read(task.id)).time_tracking_started_at).not.toBeNull(); expect(view.contentEl.textContent).toContain('running'); button(view.contentEl, 'Stop timer').click(); await flush(); expect((await repo.read(task.id)).time_tracking_started_at).toBeNull();
     choose(view, 'Add details', 'Recurring'); await flush(); button(view.contentEl, 'Recurring').click(); await flush(); expect((await repo.read(task.id)).recurring).toBe(true); expect(view.contentEl.textContent).toContain('→ active'); button(view.contentEl, 'Recurring').click(); await flush(); expect((await repo.read(task.id)).recurring).toBe(false);
     choose(view, 'Add details', 'Projects'); await flush(); const projects = vi.spyOn(owner, 'pickProjects').mockImplementation(() => undefined); button(view.contentEl, 'Link projects or topics').click(); expect(projects).toHaveBeenCalled();
-    await repo.update(task.id, t => ({ ...t, projects: ['Project.md'], time_tracked_seconds: 60 })); view.module = ''; await view.render(); expect(view.contentEl.textContent).toContain('Project.md'); expect(titles(view)).toContain('Timer');
+    await repo.update(task.id, t => ({ ...t, projects: ['Project.md'], time_tracked_seconds: 60 })); view.module = ''; await view.render(); expect(view.contentEl.textContent).toContain('ProjectLink projects or topics'); expect(titles(view)).toContain('Timer');
     owner.context = { file: {} as any, line: parseTasks(`- [ ] Actions <!--organized:${task.id}-->`)[0] }; const status = vi.spyOn(owner.service, 'status').mockResolvedValue(); choose(view, 'Status', 'open'); await flush(); expect(status).toHaveBeenCalledWith(task.id, 'open', owner.context);
     const recurrence = vi.spyOn(owner.service, 'recurrence').mockResolvedValue(); button(view.contentEl, 'Recurring').click(); await flush(); expect(recurrence).toHaveBeenCalledWith(task.id, owner.context);
   });
@@ -196,7 +196,7 @@ describe('compact calendar and contextual task inspector', () => {
       'No project links yet. Use [j] on a task to link its project or topic note.',
       'No canceled tasks.',
     ]);
-    view.selectedProject = 'Missing.md'; await view.render(); expect(view.contentEl.textContent).toContain('No tasks linked to Missing.md.');
+    view.selectedProject = 'Missing.md'; await view.render(); expect(view.contentEl.textContent).toContain('No tasks linked to Missing.');
     view.selectedProject = ''; const task = await repo.create('Delete me'); owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render();
     expect(button(view.contentEl, 'Delete task')).toBeTruthy();
     const remove = vi.spyOn(owner, 'deleteTask').mockResolvedValue(); button(view.contentEl, 'Delete task').click(); await flush(); expect(remove).toHaveBeenCalledWith(task.id);
@@ -267,5 +267,11 @@ describe('compact calendar and contextual task inspector', () => {
     editor = await open(tasksOnly, `- [ ] Linked <!--organized:${task.id}-->\n- [ ] Other`, 0); back().click(); await flush(); expect(editor.getCursor().line).toBe(0); expect(owner.selectedTaskId).toBeNull();
     files.delete(tasksOnly.path); clearActive(); owner.selectedTaskId = task.id; await view.render(); back().click(); await flush(); expect(owner.selectedTaskId).toBeNull();
     owner.selectedTaskId = task.id; view.origin = 'Projects / favorites'; await view.render(); expect(view.contentEl.querySelector('.organized-note-overview')).toBeNull();
+  });
+  it('shows project notes in the project folder by name', async () => {
+    const { view, repo, add } = await fixture(); const folder = repo.projectFolder(); await add(`${folder}/Plan.md`);
+    const task = await repo.create('Planned'); await repo.update(task.id, t => ({ ...t, projects: [`${folder}/Plan.md`, 'Elsewhere/Notes.md'] }));
+    view.tab = 'Projects'; await view.render(); expect(Array.from(view.contentEl.querySelectorAll('.organized-chip')).map(c => c.textContent)).toEqual(['Plan', 'Elsewhere/Notes']);
+    expect(Array.from(view.contentEl.querySelectorAll<HTMLOptionElement>('#organized-project-filter option')).map(o => o.text)).toContain('Plan');
   });
 });

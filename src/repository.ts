@@ -13,6 +13,9 @@ export class Repository {
     const next = this.tail.catch(() => undefined).then(fn); this.tail = next; return next;
   }
   file(notePath: string): TFile | null { const file = this.app.vault.getAbstractFileByPath(notePath); return file instanceof TFile ? file : null; }
+  /** Project notes live in a subfolder of the task folder; they are ordinary notes, not task records. */
+  projectFolder(): string { return path(`${this.settings().taskFolder}/Projects`); }
+  isTaskRecord(notePath: string): boolean { return notePath.startsWith(`${this.settings().taskFolder}/`) && !notePath.startsWith(`${this.projectFolder()}/`); }
   taskPath(id: string): string { return path(`${this.settings().taskFolder}/${id}.md`); }
   async readText(file: TFile): Promise<string> {
     const active = this.activeEditor(); return active?.file.path === file.path ? active.editor.getValue() : this.app.vault.read(file);
@@ -41,8 +44,7 @@ export class Repository {
     return taskFrom(splitNote(await this.readText(file)).frontmatter, id);
   }
   async list(): Promise<Task[]> {
-    const folder = `${this.settings().taskFolder}/`;
-    const files = this.app.vault.getMarkdownFiles().filter(f => f.path.startsWith(folder));
+    const files = this.app.vault.getMarkdownFiles().filter(f => this.isTaskRecord(f.path));
     const result: Task[] = [];
     for (const file of files) {
       try { result.push(taskFrom(splitNote(await this.readText(file)).frontmatter, file.basename)); } catch { /* Invalid task notes remain available for manual repair, never overwritten. */ }
@@ -76,7 +78,7 @@ export class Repository {
   async occurrences(id: string): Promise<{ file: TFile; text: string; tasks: TaskLine[] }[]> {
     const result: { file: TFile; text: string; tasks: TaskLine[] }[] = [];
     for (const file of this.app.vault.getMarkdownFiles()) {
-      if (file.path.startsWith(`${this.settings().taskFolder}/`)) continue;
+      if (this.isTaskRecord(file.path)) continue;
       const text = await this.readText(file); const tasks = parseTasks(text).filter(t => t.id === id);
       if (tasks.length) result.push({ file, text, tasks });
     }
