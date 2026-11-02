@@ -62,6 +62,8 @@ try {
         if (!day) throw Error('Day view has no time grid'); if (day.blocks.length < 4 || day.blocks.some(inside => !inside)) throw Error(`Day blocks are missing or leave the grid: ${JSON.stringify(day.blocks)}`);
         if (day.labels.some(inside => !inside)) throw Error('Day hour labels leave the panel'); if (day.width < 120) throw Error(`Day grid is too narrow to read: ${day.width}px at ${width}`);
         if (day.tasks < 2 || day.firstTask >= day.gridTop) throw Error('Day view does not list its tasks above the time grid');
+        const fold = await page.evaluate(() => { const head = document.querySelector('.organized-section-fold'); if (!head) return null; const box = head.getBoundingClientRect(); return { expanded: head.getAttribute('aria-expanded'), height: box.height, width: box.width, host: document.querySelector('.organized-panel').getBoundingClientRect().width }; });
+        if (!fold || fold.expanded !== 'true' || fold.height > 44 || fold.width < fold.host - 2) throw Error(`Day task list has no compact, full-width fold button: ${JSON.stringify(fold)}`);
       }
       if (tab === 'NoteTasks') {
         if (await page.locator('.organized-list-card').count() !== 2) throw Error('Task tab is missing current-note tasks when no task is selected');

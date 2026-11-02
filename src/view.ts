@@ -72,9 +72,18 @@ export class OrganizedInspectorView extends ItemView {
     setIcon(head.createSpan({ cls: "organized-card-icon", attr: { "aria-hidden": "true" } }), icon); head.createEl("h4", { cls: "organized-card-title", text: title });
     if (this.module === title) card.addClass("organized-selected-module"); return card;
   }
-  section(host: HTMLElement, title: string, count: number): HTMLElement {
-    const section = host.createDiv({ cls: "organized-section" }); const head = section.createDiv({ cls: "organized-section-head" });
-    head.createEl("h3", { cls: "organized-section-title", text: title }); head.createSpan({ cls: "organized-count", text: String(count) });
+  section(host: HTMLElement, title: string, count: number, fold?: { collapsed: boolean; toggle: () => void }): HTMLElement {
+    const section = host.createDiv({ cls: "organized-section" });
+    if (!fold) {
+      const head = section.createDiv({ cls: "organized-section-head" });
+      head.createEl("h3", { cls: "organized-section-title", text: title }); head.createSpan({ cls: "organized-count", text: String(count) });
+      return section;
+    }
+    // A heading cannot sit inside a button, so a foldable head is one button with a styled title.
+    const head = section.createEl("button", { cls: "organized-section-head organized-section-fold", attr: { type: "button", "aria-expanded": String(!fold.collapsed) } });
+    setIcon(head.createSpan({ cls: "organized-heading-chevron", attr: { "aria-hidden": "true" } }), fold.collapsed ? "chevron-right" : "chevron-down");
+    head.createSpan({ cls: "organized-section-title", text: title }); head.createSpan({ cls: "organized-count", text: String(count) });
+    head.addEventListener("click", fold.toggle);
     return section;
   }
   /** Recurring tasks stay open in frontmatter, so today's ticked occurrence is what shows them as done. */
@@ -321,12 +330,13 @@ export class OrganizedInspectorView extends ItemView {
     const note = this.owner.repo.file(this.owner.service.daily.path(date)); const lines = note ? await this.owner.taskLines(note) : [];
     const linked = new Map(tasks.map(task => [task.id, task]));
     if (generation !== this.renderId) return;
-    const list = this.section(host, "Tasks", lines.length); list.addClass("organized-grouped");
+    const collapsed = this.owner.settings.dayTasksCollapsed;
+    const list = this.section(host, "Tasks", lines.length, { collapsed, toggle: () => { this.owner.setDayTasksCollapsed(!collapsed); void this.render().catch(report); } }); list.addClass("organized-grouped");
     if (!note) {
       const empty = list.createDiv({ cls: "organized-empty", text: "There is no daily note for this day yet." });
       this.button(empty, "Create daily note", () => this.selectDay(date)).addClass("organized-note-link");
-    } else if (!lines.length) list.createDiv({ cls: "organized-empty", text: "No tasks in this day's note." });
-    for (const line of lines) {
+    } else if (!lines.length && !collapsed) list.createDiv({ cls: "organized-empty", text: "No tasks in this day's note." });
+    for (const line of collapsed ? [] : lines) {
       const task = line.id ? linked.get(line.id) : undefined;
       if (task) this.taskRow(list, task, () => this.openFromCalendar(task.id)).addClass("organized-day-task");
       else this.plainTaskRow(list, line, note!.path);
