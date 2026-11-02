@@ -5,6 +5,7 @@ import { OrganizedInspectorView } from '../../src/view';
 import { DEFAULT_SETTINGS, newTask, type Task } from '../../src/model';
 import { parseTasks } from '../../src/codec';
 import { missingIcons } from './obsidianShim';
+import { OnboardingModal } from '../../src/modals';
 
 installObsidianDom();
 const at = (day: number, hour: number, minute = 0) => new Date(2026, 2, day, hour, minute).toISOString();
@@ -53,8 +54,10 @@ const root = document.querySelector('#app')!;
 const page = (window as any);
 page.missingIcons = () => [...missingIcons];
 /** scene name -> what to show */
+let modal: OnboardingModal | null = null;
 page.scene = async (name: string) => {
-  root.replaceChildren(); owner.selectedTaskId = null; view.selectedDate = day(4); view.module = ''; view.editingTitle = false; view.editingModule = '';
+  modal?.close(); modal = null; root.replaceChildren();
+  if (name.startsWith('onboarding-')) { modal = new OnboardingModal(app, () => undefined); modal.open(); (modal as any).index = Number(name.slice('onboarding-'.length)) - 1; (modal as any).draw(); return; } owner.selectedTaskId = null; view.selectedDate = day(4); view.module = ''; view.editingTitle = false; view.editingModule = '';
   const [tab, mode] = ({ month: ['Calendar', 'Month'], week: ['Calendar', 'Week'], day: ['Calendar', 'Day'], task: ['Task', 'Month'], projects: ['Projects', 'Month'], favorites: ['Favorites', 'Month'] } as Record<string, [string, string]>)[name] ?? (() => { throw new Error(`unknown scene ${name}`); })();
   view.tab = tab as typeof view.tab; view.calendarMode = mode as typeof view.calendarMode;
   if (name === 'task') owner.selectedTaskId = 'q1review01';

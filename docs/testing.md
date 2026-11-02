@@ -132,3 +132,10 @@ The images in `resources/screenshots/` are rendered, not captured: `scripts/rend
 - A new icon in the UI makes the check fail with its name; add its Lucide paths to `icons.json`.
 - A new scene is one entry in `SCENES` (script) and one branch in `entry.ts`; add it to the README with alt text.
 
+## Onboarding card
+
+- The card's content is `src/onboarding.ts`; its figures are `src/onboardingFigures.ts` (real panel classes, no images); the modal is `OnboardingModal` in `src/modals.ts`.
+- Automated: step stepping, keys, once-only `done`, startup rules (only after layout-ready, only at a real start, not while writes are paused) and that every class a figure uses exists in `styles.css`; Chromium and WebKit layout scenes `Onboarding1`..`Onboarding6` at 240-768 px, light/dark, LTR/RTL and 1.3x text.
+- Review the steps as pictures with `node scripts/render-screenshots.mjs --all --out <folder>` (the onboarding steps are not part of the README set) and look at them in light and dark.
+- Manual (not covered by the host shim): remove `onboardingSeen` from `data.json`, fully restart Obsidian, confirm the card appears once after the workspace is ready and not during an in-session plugin update, dismiss it with Skip, Esc and Get started, confirm it does not return, then run **Show onboarding card** and the Settings button. Check phone width and a large system font.
+

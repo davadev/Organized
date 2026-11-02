@@ -4,6 +4,8 @@ import { isoFromInput, lengthOf, localInput, sessionProblem } from "./sessions";
 import { cleanTags, freePath, noteName } from "./notes";
 import { report } from "./service";
 import { renderMarkdownLinks } from "./markdown";
+import { ONBOARDING_STEPS, OnboardingStep } from "./onboarding";
+import { renderFigure } from "./onboardingFigures";
 
 /** Share the compact inspector surface with native modal chrome. */
 function decorate(modal: Modal): void {
@@ -178,4 +180,36 @@ export class NoteConversionModal extends Modal {
     folder.focus();
   }
   onClose(): void { this.contentEl.empty(); }
+}
+
+/** The one-time onboarding card: a short stepper explaining the idea behind the plugin. `done` fires once, however it closes. */
+export class OnboardingModal extends Modal {
+  private index = 0;
+  private settled = false;
+  constructor(app: App, readonly done: () => void, readonly steps: OnboardingStep[] = ONBOARDING_STEPS) { super(app); decorate(this); }
+  onOpen(): void {
+    this.titleEl.setText("Welcome to Organized"); this.contentEl.addClass("organized-modal");
+    // Arrow keys step through the card; the buttons below do the same for touch.
+    this.contentEl.addEventListener("keydown", event => { if (event.key === "ArrowRight") this.go(1); else if (event.key === "ArrowLeft") this.go(-1); });
+    this.draw();
+  }
+  private go(delta: number): void { const next = this.index + delta; if (next < 0 || next >= this.steps.length) return; this.index = next; this.draw(); }
+  private draw(): void {
+    const step = this.steps[this.index]; const last = this.index === this.steps.length - 1; const el = this.contentEl;
+    el.empty(); el.addClass("organized-onboarding");
+    const progress = el.createDiv({ cls: "organized-welcome-progress", attr: { role: "img", "aria-label": `Step ${this.index + 1} of ${this.steps.length}` } });
+    this.steps.forEach((_, i) => progress.createSpan({ cls: "organized-welcome-dot", attr: i === this.index ? { "aria-current": "step" } : {} }));
+    el.createEl("h3", { cls: "organized-welcome-title", text: step.title });
+    // `like this` in a step text is shown as code.
+    const copy = el.createEl("p", { cls: "organized-modal-copy organized-welcome-text" });
+    step.text.split("`").forEach((part, i) => { if (i % 2) copy.createEl("code", { text: part }); else copy.appendText(part); });
+    if (step.figure) renderFigure(el, step.figure);
+    const footer = new Setting(el);
+    if (!last) footer.addButton(b => b.setButtonText("Skip").onClick(() => this.close()));
+    if (this.index > 0) footer.addButton(b => b.setButtonText("Back").onClick(() => this.go(-1)));
+    const primary: HTMLElement[] = [];
+    footer.addButton(b => { b.setButtonText(last ? "Get started" : "Next"); b.setCta(); primary.push(b.buttonEl); b.onClick(() => { if (last) this.close(); else this.go(1); }); });
+    primary[0].focus();
+  }
+  onClose(): void { this.contentEl.empty(); if (!this.settled) { this.settled = true; this.done(); } }
 }

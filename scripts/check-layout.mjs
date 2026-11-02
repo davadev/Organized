@@ -26,7 +26,7 @@ try {
   for (const width of [240, 320, 360, 390, 412, 768].filter(width => scale === 1 || width <= 412)) for (const dark of [false, true]) for (const rtl of [false, true]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(({ dark, rtl }) => { document.body.className = `${dark ? 'theme-dark' : 'theme-light'} is-mobile`; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, { dark, rtl });
-    for (const tab of ['Calendar', 'Week', 'Day', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Favorites', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'SessionModal', 'NoteModal', 'Eof']) {
+    for (const tab of ['Calendar', 'Week', 'Day', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Favorites', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'SessionModal', 'NoteModal', 'Onboarding1', 'Onboarding2', 'Onboarding3', 'Onboarding4', 'Onboarding5', 'Onboarding6', 'Eof']) {
       await page.evaluate(tab => window.scene(tab), tab);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       if (overflow) throw Error(`${engine}: horizontal overflow at ${width}${scale === 1 ? '' : ` with ${scale}x text`}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
@@ -71,6 +71,13 @@ try {
         if (day.tasks < 2 || day.firstTask >= day.gridTop) throw Error('Day view does not list its tasks above the time grid');
         const fold = await page.evaluate(() => { const head = document.querySelector('.organized-section-fold'); if (!head) return null; const box = head.getBoundingClientRect(); return { expanded: head.getAttribute('aria-expanded'), height: box.height, width: box.width, host: document.querySelector('.organized-panel').getBoundingClientRect().width }; });
         if (!fold || fold.expanded !== 'true' || fold.height > 44 || fold.width < fold.host - 2) throw Error(`Day task list has no compact, full-width fold button: ${JSON.stringify(fold)}`);
+      }
+      if (tab.startsWith('Onboarding')) {
+        const card = await page.evaluate(() => { const win = document.querySelector('.organized-modal-window'); if (!win) return null; const w = win.getBoundingClientRect(); const inside = el => { const b = el.getBoundingClientRect(); return b.left >= w.left - 1 && b.right <= w.right + 1; }; const figure = document.querySelector('.organized-welcome-figure'); return { window: w.width, viewport: innerWidth, title: !!win.querySelector('.organized-welcome-title'), dots: win.querySelectorAll('.organized-welcome-dot').length, figureInside: figure ? [...figure.querySelectorAll('*')].every(inside) : null, hasFigure: !!figure, buttons: [...win.querySelectorAll('button')].map(b => [b.textContent.trim(), b.scrollWidth <= b.clientWidth + 1, inside(b)]) }; });
+        if (!card || !card.title || card.dots !== 6 || card.window > card.viewport + 1) throw Error(`${engine}: onboarding card is missing, wider than the screen or has no progress dots at ${width}: ${JSON.stringify(card)}`);
+        if (tab !== 'Onboarding6' && !card.hasFigure) throw Error(`${engine}: ${tab} lost its figure`);
+        if (card.figureInside === false) throw Error(`${engine}: ${tab} figure content leaves the card at ${width}${scale === 1 ? '' : ` with ${scale}x text`}`);
+        if (card.buttons.some(([, fits, inside]) => !fits || !inside)) throw Error(`${engine}: onboarding buttons are clipped at ${width}${scale === 1 ? '' : ` with ${scale}x text`}: ${JSON.stringify(card.buttons)}`);
       }
       if (tab === 'NoteTasks') {
         if (await page.locator('.organized-list-card').count() !== 2) throw Error('Task tab is missing current-note tasks when no task is selected');

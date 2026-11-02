@@ -11,7 +11,7 @@ describe('settings completeness and validation', () => {
   it('renders every setting in classic and modern hosts, validates changes before save', () => {
     const h = harness(); const owner = { settings: { ...DEFAULT_SETTINGS, displayProperties: [] }, saveSettings: vi.fn() } as any;
     const tab = new OrganizedSettingsTab(h.app, owner); Setting.instances.length = 0; tab.display();
-    expect(Setting.instances.filter(s => s.controls.length)).toHaveLength(11 + DISPLAY_PROPERTIES.length - 1);
+    expect(Setting.instances.filter(s => s.controls.length)).toHaveLength(12 + DISPLAY_PROPERTIES.length - 1);
     const controls = (name: string) => Setting.instances.find(s => s.nameText === name)!.controls[0];
     const type = (control: any, value: string) => { control.inputEl.value = value; control.inputEl.dispatchEvent(new Event('input')); };
     type(controls('Task folder'), 'Work'); expect(owner.settings.taskFolder).toBe('Work'); type(controls('Task folder'), '.tasks'); expect(owner.settings.taskFolder).toBe('Work'); expect(Notice.instances.at(-1)?.message).toContain('visible');
@@ -26,8 +26,9 @@ describe('settings completeness and validation', () => {
     select('Priority sort scope', 'none'); expect(owner.settings.sortScope).toBe('none');
     controls('Show scheduled date link').toggle(); expect(owner.settings.showScheduledDate).toBe(false); controls('Show scheduled date link').toggle(); expect(owner.settings.showScheduledDate).toBe(true);
     for (const p of DISPLAY_PROPERTIES.filter(p => p !== 'scheduled')) { controls(PROPERTY_LABELS[p]).toggle(); expect(owner.settings.displayProperties).toContain(p); controls(PROPERTY_LABELS[p]).toggle(); expect(owner.settings.displayProperties).not.toContain(p); }
+    const showCard = vi.fn(); owner.showOnboarding = showCard; Setting.instances.length = 0; tab.display(); Setting.instances.find(s => s.nameText === 'Onboarding card')!.controls[0].buttonEl.click(); expect(showCard).toHaveBeenCalledWith(false);
     expect(owner.saveSettings).toHaveBeenCalled();
-    const definitions = tab.getSettingDefinitions() as any[]; expect(definitions).toHaveLength(4);
+    const definitions = tab.getSettingDefinitions() as any[]; expect(definitions).toHaveLength(5);
     for (const group of definitions) for (const row of group.items) { const setting = new Setting(createDiv()); row.render(setting); expect(setting.settingEl.classList.contains('organized-setting-row')).toBe(true); expect(setting.settingEl.querySelector('.setting-item')).toBeNull(); }
   });
 });

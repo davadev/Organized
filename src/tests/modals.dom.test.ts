@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
-import { TaskPicker, PriorityPicker, DatePicker, ConfirmModal, ProjectPicker, SessionModal, NoteConversionModal, KEEP_AS_TODO } from "../modals";
+import { TaskPicker, PriorityPicker, DatePicker, ConfirmModal, ProjectPicker, SessionModal, NoteConversionModal, OnboardingModal, KEEP_AS_TODO } from "../modals";
 import { newTask } from "../model";
 import { harness } from "./harness";
 import { Notice, Setting } from "./__mocks__/obsidian";
@@ -100,5 +100,40 @@ describe("native task, date, source and project modals", () => {
     Array.from(second.contentEl.querySelectorAll("button")).find(b => b.textContent === "Create note")!.click(); await flush(); expect(convert).toHaveBeenLastCalledWith({ folder: "", tags: [], template: null, clash: "new" });
     const third = new NoteConversionModal(h.app, { title: "Plan", folders: [], folder: "", templates: [], exists: () => false, convert: async () => { throw Error("convert failed"); } }); third.open(); Array.from(third.contentEl.querySelectorAll("button")).find(b => b.textContent === "Create note")!.click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain("convert failed");
     const fourth = new NoteConversionModal(h.app, { title: "Plan", folders: [], folder: "", templates: [], exists: () => false, convert }); fourth.open(); Array.from(fourth.contentEl.querySelectorAll("button")).find(b => b.textContent === "Cancel")!.click(); expect(fourth.contentEl.childElementCount).toBe(0);
+  });
+});
+
+describe("onboarding card", () => {
+  const buttons = (modal: OnboardingModal) => [...modal.contentEl.querySelectorAll<HTMLElement>("button")].map(b => b.textContent);
+  it("steps forward and back, shows progress and a figure, and finishes with Get started", () => {
+    const h = harness(); const done = vi.fn(); const modal = new OnboardingModal(h.app, done); decorated(modal); modal.open();
+    expect(modal.titleEl.textContent).toBe("Welcome to Organized");
+    const total = modal.steps.length;
+    expect(modal.contentEl.querySelector(".organized-welcome-progress")?.getAttribute("aria-label")).toBe(`Step 1 of ${total}`);
+    expect(modal.contentEl.querySelectorAll(".organized-welcome-dot")).toHaveLength(total); expect(modal.contentEl.querySelectorAll("[aria-current=step]")).toHaveLength(1);
+    expect(modal.contentEl.querySelector(".organized-welcome-title")?.textContent).toBe(modal.steps[0].title);
+    expect(modal.contentEl.querySelector(".organized-welcome-figure")).not.toBeNull();
+    expect(buttons(modal)).toEqual(["Skip", "Next"]);
+    Setting.instances.at(-1)!.controls.at(-1)!.buttonEl.click();
+    expect(modal.contentEl.querySelector(".organized-welcome-title")?.textContent).toBe(modal.steps[1].title); expect(buttons(modal)).toEqual(["Skip", "Back", "Next"]);
+    Setting.instances.at(-1)!.controls[1].buttonEl.click();
+    expect(modal.contentEl.querySelector(".organized-welcome-title")?.textContent).toBe(modal.steps[0].title);
+    for (let i = 1; i < total; i++) modal.contentEl.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
+    expect(buttons(modal)).toEqual(["Back", "Get started"]); expect(modal.contentEl.querySelector(".organized-welcome-figure")).toBeNull();
+    modal.contentEl.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" })); expect(modal.contentEl.querySelector(".organized-welcome-title")?.textContent).toBe(modal.steps[total - 1].title);
+    expect(done).not.toHaveBeenCalled();
+    Setting.instances.at(-1)!.controls.at(-1)!.buttonEl.click(); expect(done).toHaveBeenCalledTimes(1);
+  });
+  it("cannot step before the first page, shows code spans, and reports done exactly once however it closes", () => {
+    const h = harness(); const done = vi.fn(); const modal = new OnboardingModal(h.app, done, [{ title: "One", text: "Use `[/]` now." }, { title: "Two", text: "Plain." }]); modal.open();
+    modal.contentEl.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft" })); expect(modal.contentEl.querySelector(".organized-welcome-title")?.textContent).toBe("One");
+    expect(modal.contentEl.querySelector("code")?.textContent).toBe("[/]"); expect(modal.contentEl.querySelector(".organized-welcome-figure")).toBeNull();
+    modal.contentEl.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" })); modal.contentEl.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft" })); modal.contentEl.dispatchEvent(new KeyboardEvent("keydown", { key: "x" }));
+    expect(modal.contentEl.querySelector(".organized-welcome-title")?.textContent).toBe("One");
+    modal.close(); modal.close(); modal.onClose(); expect(done).toHaveBeenCalledTimes(1);
+  });
+  it("Skip closes the card", () => {
+    const h = harness(); const done = vi.fn(); const modal = new OnboardingModal(h.app, done); modal.open();
+    Setting.instances.at(-1)!.controls[0].buttonEl.click(); expect(done).toHaveBeenCalledTimes(1); expect(modal.contentEl.children).toHaveLength(0);
   });
 });
