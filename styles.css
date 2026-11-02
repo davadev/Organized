@@ -11,6 +11,9 @@
   background: var(--background-primary);
   touch-action: pan-y;
 }
+/* Obsidian turns text selection off inside plugin views; read-only content (titles, descriptions, notes, sources, list rows) must stay copyable. Controls keep it off so a tap never starts a selection. */
+.organized-view .organized-task-title, .organized-view .organized-task-notes, .organized-view .organized-list-title, .organized-view .organized-muted, .organized-view .organized-card :is(p, li, h1, h2, h3, h4, h5, h6, blockquote, pre, code, td, th) { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; cursor: text; }
+.organized-view .organized-task-title a, .organized-view .organized-task-notes a { cursor: pointer; }
 .organized-settings { display: block; padding: 12px; }
 .organized-settings .setting-item { padding-block: 8px; }
 .organized-settings .organized-setting-row.setting-item { min-block-size: 0; block-size: auto; align-content: start; }
