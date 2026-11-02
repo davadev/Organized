@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed rare duplicated or stale property lines in Reading view and Live Preview when a task changed while its properties were still loading, and a Task panel refresh skipped because you were typing no longer cancels the render already in progress.
 - Fixed two startup/picker races: disabling Organized while it was still loading no longer leaves handlers registered, and a failed task-list read when attaching a task no longer switches off the editor's task handling until restart.
 - Fixed rare races in the references list (a note edited or a task deleted while the list loaded could error or show stale notes) and in converting todos (editing the note while the confirmation was open could leave unlinked task notes).
 - The Projects tab has an eye button by its title that hides done and canceled tasks; it is **on by default**, remembers your choice, and a line says how many are hidden (the Canceled section is hidden with them). The tab lists every task ever linked to a project, not just today's, so long lists now stop after 50 rows with a **Show all N** button.

@@ -17,7 +17,8 @@ export function icon(host: HTMLElement, marker: string): void {
 }
 /** Notes and sources render as Markdown blocks and need their own row; every other property is a short label that sits beside the title. */
 export function hasRichProperties(owner: Organized): boolean { return owner.settings.displayProperties.some(p => p === "notes" || p === "sources"); }
-export async function projection(owner: Organized, host: HTMLElement, task: Task, component: Component): Promise<void> {
+/** `live` turns false once a newer draw or a teardown owns `host`, so an older projection stops appending after its awaits. */
+export async function projection(owner: Organized, host: HTMLElement, task: Task, component: Component, live: () => boolean = () => true): Promise<void> {
   host.addClass("organized-projection"); const selected = owner.settings.displayProperties;
   if (task.scheduled && owner.settings.showScheduledDate) {
     const scheduled = task.scheduled;
@@ -25,10 +26,11 @@ export async function projection(owner: Organized, host: HTMLElement, task: Task
     link.addEventListener("click", event => { event.preventDefault(); void owner.run(() => owner.service.daily.open(scheduled)); });
   }
   for (const property of selected) {
+    if (!live()) return;
     if (property === "scheduled") continue;
     if (property === "notes" || property === "sources") {
       const file = owner.repo.file(owner.repo.taskPath(task.id)); if (!file) continue;
-      const body = splitNote(await owner.repo.readText(file)).body;
+      const body = splitNote(await owner.repo.readText(file)).body; if (!live()) return;
       const content = property === "notes" ? body : /(?:^|\n)## Sources\n([\s\S]*?)(?=\n## |$)/.exec(body)?.[1] ?? "";
       const block = host.createDiv({ cls: "organized-rich-property" }); await MarkdownRenderer.render(owner.app, content, block, file.path, component);
     } else {
@@ -74,8 +76,8 @@ class ReadingProjection extends MarkdownRenderChild {
       const task = await this.owner.repo.read(this.id); if (generation !== this.generation) return;
       if (this.markdown) this.removeChild(this.markdown);
       this.markdown = this.addChild(new Component());
-      this.containerEl.empty(); await projection(this.owner, this.containerEl, task, this.markdown);
-    } catch { this.containerEl.empty(); this.containerEl.createSpan({ cls: "organized-muted", text: "Missing/invalid task · use attach/create to repair" }); }
+      this.containerEl.empty(); await projection(this.owner, this.containerEl, task, this.markdown, () => generation === this.generation);
+    } catch { if (generation !== this.generation) return; this.containerEl.empty(); this.containerEl.createSpan({ cls: "organized-muted", text: "Missing/invalid task · use attach/create to repair" }); }
   }
 }
 const refreshEffect = StateEffect.define<null>();
@@ -91,7 +93,7 @@ class PropertyWidget extends WidgetType {
   toDOM(): HTMLElement {
     const host = this.inline ? createSpan() : createDiv(); const component = new Component(); this.component = component; component.load();
     let disposed = false; component.register(() => { disposed = true; });
-    void this.owner.repo.read(this.id).then(async task => { if (!disposed) await projection(this.owner, host, task, component); }).catch(() => { if (!disposed) host.setText("Missing task; repair via attach/create"); });
+    void this.owner.repo.read(this.id).then(async task => { if (!disposed) await projection(this.owner, host, task, component, () => !disposed); }).catch(() => { if (!disposed) host.setText("Missing task; repair via attach/create"); });
     return host;
   }
   destroy(): void { this.component?.unload(); this.component = null; }
