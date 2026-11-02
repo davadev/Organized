@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Dependency updates: vitest and coverage 5.0.5, happy-dom, @lezer/markdown, moment, playwright 1.64.1, stylelint, js-yaml 5 and the setup-node and upload-artifact actions. The `obsidian` typings stay on 1.13.1 because 1.14 needs newer CodeMirror packages than the app bundles.
+
 - Fixed the task ID flashing in Live Preview while a marker is being retyped (for example `[/]` to `[>]`): the hidden ID comment now stays hidden on any line, even when it briefly stops parsing as a task.
 
 - Sorting (when on) now keeps what you are doing at the top: a task that is in progress moves to the top of its list, and forwarded (`>`) and scheduled (`<`) lines are ranked as no priority, so a high-priority task you pushed to another day no longer sits at the top of today's list. The list re-sorts when a task is started or stopped, and when it is forwarded or scheduled, as well as when its priority changes.
