@@ -160,6 +160,11 @@ describe("project sections and start date", () => {
     const bare: any = await h.add(`${folder}/Bare.md`, "plain"); const bad: any = await h.add(`${folder}/Bad.md`, `---\norganized_type: project\norganized_start: soon\n---\n`);
     expect(await h.service.markProjects()).toBe(3); expect(started(h.texts.get(old.path)!)).toBe(true); expect(started(h.texts.get(dated.path)!, "2025-05-05")).toBe(true); expect(started(h.texts.get(bare.path)!)).toBe(true); expect(started(h.texts.get(bad.path)!)).toBe(true); expect(await h.service.markProjects()).toBe(0);
     const colored: any = await h.add("Colored.md", `---\norganized_type: project\n---\n`); await h.service.setProjectColor(colored.path, "#3b82f6"); expect(started(h.texts.get(colored.path)!)).toBe(true);
+    // A YAML reader that turns a bare date into a Date still counts as a start; an invalid Date does not.
+    const kept: Record<string, unknown> = { organized_start: new Date("2025-05-05") }; const lost: Record<string, unknown> = { organized_start: new Date(NaN) };
+    h.raw.fileManager.processFrontMatter.mockImplementationOnce(async (_f: unknown, fn: (fm: Record<string, unknown>) => void) => fn(kept)); await h.service.setProjectColor(dated.path, "#3b82f6");
+    h.raw.fileManager.processFrontMatter.mockImplementationOnce(async (_f: unknown, fn: (fm: Record<string, unknown>) => void) => fn(lost)); await h.service.setProjectColor(dated.path, "#3b82f6");
+    expect(kept.organized_start).toBeInstanceOf(Date); expect((kept.organized_start as Date).getFullYear()).toBe(2025); expect(typeof lost.organized_start).toBe("string");
     await h.service.setProjectColor(dated.path, "#3b82f6"); expect(started(h.texts.get(dated.path)!, "2025-05-05")).toBe(true); expect(await h.repo.markProject(h.repo.file(dated.path)!, "2030-01-01")).toBe(false);
   });
   it("moves lines in text directly, keeping a line that is already in place and refusing missing or doubled ones", () => {
