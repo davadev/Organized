@@ -85,10 +85,10 @@ try {
         const sections = await page.locator('.organized-section-title').allTextContents();
         if (sections.join(',') !== 'Favorites,Projects,Canceled') throw Error(`Projects tab lost its sections: ${sections.join(',')}`);
         if (await page.locator('.organized-list-card').count() < 2) throw Error('Projects tab did not render task cards');
-        // Cards are filled with their project colour and outlined by status: the fill must differ from the neutral card, the outlines must differ by status.
-        const cards = await page.evaluate(() => { const read = status => { const card = document.querySelector(`.organized-list-card[data-status="${status}"]`); if (!card) return null; const style = getComputedStyle(card); return { border: style.borderTopColor, image: style.backgroundImage, project: card.hasAttribute('data-project') }; }; return { open: read('open'), completed: read('completed'), active: read('in_progress') }; });
+        // Cards are filled with their project colour; the status is shown by the icon alone, so the icon colours must differ.
+        const cards = await page.evaluate(() => { const read = status => { const card = document.querySelector(`.organized-list-card[data-status="${status}"]`); if (!card) return null; const icon = card.querySelector('.organized-list-status'); return { icon: icon ? getComputedStyle(icon).color : null, image: getComputedStyle(card).backgroundImage, project: card.hasAttribute('data-project') }; }; return { open: read('open'), completed: read('completed'), active: read('in_progress') }; });
         if (!cards.open || !cards.completed || !cards.active) throw Error(`Projects tab is missing status cards: ${JSON.stringify(cards)}`);
-        if (new Set([cards.open.border, cards.completed.border, cards.active.border]).size !== 3) throw Error(`Task status outlines are not distinct: ${JSON.stringify(cards)}`);
+        if (new Set([cards.open.icon, cards.completed.icon, cards.active.icon]).size !== 3) throw Error(`Task status icon colours are not distinct: ${JSON.stringify(cards)}`);
         if (![cards.open, cards.completed, cards.active].some(card => card.project && card.image.includes('gradient'))) throw Error(`No card is filled with its project colour: ${JSON.stringify(cards)}`);
         const stripes = await page.evaluate(() => Array.from(document.querySelectorAll('.organized-list-card[data-project] .organized-list-open')).map(el => getComputedStyle(el).borderInlineStartColor));
         if (!stripes.length || stripes.some(stripe => stripe === 'rgba(0, 0, 0, 0)')) throw Error(`Project cards lost their colour stripe: ${stripes}`);
