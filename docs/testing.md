@@ -94,3 +94,6 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Link a task to a new project with `[j]` and confirm the note is created in `Tasks/Projects/`.
 - Confirm task cards show a green wash when done, accent when in progress, neutral when open, in light and dark themes.
 - On Android with the system font set to large, confirm the side panel does not slide sideways, the Calendar/Task/Projects tabs are readable, and dialogs fit the screen.
+- Start a task timer (set In Progress), wait over a minute, stop it, and confirm a block appears in the Calendar tab's Day and Week views; a running timer shows a block ending now.
+- Open Day for a date without a daily note and confirm browsing creates nothing and **Create daily note** works; tap a block or task to open it and use **Back to calendar**.
+- Check Week and Day at phone width, in dark mode and with a large system font.

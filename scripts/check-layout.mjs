@@ -24,7 +24,7 @@ try {
   for (const width of [240, 320, 360, 390, 412, 768].filter(width => scale === 1 || width <= 412)) for (const dark of [false, true]) for (const rtl of [false, true]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(({ dark, rtl }) => { document.body.className = `${dark ? 'theme-dark' : 'theme-light'} is-mobile`; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, { dark, rtl });
-    for (const tab of ['Calendar', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'Eof']) {
+    for (const tab of ['Calendar', 'Week', 'Day', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'Eof']) {
       await page.evaluate(tab => window.scene(tab), tab);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       if (overflow) throw Error(`${engine}: horizontal overflow at ${width}${scale === 1 ? '' : ` with ${scale}x text`}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
@@ -47,6 +47,21 @@ try {
         if (!(await page.locator('.organized-task-hero .organized-task-title').count())) throw Error('Task inspector is missing its titled hero');
         if (!(await page.locator('.organized-task-actions .organized-danger').count())) throw Error('Task inspector is missing its delete action');
         if (await page.locator('.organized-task-details').count() !== 1) throw Error('Task properties are fragmented instead of grouped into one details surface');
+      }
+      if (tab === 'Week' || tab === 'Day') {
+        const segment = await page.evaluate(() => [...document.querySelectorAll('.organized-seg-button')].map(button => [button.getBoundingClientRect().height, button.getAttribute('aria-pressed')]));
+        if (segment.length !== 3 || segment.some(([height]) => height > 40) || segment.filter(([, pressed]) => pressed === 'true').length !== 1) throw Error(`Calendar view switch is missing, inflated or has no active mode: ${JSON.stringify(segment)}`);
+      }
+      if (tab === 'Week') {
+        const rows = await page.evaluate(() => [...document.querySelectorAll('.organized-week-row')].map(row => { const box = row.getBoundingClientRect(); const track = row.querySelector('.organized-week-track').getBoundingClientRect(); const blocks = [...row.querySelectorAll('.organized-week-block')].map(block => { const b = block.getBoundingClientRect(); return b.left >= track.left - 1 && b.right <= track.right + 1; }); return { height: box.height, track: track.width, inside: blocks.every(Boolean), blocks: blocks.length }; }));
+        if (rows.length !== 7 || rows.some(row => row.height > 64 || row.track < 40 || !row.inside)) throw Error(`Week rows are inflated, cramped or their blocks leave the track: ${JSON.stringify(rows)}`);
+        if (rows.reduce((sum, row) => sum + row.blocks, 0) < 3) throw Error('Week view lost its time blocks');
+      }
+      if (tab === 'Day') {
+        const day = await page.evaluate(() => { const grid = document.querySelector('.organized-day-grid'); if (!grid) return null; const box = grid.getBoundingClientRect(); const blocks = [...grid.querySelectorAll('.organized-block')].map(block => { const b = block.getBoundingClientRect(); return b.left >= box.left - 1 && b.right <= box.right + 1 && b.top >= box.top - 1 && b.bottom <= box.bottom + 1; }); const labels = [...grid.querySelectorAll('.organized-hour-label')].map(label => { const b = label.getBoundingClientRect(); return b.left >= 0 && b.right <= innerWidth; }); return { blocks, labels, width: box.width, tasks: document.querySelectorAll('.organized-day-task').length, firstTask: document.querySelector('.organized-day-task').getBoundingClientRect().top, gridTop: box.top }; });
+        if (!day) throw Error('Day view has no time grid'); if (day.blocks.length < 4 || day.blocks.some(inside => !inside)) throw Error(`Day blocks are missing or leave the grid: ${JSON.stringify(day.blocks)}`);
+        if (day.labels.some(inside => !inside)) throw Error('Day hour labels leave the panel'); if (day.width < 120) throw Error(`Day grid is too narrow to read: ${day.width}px at ${width}`);
+        if (day.tasks < 2 || day.firstTask >= day.gridTop) throw Error('Day view does not list its tasks above the time grid');
       }
       if (tab === 'NoteTasks') {
         if (await page.locator('.organized-list-card').count() !== 2) throw Error('Task tab is missing current-note tasks when no task is selected');
