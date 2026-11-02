@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The Projects tab has an eye button by its title that hides done and canceled tasks; it is **on by default**, remembers your choice, and a line says how many are hidden (the Canceled section is hidden with them). The tab lists every task ever linked to a project, not just today's, so long lists now stop after 50 rows with a **Show all N** button.
 - The Timer card's session list is now a foldable **Sessions (N)** section, closed by default (it remembers being opened), and lists every session newest first, grouped by day with each day's total. Before, it showed only the five latest in a fixed list.
 - Project notes are now organised by status. A new project note starts with **Open**, **In progress** and **Done** headings, and a task linked to the project is written under the heading for its status; when the task's status changes (from the panel, the editor or a checkbox) its line in the project note moves to the matching heading, with **Canceled** added when needed. Headings you already have are reused (any level, any capitalisation), and an older note without them gets the headings added at the end the first time a status changes. Existing lines are not rearranged until their task changes.
 - Project notes record when they started: `organized_start: YYYY-MM-DD` in the frontmatter, set automatically for new projects and, once on update, for every existing project note (to the update date). An end date (`organized_end`) is reserved for later and is not used yet.

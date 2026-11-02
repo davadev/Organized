@@ -99,6 +99,8 @@ try {
       if (tab === 'Projects') {
         const sections = await page.locator('.organized-section-title').allTextContents();
         if (sections.join(',') !== 'Projects,Canceled') throw Error(`Projects tab lost its sections: ${sections.join(',')}`);
+        const hideButton = await page.evaluate(() => { const button = document.querySelector('.organized-hide-done'); if (!button) return null; const b = button.getBoundingClientRect(); const head = button.closest('.organized-section-head').getBoundingClientRect(); return { w: Math.round(b.width), h: Math.round(b.height), inside: b.left >= head.left && b.right <= head.right + 1 }; });
+        if (!hideButton || !hideButton.inside || hideButton.w > 44 || hideButton.h > 44) throw Error(`Projects tab lacks a compact hide-done button: ${JSON.stringify(hideButton)}`);
         if (await page.locator('.organized-list-card').count() < 2) throw Error('Projects tab did not render task cards');
         const chips = await page.evaluate(() => Array.from(document.querySelectorAll('.organized-chip[data-project]')).map(chip => { const dot = getComputedStyle(chip, '::before'); return { dot: dot.backgroundColor, size: [dot.width, dot.height] }; }));
         if (!chips.length || chips.some(chip => chip.dot === 'rgba(0, 0, 0, 0)' || chip.size[0] !== '8px' || chip.size[1] !== '8px')) throw Error(`Project labels lost their colour dot: ${JSON.stringify(chips)}`);
