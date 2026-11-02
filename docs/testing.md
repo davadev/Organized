@@ -98,3 +98,4 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Open Day for a date without a daily note and confirm browsing creates nothing and **Create daily note** works; tap a block or task to open it and use **Back to calendar**.
 - Check Week and Day at phone width, in dark mode and with a large system font.
 - In the Day view, collapse the **Tasks** heading, switch days and restart Obsidian; confirm it stays collapsed until expanded.
+- Edit the text of a linked todo in a daily note, pause for a second, and confirm the Task tab, the task note's title and the same todo in other notes show the new text.
