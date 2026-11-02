@@ -234,4 +234,20 @@ describe('compact calendar and contextual task inspector', () => {
     files.delete(today); texts.delete(today); await view.render(); expect(view.contentEl.querySelector<HTMLSelectElement>('select[aria-label="Status"]')!.value).toBe('open');
     const noNote = view.contentEl.querySelector<HTMLSelectElement>('select[aria-label="Status"]')!; noNote.value = 'completed'; noNote.dispatchEvent(new Event('change')); await flush(); expect((await repo.read(task.id)).status).toBe('open');
   });
+  it('groups current-note tasks under their headings, collapses them persistently and expands on demand', async () => {
+    const { owner, view, setActive } = await fixture(); const { add } = { add: (path: string, text: string) => (owner.app.vault as any).create(path, text) };
+    const text = '- [ ] Loose\n# Work\n- [ ] A\n## Deep\n- [ ] B\n# Home\n- [ ] C\n## Empty\n';
+    const file: any = await add('Daily/Today.md', text); setActive(file); owner.context = null; owner.selectedTaskId = null; view.tab = 'Task'; await view.render(); await flush();
+    const rows = () => Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-heading-row, .organized-list-card')).map(el => el.classList.contains('organized-heading-row') ? `# ${el.querySelector('.organized-heading-text')!.textContent} (${el.querySelector('.organized-count')!.textContent}) ${el.getAttribute('aria-expanded')}` : el.querySelector('.organized-list-title')!.textContent);
+    expect(rows()).toEqual(['Loose', '# Work (2) true', 'A', '# Deep (1) true', 'B', '# Home (1) true', 'C']);
+    expect(view.contentEl.querySelectorAll<HTMLElement>('.organized-heading-row')[1].style.getPropertyValue('--organized-depth')).toBe('1');
+    const click = (name: string) => { Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-heading-row')).find(el => el.querySelector('.organized-heading-text')!.textContent === name)!.click(); return flush(); };
+    await click('Work'); expect(rows()).toEqual(['Loose', '# Work (2) false', '# Home (1) true', 'C']); expect(owner.settings.collapsedHeadings['Daily/Today.md']).toHaveLength(1);
+    await view.render(); expect(rows()).toEqual(['Loose', '# Work (2) false', '# Home (1) true', 'C']);
+    await click('Home'); expect(rows()).toEqual(['Loose', '# Work (2) false', '# Home (1) false']); expect(owner.settings.collapsedHeadings['Daily/Today.md']).toHaveLength(2);
+    await click('Work'); expect(rows()).toEqual(['Loose', '# Work (2) true', 'A', '# Deep (1) true', 'B', '# Home (1) false']); expect(owner.settings.collapsedHeadings['Daily/Today.md']).toHaveLength(1);
+    await click('Deep'); expect(rows()).toEqual(['Loose', '# Work (2) true', 'A', '# Deep (1) false', '# Home (1) false']);
+    await click('Home'); await click('Deep'); expect(owner.settings.collapsedHeadings).toEqual({});
+    const blank: any = await add('Blank.md', '#\n- [ ] Z'); setActive(blank); await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-heading-text')?.textContent).toBe('Untitled heading');
+  });
 });

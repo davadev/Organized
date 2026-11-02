@@ -130,6 +130,7 @@ export function installObsidianDom(): void {
     this.textContent = typeof t === "string" ? t : "";
     if (typeof t !== "string") this.appendChild(t);
   };
+  proto.setCssProps = function (this: HTMLElement, props: Record<string, string>) { for (const [name, value] of Object.entries(props)) this.style.setProperty(name, value); };
   proto.setAttr = function (this: HTMLElement, name: string, value: string | number | boolean | null) {
     if (value === null) this.removeAttribute(name);
     else this.setAttribute(name, String(value));

@@ -61,4 +61,14 @@ describe("Markdown task codec", () => {
     expect(sortTasks('- [ ] parent\n    child\n- [ ] next', 0, 'section', priorities)).toBe('- [ ] parent\n    child\n- [ ] next');
     expect(sortTasks('- [ ] plain\n- [ ] another', 1, 'list', priorities)).toBe('- [ ] plain\n- [ ] another');
   });
+  it('keeps forwarded tasks adjacent instead of separating each with a blank line', () => {
+    const work = [{ level: 2, text: 'Work', ordinal: 0 }]; const home = [{ level: 2, text: 'Home', ordinal: 0 }];
+    let text = '';
+    for (const [task, section] of [['A', work], ['B', work], ['C', home], ['D', work], ['E', home]] as const) text = insertTask(text, `- [ ] ${task}`, [...section]).text;
+    expect(text).toBe('## Work\n\n- [ ] A\n- [ ] B\n- [ ] D\n\n## Home\n\n- [ ] C\n- [ ] E\n');
+    expect(insertTask('## Todos\n\n## Log\n', '- [ ] A', [{ level: 2, text: 'Todos', ordinal: 0 }]).text).toBe('## Todos\n\n- [ ] A\n## Log\n');
+    expect(insertTask('# Day\n\n## Todos\n- [ ] A\n\n\n## Log\n', '- [ ] B', [{ level: 1, text: 'Day', ordinal: 0 }, { level: 2, text: 'Todos', ordinal: 0 }]).text).toBe('# Day\n\n## Todos\n- [ ] A\n- [ ] B\n\n\n## Log\n');
+    expect(insertTask('# Day', '- [ ] A', [{ level: 1, text: 'New', ordinal: 0 }]).text).toBe('# Day\n\n# New\n\n- [ ] A\n');
+    expect(insertTask('# Day\n- [ ] A\n# Last', '- [ ] B', [{ level: 1, text: 'Day', ordinal: 0 }]).text).toBe('# Day\n- [ ] A\n- [ ] B\n# Last');
+  });
 });

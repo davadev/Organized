@@ -2,13 +2,14 @@ import { Component, ItemView, WorkspaceLeaf, TFile, setIcon } from "obsidian";
 import type { Editor } from "obsidian";
 import { moment } from "./moment";
 import type Organized from "./main";
-import { elapsed, localDate, PRIORITIES, STATUSES, Task } from "./model";
+import { elapsed, localDate, PRIORITIES, Section, STATUSES, Task } from "./model";
 import { byPriority, report } from "./service";
 import { DatePicker } from "./modals";
 import { NoteSection, NOTE_SECTIONS, noteLoose, noteSection, parseTasks, TaskLine } from "./codec";
 import { splitNote } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 
+const sameHeading = (a: Section, b: Section): boolean => a.level === b.level && a.text === b.text && a.ordinal === b.ordinal;
 export const VIEW_TYPE = "organized-inspector";
 export type Tab = "Calendar" | "Task" | "Projects";
 export class OrganizedInspectorView extends ItemView {
@@ -147,7 +148,20 @@ export class OrganizedInspectorView extends ItemView {
     const name = source.file.path.split("/").at(-1)!.replace(/\.md$/i, "");
     const list = this.section(host, name, lines.length);
     if (!lines.length) { list.createDiv({ cls: "organized-empty", text: "No tasks in this note yet." }); return; }
+    let shown: Section[] = []; let hidden = 0;
     for (const line of lines) {
+      // Emit headings this line enters; a collapsed ancestor hides everything beneath it.
+      let common = 0; while (common < shown.length && common < line.section.length && sameHeading(shown[common], line.section[common])) common++;
+      if (common < hidden) hidden = 0;
+      for (let depth = common; depth < line.section.length; depth++) {
+        if (hidden) break;
+        const key = JSON.stringify(line.section.slice(0, depth + 1));
+        const collapsed = this.owner.settings.collapsedHeadings[source.file.path]?.includes(key) === true;
+        this.headingRow(list, source.file.path, line.section[depth], depth, key, collapsed, lines.filter(l => JSON.stringify(l.section.slice(0, depth + 1)) === key).length);
+        if (collapsed) hidden = depth + 1;
+      }
+      shown = line.section;
+      if (hidden) continue;
       if (line.id) {
         try {
           const task = await this.owner.repo.read(line.id);
@@ -159,6 +173,13 @@ export class OrganizedInspectorView extends ItemView {
         }
       } else this.noteTaskRow(list, source.file, source.editor, line, "Regular todo");
     }
+  }
+  private headingRow(host: HTMLElement, notePath: string, heading: Section, depth: number, key: string, collapsed: boolean, count: number): void {
+    const row = host.createEl("button", { cls: "organized-heading-row", attr: { type: "button", "aria-expanded": String(!collapsed) } });
+    row.setCssProps({ "--organized-depth": String(depth) });
+    setIcon(row.createSpan({ cls: "organized-heading-chevron", attr: { "aria-hidden": "true" } }), collapsed ? "chevron-right" : "chevron-down");
+    row.createSpan({ cls: "organized-heading-text", text: heading.text || "Untitled heading" }); row.createSpan({ cls: "organized-count", text: String(count) });
+    row.addEventListener("click", () => { this.owner.setHeadingCollapsed(notePath, key, !collapsed); void this.render().catch(report); });
   }
   private inlineEditor(host: HTMLElement, id: string, section: NoteSection, text: string): void {
     const field = host.createEl("textarea", { cls: "organized-inline-editor", attr: { "aria-label": section, placeholder: `Add ${section.toLowerCase()}…` } }); field.value = text;
