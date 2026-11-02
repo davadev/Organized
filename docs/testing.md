@@ -80,6 +80,9 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Set retention to a few days, choose *Add everything*, track time on a task, complete it and open today's daily note after expiry: the latest daily note shows the description as a quote and `- Worked …` lines under a plain checkbox, and the Day/Week views still show the block.
 - Change a task's priority in the side panel with *Current task list* sorting: the list in the note reorders.
 
+## Project sections and start date
+- Link a task to a new project: the note has Open / In progress / Done headings and the task sits under Open. Start the timer, complete it, cancel another: each line moves under the matching heading (Canceled appears when needed). A project note without headings gets them added when a linked task changes status. After updating, every existing project note has `organized_start` set to the update date (once); notes that already had a start keep it.
+
 ## Manual time
 - Day view → **+** beside Time: pick a task, set a start/end and save; a block appears and the Task tab's tracked total grows. Tap the block: change the end and save, then Delete; the total follows. Try an end before the start, 30 seconds, more than 24 hours and a future end: each shows a reason and saves nothing. A running timer's block opens the task instead of the form.
 

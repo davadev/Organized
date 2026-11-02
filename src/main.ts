@@ -121,11 +121,11 @@ export default class Organized extends Plugin {
     }
     new Notice(fragment, 15000);
   }
-  /** One-time: project notes made before the marker existed get `organized_type: project`, so the picker can list only them. */
+  /** One-time: project notes made before the marker or the start date existed get `organized_type: project` and `organized_start` (today), so the picker lists them and a project knows when it began. */
   async markProjectNotes(): Promise<void> {
-    if (this.settings.projectNotesMarked || !this.safety.writable) return;
-    const marked = await this.service.markProjects(); this.settings.projectNotesMarked = true; this.saveSettings(false);
-    if (marked) new Notice(`${marked} project note${marked === 1 ? "" : "s"} marked with organized_type: project so they can be listed when linking projects.`, 12000);
+    if (this.settings.projectStartsSet || !this.safety.writable) return;
+    const updated = await this.service.markProjects(); this.settings.projectNotesMarked = true; this.settings.projectStartsSet = true; this.saveSettings(false);
+    if (updated) new Notice(`${updated} project note${updated === 1 ? "" : "s"} updated: marked as projects and given a start date (today).`, 12000);
   }
   private remapKnownProjects(moved: { from: string; to: string }[]): void {
     const target = new Map(moved.map(m => [m.from, m.to]));

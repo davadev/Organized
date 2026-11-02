@@ -122,6 +122,21 @@ export function insertTask(text: string, line: string, section: Section[]): { te
   }
   lines.splice(insert, 0, line); return { text: lines.join(newline), missing: false };
 }
+/** Status sections of a project note, in the order a project reads: what is being done, what waits, what is finished. */
+export const PROJECT_SECTIONS = { in_progress: "In progress", open: "Open", completed: "Done", canceled: "Canceled" } as const;
+/** The heading path to use for `name` in a note: an existing heading of that name at any level, else a new level-2 heading. */
+export function sectionNamed(text: string, name: string): Section[] {
+  let found: Section[] | null = null;
+  parseTasks(text, (_line, section) => { if (!found && section.at(-1)?.text.toLocaleLowerCase() === name.toLocaleLowerCase()) found = section; });
+  return found ?? [{ level: 2, text: name, ordinal: 0 }];
+}
+/** Moves the single line carrying `id` under the heading `name`, creating the heading when it is missing. A line already there stays where it is. */
+export function moveTask(text: string, id: string, name: string): string {
+  const matches = parseTasks(text).filter(t => t.id === id); if (matches.length !== 1) throw new Error("Occurrence is missing or ambiguous; preserved for repair.");
+  const target = sectionNamed(text, name); if (JSON.stringify(matches[0].section) === JSON.stringify(target)) return text;
+  const lines = text.split("\n"); const [moved] = lines.splice(matches[0].line, 1);
+  return insertTask(lines.join("\n"), moved.replace(/\r$/, ""), target).text;
+}
 export function removeUnique(text: string, id: string, repeatOnly = false): string {
   const matches = parseTasks(text).filter(t => t.id === id && (!repeatOnly || t.repeat));
   if (matches.length !== 1) throw new Error("Occurrence is missing or ambiguous; preserved for repair.");
