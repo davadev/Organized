@@ -1,6 +1,6 @@
 import { Component, MarkdownPostProcessorContext, MarkdownRenderer, MarkdownRenderChild } from "obsidian";
-import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
-import { StateEffect, StateField, RangeSetBuilder, EditorState, Extension } from "@codemirror/state";
+import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetType, keymap } from "@codemirror/view";
+import { StateEffect, StateField, RangeSetBuilder, EditorState, Extension, Prec } from "@codemirror/state";
 import { editorLivePreviewField } from "obsidian";
 import type Organized from "./main";
 import { parseTasks } from "./codec";
@@ -121,7 +121,15 @@ export function editorExtension(owner: Organized): Extension {
     }
     update(update: ViewUpdate): void { if (update.docChanged || update.viewportChanged || update.selectionSet || update.transactions.some(t => t.effects.some(e => e.is(refreshEffect)))) this.decorations = this.build(update.view); }
   }, { decorations: value => value.decorations, provide: plugin => EditorView.atomicRanges.of(view => view.plugin(plugin)?.decorations ?? Decoration.none) });
-  return [field, icons, EditorView.updateListener.of(update => owner.onEditorUpdate(update))];
+  return [field, icons, Prec.highest(keymap.of([{ key: "Enter", run: stepPastComments }])), EditorView.updateListener.of(update => owner.onEditorUpdate(update))];
+}
+const TRAILING_COMMENTS = /^(?:\s*<!--organized:(?:[a-zA-Z0-9_-]{8,80}|repeat)-->)+\s*$/;
+/** The hidden ID comments sit after the visible text, so Enter at the visible end would split them onto the new line and orphan the task above. Step the caret past them first, then let the normal Enter (list continuation) run. */
+export function stepPastComments(view: EditorView): boolean {
+  const { main } = view.state.selection; if (!main.empty) return false;
+  const line = view.state.doc.lineAt(main.head);
+  if (main.head < line.to && TRAILING_COMMENTS.test(line.text.slice(main.head - line.from))) view.dispatch({ selection: { anchor: line.to } });
+  return false;
 }
 function build(state: EditorState, owner: Organized): DecorationSet {
   if (!state.field(editorLivePreviewField, false)) return Decoration.none;
