@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Project colours now look like one family: only the hue of the colour you pick is kept, and it is drawn at one shared lightness and a moderate strength (grays stay gray), so any pick sits well next to the others and the theme. The card fill is fainter, the project colour is the card's left stripe, and the status is a thin, quiet outline (in progress, done) plus its icon, instead of a strong coloured border. Day and Week blocks follow the same rules.
 - Projects can have a colour. The **Projects** tab has a folded **Project colors** list with a colour picker per project (and Clear); the colour is stored in the project note's frontmatter as `organized_color: "#rrggbb"`. Task cards in the side panel are filled with their project's colour (the first coloured project of a task), and the Day view blocks and Week view bars use it too; without a coloured project, calendar blocks are gray and cards stay neutral.
 - The status colour moved from the card fill to its outline: open stays neutral, in progress takes your accent, done is green, canceled is muted. The same applies to the blocks in the Day and Week views.
 - Fix rendered task properties disappearing from the todo your cursor is on, which made the list jump as you clicked between tasks. The line being edited keeps its properties, and moving the cursor no longer redraws them.

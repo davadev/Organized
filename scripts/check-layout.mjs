@@ -90,8 +90,8 @@ try {
         if (!cards.open || !cards.completed || !cards.active) throw Error(`Projects tab is missing status cards: ${JSON.stringify(cards)}`);
         if (new Set([cards.open.border, cards.completed.border, cards.active.border]).size !== 3) throw Error(`Task status outlines are not distinct: ${JSON.stringify(cards)}`);
         if (![cards.open, cards.completed, cards.active].some(card => card.project && card.image.includes('gradient'))) throw Error(`No card is filled with its project colour: ${JSON.stringify(cards)}`);
-        const edges = await page.evaluate(() => ['completed', 'in_progress'].map(status => getComputedStyle(document.querySelector(`.organized-list-card[data-status="${status}"] .organized-list-open`)).borderInlineStartColor));
-        if (edges.some(edge => edge === 'rgba(0, 0, 0, 0)') || edges[0] === edges[1]) throw Error(`Status edge colours are missing or identical: ${edges}`);
+        const stripes = await page.evaluate(() => Array.from(document.querySelectorAll('.organized-list-card[data-project] .organized-list-open')).map(el => getComputedStyle(el).borderInlineStartColor));
+        if (!stripes.length || stripes.some(stripe => stripe === 'rgba(0, 0, 0, 0)')) throw Error(`Project cards lost their colour stripe: ${stripes}`);
         if (await page.locator('.organized-list-meta .organized-status-dot').count()) throw Error('Task rows still show a status dot next to their tinted card');
         if (await page.locator('.organized-view .setting-item').count()) throw Error('Projects tab exposed a native settings row');
       }

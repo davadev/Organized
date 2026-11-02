@@ -1,7 +1,7 @@
 import { Component, ItemView, WorkspaceLeaf, TFile, setIcon } from "obsidian";
 import type { Editor } from "obsidian";
 import { moment } from "./moment";
-import { rgbOf } from "./colors";
+import { softTint } from "./colors";
 import type Organized from "./main";
 import { elapsed, localDate, PRIORITIES, Section, STATUSES, Task } from "./model";
 import { byPriority, report } from "./service";
@@ -218,7 +218,7 @@ export class OrganizedInspectorView extends ItemView {
   /** Paints an element with the colour of the task's project; without a coloured project it stays gray (blocks) or neutral (cards). */
   private tint(el: HTMLElement, task: Task): void {
     const color = this.owner.repo.taskColor(task); if (!color) return;
-    el.setAttribute("data-project", ""); el.setCssProps({ "--organized-project-rgb": rgbOf(color) });
+    el.setAttribute("data-project", ""); el.setCssProps({ "--organized-project-rgb": softTint(color) });
   }
   /** One colour picker per project, folded away by default; the colour lives in the project note's frontmatter. */
   private colorPickers(host: HTMLElement, projects: string[]): void {
