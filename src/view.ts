@@ -5,7 +5,7 @@ import type Organized from "./main";
 import { elapsed, localDate, PRIORITIES, STATUSES, Task } from "./model";
 import { byPriority, report } from "./service";
 import { DatePicker } from "./modals";
-import { NoteSection, NOTE_SECTIONS, noteLoose, noteSection, TaskLine } from "./codec";
+import { NoteSection, NOTE_SECTIONS, noteLoose, noteSection, parseTasks, TaskLine } from "./codec";
 import { splitNote } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 
@@ -23,6 +23,7 @@ export class OrganizedInspectorView extends ItemView {
   referencesOpen = false;
   private renderId = 0;
   private scrolledModule = "";
+  private doneToday = new Set<string>();
   private markdown = this.addChild(new Component());
   constructor(leaf: WorkspaceLeaf, readonly owner: Organized) { super(leaf); }
   getViewType(): string { return VIEW_TYPE; }
@@ -68,8 +69,20 @@ export class OrganizedInspectorView extends ItemView {
     head.createEl("h3", { cls: "organized-section-title", text: title }); head.createSpan({ cls: "organized-count", text: String(count) });
     return section;
   }
+  /** Recurring tasks stay open in frontmatter, so today's ticked occurrence is what shows them as done. */
+  private async loadDoneToday(): Promise<void> {
+    const note = this.owner.repo.file(this.owner.service.daily.path(localDate()));
+    this.doneToday = new Set(note ? parseTasks(await this.owner.repo.readText(note)).filter(t => t.id && t.marker.toLowerCase() === "x").map(t => t.id!) : []);
+  }
+  /** Today's occurrence of a recurring task, so changing status from the inspector targets only today. */
+  private async todayContext(id: string): Promise<{ file: TFile; line: TaskLine } | undefined> {
+    const note = this.owner.repo.file(this.owner.service.daily.path(localDate())); if (!note) return undefined;
+    const lines = parseTasks(await this.owner.repo.readText(note)).filter(t => t.id === id);
+    return lines.length === 1 ? { file: note, line: lines[0] } : undefined;
+  }
+  private shownStatus(task: Task): Task["status"] { return task.recurring && task.status === "open" && this.doneToday.has(task.id) ? "completed" : task.status; }
   private statusDot(host: HTMLElement, task: Task): HTMLElement {
-    return host.createSpan({ cls: "organized-status-dot", attr: { "data-status": task.status, "aria-hidden": "true" } });
+    return host.createSpan({ cls: "organized-status-dot", attr: { "data-status": this.shownStatus(task), "aria-hidden": "true" } });
   }
   private taskRow(host: HTMLElement, task: Task, action: () => Promise<unknown> | void): HTMLElement {
     const row = host.createDiv({ cls: "organized-list-card" });
@@ -84,7 +97,7 @@ export class OrganizedInspectorView extends ItemView {
     const title = open.createDiv({ cls: "organized-list-title" });
     void renderMarkdownLinks(this.app, task.title, title, this.owner.repo.taskPath(task.id), this.markdown).catch(report);
     const meta = open.createDiv({ cls: "organized-list-meta" }); this.statusDot(meta, task);
-    meta.createSpan({ cls: "organized-list-status", text: task.status.replace(/_/g, " ") });
+    meta.createSpan({ cls: "organized-list-status", text: task.recurring && this.shownStatus(task) === "completed" ? "done · today" : task.status.replace(/_/g, " ") });
     if (task.priority !== "none") meta.createSpan({ cls: `organized-list-priority priority-${task.priority}`, text: task.priority });
     if (task.scheduled && this.owner.settings.showScheduledDate) meta.createSpan({ cls: "organized-list-date", text: task.scheduled });
     if (task.starred) { const star = meta.createSpan({ cls: "organized-list-star", attr: { "aria-label": "Favorite" } }); setIcon(star, "star"); }
@@ -129,7 +142,7 @@ export class OrganizedInspectorView extends ItemView {
   private async noteTasks(host: HTMLElement, generation: number): Promise<void> {
     const source = this.owner.taskSourceEditor();
     if (!source) { host.createEl("p", { text: "Open a Markdown note to browse its tasks here." }); return; }
-    const lines = await this.owner.taskLines(source.file);
+    const lines = await this.owner.taskLines(source.file); await this.loadDoneToday();
     if (generation !== this.renderId) return;
     const name = source.file.path.split("/").at(-1)!.replace(/\.md$/i, "");
     const list = this.section(host, name, lines.length);
@@ -148,11 +161,16 @@ export class OrganizedInspectorView extends ItemView {
     }
   }
   private inlineEditor(host: HTMLElement, id: string, section: NoteSection, text: string): void {
-    const field = host.createEl("textarea", { cls: "organized-inline-editor", attr: { "aria-label": section } }); field.value = text;
-    // Actions sit above the field so a mobile keyboard cannot cover Save.
-    const actions = host.createDiv({ cls: "organized-inline-actions" }); host.insertBefore(actions, field);
-    this.button(actions, "Save", () => { field.blur(); this.editingModule = ""; return this.owner.run(() => this.owner.saveModule(id, section, field.value)); }).addClass("organized-save");
-    this.button(actions, "Cancel", () => { field.blur(); this.editingModule = ""; return this.render(); });
+    const field = host.createEl("textarea", { cls: "organized-inline-editor", attr: { "aria-label": section, placeholder: `Add ${section.toLowerCase()}…` } }); field.value = text;
+    // Edits save themselves: shortly after typing stops and again when the field loses focus.
+    let saved = text; let timer = 0; let pending: Promise<unknown> = Promise.resolve();
+    const save = (): Promise<unknown> => {
+      window.clearTimeout(timer); if (field.value === saved) return pending;
+      const value = saved = field.value; pending = pending.then(() => this.owner.run(() => this.owner.saveModule(id, section, value))); return pending;
+    };
+    field.addEventListener("input", () => { window.clearTimeout(timer); timer = window.setTimeout(() => { void save(); }, 800); });
+    field.addEventListener("keydown", event => { if (event.key === "Escape") field.blur(); });
+    field.addEventListener("blur", () => { this.editingModule = ""; void save().then(() => this.render()).catch(report); });
     field.focus(); field.setSelectionRange(text.length, text.length); field.scrollIntoView({ block: "nearest" });
   }
   calendar(host: HTMLElement): void {
@@ -195,7 +213,7 @@ export class OrganizedInspectorView extends ItemView {
   async task(host: HTMLElement, generation: number): Promise<void> {
     const id = this.owner.selectedTaskId;
     if (!id) { await this.noteTasks(host, generation); return; }
-    const task = await this.owner.repo.read(id);
+    const task = await this.owner.repo.read(id); await this.loadDoneToday();
     if (generation !== this.renderId) return;
     const hero = host.createDiv({ cls: "organized-task-hero" });
     const eyebrow = hero.createDiv({ cls: "organized-eyebrow" });
@@ -216,7 +234,8 @@ export class OrganizedInspectorView extends ItemView {
     const star = this.iconButton(header, "Favorite", "star", () => this.owner.run(async () => { await this.owner.repo.update(id, t => ({ ...t, starred: !t.starred })); this.owner.refresh(); })); star.setAttribute("aria-pressed", String(task.starred));
     const toolbar = hero.createDiv({ cls: "organized-task-toolbar" });
     const status = toolbar.createDiv({ cls: "organized-status-field" }); this.statusDot(status, task);
-    this.select(status, "Status", task.status, STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(() => this.owner.service.status(id, value as Task["status"], this.owner.context ?? undefined)); });
+    const statusSelect = this.select(status, "Status", this.shownStatus(task), STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(async () => this.owner.service.status(id, value as Task["status"], this.owner.context?.line.id === id ? this.owner.context : task.recurring ? await this.todayContext(id) : undefined)); });
+    if (task.recurring) statusSelect.options[STATUSES.indexOf("completed")].text = "done · today";
     const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Description", "Idea", "Question", "Sources", "Notes"], value => { this.module = value; this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
     const file = this.owner.repo.file(this.owner.repo.taskPath(id))!; const body = splitNote(await this.owner.repo.readText(file)).body;
     const details = host.createDiv({ cls: "organized-task-details" });
@@ -265,14 +284,15 @@ export class OrganizedInspectorView extends ItemView {
     this.button(actions, "Delete task", () => this.owner.deleteTask(id)).addClass("organized-danger");
   }
   async projects(host: HTMLElement, generation: number): Promise<void> {
-    const tasks = byPriority(await this.owner.repo.list());
+    const tasks = byPriority(await this.owner.repo.list()); await this.loadDoneToday();
     if (generation !== this.renderId) return;
     const choose = (task: Task) => { this.owner.selectedTaskId = task.id; this.origin = "Projects / favorites"; this.tab = "Task"; this.module = ""; this.editingModule = ""; this.editingTitle = false; return this.render(); };
     const favorites = tasks.filter(t => t.starred && t.status !== "canceled");
     const favoriteSection = this.section(host, "Favorites", favorites.length);
     if (!favorites.length) favoriteSection.createDiv({ cls: "organized-empty", text: "No favorites yet. Use [*] on a task or star it in the Task tab." });
     for (const task of favorites) this.taskRow(favoriteSection, task, () => choose(task));
-    const projects = [...new Set(tasks.flatMap(t => t.projects))];
+    const linked = tasks.flatMap(t => t.projects); this.owner.rememberProjects(linked);
+    const projects = [...new Set([...this.owner.settings.knownProjects.filter(p => this.owner.repo.file(p)), ...linked])];
     const projectSection = this.section(host, "Projects", projects.length);
     const field = projectSection.createDiv({ cls: "organized-field" });
     field.createEl("label", { cls: "organized-field-label", text: "Filter by project", attr: { for: "organized-project-filter" } });
@@ -281,7 +301,7 @@ export class OrganizedInspectorView extends ItemView {
     for (const project of projects) picker.createEl("option", { text: project, value: project }); picker.value = this.selectedProject;
     picker.addEventListener("change", () => { this.selectedProject = picker.value; picker.blur(); void this.render().catch(report); });
     const shown = tasks.filter(t => t.status !== "canceled" && t.projects.length && (!this.selectedProject || t.projects.includes(this.selectedProject)));
-    if (!shown.length) projectSection.createDiv({ cls: "organized-empty", text: this.selectedProject ? `No tasks linked to ${this.selectedProject}.` : "No project links yet. Use [b] on a task to link its project or topic note." });
+    if (!shown.length) projectSection.createDiv({ cls: "organized-empty", text: this.selectedProject ? `No tasks linked to ${this.selectedProject}.` : "No project links yet. Use [j] on a task to link its project or topic note." });
     for (const task of shown) this.taskRow(projectSection, task, () => choose(task));
     const canceled = tasks.filter(t => t.status === "canceled");
     const canceledSection = this.section(host, "Canceled", canceled.length);

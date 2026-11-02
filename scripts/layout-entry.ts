@@ -20,7 +20,7 @@ const noteTasksFile = { path: 'Daily/Today.md' } as any;
 const noteTasksEditor = { focus() {}, setCursor() {} } as any;
 const app: any = { workspace: { getLeaf: () => ({ openFile: async () => undefined }) } };
 const owner: any = {
-  app, selectedTaskId: task.id, context: null, settings: { ...DEFAULT_SETTINGS, displayProperties: [] }, revision: 0,
+  app, selectedTaskId: task.id, context: null, settings: { ...DEFAULT_SETTINGS, displayProperties: [] }, revision: 0, rememberProjects: () => undefined,
   saveSettings() {}, onEditorUpdate() {}, deleteTask: async () => undefined,
   assertWritable() {}, run: async (fn: () => unknown) => fn(), contextFor: () => null,
   pickProjects() {}, saveModule: async () => undefined, refresh() {},
@@ -38,7 +38,7 @@ let modal: DatePicker | null = null;
     const settings = new OrganizedSettingsTab(app, owner);
     if (tab === 'LegacySettings') { root.appendChild(settings.containerEl); settings.display(); }
     else {
-      const host = root.createDiv({ cls: 'organized-settings' });
+      const host = root.createDiv({ cls: 'vertical-tab-content' });
       for (const group of settings.getSettingDefinitions() as any[]) {
         new Setting(host).setName(group.heading).setHeading();
         for (const row of group.items) { const setting = new Setting(host).setName(row.name); if (row.desc) setting.setDesc(row.desc); row.render(setting); }

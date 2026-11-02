@@ -1,7 +1,7 @@
 import { Editor, MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { Transaction } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
-import { parseTasks, NoteSection, TaskLine, writeNoteSection } from "./codec";
+import { ACTION_MARKERS, parseTasks, NoteSection, PROJECT_MARKER, SECTION_MARKERS, TaskLine, writeNoteSection } from "./codec";
 import { DEFAULT_SETTINGS, localDate, object, Settings, Task } from "./model";
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
@@ -83,10 +83,15 @@ export default class Organized extends Plugin {
       await this.repo.serial(action);
     } catch (error) { report(error); } finally { this.busy--; }
   }
-  saveSettings(): void {
+  saveSettings(refresh = true): void {
     this.saveTail = this.saveTail.then(async () => {
-      this.assertWritable(); await this.saveData({ ...this.settingsRaw, schemaVersion: 1, writerVersion: this.manifest.version, settings: { ...object(this.settingsRaw.settings), ...this.settings } }); this.refresh();
+      this.assertWritable(); await this.saveData({ ...this.settingsRaw, schemaVersion: 1, writerVersion: this.manifest.version, settings: { ...object(this.settingsRaw.settings), ...this.settings } }); if (refresh) this.refresh();
     }).catch(report);
+  }
+  /** Remembers project notes so they stay listed after their last task is deleted. */
+  rememberProjects(projects: string[]): void {
+    const added = projects.filter(p => !this.settings.knownProjects.includes(p)); if (!added.length) return;
+    this.settings.knownProjects = [...this.settings.knownProjects, ...new Set(added)]; this.saveSettings(false);
   }
   activeEditor(): { editor: Editor; file: TFile } | null {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView); return view?.file && view.getMode() === "source" ? { editor: view.editor, file: view.file } : null;
@@ -197,7 +202,7 @@ export default class Organized extends Plugin {
     if (!context.line.id && context.line.marker === " " && (!old || !/^\s*(?:[-+*]|\d+[.)]) \[ \]/.test(old.raw))) {
       queueMicrotask(() => { if (!this.pickerOpen) void this.pickTask(active.editor, active.file, false, true).catch(report); }); return;
     }
-    if (!context.line.id && context.line.title && '<>/!iI?xX-*"bf'.includes(context.line.marker) && context.line.marker !== old?.marker) {
+    if (!context.line.id && context.line.title && ACTION_MARKERS.includes(context.line.marker) && context.line.marker !== old?.marker) {
       queueMicrotask(() => { void this.run(async () => {
         const fresh = await this.service.resolve(context);
         const task = await this.repo.create(fresh.line.title);
@@ -214,14 +219,12 @@ export default class Organized extends Plugin {
     this.assertWritable(); this.context = context; this.selectedTaskId = id;
     if (marker === "<") { const task = await this.repo.read(id); new DatePicker(this.app, task.scheduled ?? localDate(), date => this.run(() => this.service.schedule(context, date))).open(); }
     else if (marker === "!") new PriorityPicker(this.app, priority => this.run(() => this.service.priority(context, priority))).open();
-    else if (["i", "I", "?"].includes(marker)) {
-      await this.openInspector("Task", marker === "i" ? "Description" : marker === "I" ? "Idea" : "Question"); await this.run(() => this.service.clean(context));
-    } else if (marker === '"') { await this.openInspector("Task", "Sources"); await this.run(() => this.service.clean(context)); }
-    else if (marker === "b") this.pickProjects(await this.repo.read(id), context);
+    else if (marker in SECTION_MARKERS) { await this.openInspector("Task", SECTION_MARKERS[marker]); await this.run(() => this.service.clean(context)); }
+    else if (marker === PROJECT_MARKER) this.pickProjects(await this.repo.read(id), context);
     else await this.run(() => this.service.marker(context, marker));
   }
   pickProjects(task: Task, context?: Context): void {
-    new ProjectPicker(this.app, this.app.vault.getMarkdownFiles().filter(f => !f.path.startsWith(`${this.settings.taskFolder}/`)).map(f => f.path), task.projects, notes => this.run(async () => { await this.service.projects(task.id, notes); if (context) await this.service.clean(context); })).open();
+    new ProjectPicker(this.app, this.app.vault.getMarkdownFiles().filter(f => !f.path.startsWith(`${this.settings.taskFolder}/`)).map(f => f.path), task.projects, notes => this.run(async () => { await this.service.projects(task.id, notes); this.rememberProjects(notes); if (context) await this.service.clean(context); })).open();
   }
   async saveModule(id: string, section: NoteSection, text: string): Promise<void> {
     const file = this.repo.file(this.repo.taskPath(id)); if (!file) throw new Error("Task note is missing.");

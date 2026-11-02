@@ -135,10 +135,12 @@ describe('plugin lifecycle and user-only editor actions', () => {
     const context = (marker: string) => { const text = `- [${marker}] Task <!--organized:${task.id}-->`; h.texts.set(file.path, text); return { file, line: parseTasks(text)[0] }; };
     const schedule = vi.spyOn(plugin.service, 'schedule').mockResolvedValue(); await plugin.trigger(context('<')); let modal = Modal.instances.at(-1) as DatePicker; expect(modal).toBeInstanceOf(DatePicker); await modal.choose('2026-01-01'); expect(schedule).toHaveBeenCalled(); modal.close();
     const priority = vi.spyOn(plugin.service, 'priority').mockResolvedValue(); await plugin.trigger(context('!')); const picker = Modal.instances.at(-1) as PriorityPicker; await picker.choose('high'); expect(priority).toHaveBeenCalled(); picker.close();
-    const open = vi.spyOn(plugin, 'openInspector').mockResolvedValue(); const clean = vi.spyOn(plugin.service, 'clean').mockResolvedValue(); for (const marker of ['i', 'I', '?']) await plugin.trigger(context(marker)); expect(open.mock.calls.map(c => c[1])).toEqual(['Description', 'Idea', 'Question']); expect(clean).toHaveBeenCalledTimes(3);
-    await plugin.trigger(context('"')); expect(open).toHaveBeenLastCalledWith('Task', 'Sources'); expect(clean).toHaveBeenCalledTimes(4);
-    await plugin.trigger(context('b')); const projects = Modal.instances.at(-1) as ProjectPicker; await projects.save(['Project.md']); expect((await plugin.repo.read(task.id)).projects).toEqual(['Project.md']); projects.close();
+    const open = vi.spyOn(plugin, 'openInspector').mockResolvedValue(); const clean = vi.spyOn(plugin.service, 'clean').mockResolvedValue(); for (const marker of ['a', 'e', 'q']) await plugin.trigger(context(marker)); expect(open.mock.calls.map(c => c[1])).toEqual(['Description', 'Idea', 'Question']); expect(clean).toHaveBeenCalledTimes(3);
+    await plugin.trigger(context('s')); expect(open).toHaveBeenLastCalledWith('Task', 'Sources'); expect(clean).toHaveBeenCalledTimes(4);
+    await plugin.trigger(context('j')); const projects = Modal.instances.at(-1) as ProjectPicker; await projects.save(['Project.md']); expect((await plugin.repo.read(task.id)).projects).toEqual(['Project.md']); projects.close();
     await plugin.trigger(context('*')); expect((await plugin.repo.read(task.id)).starred).toBe(true);
+    for (const marker of ['d', 'p', 'i', 'I', '?', '"', 'b', 'f']) await plugin.trigger(context(marker));
+    expect(open).toHaveBeenCalledTimes(4); expect(clean).toHaveBeenCalledTimes(5); expect((await plugin.repo.read(task.id)).recurring).toBe(false);
     await plugin.trigger({ file, line: parseTasks('- [k] visual')[0] }); expect(await plugin.repo.list()).toHaveLength(1);
     const missing = harness(); const p = new Organized(missing.app, {} as any); (p as any).repo = missing.repo; await expect(p.saveModule('missing1', 'Sources', 'text')).rejects.toThrow('missing');
     const canonical = plugin.repo.file(plugin.repo.taskPath(task.id))!; await plugin.saveModule(task.id, 'Sources', '- [Source](https://example.com)'); expect(await plugin.repo.readText(canonical)).toContain('https://example.com');

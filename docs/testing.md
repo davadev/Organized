@@ -62,7 +62,7 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 
 - Verify wikilinks and Markdown links open from the inspector's task title and note sections; ordinary links in task-list cards remain separate from card activation.
 - Verify the task inspector uses a single grouped details surface and that mobile Settings controls stay close to their labels at 240–390 px.
-- Confirm an unfinished `[f]` recurring occurrence is not copied by automatic daily-note reconciliation.
+- Confirm an unfinished `[r]` recurring occurrence is not copied by automatic daily-note reconciliation.
 
 ## Mobile toolbar picker regression
 
@@ -82,3 +82,8 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - After expiry, open today's daily note. Confirm linked occurrences across notes lose only Organized markers, keep their checkbox state/indentation, and the canonical Markdown task note moves to Obsidian's trash.
 - Confirm open/in-progress, recurring, and legacy completed/canceled records without a `closed_at` timestamp remain. Simulate a concurrently changed reference and verify the task note is preserved; retry after resolving the conflict.
 - Test with Obsidian's trash enabled and disabled as relevant to the vault, and verify behavior on desktop and mobile before stable promotion.
+- Type `[a]`, `[j]`, `[r]` and confirm they act; type `[d]`, `[p]`, `[i]`, `[b]`, `[f]` and confirm only an icon appears.
+- Tick a recurring task in today's note; confirm the Task and Projects tabs show **done · today** and tomorrow's occurrence is open.
+- Type in a description, wait about a second, switch tabs and return; the text is saved without pressing a button.
+- Set **Daily-note template**, schedule a task to a date with no note, and confirm the new note has the template content with the task under its heading.
+- Delete the only task of a project and confirm the project is still listed.
