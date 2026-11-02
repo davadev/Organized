@@ -21,6 +21,7 @@ export default class Organized extends Plugin {
   context: Context | null = null;
   selectedTaskId: string | null = null;
   private shownNote: string | null = null;
+  private readonly titleTimers = new Map<string, number>();
   private lastNoteEditor: { editor: Editor; file: TFile } | null = null;
   revision = 0;
   readonly projectionListeners = new Set<() => void>();
@@ -74,7 +75,7 @@ export default class Organized extends Plugin {
     } catch (error) { report(error); throw error; }
   }
   onunload(): void {
-    this.loaded = false;
+    this.loaded = false; for (const timer of this.titleTimers.values()) window.clearTimeout(timer); this.titleTimers.clear();
     void writeCrashState(this.app.vault.adapter, crashStatePath(this.manifest, this.app.vault.configDir), DEFAULT_CRASH_STATE);
   }
   assertWritable(): void { if (!this.safety.writable) throw new Error("Writes paused to protect newer/unreadable settings. Restore a compatible backup or update Organized."); }
@@ -211,8 +212,25 @@ export default class Organized extends Plugin {
     picker.onClose = () => { close(); this.pickerOpen = false; };
     picker.open();
   }
+  /** Editing a linked todo's text in a note renames the task once typing pauses, so the panel and every other occurrence follow. */
+  private watchEditedTitle(update: ViewUpdate): void {
+    const events = update.transactions.map(t => t.annotation(Transaction.userEvent));
+    if (events.every(event => event?.startsWith("input.organized"))) return;
+    const active = this.activeEditor(); if (!active || active.editor.getValue() !== update.state.doc.toString()) return;
+    const cursor = active.editor.getCursor().line;
+    const now = parseTasks(update.state.doc.toString()).find(t => t.line === cursor); const before = parseTasks(update.startState.doc.toString()).find(t => t.line === cursor);
+    if (!now?.id || before?.id !== now.id || before.title === now.title) return;
+    const id = now.id; window.clearTimeout(this.titleTimers.get(id));
+    this.titleTimers.set(id, window.setTimeout(() => { this.titleTimers.delete(id); void this.syncEditedTitle(active.file, id).catch(report); }, 800));
+  }
+  private async syncEditedTitle(file: TFile, id: string): Promise<void> {
+    const lines = parseTasks(await this.repo.readText(file)).filter(t => t.id === id); if (lines.length !== 1 || !lines[0].title) return;
+    const title = lines[0].title; const task = await this.repo.read(id); if (task.title === title) return;
+    await this.run(() => this.service.title(id, title));
+  }
   onEditorUpdate(update: ViewUpdate): void {
     if (update.selectionSet) this.followCursor();
+    if (update.docChanged) this.watchEditedTitle(update);
     if (!update.docChanged || this.busy || this.pickerOpen) return;
     const events = update.transactions.map(t => t.annotation(Transaction.userEvent));
     if (events.some(event => event && ["paste", "drop", "undo", "redo"].some(ignored => event.includes(ignored)))) return;

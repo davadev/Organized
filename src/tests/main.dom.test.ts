@@ -245,4 +245,35 @@ describe('plugin lifecycle and user-only editor actions', () => {
     no(`- [x] Same <!--organized:${task.id}-->`, 3, 4, 'X'); await flush(); expect(status).not.toHaveBeenCalled();
     editor.setCursor({ line: 1, ch: 3 }); const typed = open.indexOf('[ ] Clean') + 1; no(open, typed, typed + 1, 'x', 'input.type'); await flush(); expect(trigger).toHaveBeenCalledOnce(); expect(status).not.toHaveBeenCalled();
   });
+  it('renames a linked task shortly after its todo text is edited in a note, everywhere it appears', async () => {
+    const { h, plugin } = await loaded(); const task = await plugin.repo.create('Old title'); const line = `- [ ] Old title <!--organized:${task.id}-->`;
+    const file: any = await h.add('Daily.md', `Intro\n${line}`); const other: any = await h.add('Project.md', line);
+    const editor = h.setActive(file, `Intro\n${line}`); editor.setCursor({ line: 1, ch: 8 });
+    const rename = vi.spyOn(plugin.service, 'title'); const type = (text: string, from: number, to: number, insert: string, event: string | null = 'input.type') => { const before = editor.getValue(); const next = before.slice(0, from) + insert + before.slice(to); editor.setValue(next); plugin.onEditorUpdate(replaceAt(before, from, to, insert, event)); return text; };
+    const at = `Intro\n- [ ] `.length; type('', at, at + 3, 'Newer'); await vi.advanceTimersByTimeAsync(500); expect(rename).not.toHaveBeenCalled();
+    type('', at, at + 5, 'New'); await vi.advanceTimersByTimeAsync(799); expect(rename).not.toHaveBeenCalled(); await vi.advanceTimersByTimeAsync(1); await flush();
+    expect(rename).toHaveBeenCalledOnce(); expect(rename).toHaveBeenCalledWith(task.id, 'New title'); expect((await plugin.repo.read(task.id)).title).toBe('New title'); expect(h.texts.get(other.path)).toContain('- [ ] New title <!--organized:');
+    rename.mockClear(); await vi.advanceTimersByTimeAsync(2000); expect(rename).not.toHaveBeenCalled();
+  });
+  it('ignores edits that are not a title change on a single linked line', async () => {
+    const { h, plugin } = await loaded(); const task = await plugin.repo.create('Same'); const line = `- [ ] Same <!--organized:${task.id}-->`;
+    const file: any = await h.add('Daily.md', `Intro\n${line}\n- [ ] Plain\n${line}`); const editor = h.setActive(file, `Intro\n${line}\n- [ ] Plain\n${line}`);
+    const rename = vi.spyOn(plugin.service, 'title').mockResolvedValue(); const edit = (before: string, from: number, to: number, insert: string, event: string | null = 'input.type', cursor = 1) => { editor.setValue(before.slice(0, from) + insert + before.slice(to)); editor.setCursor({ line: cursor, ch: 0 }); plugin.onEditorUpdate(replaceAt(before, from, to, insert, event)); };
+    const base = editor.getValue(); const title = base.indexOf('Same'); const run = async () => { await vi.advanceTimersByTimeAsync(1000); await flush(); };
+    edit(base, title, title + 4, 'Other', 'input.organized'); await run(); expect(rename).not.toHaveBeenCalled();
+    editor.setValue(base); edit(base, title, title + 4, 'Other', 'input.type', 2); await run(); expect(rename).not.toHaveBeenCalled();
+    editor.setValue(base); const marker = base.indexOf('[ ]') + 1; edit(base, marker, marker + 1, 'x'); await run(); expect(rename).not.toHaveBeenCalled();
+    const plain = base.indexOf('Plain'); editor.setValue(base); edit(base, plain, plain + 5, 'Changed', 'input.type', 2); await run(); expect(rename).not.toHaveBeenCalled();
+    const stale = replaceAt(base, title, title + 4, 'Mismatch'); editor.setValue('something else'); plugin.onEditorUpdate(stale); await run(); expect(rename).not.toHaveBeenCalled();
+    h.clearActive(); plugin.onEditorUpdate(replaceAt(base, title, title + 4, 'Inactive')); await run(); expect(rename).not.toHaveBeenCalled();
+    // The same task twice in one note is ambiguous, so nothing is renamed.
+    const live = h.setActive(file, base); live.setCursor({ line: 1, ch: 0 }); live.setValue(base.replace('Same', 'Other')); plugin.onEditorUpdate(replaceAt(base, title, title + 4, 'Other')); await run(); expect(rename).not.toHaveBeenCalled();
+  });
+  it('skips blank, unchanged and cleared-on-unload title syncs', async () => {
+    const { h, plugin } = await loaded(); const task = await plugin.repo.create('Keep'); const line = `- [ ] Keep <!--organized:${task.id}-->`; const file: any = await h.add('Daily.md', line); const editor = h.setActive(file, line); editor.setCursor({ line: 0, ch: 0 });
+    const rename = vi.spyOn(plugin.service, 'title').mockResolvedValue(); const edit = (to: string) => { const before = editor.getValue(); const title = before.indexOf('Keep') >= 0 ? 'Keep' : before.slice(6, before.indexOf(' <!--')); const from = before.indexOf(title); editor.setValue(before.slice(0, from) + to + before.slice(from + title.length)); plugin.onEditorUpdate(replaceAt(before, from, from + title.length, to)); };
+    edit(''); h.texts.set(file.path, editor.getValue()); await vi.advanceTimersByTimeAsync(1000); await flush(); expect(rename).not.toHaveBeenCalled();
+    editor.setValue(line); h.texts.set(file.path, line); edit('Keep'); edit('Kee'); edit('Keep'); await vi.advanceTimersByTimeAsync(1000); await flush(); expect(rename).not.toHaveBeenCalled();
+    editor.setValue(line); h.texts.set(file.path, line); edit('Pending'); plugin.onunload(); await vi.advanceTimersByTimeAsync(2000); await flush(); expect(rename).not.toHaveBeenCalled();
+  });
 });
