@@ -101,7 +101,7 @@ export function editorExtension(owner: Organized): Extension {
   // Block widgets require a direct state field. No note writes are possible here.
   const field = StateField.define<DecorationSet>({
     create: state => build(state, owner),
-    update: (old, transaction) => transaction.docChanged || transaction.selection || transaction.effects.some(e => e.is(refreshEffect)) ? build(transaction.state, owner) : old,
+    update: (old, transaction) => transaction.docChanged || transaction.effects.some(e => e.is(refreshEffect)) ? build(transaction.state, owner) : old,
     provide: f => EditorView.decorations.from(f),
   });
   const icons = ViewPlugin.fromClass(class {
@@ -141,7 +141,7 @@ function build(state: EditorState, owner: Organized): DecorationSet {
   for (const task of parseTasks(state.doc.toString())) {
     if (!task.id) continue;
     const line = state.doc.line(task.line + 1);
-    if (state.selection.main.head >= line.from && state.selection.main.head <= line.to) continue;
+    // The line being edited keeps its properties: hiding them there made the list jump with every click.
     // CodeMirror drops a block widget placed exactly at the end of a document
     // without a trailing newline; an inline widget there still renders.
     // Short properties sit to the right of the title; rich ones (notes, sources) get a block row below.

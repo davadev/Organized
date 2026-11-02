@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix rendered task properties disappearing from the todo your cursor is on, which made the list jump as you clicked between tasks. The line being edited keeps its properties, and moving the cursor no longer redraws them.
 - Rendered task properties (such as priority) now sit to the right of the title instead of on a row below, which kept lists short; notes and sources, being whole Markdown blocks, still get their own row. Applies in Live Preview and reading view.
 - Switching a rendered property on or off now updates every open note at once; before, the note only changed after you clicked into it (the settings dialog had the focus).
 - If a note cannot be reordered after a priority change because it changed in the meantime, a notice says so instead of failing silently.
