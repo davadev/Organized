@@ -21,6 +21,8 @@ export interface Task {
   recurrence_periods: { start: string; stop: string | null }[];
   starred: boolean; projects: string[]; movement_history: Movement[];
   daily_note_section_path: Section[]; work_sessions: WorkSession[];
+  /** Path of the standalone note this task became. Set only when the task note is kept for the time it tracked; such a task has no todo line and is hidden from every list. */
+  converted_to: string | null;
 }
 export const DISPLAY_PROPERTIES = ["status", "priority", "scheduled", "created", "time_tracked_seconds", "recurring", "starred", "projects", "movement_history", "sources", "notes"] as const;
 export type DisplayProperty = typeof DISPLAY_PROPERTIES[number];
@@ -116,6 +118,7 @@ export function taskFrom(value: unknown, expectedId: string): Task {
     recurring: v.recurring === true, recurrence_periods: periods as unknown as Task["recurrence_periods"], starred: v.starred === true,
     projects: strings(v.projects).filter(p => { try { return path(p) === p && p.endsWith(".md"); } catch { return false; } }),
     movement_history: history as unknown as Movement[], daily_note_section_path: sections as unknown as Section[], work_sessions: sessions,
+    converted_to: typeof v.converted_to === "string" && v.converted_to.endsWith(".md") ? v.converted_to : null,
   };
 }
 export function visibleFolder(value: string): string {

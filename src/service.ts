@@ -413,7 +413,11 @@ export class TaskService {
       if (first) { const link = this.repo.app.fileManager.generateMarkdownLink(note, occurrence.file.path); lines[first.line] = `${first.prefix.slice(0, -1)}${link}${first.raw.endsWith("\r") ? "\r" : ""}`; }
       await this.edit(occurrence.file, occurrence.text, lines.filter((_line, index) => !ours.has(index) || index === first?.line).join("\n"));
     }
-    await this.repo.app.fileManager.trashFile(taskFile); this.references = null; this.changed();
+    // A running timer is stopped and logged first. Tracked time keeps its task note (hidden from lists) so the calendar still shows it.
+    const stopped = setStatus(task, task.status === "in_progress" ? "open" : task.status);
+    if (stopped.work_sessions.length) await this.repo.update(task.id, () => ({ ...stopped, converted_to: note.path }));
+    else await this.repo.app.fileManager.trashFile(taskFile);
+    this.references = null; this.changed();
     return note;
   }
   async marker(context: Context, marker: string): Promise<void> {

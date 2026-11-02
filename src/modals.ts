@@ -137,6 +137,8 @@ export class SessionModal extends Modal {
 
 export interface NoteConversion {
   title: string; folders: string[]; folder: string; templates: string[]; exists: (path: string) => boolean;
+  /** Set when the task has tracked time: the dialog says it stays on the calendar. */
+  tracked?: string;
   convert: (options: { folder: string; tags: string[]; template: string | null; clash: "new" | "existing" }) => Promise<void>;
 }
 /** Asks where a todo's standalone note goes (folder, tags, template) and what to do when a note of that name already exists. */
@@ -144,7 +146,7 @@ export class NoteConversionModal extends Modal {
   constructor(app: App, readonly conversion: NoteConversion) { super(app); decorate(this); }
   onOpen(): void {
     const { conversion } = this; this.titleEl.setText("Make a standalone note"); this.contentEl.addClass("organized-modal");
-    this.contentEl.createEl("p", { cls: "organized-modal-copy", text: `“${conversion.title}” becomes a note holding its description. A link to the note replaces the todo here, its other copies are removed and its task note moves to Obsidian's trash.` });
+    this.contentEl.createEl("p", { cls: "organized-modal-copy", text: `“${conversion.title}” becomes a note holding its description. A link to the note replaces the todo here, its other copies are removed and its task note moves to Obsidian's trash.${conversion.tracked ? ` The ${conversion.tracked} of tracked time stays on the calendar, so the task note is kept (hidden) instead.` : ""}` });
     this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Folder" });
     const folder = this.contentEl.createEl("input", { type: "text", attr: { "aria-label": "Folder", list: "organized-folder-options", placeholder: "Vault root" } }); folder.value = conversion.folder;
     const options = this.contentEl.createEl("datalist", { attr: { id: "organized-folder-options" } }); for (const name of conversion.folders) options.createEl("option", { value: name });

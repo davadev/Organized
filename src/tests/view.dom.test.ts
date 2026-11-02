@@ -385,6 +385,15 @@ describe('compact calendar and contextual task inspector', () => {
     view.calendarMode = 'Week'; await view.render(); expect(view.contentEl.querySelectorAll('.organized-week-block')).toHaveLength(1); view.calendarMode = 'Day'; await view.render();
     files.delete(note.path); (view.contentEl.querySelector('.organized-block') as HTMLElement).click(); await flush(); expect(open).toHaveBeenCalledTimes(1);
   });
+  it('opens the standalone note from the block of a task that was converted after tracking time', async () => {
+    const { view, repo, add } = await fixture() as any; vi.setSystemTime(new Date(2026, 2, 4, 15, 0, 0));
+    const note: any = await add('Notes/Plan.md', 'body'); const task = await repo.create('Converted plan');
+    await repo.update(task.id, (t: any) => ({ ...t, converted_to: note.path, work_sessions: [{ start: new Date(2026, 2, 4, 9, 0).toISOString(), end: new Date(2026, 2, 4, 10, 0).toISOString() }] }));
+    const open = vi.fn(async () => undefined); (view.app.workspace.getLeaf as any).mockReturnValue({ openFile: open });
+    view.selectedDate = '2026-03-04'; view.calendarMode = 'Day'; await view.render(); const block = Array.from(view.contentEl.querySelectorAll('.organized-block')).find((b: any) => b.getAttribute('aria-label').startsWith('Converted plan')) as HTMLElement;
+    block.click(); await flush(); expect(open).not.toHaveBeenCalled(); const openTask = Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Open task') as HTMLButtonElement; openTask.click(); await flush(); expect(open).toHaveBeenCalledWith(note);
+    expect(view.tab).toBe('Calendar');
+  });
   it('reorders the note list when the priority is changed in the side panel', async () => {
     const { view, repo, add, owner } = await fixture(); const low = await repo.create('Low one'); const target = await repo.create('Target');
     await repo.update(low.id, t => ({ ...t, priority: 'low' })); const note: any = await add('Daily/2026-03-04.md', `- [ ] Low one <!--organized:${low.id}-->\n- [ ] Target <!--organized:${target.id}-->`);

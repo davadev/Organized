@@ -334,6 +334,8 @@ export class OrganizedInspectorView extends ItemView {
     this.iconButton(nav, next, "chevron-right", () => { step(); return this.render(); });
     this.button(nav, "Today", () => { this.selectedDate = localDate(); return this.render(); }).addClass("organized-today-button");
   }
+  /** A task that became a standalone note opens that note; any other opens in the Task tab. */
+  private openCalendarTask(task: Task): Promise<void> { return task.converted_to ? this.openNote(task.converted_to) : this.openFromCalendar(task.id); }
   private openFromCalendar(id: string): Promise<void> {
     this.owner.selectedTaskId = id; this.origin = "Calendar"; this.tab = "Task"; this.module = ""; this.editingModule = ""; this.editingTitle = false;
     return this.render();
@@ -343,7 +345,7 @@ export class OrganizedInspectorView extends ItemView {
     this.rangeNav(host, `${start.format("MMM D")} – ${end.format("MMM D, YYYY")}`, "Previous week", "Next week",
       () => { this.selectedDate = moment(this.selectedDate, "YYYY-MM-DD").add(1, "week").format("YYYY-MM-DD"); },
       () => { this.selectedDate = moment(this.selectedDate, "YYYY-MM-DD").subtract(1, "week").format("YYYY-MM-DD"); });
-    const tasks = await this.owner.repo.list(); const now = Date.now();
+    const tasks = await this.owner.repo.list(true); const now = Date.now();
     const days = Array.from({ length: 7 }, (_, i) => start.clone().add(i, "days"));
     const retired = (await this.owner.service.retiredWork(days[0].format("YYYY-MM-DD"), days[6].format("YYYY-MM-DD"))).map(item => item.task);
     const blocks = days.map(day => blocksOn([...tasks, ...retired], day.format("YYYY-MM-DD"), now)); const [from, to] = hourRange(blocks.flat());
@@ -388,7 +390,7 @@ export class OrganizedInspectorView extends ItemView {
       heading: session ? "Edit time worked" : "Add time worked", taskTitle: task.title, start: session?.start ?? at("09:00"), end: session?.end ?? at("10:00"),
       save: next => this.owner.run(() => session ? this.owner.service.changeSession(task.id, session, next) : this.owner.service.addSession(task.id, next)),
       remove: session ? () => this.owner.run(() => this.owner.service.changeSession(task.id, session, null)) : undefined,
-      openTask: session ? () => this.openFromCalendar(task.id) : undefined,
+      openTask: session ? () => this.openCalendarTask(task) : undefined,
     }).open();
   }
   /** Picks an existing task, then asks for the time to log on it. */
@@ -411,7 +413,7 @@ export class OrganizedInspectorView extends ItemView {
     const date = this.selectedDate; const day = moment(date, "YYYY-MM-DD");
     this.rangeNav(host, day.format("ddd, MMM D, YYYY"), "Previous day", "Next day",
       () => { this.selectedDate = day.clone().add(1, "day").format("YYYY-MM-DD"); }, () => { this.selectedDate = day.clone().subtract(1, "day").format("YYYY-MM-DD"); });
-    const tasks = await this.owner.repo.list(); const now = Date.now();
+    const tasks = await this.owner.repo.list(true); const now = Date.now();
     const retired = new Map((await this.owner.service.retiredWork(date, date)).map(item => [item.task.id, item]));
     const blocks = blocksOn([...tasks, ...[...retired.values()].map(item => item.task)], date, now);
     const note = this.owner.repo.file(this.owner.service.daily.path(date)); const lines = note ? await this.owner.taskLines(note) : [];
@@ -448,7 +450,7 @@ export class OrganizedInspectorView extends ItemView {
       // A retired task has no task note: open the daily note that kept its time instead.
       const kept = retired.get(block.task.id);
       // A stored session opens for editing (with an Open task button); a running timer has nothing to edit yet.
-      part.addEventListener("click", () => { if (!kept && block.session) { this.editSession(block.task, block.session, date); return; } void (kept ? this.openNote(kept.path) : this.openFromCalendar(block.task.id)).catch(report); });
+      part.addEventListener("click", () => { if (!kept && block.session) { this.editSession(block.task, block.session, date); return; } void (kept ? this.openNote(kept.path) : this.openCalendarTask(block.task)).catch(report); });
     }
     const minutes = new Date(now).getHours() * 60 + new Date(now).getMinutes();
     if (date === localDate() && minutes >= from * 60 && minutes <= to * 60) { const nowLine = grid.createDiv({ cls: "organized-now-line", attr: { "aria-hidden": "true" } }); nowLine.setCssProps({ "--organized-at": String((minutes - from * 60) / span * 100) }); }
