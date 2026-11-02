@@ -22,7 +22,8 @@ export function sessionProblem(start: string | null, end: string | null, now = D
   return null;
 }
 export const seconds = (session: WorkSession): number => Math.max(0, Math.round((Date.parse(session.end) - Date.parse(session.start)) / 1000));
-/** `1 h 20 min`, for the length shown while editing. */
-export function lengthOf(session: WorkSession): string {
-  const minutes = Math.round(seconds(session) / 60); return minutes >= 60 ? `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ""}` : `${minutes} min`;
+/** `1 h 20 min` for a number of seconds, rounded to the minute. */
+export function lengthOfSeconds(total: number): string {
+  const minutes = Math.round(total / 60); return minutes >= 60 ? `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ""}` : `${minutes} min`;
 }
+export const lengthOf = (session: WorkSession): string => lengthOfSeconds(seconds(session));

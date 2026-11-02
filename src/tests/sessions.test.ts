@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isoFromInput, lengthOf, localInput, seconds, sessionProblem } from "../sessions";
+import { isoFromInput, lengthOf, lengthOfSeconds, localInput, seconds, sessionProblem } from "../sessions";
 
 const at = (h: number, m = 0, d = 4) => new Date(2026, 2, d, h, m).toISOString();
 const NOW = new Date(2026, 2, 4, 15, 0).getTime();
@@ -16,6 +16,6 @@ describe("manual sessions", () => {
   });
   it("measures and words the length", () => {
     expect(seconds({ start: at(9), end: at(10, 30) })).toBe(5400); expect(seconds({ start: at(10), end: at(9) })).toBe(0);
-    expect(lengthOf({ start: at(9), end: at(9, 45) })).toBe("45 min"); expect(lengthOf({ start: at(9), end: at(11) })).toBe("2 h"); expect(lengthOf({ start: at(9), end: at(10, 20) })).toBe("1 h 20 min");
+    expect(lengthOf({ start: at(9), end: at(9, 45) })).toBe("45 min"); expect(lengthOf({ start: at(9), end: at(11) })).toBe("2 h"); expect(lengthOf({ start: at(9), end: at(10, 20) })).toBe("1 h 20 min"); expect(lengthOfSeconds(5400)).toBe("1 h 30 min"); expect(lengthOfSeconds(29)).toBe("0 min");
   });
 });

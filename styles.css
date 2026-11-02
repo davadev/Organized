@@ -505,3 +505,6 @@ SOFTWARE.
 .organized-view .organized-panel button.organized-session-row { justify-content: flex-start; inline-size: 100%; block-size: auto; min-block-size: 0; margin-block-start: 4px; padding: 4px 8px; font-size: var(--font-ui-smaller, 12px); font-variant-numeric: tabular-nums; text-align: start; }
 .organized-session-task { font-weight: 600; }
 .organized-session-problem { color: var(--text-error, var(--color-red)); }
+.organized-sessions { margin-block-start: 8px; }
+.organized-sessions summary { color: var(--text-muted); font-size: var(--font-ui-small); cursor: pointer; }
+.organized-session-day { margin-block: 8px 2px; color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
