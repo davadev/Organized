@@ -35,4 +35,14 @@ describe("timeline", () => {
     expect(hourRange([])).toEqual([8, 18]); const block = (startMin: number, endMin: number) => ({ task: task("t"), startMin, endMin, running: false, lane: 0, lanes: 1 });
     expect(hourRange([block(600, 660)])).toEqual([8, 18]); expect(hourRange([block(330, 400), block(1100, 1250)])).toEqual([5, 21]); expect(hourRange([block(0, 1440)])).toEqual([0, 24]); expect(hourRange([], [6, 20])).toEqual([6, 20]);
   });
+  it("puts a task started right after a very short run beside it, and handles several running at once", () => {
+    const quick = blocksOn([task("quick", [["2026-03-02", "09:00:00", "2026-03-02", "09:01:30"]]), task("next", [["2026-03-02", "09:02:00", "2026-03-02", "10:00:00"]]), task("later", [["2026-03-02", "10:00:00", "2026-03-02", "10:30:00"]])], "2026-03-02", 0);
+    expect(quick.map(b => [b.task.title, b.lane, b.lanes])).toEqual([["quick", 0, 2], ["next", 1, 2], ["later", 0, 1]]);
+    const now = at(local("2026-03-02", "11:00:00")); const run = (id: string, at0: string) => task(id, [], local("2026-03-02", at0));
+    expect(blocksOn([run("x", "10:00:00"), run("y", "10:30:00"), run("z", "10:45:00")], "2026-03-02", now).map(b => [b.task.title, b.lane, b.lanes])).toEqual([["x", 0, 3], ["y", 1, 3], ["z", 2, 3]]);
+  });
+  it("widens the hours to fit a short block drawn past its end", () => {
+    const short = { task: task("t"), startMin: 1040, endMin: 1041, running: false, lane: 0, lanes: 1 }; expect(hourRange([short])).toEqual([8, 18]);
+    expect(hourRange([{ ...short, startMin: 1075, endMin: 1076 }])).toEqual([8, 19]); expect(hourRange([{ ...short, startMin: 1430, endMin: 1431 }])).toEqual([8, 24]);
+  });
 });
