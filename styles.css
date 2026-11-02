@@ -18,12 +18,14 @@
 .organized-settings .setting-item-description { margin-block-start: 2px; line-height: 1.4; }
 .organized-settings .setting-item-description:empty { display: none; }
 .organized-view *, .organized-modal * { box-sizing: border-box; min-inline-size: 0; }
-.organized-tabs { display: flex; flex-wrap: wrap; gap: 3px; padding: 3px; margin-block-end: 20px; border-radius: var(--radius-m, 8px); background: var(--background-secondary); }
+.organized-tabs { display: flex; gap: 3px; padding: 3px; margin-block-end: 20px; margin-inline-start: auto; inline-size: fit-content; max-inline-size: 100%; border-radius: var(--radius-m, 8px); background: var(--background-secondary); }
 .organized-view .organized-tabs button.organized-tab {
-  flex: 1 1 auto; min-inline-size: max-content; min-block-size: 36px; block-size: auto; margin: 0; padding: 6px;
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; inline-size: 36px; block-size: 36px; min-block-size: 0; margin: 0; padding: 0;
   border: 0; border-radius: var(--radius-s, 5px); background: transparent;
-  box-shadow: none; font-size: 13px; font-weight: 500; color: var(--text-muted);
+  box-shadow: none; color: var(--text-muted);
 }
+.organized-view .organized-tabs button.organized-tab:hover { color: var(--text-normal); }
+.organized-view .organized-tabs button.organized-tab svg { inline-size: 18px; block-size: 18px; }
 .organized-view .organized-tabs button.organized-tab[aria-selected="true"] { color: var(--text-on-accent); background: var(--interactive-accent); }
 .organized-panel { display: flex; flex-direction: column; gap: 12px; overflow-wrap: anywhere; }
 .organized-view .organized-panel button.organized-button {

@@ -40,8 +40,9 @@ export class OrganizedInspectorView extends ItemView {
     this.markdown = this.addChild(new Component());
     host.empty(); host.addClass("organized-view");
     const tabs = host.createDiv({ cls: "organized-tabs", attr: { role: "tablist", "aria-label": "Organized panels" } });
-    for (const tab of ["Calendar", "Task", "Projects"] as const) {
-      const b = tabs.createEl("button", { cls: "organized-tab", text: tab, attr: { role: "tab", "aria-selected": String(this.tab === tab) } });
+    for (const [tab, icon] of [["Calendar", "calendar"], ["Task", "list-checks"], ["Projects", "folder"]] as const) {
+      const b = tabs.createEl("button", { cls: "organized-tab", attr: { type: "button", role: "tab", "aria-selected": String(this.tab === tab), "aria-label": tab, title: tab } });
+      setIcon(b, icon);
       b.addEventListener("click", () => { this.tab = tab; this.module = ""; this.editingModule = ""; this.editingTitle = false; void this.render().catch(report); });
     }
     const panel = host.createDiv({ cls: "organized-panel", attr: { role: "tabpanel" } });
