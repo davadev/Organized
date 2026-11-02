@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Quieter task cards: the project label is now a small dot in the project's colour followed by its name in muted text (instead of a solid block), so the title leads and the colour is an accent. Done cards have a fainter green wash and no left stripe; only an in-progress card keeps the green stripe and a stronger wash, so the two states read differently without another colour.
+- Fix the project colour pickers on mobile, where the native control stretched into tall pills ignoring its size. Each colour is now a 22 px square swatch with the native picker laid invisibly over it, so a tap still opens the picker and the swatch updates as you choose.
 - Project labels on task cards are now the project's colour itself, opaque and saturated, with white or dark text for whichever reads better, so they sit clearly on top of the status colour instead of blending into it.
 - The Task tab's note list has an eye button by the note's title to hide or show done tasks. Hidden tasks are left out of the list and of the heading counts, a line says how many are hidden, and the choice is remembered.
 - Task cards in the side panel are coloured by status again: done and in-progress tasks get a green wash and edge (in progress stronger), open stays neutral, canceled stays faded. The project colour now appears only as the colour of the project's name label on the card (a tinted chip, readable in light and dark themes). The calendar keeps the project colour for its Day blocks and Week bars.
