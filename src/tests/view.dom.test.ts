@@ -98,14 +98,16 @@ describe('compact calendar and contextual task inspector', () => {
     await repo.update(plain.id, t => ({ ...t, projects: ['Project.md'] }));
     await repo.update(low.id, t => ({ ...t, priority: 'low', starred: true, projects: ['Project.md'] })); await repo.update(high.id, t => ({ ...t, priority: 'high', starred: true, projects: ['Project.md', 'Reading list.md', 'Extra.md'], scheduled: '2026-01-02' })); await repo.update(canceled.id, t => ({ ...t, status: 'canceled' }));
     view.tab = 'Projects'; await view.render();
-    expect(Array.from(view.contentEl.querySelectorAll('.organized-section-title')).map(el => el.textContent)).toEqual(['Favorites', 'Projects', 'Canceled']);
-    expect(Array.from(view.contentEl.querySelectorAll('.organized-count')).map(el => el.textContent)).toEqual(['2', '3', '1']);
+    expect(Array.from(view.contentEl.querySelectorAll('.organized-section-title')).map(el => el.textContent)).toEqual(['Projects', 'Canceled']);
+    expect(Array.from(view.contentEl.querySelectorAll('.organized-count')).map(el => el.textContent)).toEqual(['3', '1']);
     expect(listed(view).indexOf('High')).toBeLessThan(listed(view).indexOf('Low'));
     expect(card(view, 'High').querySelector('.organized-list-priority')?.textContent).toBe('high');
     expect(card(view, 'High').querySelector('.organized-list-date')?.textContent).toBe('2026-01-02');
     expect(card(view, 'High').querySelectorAll('.organized-chip')).toHaveLength(3);
     expect(card(view, 'High').querySelectorAll('.organized-chip')[2].textContent).toBe('+1');
-    const picker = view.contentEl.querySelector<HTMLSelectElement>('[aria-label="Choose project"]')!; picker.value = 'Project.md'; picker.dispatchEvent(new Event('change')); await flush(); expect(view.selectedProject).toBe('Project.md'); view.module = 'Description'; openCard(view, 'High').click(); await flush(); expect(owner.selectedTaskId).toBe(high.id); expect(view.module).toBe(''); expect(view.origin).toBe('Projects / favorites');
+    const picker = view.contentEl.querySelector<HTMLSelectElement>('[aria-label="Choose project"]')!; picker.value = 'Project.md'; picker.dispatchEvent(new Event('change')); await flush(); expect(view.selectedProject).toBe('Project.md'); view.module = 'Description'; openCard(view, 'High').click(); await flush(); expect(owner.selectedTaskId).toBe(high.id); expect(view.module).toBe(''); expect(view.origin).toBe('Projects');
+    button(view.contentEl, 'Back to projects').click(); await flush(); view.tab = 'Favorites'; await view.render(); await flush(); expect(Array.from(view.contentEl.querySelectorAll('.organized-section-title')).map(el => el.textContent)).toEqual(['Favorites']); expect(view.contentEl.querySelector('.organized-count')?.textContent).toBe('2'); expect(listed(view).indexOf('High')).toBeLessThan(listed(view).indexOf('Low'));
+    openCard(view, 'Low').click(); await flush(); expect(view.origin).toBe('Favorites'); expect(view.contentEl.textContent).toContain('From favorites'); button(view.contentEl, 'Back to favorites').click(); await flush(); expect(view.tab).toBe('Favorites'); view.tab = 'Projects'; await view.render(); await flush(); openCard(view, 'High').click(); await flush();
     button(view.contentEl, 'Back to projects').click(); await flush(); openCard(view, 'Canceled').click(); await flush(); expect(owner.selectedTaskId).toBe(canceled.id);
     view.tab = 'Projects'; await view.render(); button(view.contentEl, 'Restore').click(); await flush(); expect((await repo.read(canceled.id)).status).toBe('open');
     view.tab = 'Projects'; view.selectedProject = ''; await view.render(); openCard(view, 'Low').click(); await flush(); expect(owner.selectedTaskId).toBe(low.id);
@@ -114,7 +116,7 @@ describe('compact calendar and contextual task inspector', () => {
   it('renders task-title links as links and keeps card activation separate', async () => {
     const { owner, view, repo } = await fixture();
     const linked = await repo.create('Read [[Reading list]] and [web](https://example.com)');
-    await repo.update(linked.id, task => ({ ...task, starred: true })); view.tab = 'Projects'; await view.render(); await flush();
+    await repo.update(linked.id, task => ({ ...task, starred: true })); view.tab = 'Favorites'; await view.render(); await flush();
     const row = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-list-card')).find(item => item.querySelector('.organized-list-title')?.textContent?.includes('Reading list'))!;
     const anchors = row.querySelectorAll('a');
     expect(anchors).toHaveLength(2); expect(anchors[0].getAttribute('href')).toBe('Reading list.md');
@@ -192,9 +194,8 @@ describe('compact calendar and contextual task inspector', () => {
     const staleFailure = view.render(); await flush(); await view.render(); rejectTask(Error('removed')); await staleFailure;
   });
   it('renders empty project sections and deletes the selected task after confirmation', async () => {
-    const { owner, view, repo } = await fixture(); view.tab = 'Projects'; await view.render();
+    const { owner, view, repo } = await fixture(); view.tab = 'Favorites'; await view.render(); expect(view.contentEl.querySelector('.organized-empty')?.textContent).toBe('No favorites yet. Use [*] on a task or star it in the Task tab.'); view.tab = 'Projects'; await view.render();
     expect(Array.from(view.contentEl.querySelectorAll('.organized-empty')).map(el => el.textContent)).toEqual([
-      'No favorites yet. Use [*] on a task or star it in the Task tab.',
       'No project links yet. Use [j] on a task to link its project or topic note.',
       'No canceled tasks.',
     ]);
@@ -223,7 +224,7 @@ describe('compact calendar and contextual task inspector', () => {
   it('shows a recurring task as done today when today\'s occurrence is ticked, and targets only today when changed', async () => {
     const { owner, view, repo, service, add, texts, files } = await fixture(); const today = service.daily.path(localDate());
     const task = await repo.create('Daily habit'); await repo.update(task.id, t => ({ ...t, recurring: true, starred: true }));
-    await view.render(); owner.selectedTaskId = task.id; view.tab = 'Projects'; await view.render(); expect(view.contentEl.textContent).not.toContain('done · today');
+    await view.render(); owner.selectedTaskId = task.id; view.tab = 'Favorites'; await view.render(); expect(view.contentEl.textContent).not.toContain('done · today');
     await add(today, `- [x] Daily habit <!--organized:${task.id}-->\n- [X] Other <!--organized:otherotherother-->`);
     await view.render(); const row = view.contentEl.querySelector('.organized-list-card')!; expect(row.querySelector('.organized-list-status')?.getAttribute('aria-label')).toBe('done · today'); expect(row.querySelector('.organized-list-status')?.textContent).toBe(''); expect(row.getAttribute('data-status')).toBe('completed'); expect(row.querySelector('.organized-status-dot')).toBeNull();
     view.tab = 'Task'; await view.render(); const status = view.contentEl.querySelector<HTMLSelectElement>('select[aria-label="Status"]')!;
@@ -279,15 +280,15 @@ describe('compact calendar and contextual task inspector', () => {
   it('marks task cards and the task header with their status for colouring', async () => {
     const { owner, view, repo } = await fixture(); const open = await repo.create('Open one'); const active = await repo.create('Active one'); const done = await repo.create('Done one'); const canceled = await repo.create('Canceled one');
     for (const [task, status] of [[open, 'open'], [active, 'in_progress'], [done, 'completed'], [canceled, 'canceled']] as const) await repo.update(task.id, t => ({ ...t, status, starred: true }));
-    view.tab = 'Projects'; await view.render();
-    expect(Array.from(view.contentEl.querySelectorAll('.organized-list-card')).map(card => card.getAttribute('data-status')).sort()).toEqual(['canceled', 'completed', 'in_progress', 'open']);
+    view.tab = 'Favorites'; await view.render(); const statuses = () => Array.from(view.contentEl.querySelectorAll('.organized-list-card')).map(card => card.getAttribute('data-status'));
+    expect(statuses().sort()).toEqual(['completed', 'in_progress', 'open']); view.tab = 'Projects'; await view.render(); expect(statuses()).toEqual(['canceled']);
     for (const [task, status] of [[done, 'completed'], [active, 'in_progress']] as const) { owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); expect(view.contentEl.querySelector('.organized-task-hero')?.getAttribute('data-status')).toBe(status); }
   });
-  it('shows the Calendar, Task and Projects tabs as labelled icon buttons', async () => {
+  it('shows the Calendar, Task, Projects and Favorites tabs as labelled icon buttons', async () => {
     const { view } = await fixture(); await view.render();
     const tabs = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-tabs button'));
-    expect(tabs.map(tab => tab.getAttribute('aria-label'))).toEqual(['Calendar', 'Task', 'Projects']); expect(tabs.map(tab => tab.title)).toEqual(['Calendar', 'Task', 'Projects']); expect(tabs.every(tab => tab.textContent === '')).toBe(true); expect(tabs.map(tab => tab.getAttribute('data-icon'))).toEqual(['calendar', 'list-checks', 'folder']);
-    expect(tabs.map(tab => tab.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']); tabs[2].click(); await flush(); expect(view.tab).toBe('Projects'); expect(view.contentEl.querySelector('.organized-tabs button[aria-selected="true"]')?.getAttribute('aria-label')).toBe('Projects');
+    expect(tabs.map(tab => tab.getAttribute('aria-label'))).toEqual(['Calendar', 'Task', 'Projects', 'Favorites']); expect(tabs.map(tab => tab.title)).toEqual(['Calendar', 'Task', 'Projects', 'Favorites']); expect(tabs.every(tab => tab.textContent === '')).toBe(true); expect(tabs.map(tab => tab.getAttribute('data-icon'))).toEqual(['calendar', 'list-checks', 'folder', 'star']);
+    expect(tabs.map(tab => tab.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false', 'false']); tabs[3].click(); await flush(); expect(view.tab).toBe('Favorites'); tabs[2].click(); await flush(); expect(view.tab).toBe('Projects'); expect(view.contentEl.querySelector('.organized-tabs button[aria-selected="true"]')?.getAttribute('aria-label')).toBe('Projects');
   });
   it('switches the calendar between month, week and day and keeps month behaviour', async () => {
     const { view } = await fixture(); await view.render();
@@ -410,5 +411,8 @@ describe('compact calendar and contextual task inspector', () => {
     expect(blocks.map(b => b.querySelector('.organized-block-status')?.getAttribute('data-status')).sort()).toEqual(['completed', 'open']);
     view.calendarMode = 'Week'; await view.render(); expect(Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-week-block')).map(b => b.style.getPropertyValue('--organized-project-rgb')).sort()).toEqual([softTint('#ef4444'), softTint('#22c55e')].sort());
     const none = await repo.create('No project'); await repo.update(none.id, t => ({ ...t, work_sessions: [{ start: new Date(2026, 2, 4, 12, 0).toISOString(), end: new Date(2026, 2, 4, 13, 0).toISOString() }] })); view.calendarMode = 'Day'; await view.render(); const plainBlock = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-block')).find(b => b.textContent!.includes('No project')); expect(plainBlock?.hasAttribute('data-project')).toBe(false);
+  });
+  it('draws nothing for a Favorites render that a newer render has replaced', async () => {
+    const { view } = await fixture(); await view.render(); const host = createDiv(); await view.favorites(host, -1); expect(host.childElementCount).toBe(0);
   });
 });

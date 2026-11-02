@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Favorites have their own tab (a star icon, after Projects) instead of sitting above the projects; the Projects tab now lists projects and canceled tasks. Opening a task from Favorites offers **Back to favorites**.
+- In-progress tasks use the same green status icon as done ones (the shapes still differ: a play triangle and a tick), on cards and Day blocks.
+- The colour pickers in **Project colors** are small rounded squares instead of large circles, and the Clear buttons are compact.
 - Fix project colours looking off (a yellow card turning greenish): cards sat on a base that was lightly mixed with your theme's accent colour, which shifted every colour washed over it. The base is now the plain theme background, so a project colour shows as itself. Lightness also follows your pick halfway (within a narrow band) instead of being forced to one value, so a yellow stays yellow rather than turning olive next to a blue.
 - Status is shown by the coloured icon alone: the outline around task cards, Day blocks and Week bars is gone, leaving the project colour (faint fill and left stripe) uncontested. Day view blocks now carry the same status icon in their corner.
 - Project colours now look like one family: only the hue of the colour you pick is kept, and it is drawn at one shared lightness and a moderate strength (grays stay gray), so any pick sits well next to the others and the theme. The card fill is fainter, the project colour is the card's left stripe, and the status is a thin, quiet outline (in progress, done) plus its icon, instead of a strong coloured border. Day and Week blocks follow the same rules.

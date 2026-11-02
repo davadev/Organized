@@ -13,7 +13,7 @@ import { blocksOn, hourRange } from "./timeline";
 
 const sameHeading = (a: Section, b: Section): boolean => a.level === b.level && a.text === b.text && a.ordinal === b.ordinal;
 export const VIEW_TYPE = "organized-inspector";
-export type Tab = "Calendar" | "Task" | "Projects";
+export type Tab = "Calendar" | "Task" | "Projects" | "Favorites";
 export const CALENDAR_MODES = ["Month", "Week", "Day"] as const;
 export type CalendarMode = typeof CALENDAR_MODES[number];
 const pad = (value: number): string => String(value).padStart(2, "0");
@@ -48,7 +48,7 @@ export class OrganizedInspectorView extends ItemView {
     this.markdown = this.addChild(new Component());
     host.empty(); host.addClass("organized-view");
     const tabs = host.createDiv({ cls: "organized-tabs", attr: { role: "tablist", "aria-label": "Organized panels" } });
-    for (const [tab, icon] of [["Calendar", "calendar"], ["Task", "list-checks"], ["Projects", "folder"]] as const) {
+    for (const [tab, icon] of [["Calendar", "calendar"], ["Task", "list-checks"], ["Projects", "folder"], ["Favorites", "star"]] as const) {
       const b = tabs.createEl("button", { cls: "organized-tab", attr: { type: "button", role: "tab", "aria-selected": String(this.tab === tab), "aria-label": tab, title: tab } });
       setIcon(b, icon);
       b.addEventListener("click", () => { this.tab = tab; this.module = ""; this.editingModule = ""; this.editingTitle = false; void this.render().catch(report); });
@@ -56,7 +56,8 @@ export class OrganizedInspectorView extends ItemView {
     const panel = host.createDiv({ cls: "organized-panel", attr: { role: "tabpanel" } });
     if (this.tab === "Calendar") await this.calendar(panel, generation);
     else if (this.tab === "Task") await this.task(panel, generation);
-    else await this.projects(panel, generation);
+    else if (this.tab === "Projects") await this.projects(panel, generation);
+    else await this.favorites(panel, generation);
   }
   button(host: HTMLElement, label: string, action: () => Promise<unknown> | void): HTMLButtonElement {
     const b = host.createEl("button", { cls: "organized-button", text: label, attr: { type: "button" } }); b.addEventListener("click", () => { try { const result = action(); if (result) void result.catch(report); } catch (error) { report(error); } }); return b;
@@ -406,9 +407,9 @@ export class OrganizedInspectorView extends ItemView {
     if (generation !== this.renderId) return;
     const hero = host.createDiv({ cls: "organized-task-hero", attr: { "data-status": this.shownStatus(task) } });
     const eyebrow = hero.createDiv({ cls: "organized-eyebrow" });
-    this.statusDot(eyebrow, task); eyebrow.createSpan({ text: this.origin === "Editor cursor" ? "From editor" : this.origin === "Calendar" ? "From calendar" : "From projects" });
+    this.statusDot(eyebrow, task); eyebrow.createSpan({ text: this.origin === "Editor cursor" ? "From editor" : this.origin === "Calendar" ? "From calendar" : this.origin === "Favorites" ? "From favorites" : "From projects" });
     if (this.origin === "Editor cursor") this.iconButton(eyebrow, "All tasks in this note", "list", () => this.showNoteTasks()).addClass("organized-note-overview");
-    if (this.origin !== "Editor cursor") this.button(hero, this.origin === "Calendar" ? "Back to calendar" : "Back to projects", () => { this.tab = this.origin === "Calendar" ? "Calendar" : "Projects"; return this.render(); }).addClass("organized-back");
+    if (this.origin !== "Editor cursor") this.button(hero, this.origin === "Calendar" ? "Back to calendar" : this.origin === "Favorites" ? "Back to favorites" : "Back to projects", () => { this.tab = this.origin === "Calendar" ? "Calendar" : this.origin === "Favorites" ? "Favorites" : "Projects"; return this.render(); }).addClass("organized-back");
     const header = hero.createDiv({ cls: "organized-task-header" });
     if (this.editingTitle) {
       const input = header.createEl("input", { cls: "organized-title-input", type: "text", attr: { "aria-label": "Task title" } }); input.value = task.title;
@@ -473,14 +474,22 @@ export class OrganizedInspectorView extends ItemView {
     this.button(actions, "Open task note", () => this.app.workspace.getLeaf(false).openFile(file)).addClass("organized-note-link");
     this.button(actions, "Delete task", () => this.owner.deleteTask(id)).addClass("organized-danger");
   }
+  /** Opens a task from the Projects or Favorites tab; the origin decides which tab Back returns to. */
+  private chooseTask(task: Task, origin: "Projects" | "Favorites"): Promise<void> {
+    this.owner.selectedTaskId = task.id; this.origin = origin; this.tab = "Task"; this.module = ""; this.editingModule = ""; this.editingTitle = false; return this.render();
+  }
+  async favorites(host: HTMLElement, generation: number): Promise<void> {
+    const tasks = byPriority(await this.owner.repo.list()); await this.loadDoneToday();
+    if (generation !== this.renderId) return;
+    const favorites = tasks.filter(t => t.starred && t.status !== "canceled");
+    const section = this.section(host, "Favorites", favorites.length);
+    if (!favorites.length) section.createDiv({ cls: "organized-empty", text: "No favorites yet. Use [*] on a task or star it in the Task tab." });
+    for (const task of favorites) this.taskRow(section, task, () => this.chooseTask(task, "Favorites"));
+  }
   async projects(host: HTMLElement, generation: number): Promise<void> {
     const tasks = byPriority(await this.owner.repo.list()); await this.loadDoneToday();
     if (generation !== this.renderId) return;
-    const choose = (task: Task) => { this.owner.selectedTaskId = task.id; this.origin = "Projects / favorites"; this.tab = "Task"; this.module = ""; this.editingModule = ""; this.editingTitle = false; return this.render(); };
-    const favorites = tasks.filter(t => t.starred && t.status !== "canceled");
-    const favoriteSection = this.section(host, "Favorites", favorites.length);
-    if (!favorites.length) favoriteSection.createDiv({ cls: "organized-empty", text: "No favorites yet. Use [*] on a task or star it in the Task tab." });
-    for (const task of favorites) this.taskRow(favoriteSection, task, () => choose(task));
+    const choose = (task: Task) => this.chooseTask(task, "Projects");
     const linked = tasks.flatMap(t => t.projects); this.owner.rememberProjects(linked);
     const projects = [...new Set([...this.owner.settings.knownProjects.filter(p => this.owner.repo.file(p)), ...linked])];
     const projectSection = this.section(host, "Projects", projects.length);
