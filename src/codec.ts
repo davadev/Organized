@@ -5,17 +5,22 @@ import { parser } from "@lezer/markdown";
 export interface TaskLine { line: number; raw: string; prefix: string; marker: string; title: string; id: string | null; repeat: boolean; section: Section[] }
 export const ID = /<!--organized:([a-zA-Z0-9_-]{8,80})-->/g;
 const TASK = /^(\s*(?:[-+*]|\d+[.)]) \[)([^\]])(\] )(.*)$/;
-export const NOTE_SECTIONS = ["Description", "Idea", "Question", "Sources", "Notes"] as const;
+/** Idea and Question sections were dropped: text under an old `## Idea` / `## Question` heading is kept and shows with the Notes. */
+export const NOTE_SECTIONS = ["Description", "Sources", "Notes"] as const;
 export type NoteSection = typeof NOTE_SECTIONS[number];
 /** Markers that act when typed. Any other letter is formatting only, so themes can style it freely. */
-export const SECTION_MARKERS: Record<string, NoteSection> = { a: "Description", e: "Idea", q: "Question", s: "Sources" };
+export const SECTION_MARKERS: Record<string, NoteSection> = { a: "Description", s: "Sources" };
 export const PROJECT_MARKER = "j";
 export const RECURRING_MARKER = "r";
-export const ACTION_MARKERS = `<>/!xX-*${Object.keys(SECTION_MARKERS).join("")}${PROJECT_MARKER}${RECURRING_MARKER}`;
+/** Turns a todo into a standalone note and leaves a link to it. */
+export const NOTE_MARKER = "n";
+export const ACTION_MARKERS = `<>/!xX-*${Object.keys(SECTION_MARKERS).join("")}${PROJECT_MARKER}${RECURRING_MARKER}${NOTE_MARKER}`;
 const SECTION_HEADINGS: Record<NoteSection, string[]> = {
-  Description: ["Description", "Information"], Idea: ["Idea"], Question: ["Question"], Sources: ["Sources"], Notes: ["Notes"],
+  Description: ["Description", "Information"], Sources: ["Sources"], Notes: ["Notes"],
 };
-function sectionRegex(heading: string): RegExp { return new RegExp(`(^|\\n)## ${heading}\\n([\\s\\S]*?)(?=\\n## |$)`); }
+/** Headings that start a section of a task note. Any other heading inside a section (a `## Plan` in a description) is content, not the end of it. */
+const SECTION_TITLES = ["Description", "Information", "Idea", "Question", "Sources", "Notes"].join("|");
+function sectionRegex(heading: string): RegExp { return new RegExp(`(^|\\n)## ${heading}\\n([\\s\\S]*?)(?=\\n## (?:${SECTION_TITLES})(?:\\n|$)|$)`); }
 export function noteSection(note: string, section: NoteSection): string {
   for (const heading of SECTION_HEADINGS[section]) {
     const match = sectionRegex(heading).exec(note); if (match) return match[2].trim();
@@ -160,7 +165,9 @@ export function sortTasks(text: string, line: number, scope: Settings["sortScope
     while (end < group.length - 1 && endOfBlock(group[end]) === group[end + 1].line) end++;
     group = group.slice(start, end + 1);
   }
-  const sorted = [...group].sort((a, b) => PRIORITIES.indexOf(priorities.get(a.id ?? "") ?? "none") - PRIORITIES.indexOf(priorities.get(b.id ?? "") ?? "none"));
+  // What is being worked on comes first; forwarded and scheduled lines are no longer today's work, so they rank as no priority whatever they were given.
+  const rank = (task: TaskLine) => task.marker === "/" ? -1 : task.marker === ">" || task.marker === "<" ? PRIORITIES.indexOf("none") : PRIORITIES.indexOf(priorities.get(task.id ?? "") ?? "none");
+  const sorted = [...group].sort((a, b) => rank(a) - rank(b));
   if (scope === "first") {
     const selected = group.find(t => t.line === line)!;
     sorted.splice(sorted.indexOf(selected), 1); sorted.unshift(selected);

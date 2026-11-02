@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
-import { TaskPicker, PriorityPicker, DatePicker, ConfirmModal, ProjectPicker, SessionModal, KEEP_AS_TODO } from "../modals";
+import { TaskPicker, PriorityPicker, DatePicker, ConfirmModal, ProjectPicker, SessionModal, NoteConversionModal, KEEP_AS_TODO } from "../modals";
 import { newTask } from "../model";
 import { harness } from "./harness";
 import { Notice, Setting } from "./__mocks__/obsidian";
@@ -82,5 +82,19 @@ describe("native task, date, source and project modals", () => {
     const fresh = new SessionModal(h.app, { heading: "Add time worked", taskTitle: "New", start: at(9), end: at(10), save }); fresh.open(); expect(fresh.contentEl.querySelectorAll("button")).toHaveLength(1); fresh.close(); expect(fresh.contentEl.childElementCount).toBe(0);
     const failing = new SessionModal(h.app, { heading: "Add", taskTitle: "x", start: at(9), end: at(10), save: async () => { throw Error("save failed"); } }, () => now); failing.open(); failing.contentEl.querySelector("button")!.click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain("save failed");
     const picker = new TaskPicker(h.app, [newTask("Alpha task", "alpha12345")], async () => undefined, "", false, false); expect(picker.getSuggestions("Alpha").length).toBe(1); expect(picker.getSuggestions("nothing like it")).toEqual([]); expect(new TaskPicker(h.app, [], async () => undefined).getSuggestions("brand new")).toEqual(["brand new"]);
+  });
+  it("asks for folder, tags and template, previews the result and handles a name clash", async () => {
+    const h = harness(); const taken = new Set<string>(["Notes/Plan.md"]); const convert = vi.fn(async () => undefined);
+    const modal = new NoteConversionModal(h.app, { title: "Plan", folders: ["Notes", "Ideas"], folder: "Ideas", templates: ["Templates/A.md"], exists: p => taken.has(p), convert }); modal.open(); decorated(modal);
+    const [folder, tags] = Array.from(modal.contentEl.querySelectorAll<HTMLInputElement>('input[type=text]')); const [template, clash] = Array.from(modal.contentEl.querySelectorAll<HTMLSelectElement>('select')); const note = () => modal.contentEl.querySelector('.organized-session-note')!.textContent; const labels = () => Array.from(modal.contentEl.querySelectorAll<HTMLElement>('.organized-modal-label'));
+    expect(modal.contentEl.querySelector('datalist')!.children).toHaveLength(2); expect(folder.value).toBe("Ideas"); expect(note()).toBe("Creates “Ideas/Plan.md”."); expect(labels().at(-1)!.style.display).toBe("none"); expect(clash.style.display).toBe("none"); expect(template.options).toHaveLength(2);
+    folder.value = "Notes"; folder.dispatchEvent(new Event("input")); expect(note()).toBe("Creates “Notes/Plan 2.md”."); expect(clash.style.display).not.toBe("none"); expect(labels().at(-1)!.style.display).not.toBe("none");
+    clash.value = "existing"; clash.dispatchEvent(new Event("change")); expect(note()).toContain("Links to the existing “Notes/Plan.md”"); clash.value = "new"; clash.dispatchEvent(new Event("change"));
+    folder.value = "../up"; folder.dispatchEvent(new Event("input")); expect(note()).toContain("relative vault folder"); const create = () => Array.from(modal.contentEl.querySelectorAll("button")).find(b => b.textContent === "Create note")!; create().click(); await flush(); expect(convert).not.toHaveBeenCalled();
+    folder.value = "Notes"; folder.dispatchEvent(new Event("input")); tags.value = "idea, #project/a idea"; template.value = "Templates/A.md"; clash.value = "existing"; create().click(); await flush(); expect(convert).toHaveBeenCalledWith({ folder: "Notes", tags: ["idea", "project/a"], template: "Templates/A.md", clash: "existing" });
+    const second = new NoteConversionModal(h.app, { title: "Plan", folders: [], folder: "", templates: [], exists: () => false, convert }); second.open(); const clashOn = second.contentEl.querySelectorAll<HTMLSelectElement>('select')[1]; clashOn.value = "existing"; expect(second.contentEl.querySelector('.organized-session-note')!.textContent).toBe("Creates “Plan.md”.");
+    Array.from(second.contentEl.querySelectorAll("button")).find(b => b.textContent === "Create note")!.click(); await flush(); expect(convert).toHaveBeenLastCalledWith({ folder: "", tags: [], template: null, clash: "new" });
+    const third = new NoteConversionModal(h.app, { title: "Plan", folders: [], folder: "", templates: [], exists: () => false, convert: async () => { throw Error("convert failed"); } }); third.open(); Array.from(third.contentEl.querySelectorAll("button")).find(b => b.textContent === "Create note")!.click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain("convert failed");
+    const fourth = new NoteConversionModal(h.app, { title: "Plan", folders: [], folder: "", templates: [], exists: () => false, convert }); fourth.open(); Array.from(fourth.contentEl.querySelectorAll("button")).find(b => b.textContent === "Cancel")!.click(); expect(fourth.contentEl.childElementCount).toBe(0);
   });
 });

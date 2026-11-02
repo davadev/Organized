@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS, newTask } from '../src/model';
 import { editorExtension } from '../src/render';
 import { Setting, editorLivePreviewField } from '../src/tests/__mocks__/obsidian';
 import { OrganizedSettingsTab } from '../src/settings';
-import { DatePicker, SessionModal } from '../src/modals';
+import { DatePicker, NoteConversionModal, SessionModal } from '../src/modals';
 import { parseTasks } from '../src/codec';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
@@ -17,7 +17,7 @@ const browseTask = { ...task, work_sessions: [{ start: at(4, 13), end: at(4, 17,
 const doneTask = { ...newTask('A finished task', 'task9001'), status: 'completed', starred: true, work_sessions: [{ start: at(4, 9), end: at(4, 10, 30) }] };
 const activeTask = { ...newTask('A task in progress', 'task9002'), status: 'in_progress', starred: true, work_sessions: [{ start: at(4, 10), end: at(4, 11) }, { start: at(4, 14), end: at(4, 15) }] };
 const canceledTask = { ...newTask('A canceled task', 'task5678'), status: 'canceled' };
-const note = '---\ntitle: A task title that stays readable at phone widths\n---\n\n## Description\nA note that explains the task in enough detail to wrap cleanly on a narrow phone sidebar without clipping.\n\n## Idea\nAn idea that should stay below the description.\n';
+const note = '---\ntitle: A task title that stays readable at phone widths\n---\n\n## Description\nA note that explains the task in enough detail to wrap cleanly on a narrow phone sidebar without clipping.\n\n## Sources\nhttps://example.com/a-source-that-should-stay-below-the-description\n';
 const noteTasksDoc = `Intro\n# Mood & Focus\n- [ ] ${task.title} <!--organized:${task.id}-->\n## Daily Prep\n- [ ] A regular todo`;
 const noteTasksFile = { path: 'Daily/Today.md' } as any;
 const noteTasksEditor = { focus() {}, setCursor() {} } as any;
@@ -34,7 +34,7 @@ const owner: any = {
 const view = new OrganizedInspectorView({ app } as any, owner);
 const root = document.querySelector('#app')!; root.appendChild(view.contentEl);
 let editor: EditorView | null = null;
-let modal: DatePicker | SessionModal | null = null;
+let modal: DatePicker | SessionModal | NoteConversionModal | null = null;
 (window as any).scene = async (tab: string) => {
   editor?.destroy(); editor = null; modal?.close(); modal = null; root.replaceChildren();
   if (tab === 'Settings' || tab === 'LegacySettings') {
@@ -56,6 +56,9 @@ let modal: DatePicker | SessionModal | null = null;
     modal.open();
   } else if (tab === 'SessionModal') {
     modal = new SessionModal(app, { heading: 'Edit time worked', taskTitle: 'A task title that stays readable at phone widths', start: new Date(2026, 2, 4, 9, 0).toISOString(), end: new Date(2026, 2, 4, 10, 30).toISOString(), save: async () => undefined, remove: async () => undefined, openTask: async () => undefined });
+    modal.open();
+  } else if (tab === 'NoteModal') {
+    modal = new NoteConversionModal(app, { title: 'A task title that stays readable at phone widths', folders: ['Notes', 'Ideas'], folder: 'Notes', templates: ['Templates/Idea note.md'], exists: path => path === 'Notes/A task title that stays readable at phone widths.md', convert: async () => undefined });
     modal.open();
   } else if (tab === 'NoteTasks') {
     owner.selectedTaskId = null; view.module = ''; view.editingTitle = false; view.tab = 'Task';

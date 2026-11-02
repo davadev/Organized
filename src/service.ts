@@ -1,10 +1,11 @@
 import { Notice, TFile } from "obsidian";
-import { insertTask, moveTask, parseTasks, PROJECT_SECTIONS, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
+import { insertTask, moveTask, noteLoose, noteSection, parseTasks, PROJECT_SECTIONS, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, Status, Task, WorkSession } from "./model";
 import { seconds } from "./sessions";
 import { projectTemplate, Repository, splitNote } from "./repository";
 import { parseWorked, retiredLines } from "./retention";
+import { buildNote, freePath, noteName } from "./notes";
 
 export interface Change { file: TFile; before: string; after: string }
 export interface Context { file: TFile; line: TaskLine }
@@ -85,6 +86,7 @@ export class TaskService {
     if (target.path !== context.file.path) {
       const current = await this.resolve(context);
       await this.edit(context.file, current.text, replaceTask(current.text, current.line, { marker: kind === "forward" ? (this.daily.date(context.file.path) ? ">" : " ") : "<" }), changes);
+      await this.resortAfter(context.file, next, changes);
     }
     if (oldDate && oldDate !== date && kind !== "forward") {
       await this.cleanupSchedule(task.id, oldDate, context.file.path, changes);
@@ -129,6 +131,7 @@ export class TaskService {
       // In a project note the line also moves to the heading for the new status.
       if (occurrence.tasks.length === 1 && this.isProjectFile(occurrence.file)) after = moveTask(after, id, PROJECT_SECTIONS[task.status]);
       await this.edit(occurrence.file, occurrence.text, after);
+      if (!this.isProjectFile(occurrence.file)) await this.resortAfter(occurrence.file, task);
     }
     this.changed();
   }
@@ -156,10 +159,14 @@ export class TaskService {
     this.changed();
   }
   /** Re-sorts the list holding the task by priority, using the priority just saved rather than a possibly stale re-read of the task note. */
-  private async resort(file: TFile, changed: Task): Promise<void> {
+  private async resort(file: TFile, changed: Task, changes?: Change[]): Promise<void> {
     const text = await this.repo.readText(file); const line = parseTasks(text).find(t => t.id === changed.id); if (!line) return;
     const priorities = new Map((await this.repo.list()).map(t => [t.id, t.priority])); priorities.set(changed.id, changed.priority);
-    await this.edit(file, text, sortTasks(text, line.line, this.repo.settings().sortScope, priorities));
+    await this.edit(file, text, sortTasks(text, line.line, this.repo.settings().sortScope, priorities), changes);
+  }
+  /** Re-sorts after a change that moves a line between ranks (started, forwarded, scheduled); a failed sort never fails the change itself. */
+  private async resortAfter(file: TFile, task: Task, changes?: Change[]): Promise<void> {
+    if (this.repo.settings().sortScope === "none") return; await this.resort(file, task, changes).catch(() => undefined);
   }
   async recurrence(id: string, context?: Context): Promise<void> {
     const today = localDate(); const changes: Change[] = []; const skipped: string[] = [];
@@ -383,6 +390,31 @@ export class TaskService {
     const file = this.repo.file(this.repo.taskPath(id)); if (!file) throw new Error("Task note is missing; relink or repair before deleting.");
     await this.repo.app.fileManager.trashFile(file);
     this.references = null; return true;
+  }
+  /** Turns a task into a standalone note and leaves a link in its place: the note is titled after the task and holds its description (then sources and notes), in the chosen folder with the chosen tags and template. The task's other copies are removed and its task note moves to the trash. */
+  async convertToNote(id: string, options: { folder: string; tags: string[]; template: string | null; clash: "new" | "existing" }, context?: Context): Promise<TFile> {
+    const taskFile = this.repo.file(this.repo.taskPath(id)); if (!taskFile) throw new Error("Task note is missing; relink or repair before converting.");
+    const task = await this.repo.read(id); const folder = path(options.folder, true); const occurrences = await this.repo.occurrences(id);
+    const body = splitNote(await this.repo.readText(taskFile)).body; const name = noteName(task.title);
+    const wanted = folder ? `${folder}/${name}.md` : `${name}.md`; const existing = this.repo.file(wanted);
+    if (existing && options.clash === "existing") return this.linkNote(task, existing, occurrences, context, taskFile);
+    const templateFile = options.template ? this.repo.file(path(options.template)) : null; if (options.template && !templateFile) throw new Error(`The template ${options.template} was not found.`);
+    const target = freePath(folder, name, candidate => this.repo.file(candidate) !== null);
+    const content = buildNote({ title: task.title, description: noteSection(body, "Description"), sources: noteSection(body, "Sources"), notes: `${noteSection(body, "Notes")}\n${noteLoose(body)}`.trim(), template: templateFile ? await this.repo.readText(templateFile) : null, tags: options.tags, today: localDate() });
+    const file = await this.repo.ensure(target, content);
+    return this.linkNote(task, file, occurrences, context, taskFile);
+  }
+  /** Replaces the task's lines with one link to `note` (in the copy being worked from) and removes the rest and the task note. */
+  private async linkNote(task: Task, note: TFile, occurrences: Awaited<ReturnType<Repository["occurrences"]>>, context: Context | undefined, taskFile: TFile): Promise<TFile> {
+    const latest = (item: { file: TFile }) => this.daily.date(item.file.path) ?? "";
+    const home = occurrences.find(item => item.file.path === context?.file.path) ?? [...occurrences].sort((a, b) => latest(b).localeCompare(latest(a)))[0];
+    for (const occurrence of occurrences) {
+      const lines = occurrence.text.split("\n"); const ours = new Set(occurrence.tasks.map(line => line.line)); const first = occurrence === home ? occurrence.tasks[0] : null;
+      if (first) { const link = this.repo.app.fileManager.generateMarkdownLink(note, occurrence.file.path); lines[first.line] = `${first.prefix.slice(0, -1)}${link}${first.raw.endsWith("\r") ? "\r" : ""}`; }
+      await this.edit(occurrence.file, occurrence.text, lines.filter((_line, index) => !ours.has(index) || index === first?.line).join("\n"));
+    }
+    await this.repo.app.fileManager.trashFile(taskFile); this.references = null; this.changed();
+    return note;
   }
   async marker(context: Context, marker: string): Promise<void> {
     const id = context.line.id; if (!id) return;

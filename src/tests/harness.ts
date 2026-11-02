@@ -27,6 +27,7 @@ export function harness() {
       },
       on,
       getAbstractFileByPath: (p: string) => files.get(p) ?? null,
+      getAllLoadedFiles: () => [...files.values()],
       getMarkdownFiles: () => [...files.values()].filter((f): f is TFile => f instanceof TFile && f.path.endsWith(".md")),
       read: vi.fn(async (file: TFile) => { if (!texts.has(file.path)) throw new Error("Missing"); return texts.get(file.path)!; }),
       create: vi.fn(async (p: string, text: string) => { if (files.has(p)) throw new Error("Exists"); const file = new TFile(p); files.set(p, file); texts.set(p, text); return file; }),
@@ -37,6 +38,7 @@ export function harness() {
       processFrontMatter: vi.fn(async (file: TFile, fn: (fm: Record<string, unknown>) => void) => {
         const { frontmatter, body } = splitNote(texts.get(file.path)!); fn(frontmatter); texts.set(file.path, `---\n${stringifyYaml(frontmatter)}---\n${body}`);
       }),
+      generateMarkdownLink: vi.fn((file: TFile, _from: string) => `[[${file.path.replace(/\.md$/, "")}]]`),
       renameFile: vi.fn(async (file: TFile, to: string) => {
         if (files.has(to)) throw new Error("Exists"); const text = texts.get(file.path)!; files.delete(file.path); texts.delete(file.path);
         file.path = to; file.name = to.split("/").pop()!; file.basename = file.name.replace(/\.md$/, ""); files.set(to, file); texts.set(to, text);
