@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rendered task properties (such as priority) now sit to the right of the title instead of on a row below, which kept lists short; notes and sources, being whole Markdown blocks, still get their own row. Applies in Live Preview and reading view.
+- Switching a rendered property on or off now updates every open note at once; before, the note only changed after you clicked into it (the settings dialog had the focus).
+- If a note cannot be reordered after a priority change because it changed in the meantime, a notice says so instead of failing silently.
 - Task cards are more compact: the status word is replaced by one small icon at the right of the title (open, in progress, done, canceled, and a calendar tick for a recurring task done today), with the word kept as a tooltip and screen-reader label. The line of metadata only appears when there is a priority, date or star.
 - Project notes now start with `organized_type: project` in their frontmatter, and the project picker lists only those notes (plus new ones you create). On first start, existing project notes (linked ones, remembered ones and everything in the project folder) are marked automatically; other properties are kept, and notes already marked are not rewritten.
 - New setting **What retired tasks keep**, applied when retention turns a task into a regular checkbox: title only (as before), add description, or add everything (ideas, questions, sources, notes, days and times worked and total time tracked). Details are written once under the latest daily note as readable nested items; the Day and Week views read the time worked back from those notes, so blocks of retired tasks stay on the calendar (a block opens the note that kept it).

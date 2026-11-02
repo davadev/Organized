@@ -15,6 +15,8 @@ export function icon(host: HTMLElement, marker: string): void {
   const label = GLYPHS[marker]; if (!label) return;
   host.createSpan({ cls: "organized-glyph", attr: { "data-marker": marker, role: "img", "aria-label": label } });
 }
+/** Notes and sources render as Markdown blocks and need their own row; every other property is a short label that sits beside the title. */
+export function hasRichProperties(owner: Organized): boolean { return owner.settings.displayProperties.some(p => p === "notes" || p === "sources"); }
 export async function projection(owner: Organized, host: HTMLElement, task: Task, component: Component): Promise<void> {
   host.addClass("organized-projection"); const selected = owner.settings.displayProperties;
   if (task.scheduled && owner.settings.showScheduledDate) {
@@ -51,7 +53,9 @@ export async function reading(owner: Organized, el: HTMLElement, ctx: MarkdownPo
       const context = { file, line: task }; const status = task.marker.toLowerCase() === "x" ? "open" : "completed";
       void owner.run(async () => { await owner.service.clean(context, status === "completed" ? "x" : " "); await owner.service.status(task.id!, status, context); });
     }, { capture: true });
-    const host = item.createDiv({ cls: "organized-properties" });
+    const rich = hasRichProperties(owner); const host = rich ? item.createDiv({ cls: "organized-properties" }) : item.createSpan({ cls: "organized-properties" });
+    // Beside the title, not after a nested list.
+    const nested = rich ? null : item.querySelector(":scope > ul, :scope > ol"); if (nested) nested.before(host);
     const child = new ReadingProjection(host, owner, task.id); ctx.addChild(child); await child.draw();
   }
 }
@@ -82,10 +86,10 @@ class IconWidget extends WidgetType {
 }
 class PropertyWidget extends WidgetType {
   private component: Component | null = null;
-  constructor(readonly owner: Organized, readonly id: string, readonly revision: number) { super(); }
-  eq(other: PropertyWidget): boolean { return this.id === other.id && this.revision === other.revision; }
+  constructor(readonly owner: Organized, readonly id: string, readonly revision: number, readonly inline: boolean) { super(); }
+  eq(other: PropertyWidget): boolean { return this.id === other.id && this.revision === other.revision && this.inline === other.inline; }
   toDOM(): HTMLElement {
-    const host = createDiv(); const component = new Component(); this.component = component; component.load();
+    const host = this.inline ? createSpan() : createDiv(); const component = new Component(); this.component = component; component.load();
     let disposed = false; component.register(() => { disposed = true; });
     void this.owner.repo.read(this.id).then(async task => { if (!disposed) await projection(this.owner, host, task, component); }).catch(() => { if (!disposed) host.setText("Missing task; repair via attach/create"); });
     return host;
@@ -140,7 +144,9 @@ function build(state: EditorState, owner: Organized): DecorationSet {
     if (state.selection.main.head >= line.from && state.selection.main.head <= line.to) continue;
     // CodeMirror drops a block widget placed exactly at the end of a document
     // without a trailing newline; an inline widget there still renders.
-    ranges.push(Decoration.widget({ widget: new PropertyWidget(owner, task.id, owner.revision), block: line.to < state.doc.length, side: 1 }).range(line.to));
+    // Short properties sit to the right of the title; rich ones (notes, sources) get a block row below.
+    const inline = !hasRichProperties(owner);
+    ranges.push(Decoration.widget({ widget: new PropertyWidget(owner, task.id, owner.revision, inline), block: !inline && line.to < state.doc.length, side: 1 }).range(line.to));
   }
   return Decoration.set(ranges, true);
 }

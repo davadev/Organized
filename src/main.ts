@@ -173,13 +173,16 @@ export default class Organized extends Plugin {
     this.revision++;
     for (const listener of this.projectionListeners) listener();
     this.eachView(view => { void view.render().catch(report); });
-    const active = this.activeEditor(); if (active) {
-      // One isolated bridge: Obsidian intentionally omits CM6 from Editor's
-      // public type. Unknown first also keeps type-blind review lint honest.
-      const bridge: unknown = active.editor;
-      const cm = (bridge as { cm?: EditorView }).cm;
-      if (cm) refreshEditor(cm);
-    }
+    // Every open note, not just the focused one: the settings dialog has focus when a display option is switched.
+    for (const cm of this.editorViews()) refreshEditor(cm);
+  }
+  private editorViews(): Set<EditorView> {
+    // One isolated bridge: Obsidian intentionally omits CM6 from Editor's
+    // public type. Unknown first also keeps type-blind review lint honest.
+    const views = new Set<EditorView>(); const editors: unknown[] = [this.activeEditor()?.editor];
+    for (const leaf of this.app.workspace.getLeavesOfType("markdown")) if (leaf.view instanceof MarkdownView) editors.push(leaf.view.editor);
+    for (const editor of editors) { const cm = (editor as { cm?: EditorView } | undefined)?.cm; if (cm) views.add(cm); }
+    return views;
   }
   async openInspector(tab?: "Task", module = ""): Promise<void> {
     const active = this.activeEditor(); if (active) this.lastNoteEditor = active;

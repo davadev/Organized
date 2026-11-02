@@ -99,7 +99,7 @@ describe("changing a priority from outside the note reorders its list", () => {
   });
   it("leaves the order alone when sorting is off, and survives a note that changed underneath", async () => {
     const off = await setup("none"); await off.h.service.setPriority(off.target.id, "high"); expect(off.order()).toEqual(["Low one", "Mid one", "Target"]); expect((await off.h.repo.read(off.target.id)).priority).toBe("high");
-    const busy = await setup(); const write = (await import("vitest")).vi.spyOn(busy.h.repo, "write").mockRejectedValue(Error("concurrent")); await busy.h.service.setPriority(busy.target.id, "high"); expect(write).toHaveBeenCalled(); expect((await busy.h.repo.read(busy.target.id)).priority).toBe("high");
+    const busy = await setup(); const write = (await import("vitest")).vi.spyOn(busy.h.repo, "write").mockRejectedValue(Error("concurrent")); Notice.instances.length = 0; await busy.h.service.setPriority(busy.target.id, "high"); expect(write).toHaveBeenCalled(); expect(String(Notice.instances.at(-1)?.message)).toContain("could not be reordered"); expect((await busy.h.repo.read(busy.target.id)).priority).toBe("high");
     const away = await setup(); const other: any = await away.h.add("Other.md", "- [ ] Elsewhere"); await away.h.service.setPriority(away.target.id, "high", { file: other, line: { line: 0 } as any }); expect(away.h.texts.get(other.path)).toBe("- [ ] Elsewhere"); expect(away.order()).toEqual(["Low one", "Mid one", "Target"]);
     const gone = await setup(); await gone.h.service.setPriority((await gone.h.repo.create("Unlisted")).id, "low"); expect(gone.order()).toEqual(["Low one", "Mid one", "Target"]);
   });

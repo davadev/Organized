@@ -146,7 +146,7 @@ export class TaskService {
     const task = await this.repo.update(id, t => ({ ...t, priority }));
     if (this.repo.settings().sortScope !== "none") {
       if (context) await this.resort(context.file, task);
-      else for (const occurrence of await this.repo.occurrences(id)) await this.resort(occurrence.file, task).catch(() => undefined);
+      else for (const occurrence of await this.repo.occurrences(id)) await this.resort(occurrence.file, task).catch(() => new Notice(`Priority saved, but ${occurrence.file.path} could not be reordered safely (it changed while sorting). Set the priority again to retry.`));
     }
     this.changed();
   }
