@@ -295,3 +295,17 @@ describe('plugin lifecycle and user-only editor actions', () => {
     expect(h.events['changed']?.length).toBeGreaterThan(0);
   });
 });
+describe('lifecycle and picker races', () => {
+  it('does not register anything when disabled while onload is still awaiting settings', async () => {
+    vi.useFakeTimers(); const h = harness();
+    const plugin = new Organized(h.app, { id: 'organized', name: 'Organized', author: 'davadev', version: '0.0.0', minAppVersion: '1.7.2', description: '', isDesktopOnly: false });
+    let release!: (value: unknown) => void; vi.spyOn(plugin, 'loadData').mockReturnValue(new Promise(resolve => { release = resolve; }));
+    const loading = plugin.onload(); await flush(); plugin.onunload(); release({}); await loading; await flush();
+    expect((plugin as any).commands).toHaveLength(0); expect(h.layout).toHaveLength(0);
+  });
+  it('keeps editor handling enabled when the task list cannot be read for the picker', async () => {
+    const { h, plugin } = await loaded(); const file: any = await h.add('Note.md', '- [ ] ordinary'); const editor: any = h.setActive(file);
+    vi.spyOn(plugin.repo, 'list').mockRejectedValueOnce(Error('list failed'));
+    await expect(plugin.pickTask(editor, file)).rejects.toThrow('list failed'); expect((plugin as any).pickerOpen).toBe(false);
+  });
+});
