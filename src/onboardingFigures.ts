@@ -6,9 +6,9 @@ import { STATUS_ICONS } from "./model";
  * screenshots: they follow the user's theme and font, add almost nothing to the plugin's size and cannot go stale the way
  * a picture does. They are decoration (aria-hidden, not interactive); the step's text carries the meaning.
  */
-export type FigureId = "note" | "tabs" | "follow" | "forward" | "card" | "keys" | "day";
+export type FigureId = "settings" | "tabs" | "calendar" | "follow" | "forward" | "card" | "keys" | "commands";
 /** Every figure id; the tests walk it so a new figure cannot ship undrawn. */
-export const FIGURE_IDS: FigureId[] = ["note", "tabs", "follow", "forward", "card", "keys", "day"];
+export const FIGURE_IDS: FigureId[] = ["settings", "tabs", "calendar", "follow", "forward", "card", "keys", "commands"];
 
 const box = (host: HTMLElement, marker: string): void => {
   const b = host.createSpan({ cls: "organized-welcome-fig-box", text: marker === "x" ? "" : marker.trim(), attr: { "data-marker": marker } });
@@ -20,13 +20,6 @@ const line = (host: HTMLElement, marker: string, text: string, cls = ""): HTMLEl
   row.createSpan({ text });
   return row;
 };
-
-function noteFigure(fig: HTMLElement): void {
-  const note = fig.createDiv({ cls: "organized-welcome-fig-note" });
-  line(note, "x", "Reply to Anna");
-  line(note, " ", "Draft the Q1 review");
-  line(note, " ", "Book the dentist");
-}
 
 /** The panel's four tabs, in order, with the icon each one has in the panel (the tabs there are icon-only). */
 const TABS: [string, string, string][] = [["calendar", "Calendar", "Month, week and day, with the time you worked"], ["list-checks", "Task", "The todo you are on, in detail"], ["folder", "Projects", "Todos grouped by project"], ["star", "Favorites", "Everything you starred"]];
@@ -91,29 +84,37 @@ function keysFigure(fig: HTMLElement): void {
   }
 }
 
-/** Hours shown by the day figure, and its blocks as [title, start, end, status, lane, lanes]. */
-const FIRST_HOUR = 9, LAST_HOUR = 13;
-const BLOCKS: [string, number, number, "completed" | "in_progress", number, number][] = [
-  ["Reply to Anna", 9, 9.75, "completed", 0, 1],
-  ["Draft the Q1 review", 10, 11.5, "in_progress", 0, 2],
-  ["Plan the Lisbon trip", 10.75, 12, "in_progress", 1, 2],
-];
-function dayFigure(fig: HTMLElement): void {
-  const grid = fig.createDiv({ cls: "organized-welcome-fig-day" });
-  const span = LAST_HOUR - FIRST_HOUR;
-  for (let hour = FIRST_HOUR; hour <= LAST_HOUR; hour++) {
-    const hourLine = grid.createDiv({ cls: "organized-welcome-fig-hour" });
-    hourLine.setCssProps({ "--organized-at": String((hour - FIRST_HOUR) / span * 100) });
-    hourLine.createSpan({ cls: "organized-welcome-fig-hour-label", text: `${String(hour).padStart(2, "0")}:00` });
-  }
-  for (const [title, start, end, status, lane, lanes] of BLOCKS) {
-    const block = grid.createDiv({ cls: "organized-welcome-fig-block", attr: { "data-status": status } });
-    block.setCssProps({ "--organized-top": String((start - FIRST_HOUR) / span * 100), "--organized-height": String((end - start) / span * 100), "--organized-lane": String(lane), "--organized-lanes": String(lanes) });
-    block.createSpan({ cls: "organized-welcome-fig-block-title", text: title });
+const SETTINGS_ROWS: [string, string][] = [["Daily-note folder", "Daily"], ["Filename format", "YYYY-MM-DD"], ["Daily-note template", "Templates/Daily.md"]];
+function settingsFigure(fig: HTMLElement): void {
+  const list = fig.createDiv({ cls: "organized-welcome-fig-rows" });
+  for (const [name, value] of SETTINGS_ROWS) {
+    const row = list.createDiv({ cls: "organized-welcome-fig-row" });
+    row.createSpan({ cls: "organized-welcome-fig-row-name", text: name });
+    row.createSpan({ cls: "organized-welcome-fig-field", text: value });
   }
 }
 
-const BUILDERS: Record<FigureId, (fig: HTMLElement) => void> = { note: noteFigure, tabs: tabsFigure, follow: followFigure, forward: forwardFigure, card: cardFigure, keys: keysFigure, day: dayFigure };
+const MODES: [string, string][] = [["Month", "Switch between your daily notes"], ["Week", "The big picture: where your time went, by project"], ["Day", "The tasks you worked on that day, as blocks of time"]];
+function calendarFigure(fig: HTMLElement): void {
+  const list = fig.createDiv({ cls: "organized-welcome-fig-rows" });
+  for (const [mode, role] of MODES) {
+    const row = list.createDiv({ cls: "organized-welcome-fig-row" });
+    row.createSpan({ cls: "organized-welcome-fig-pill", text: mode });
+    row.createSpan({ cls: "organized-welcome-fig-row-role", text: role });
+  }
+}
+
+const COMMANDS = ["Convert unchecked todos to tasks", "Convert tasks in this note back to todos", "Convert all tasks in the vault back to todos"];
+function commandsFigure(fig: HTMLElement): void {
+  const list = fig.createDiv({ cls: "organized-welcome-fig-rows" });
+  for (const name of COMMANDS) {
+    const row = list.createDiv({ cls: "organized-welcome-fig-row" });
+    row.createSpan({ cls: "organized-welcome-fig-cap", text: "Organized" });
+    row.createSpan({ cls: "organized-welcome-fig-row-role", text: name });
+  }
+}
+
+const BUILDERS: Record<FigureId, (fig: HTMLElement) => void> = { settings: settingsFigure, tabs: tabsFigure, calendar: calendarFigure, follow: followFigure, forward: forwardFigure, card: cardFigure, keys: keysFigure, commands: commandsFigure };
 
 /** Draw the illustration `id` into `parent`. */
 export function renderFigure(parent: HTMLElement, id: FigureId): HTMLElement {

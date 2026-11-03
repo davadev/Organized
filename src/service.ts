@@ -381,6 +381,34 @@ export class TaskService {
     await this.edit(file, text, lines.join("\n"));
     this.changed(); new Notice(`Converted ${count} into Organized tasks.`);
   }
+  /**
+   * The reverse of converting: turn the linked checkboxes in `files` back into plain todos (the text and state stay, the hidden id and
+   * recurrence comments go). Task notes are not touched, so descriptions, notes and tracked time are kept, only no longer linked.
+   * This is how a person retires the plugin without leaving hidden comments behind. One Undo restores every note.
+   */
+  async unlinkTasks(files: TFile[], scope: string): Promise<void> {
+    const found: { file: TFile; text: string; todos: TaskLine[] }[] = [];
+    for (const file of files) {
+      if (this.repo.isTaskRecord(file.path)) continue;
+      const text = await this.repo.readText(file);
+      if (!text.includes("<!--organized:")) continue;
+      const todos = parseTasks(text).filter(t => t.id || t.repeat);
+      if (todos.length) found.push({ file, text, todos });
+    }
+    const count = found.reduce((sum, item) => sum + item.todos.length, 0);
+    if (!count) { new Notice(`No linked tasks to convert back in ${scope}.`); return; }
+    const noun = `${count} linked task${count === 1 ? "" : "s"} in ${found.length} note${found.length === 1 ? "" : "s"}`;
+    if (!(await this.confirm(`Turn ${noun} back into plain todos? The checkboxes keep their text and state. Recurrence stops. The task notes (descriptions, notes, tracked time) stay in your task folder, unlinked, and you can undo this right afterwards.`, "Convert back to todos", "Convert"))) return;
+    const changes: Change[] = [];
+    for (const { file, text, todos } of found) {
+      // The note may have changed while the prompt was open; skip it rather than overwrite.
+      if (await this.repo.readText(file) !== text) throw new Error(`${file.path} changed while confirming; nothing more was converted. Retry the action.`);
+      const lines = text.split("\n");
+      for (const todo of todos) lines[todo.line] = taskText(todo, { id: null, repeat: false });
+      await this.edit(file, text, lines.join("\n"), changes);
+    }
+    this.summarize(changes, `Converted ${count} task${count === 1 ? "" : "s"} back to todos`);
+  }
   async deleteTask(id: string, onConfirmed?: () => void): Promise<boolean> {
     // The inspector must clear its now-invalid selection before occurrence or
     // trash events can trigger a refresh, so the confirmed hook runs first.

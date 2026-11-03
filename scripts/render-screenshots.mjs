@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path';
 /** scene -> [description (the README alt text says the same), in the default set?, element to capture]. The onboarding steps are for review (`--all`), the README does not use them. */
 const PANEL = '#frame';
 const SCENES = { month: ['Month calendar', true, PANEL], week: ['Week view', true, PANEL], day: ['Day view with time blocks', true, PANEL], task: ['Task details', true, PANEL], projects: ['Projects', true, PANEL],
-  ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8].map(n => [`onboarding-${n}`, [`Onboarding card, step ${n}`, false, '.organized-modal-window']])) };
+  ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => [`onboarding-${n}`, [`Onboarding card, step ${n}`, false, '.organized-modal-window']])) };
 const WIDTH = 400; // CSS px, a typical side-panel width; images are 2x
 const args = process.argv.slice(2);
 const check = args.includes('--check');

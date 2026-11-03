@@ -336,14 +336,13 @@ body.is-mobile .modal-container.organized-modal-host { overflow-y: auto; }
 .organized-welcome-fig-keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 8px 12px; }
 .organized-welcome-fig-key { display: flex; align-items: center; gap: 8px; min-inline-size: 0; color: var(--text-normal); font-size: var(--font-ui-small, 13px); }
 .organized-welcome-fig-cap { flex: 0 0 auto; min-inline-size: 2.4rem; padding: 2px 6px; border: 1px solid var(--background-modifier-border); border-block-end-width: 2px; border-radius: var(--radius-s, 5px); background: var(--background-secondary); color: var(--text-normal); font-family: var(--font-monospace, monospace); font-size: 12px; text-align: center; }
-.organized-welcome-fig-day { --organized-hour-size: calc(var(--font-ui-small, 13px) * 2.6); position: relative; margin-inline-start: 2.8rem; margin-block: 4px; block-size: calc(4 * var(--organized-hour-size)); }
-.organized-welcome-fig-hour { position: absolute; inset-inline-start: 0; inline-size: 100%; inset-block-start: calc(var(--organized-at, 0) * 1%); border-block-start: 1px solid var(--background-modifier-border); }
-.organized-welcome-fig-hour-label { position: absolute; inset-inline-end: 100%; inset-block-start: 0; padding-inline-end: 8px; transform: translateY(-50%); color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.organized-welcome-fig-block { position: absolute; display: flex; align-items: flex-start; overflow: hidden; padding: 2px 6px; border: 1px solid var(--background-modifier-border); border-inline-start: 3px solid var(--interactive-accent); border-radius: var(--radius-s, 5px); background: var(--organized-card-active); color: var(--text-normal); font-size: 11px; font-weight: 600;
-  inset-block-start: calc(var(--organized-top, 0) * 1%); block-size: calc(var(--organized-height, 0) * 1%);
-  inset-inline-start: calc(var(--organized-lane, 0) / var(--organized-lanes, 1) * 100%); inline-size: calc(100% / var(--organized-lanes, 1) - 2px); }
-.organized-welcome-fig-block[data-status="completed"] { border-inline-start-color: var(--organized-edge-done); background: var(--organized-card-done); color: var(--text-muted); }
-.organized-welcome-fig-block-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.organized-welcome-fig-rows { display: flex; flex-direction: column; gap: 8px; }
+.organized-welcome-fig-row { display: flex; align-items: center; gap: 10px; min-inline-size: 0; font-size: var(--font-ui-small, 13px); }
+.organized-welcome-fig-row-name { flex: 0 0 auto; color: var(--text-normal); font-weight: 600; }
+.organized-welcome-fig-row-role { min-inline-size: 0; color: var(--text-muted); overflow-wrap: anywhere; }
+.organized-welcome-fig-field { flex: 1 1 auto; min-inline-size: 0; padding: 4px 8px; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s, 5px); background: var(--background-secondary); color: var(--text-muted); overflow-wrap: anywhere; }
+.organized-welcome-fig-pill { flex: 0 0 auto; min-inline-size: 3.6rem; padding: 2px 10px; border-radius: var(--radius-s, 5px); background: var(--background-secondary); color: var(--text-normal); font-weight: 600; text-align: center; }
+.organized-welcome-fig-row:first-child .organized-welcome-fig-pill { background: var(--interactive-accent); color: var(--text-on-accent, #fff); }
 /* Bundled Things/Minimal checkbox artwork.
 # Third-party notices
 

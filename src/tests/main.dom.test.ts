@@ -52,7 +52,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
   });
   it('registers capabilities only, defers vault-create handling and cleans durable crash state', async () => {
     const { h, plugin, stub } = await loaded();
-    expect(stub.commands).toHaveLength(7); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
+    expect(stub.commands).toHaveLength(9); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
     const factory = stub.views.get(VIEW_TYPE); expect(factory({ app: h.app })).toBeInstanceOf(OrganizedInspectorView);
     h.layout[0](); expect(h.events.create).toHaveLength(1);
     const created = vi.spyOn(plugin.service, 'onDailyCreated').mockResolvedValue(); const index = vi.spyOn(plugin.service, 'index').mockResolvedValue(); const reconcile = vi.spyOn(plugin.service, 'reconcile').mockResolvedValue(); const refresh = vi.spyOn(plugin, 'refresh').mockImplementation(() => undefined);
@@ -63,6 +63,8 @@ describe('plugin lifecycle and user-only editor actions', () => {
     open.mockRejectedValueOnce(Error('open failed')); stub.ribbon[0].cb(); await flush(); expect(Notice.instances.at(-1)?.message).toContain('open failed');
     const pick = vi.spyOn(plugin, 'pickTask').mockResolvedValue(); stub.commands[1].editorCallback({}, { file }); stub.commands[2].editorCallback({}, { file }); stub.commands[1].editorCallback({}, {}); stub.commands[2].editorCallback({}, {}); await flush(); expect(pick).toHaveBeenCalledTimes(2);
     const convert = vi.spyOn(plugin, 'convertTodos').mockResolvedValue(); stub.commands.find((c: any) => c.id === 'convert-todos').editorCallback({}, { file }); stub.commands.find((c: any) => c.id === 'convert-todos').editorCallback({}, {}); await flush(); expect(convert).toHaveBeenCalledExactlyOnceWith(file);
+    const unlink = vi.spyOn(plugin.service, 'unlinkTasks').mockResolvedValue(); stub.commands.find((c: any) => c.id === 'unlink-note-tasks').editorCallback({}, { file }); stub.commands.find((c: any) => c.id === 'unlink-note-tasks').editorCallback({}, {}); stub.commands.find((c: any) => c.id === 'unlink-vault-tasks').callback(); await flush();
+    expect(unlink).toHaveBeenNthCalledWith(1, [file], 'this note'); expect(unlink).toHaveBeenNthCalledWith(2, expect.any(Array), 'the vault'); expect(unlink).toHaveBeenCalledTimes(2);
     const undo = vi.spyOn(plugin.service, 'undo').mockResolvedValue(); stub.commands.find((c: any) => c.id === 'undo').callback(); await flush(); expect(undo).toHaveBeenCalledOnce();
     const confirm = vi.spyOn(plugin, 'confirm').mockResolvedValue(false); const restore = vi.spyOn(plugin.safety, 'queueCompatibleRestore').mockResolvedValue(); // Find restore by stable id, not menu order.
     stub.commands.find((c: any) => c.id === 'restore-settings').callback(); await flush(); expect(restore).not.toHaveBeenCalled(); confirm.mockResolvedValue(true); stub.commands.find((c: any) => c.id === 'restore-settings').callback(); await flush(); expect(restore).toHaveBeenCalledOnce();
