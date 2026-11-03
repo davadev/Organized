@@ -227,6 +227,13 @@ describe("repository and explicit task actions", () => {
     await expect(h.service.unlinkTasks([second], 'this note')).rejects.toThrow('changed while confirming');
     const single: any = await h.add('Single.md', `- [ ] One <!--organized:${a.id}-->`); h.confirm.mockResolvedValueOnce(true); await h.service.unlinkTasks([single], 'this note'); expect(h.confirm).toHaveBeenLastCalledWith(expect.stringContaining('Turn 1 linked task in 1 note back'), 'Convert back to todos', 'Convert');
   });
+  it("keeps a task pointing at the note it became when that note is renamed or moved", async () => {
+    const h = harness(); const task = await h.repo.create("Tracked"); const other = await h.repo.create("Other");
+    await h.repo.update(task.id, t => ({ ...t, converted_to: "Notes/Tracked.md" })); await h.repo.update(other.id, t => ({ ...t, converted_to: "Notes/Other.md" }));
+    expect(h.repo.convertedTo("Notes/Tracked.md")).toEqual([task.id]); expect(h.repo.convertedTo("Notes/Missing.md")).toEqual([]);
+    await h.service.followRename("Notes/Tracked.md", "Archive/Tracked_v2.md"); expect((await h.repo.list(true)).find(t => t.id === task.id)!.converted_to).toBe("Archive/Tracked_v2.md"); expect((await h.repo.list(true)).find(t => t.id === other.id)!.converted_to).toBe("Notes/Other.md");
+    await h.service.followRename("Archive/Tracked_v2.md", "Archive/Tracked_v2"); expect((await h.repo.list(true)).find(t => t.id === task.id)!.converted_to).toBe("Archive/Tracked_v2.md"); expect(h.repo.convertedTo("Archive/Tracked_v2.md")).toEqual([task.id]);
+  });
   it("preserves CRLF and indentation while converting and refuses task notes", async () => {
     const h = harness(); const file: any = await h.add('Crlf.md', '- [ ] One\r\n  - [ ] Two\r\n');
     h.confirm.mockResolvedValueOnce(true); await h.service.convertTodos(file);

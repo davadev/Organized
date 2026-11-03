@@ -74,7 +74,7 @@ export default class Organized extends Plugin {
             if (file.path.startsWith(`${this.settings.taskFolder}/`) || this.service.daily.date(file.path) === localDate() || wasReference || this.service.hasReference(id, file.path)) this.refresh();
           }).catch(report);
         } }));
-        this.registerEvent(this.app.vault.on("rename", (file, oldPath) => { this.service.forget(oldPath); if (file instanceof TFile) void this.service.index(file).then(() => this.refresh()).catch(report); }));
+        this.registerEvent(this.app.vault.on("rename", (file, oldPath) => { this.service.forget(oldPath); if (file instanceof TFile) { void this.service.index(file).then(() => this.refresh()).catch(report); if (this.safety.writable && this.repo.convertedTo(oldPath).length) void this.run(() => this.service.followRename(oldPath, file.path)); } }));
         // The colour is read from the metadata cache, which updates a moment after the note is written.
         this.registerEvent(this.app.metadataCache.on("changed", file => { if (this.repo.isProjectNote(file)) this.refresh(); }));
         this.registerEvent(this.app.vault.on("delete", file => { this.service.forget(file.path); this.refresh(); }));

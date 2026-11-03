@@ -117,6 +117,10 @@ export class Repository {
       await this.app.vault.process(file, current => { if (current !== before) throw new Error(`${file.path} changed concurrently; preserved. Retry the action.`); return after; });
     }
   }
+  /** Ids of task notes that remember `notePath` as the note they became (read from the metadata cache, so this is cheap enough for every rename). */
+  convertedTo(notePath: string): string[] {
+    return this.app.vault.getMarkdownFiles().filter(f => this.isTaskRecord(f.path) && this.app.metadataCache.getFileCache(f)?.frontmatter?.converted_to === notePath).map(f => f.basename);
+  }
   async occurrences(id: string): Promise<{ file: TFile; text: string; tasks: TaskLine[] }[]> {
     const result: { file: TFile; text: string; tasks: TaskLine[] }[] = [];
     for (const file of this.app.vault.getMarkdownFiles()) {

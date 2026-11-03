@@ -510,6 +510,11 @@ export class TaskService {
     if (trashed) { this.undoChanges = []; this.undoRenames = []; new Notice(`${detail} Trashed task notes can be restored from Obsidian's trash; Undo is not offered because it would relink todos to them.`, 20000); this.changed(); }
     else this.summarize(changes, "Tasks retired", detail, renames);
   }
+  /** A note a task became was renamed or moved: the task keeps pointing at it, so the calendar still opens the right note. */
+  async followRename(oldPath: string, newPath: string): Promise<void> {
+    if (!newPath.endsWith(".md")) return;
+    for (const id of this.repo.convertedTo(oldPath)) await this.repo.update(id, task => ({ ...task, converted_to: newPath }));
+  }
   async deleteTask(id: string, onConfirmed?: () => void): Promise<boolean> {
     // The inspector must clear its now-invalid selection before occurrence or
     // trash events can trigger a refresh, so the confirmed hook runs first.

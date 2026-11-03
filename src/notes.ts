@@ -2,9 +2,13 @@ import { stringifyYaml } from "obsidian";
 import { object } from "./model";
 import { splitNote } from "./repository";
 
+/** Emphasis markers that wrap text (`_a_`, `__a__`, `**a**`, `~~a~~`, `` `a` ``), without touching an underscore, tilde or backtick that belongs to the title (`snake_case`, `_`, `~5 min`). */
+function withoutEmphasis(text: string): string {
+  return text.replace(/(^|[^\p{L}\p{N}_])(_{1,2})(?=\S)(.*?\S)\2(?![\p{L}\p{N}_])/gu, "$1$3").replace(/\*{1,3}(?=\S)(.*?\S)\*{1,3}/g, "$1").replace(/~~(?=\S)(.*?\S)~~/g, "$1").replace(/`([^`]+)`/g, "$1");
+}
 /** A filename for a todo's title: links and emphasis reduced to their text, characters Obsidian or the OS reject removed, kept to a sensible length. */
 export function noteName(title: string): string {
-  const plain = title.replace(/!?\[\[([^\]|]*\|)?([^\]]*)\]\]/g, "$2").replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/<!--.*?-->/g, "").replace(/[*_`~]/g, "");
+  const plain = withoutEmphasis(title.replace(/!?\[\[([^\]|]*\|)?([^\]]*)\]\]/g, "$2").replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/<!--.*?-->/g, ""));
   const safe = plain.replace(/[\\/:*?"<>|#^[\]]/g, " ").replace(/\s+/g, " ").trim().replace(/^\.+|\.+$/g, "").trim().slice(0, 100).trim();
   return safe || "Untitled";
 }
