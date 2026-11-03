@@ -27,7 +27,7 @@ Organized does not ask you to adopt a system. Stay at the first level forever, o
 |---|---|---|
 | **1. Forwarder** | Write todos in your daily note as usual. Change nothing else. | Unfinished tasks carry over to the next day automatically; the old line is marked as forwarded so history stays honest. |
 | **2. Organised** | Press `[!]` for priority, `[<]` to schedule for a date, `[*]` to favourite. | The daily note sorts by priority and keeps what you are working on at the top; scheduled tasks arrive on their day. |
-| **3. Full workflow** | Add a description and sources, attach projects, repeat tasks, start a timer, turn a todo into a standalone note. | A calendar with the time you really spent, project pages with Open / In progress / Done, recurring routines, and notes that came from todos. |
+| **3. Full workflow** | Add a description and sources, attach projects, repeat tasks, start a timer, break a todo into subtasks by indenting, turn a todo into a standalone note. | A calendar with the time you really spent, project pages with Open / In progress / Done, recurring routines, and notes that came from todos. |
 
 ```mermaid
 flowchart LR
@@ -132,13 +132,13 @@ Identity and recurrence comments stay hidden in Live Preview, including the line
 
 | Marker | Action |
 |---|---|
-| `[<]` | Choose schedule date; keep origin marker, link daily destination |
-| `[>]` | Forward to tomorrow; daily origin stays gray, undated origin stays active |
+| `[<]` | Choose schedule date; keep origin marker, link daily destination. Open subtasks travel with it |
+| `[>]` | Forward to tomorrow; daily origin stays gray, undated origin stays active. Open subtasks travel with it |
 | `[/]` | Start durable wall-clock timer; complete or clear to stop/log. Changing the `/` to anything else, or deleting the line, stops the timer too and a notice says so |
 | `[!]` | High/medium/low/none priority, constrained sort, then clear |
 | `[a]` | Open the Description section for inline editing (autosaves), then clear |
-| `[x]`, `[ ]` | Complete/reopen; stop active timer idempotently |
-| `[-]` | Reversible cancellation; recurring dates cancel independently |
+| `[x]`, `[ ]` | Complete/reopen; stop active timer idempotently. Completing also completes the todo's open [subtasks](#link-or-create-tasks) |
+| `[-]` | Reversible cancellation; recurring dates cancel independently. Also cancels open subtasks |
 | `[*]` | Toggle favorite |
 | `[s]` | Open the Sources section for inline Markdown references (URLs/Obsidian links, optional labels/citations) |
 | `[j]` | Multi-select project notes; missing selected notes are created in `<task folder>/Projects/` with `organized_type: project` and an `organized_start` date in their frontmatter and **Open / In progress / Ongoing / Done** headings that linked tasks move between as their status changes, and only such notes are listed. A project can have a colour (`organized_color: "#rrggbb"`, set from the Projects tab) shown as a dot beside its name on task cards and as the fill of its blocks in the calendar |

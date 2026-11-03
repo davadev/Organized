@@ -43,7 +43,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "A todo grows only when it needs to",
-    text: "A task starts as a title and a status. Priority, a date, a description, projects or a timer appear when you ask. Set a priority with `[!]` and, with sorting on, the note itself floats the important todos up, so the panel is nice to have, not required. Indent a todo under another (Tab) and it becomes its subtask. Write `[[Note]]` in a description to link any note.",
+    text: "A task starts as a title and a status. Priority, a date, a description, projects or a timer appear when you ask. With `[!]` and sorting on, the note itself floats important todos up. Indent a todo under another (Tab) and it becomes a subtask: completing, canceling or forwarding the parent takes the open ones along. Write `[[Note]]` in a description to link any note.",
     figure: "card",
   },
   {
