@@ -29,6 +29,10 @@ describe("onboarding content and figures", () => {
       for (const name of classes) if (name.startsWith("organized-")) expect(css, `${id}: .${name}`).toContain(`.${name}`);
     }
   });
+  it("names the three subtask buttons in the card figure, in the order they have in the panel", () => {
+    const fig = renderFigure(createDiv(), "card"); const actions = [...fig.querySelectorAll(".organized-welcome-fig-action")];
+    expect(actions.map(a => a.textContent)).toEqual(["New subtask", "Link a task", "Make it a subtask"]); expect(actions.map(a => a.querySelector("[data-icon]")?.getAttribute("data-icon"))).toEqual(["list-plus", "link", "corner-down-right"]);
+  });
   it("refuses an unknown figure instead of drawing nothing", () => { expect(() => renderFigure(createDiv(), "nope" as never)).toThrow(/Unknown onboarding figure/); });
   it("shows the calendar's three modes and the commands it names", () => {
     expect([...renderFigure(createDiv(), "calendar").querySelectorAll(".organized-welcome-fig-pill")].map(n => n.textContent)).toEqual(["Month", "Week", "Day"]);

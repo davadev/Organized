@@ -62,6 +62,8 @@ function forwardFigure(fig: HTMLElement): void {
   line(today, " ", "Draft the Q1 review");
 }
 
+/** The icon buttons under a task's subtasks, with what each does. */
+const SUBTASK_ACTIONS: [string, string][] = [["list-plus", "New subtask"], ["link", "Link a task"], ["corner-down-right", "Make it a subtask"]];
 function cardFigure(fig: HTMLElement): void {
   const card = fig.createDiv({ cls: "organized-list-card", attr: { "data-status": "in_progress" } });
   const open = card.createDiv({ cls: "organized-list-open" });
@@ -73,6 +75,9 @@ function cardFigure(fig: HTMLElement): void {
   meta.createSpan({ cls: "organized-list-date", text: "2026-03-04" });
   setIcon(meta.createSpan({ cls: "organized-list-star" }), "star");
   fig.createDiv({ cls: "organized-welcome-fig-add", text: "Add details…" });
+  // The subtask buttons of the Task tab (they are icon-only there, so the card names them).
+  const actions = fig.createDiv({ cls: "organized-welcome-fig-actions" });
+  for (const [icon, label] of SUBTASK_ACTIONS) { const item = actions.createDiv({ cls: "organized-welcome-fig-action" }); setIcon(item.createSpan({ cls: "organized-welcome-fig-action-icon" }), icon); item.createSpan({ text: label }); }
 }
 
 const KEYS: [string, string][] = [["!", "Priority"], ["<", "Schedule"], ["/", "Start a timer"], ["*", "Favorite"], ["j", "Link projects"], ["n", "Make a note"]];
