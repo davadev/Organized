@@ -4,7 +4,7 @@
 
 - Removing a running todo's line now stops its timer only when you made the edit and the timer is actually running. A note reloaded after a sync, or rewritten by another plugin, no longer stops a timer, and a task that was already stopped or deleted no longer produces a notice or an error.
 - Housekeeping before submission: `PLAN.md` is now short design notes that match the product, the crash-guard source lost its leftover scaffold header, and no document refers to private tooling.
-- The rendered *Recurring* property beside a todo is now a repeat symbol instead of the text `recurring: false`: green when the task repeats, gray when it does not (with a screen-reader label).
+- **Compact symbols for rendered properties.** Properties shown beside a todo are small symbols instead of `name: value` text, each with a screen-reader label: *Starred* is a yellow star (gray when not starred), *Recurring* a green repeat symbol (gray when off), *Priority* a flag (red, orange, yellow, or gray for none), *Status* an icon (gray open, accent in progress, green completed, faint canceled), *Time tracked* a timer with the minutes (green while running), *Created* a calendar with the date, and *Movement history* an arrow with the number of moves (hidden when there are none). Project links, scheduled date, description and sources are unchanged.
 - The task panel's bottom actions (Open task note, Make standalone note, Delete task) now sit in an even grid of bordered buttons instead of loose text, with Delete task on its own full-width row.
 - Sorting by priority now keeps every open todo above finished, canceled, forwarded and scheduled ones, including open todos without a priority.
 - **Daily-note polish.**

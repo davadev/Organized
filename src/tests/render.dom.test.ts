@@ -26,7 +26,7 @@ describe('read-only projections and bundled visual markers', () => {
     owner.settings.displayProperties = [...DISPLAY_PROPERTIES]; const record = await repo.update(task.id, t => ({ ...t, scheduled: '2026-01-01', starred: true }));
     const file = repo.file(repo.taskPath(task.id))!; const before = await repo.readText(file); await repo.write(file, before, before + '\n## Sources\n- [Source](https://example.com)\n');
     raw.vault.process.mockClear(); raw.fileManager.processFrontMatter.mockClear(); await projection(owner, host, record, new Component() as any);
-    expect(host.textContent).toContain('2026-01-01'); expect(host.querySelector('a[href="https://example.com"]')).toBeTruthy(); expect(host.textContent).toContain('priority: none'); expect(host.textContent).toContain('starred: true'); expect(raw.vault.process).not.toHaveBeenCalled(); expect(raw.fileManager.processFrontMatter).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('2026-01-01'); expect(host.querySelector('a[href="https://example.com"]')).toBeTruthy(); expect(host.querySelector('[aria-label="Priority: none"]')).toBeTruthy(); expect(host.querySelector('.organized-symbol-starred')).toBeTruthy(); expect(raw.vault.process).not.toHaveBeenCalled(); expect(raw.fileManager.processFrontMatter).not.toHaveBeenCalled();
     const open = vi.spyOn(owner.service.daily, 'open').mockResolvedValue(file); host.querySelector<HTMLAnchorElement>('a')!.click(); await flush(); expect(open).toHaveBeenCalledWith('2026-01-01');
     owner.safety.writable = false; host.querySelector<HTMLAnchorElement>('a')!.click(); await flush(); expect(open).toHaveBeenCalledOnce(); owner.safety.writable = true;
     owner.settings.showScheduledDate = false; const hiddenDate = createDiv(); await projection(owner, hiddenDate, record, new Component() as any); expect(hiddenDate.querySelector('.organized-date')).toBeNull();
@@ -40,7 +40,7 @@ describe('read-only projections and bundled visual markers', () => {
     await reading(owner, host, context); expect(host.querySelector('.organized-forwarded')).toBeTruthy(); expect(host.querySelector('input')!.dataset.organizedMarker).toBe('>'); expect(host.textContent).toContain('Missing/invalid'); expect(children).toHaveLength(2); expect(owner.projectionListeners.size).toBe(2);
     const status = vi.spyOn(owner.service, 'status').mockResolvedValue(); const checkboxes = host.querySelectorAll<HTMLInputElement>('input'); checkboxes[0].click(); checkboxes[2].click(); await flush(); expect(status).toHaveBeenCalledWith(task.id, 'completed', expect.anything()); expect(status).toHaveBeenCalledWith('missing1', 'open', expect.anything());
     files.delete(file.path); checkboxes[0].click(); await flush(); expect(status).toHaveBeenCalledTimes(2);
-    owner.settings.displayProperties = ['priority']; owner.refresh(); await flush(); expect(host.textContent).toContain('priority: none');
+    owner.settings.displayProperties = ['priority']; owner.refresh(); await flush(); expect(host.querySelector('[aria-label="Priority: none"]')).toBeTruthy();
     let resolve!: (t: any) => void; vi.spyOn(repo, 'read').mockImplementationOnce(() => new Promise(r => { resolve = r; })); const stale = children[0].draw(); children[0].unload(); resolve(task); await stale; expect(owner.projectionListeners.size).toBe(1); children[1].unload(); expect(owner.projectionListeners.size).toBe(0);
     await reading(owner, host, { ...context, getSectionInfo: () => null }); expect(status).toHaveBeenCalledTimes(2);
     const noCheckbox = createDiv(); noCheckbox.createEl('li', { cls: 'task-list-item' }); await reading(owner, noCheckbox, { ...context, getSectionInfo: () => ({ text, lineStart: 0, lineEnd: 0 }) }); expect(noCheckbox.querySelector('.organized-properties')).toBeTruthy();
@@ -66,7 +66,7 @@ describe('read-only projections and bundled visual markers', () => {
     const state = EditorState.create({ doc, selection: { anchor: 0 }, extensions: [editorLivePreviewField, field] });
     expect(widgets(state, field)).toHaveLength(1);
     const editor = new EditorView({ state, parent: createDiv() });
-    await flush(); expect(editor.dom.querySelector('.organized-projection')?.textContent).toContain('priority: none');
+    await flush(); expect(editor.dom.querySelector('.organized-projection [aria-label="Priority: none"]')).toBeTruthy();
     expect(editor.state.doc.toString()).toBe(doc); editor.destroy();
   });
   it('limits icons to visible ranges, rebuilds only for relevant updates and refreshes projected data', async () => {
@@ -118,13 +118,23 @@ describe('read-only projections and bundled visual markers', () => {
     owner.settings.displayProperties = ['priority']; const inline = list(); await reading(owner, inline.host, context); const span = inline.item.querySelector('.organized-properties')!; expect(span.tagName).toBe('SPAN'); expect(span.nextElementSibling?.tagName).toBe('UL');
     owner.settings.displayProperties = ['description']; const rich = list(); await reading(owner, rich.host, context); expect(rich.item.querySelector('.organized-properties')!.tagName).toBe('DIV'); expect(rich.item.lastElementChild?.classList.contains('organized-properties')).toBe(true);
   });
-  it('colours a displayed priority: high red, medium orange, low yellow, none uncoloured', async () => {
+  it('shows a displayed priority as a flag coloured high red, medium orange, low yellow, none gray', async () => {
     const { owner, task } = await fixture(); owner.settings.displayProperties = ['priority']; const component: any = new Component();
     for (const priority of ['high', 'medium', 'low', 'none'] as const) {
       const host = createDiv(); await projection(owner, host, { ...task, priority }, component); const span = host.querySelector('.organized-property')!;
-      expect(span.textContent).toBe(`priority: ${priority}`); expect(span.classList.contains(`organized-priority-${priority}`)).toBe(true);
+      expect(span.textContent).toBe(''); expect(span.getAttribute('aria-label')).toBe(`Priority: ${priority}`); expect(span.classList.contains(`organized-priority-${priority}`)).toBe(true);
     }
-    const other = createDiv(); owner.settings.displayProperties = ['status']; await projection(owner, other, task, component); expect(other.querySelector('.organized-property')!.className).toBe('organized-property');
+  });
+  it('shows status, star, time, created date and moves as compact symbols', async () => {
+    const { owner, task } = await fixture(); const component: any = new Component(); owner.settings.displayProperties = ['status', 'starred', 'time_tracked_seconds', 'created', 'movement_history'];
+    const labels = (host: HTMLElement) => Array.from(host.querySelectorAll('.organized-symbol')).map(el => `${el.getAttribute('aria-label')}|${el.className.replace('organized-property organized-symbol ', '')}|${el.textContent}`);
+    const plain = createDiv(); await projection(owner, plain, { ...task, created: '2026-03-04T10:00:00' }, component);
+    expect(labels(plain)).toEqual(['Status: open|organized-status-open|', 'Not starred|organized-symbol-off|', 'Time tracked: 0 min|organized-symbol-muted|0 min', 'Created 2026-03-04|organized-symbol-muted|2026-03-04']);
+    const busy = createDiv(); const moved = [{ id: 'm1', kind: 'forward' as const, source: 'manual' as const, from: 'a', to: 'b', at: 'c' }];
+    await projection(owner, busy, { ...task, status: 'in_progress', starred: true, time_tracking_started_at: new Date().toISOString(), movement_history: moved }, component);
+    expect(labels(busy).slice(0, 3)).toEqual(['Status: in progress|organized-status-in_progress|', 'Starred|organized-symbol-starred|', expect.stringContaining('running|organized-symbol-running|')]); expect(labels(busy).at(-1)).toBe('Moved 1 time|organized-symbol-muted|1');
+    const twice = createDiv(); await projection(owner, twice, { ...task, movement_history: [...moved, ...moved] }, component); expect(labels(twice).at(-1)).toBe('Moved 2 times|organized-symbol-muted|2');
+    for (const status of ['completed', 'canceled'] as const) { const host = createDiv(); owner.settings.displayProperties = ['status']; await projection(owner, host, { ...task, status }, component); expect(host.querySelector('.organized-symbol')!.className).toContain(`organized-status-${status}`); }
   });
 });
 
@@ -145,9 +155,9 @@ describe('project links beside a todo', () => {
 describe('recurring symbol beside a todo', () => {
   it('shows a green repeat symbol when the task recurs and a gray one when it does not, with a text label for screen readers', async () => {
     const { owner, task, repo } = await fixture(); owner.settings.displayProperties = ['recurring'];
-    const off = createDiv(); await projection(owner, off, task, new Component() as any); const gray = off.querySelector('.organized-recurring')!;
-    expect(gray.classList.contains('organized-recurring-off')).toBe(true); expect(gray.getAttribute('aria-label')).toBe('Recurring: off'); expect(off.textContent).not.toContain('recurring: false');
+    const off = createDiv(); await projection(owner, off, task, new Component() as any); const gray = off.querySelector('.organized-symbol')!;
+    expect(gray.classList.contains('organized-symbol-off')).toBe(true); expect(gray.getAttribute('aria-label')).toBe('Recurring: off'); expect(off.textContent).not.toContain('recurring: false');
     const on = createDiv(); await projection(owner, on, await repo.update(task.id, t => ({ ...t, recurring: true })), new Component() as any);
-    expect(on.querySelector('.organized-recurring')!.classList.contains('organized-recurring-on')).toBe(true); expect(on.querySelector('.organized-recurring')!.getAttribute('aria-label')).toBe('Recurring: on');
+    expect(on.querySelector('.organized-symbol')!.classList.contains('organized-symbol-recurring')).toBe(true); expect(on.querySelector('.organized-symbol')!.getAttribute('aria-label')).toBe('Recurring: on');
   });
 });
