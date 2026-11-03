@@ -3,8 +3,14 @@ import { buildNote, cleanTags, freePath, noteName } from "../notes";
 
 describe("standalone note helpers", () => {
   it("makes a safe filename from a todo title", () => {
-    expect(noteName("Plan the **launch**")).toBe("Plan the launch"); expect(noteName("Read [[Reading list|my list]] and [web](https://example.com)")).toBe("Read my list and web"); expect(noteName("a/b\\c:d*e?f\"g<h>i|j#k^l[m]n")).toBe("a b c de f g h i j k l m n");
+    expect(noteName("Plan the **launch**")).toBe("Plan the launch"); expect(noteName("Read [[Reading list|my list]] and [web](https://example.com)")).toBe("Read my list and web"); expect(noteName("a/b\\c:d*e?f\"g<h>i|j#k^l[m]n")).toBe("a b c d e f g h i j k l m n");
     expect(noteName("  ..hidden.. ")).toBe("hidden"); expect(noteName("???")).toBe("Untitled"); expect(noteName("")).toBe("Untitled"); expect(noteName("x".repeat(150))).toHaveLength(100); expect(noteName("Title <!--organized:abc12345--> more")).toBe("Title more"); expect(noteName("![[pic.png]] shot")).toBe("pic.png shot");
+  });
+  it("keeps underscores, tildes and backticks that belong to the title and drops only emphasis that wraps text", () => {
+    expect(noteName("_")).toBe("_"); expect(noteName("__")).toBe("__"); expect(noteName("snake_case_name")).toBe("snake_case_name"); expect(noteName("_private")).toBe("_private"); expect(noteName("trailing_")).toBe("trailing_");
+    expect(noteName("_emphasis_ and __strong__ text")).toBe("emphasis and strong text"); expect(noteName("see _this_.")).toBe("see this"); expect(noteName("my_file_ _a_")).toBe("my_file_ a");
+    expect(noteName("~5 min and ~~gone~~")).toBe("~5 min and gone"); expect(noteName("use `code` here")).toBe("use code here"); expect(noteName("a ` b")).toBe("a ` b");
+    expect(noteName("*bold* and ***both***")).toBe("bold and both"); expect(noteName("5*3")).toBe("5 3"); expect(noteName("**")).toBe("Untitled"); expect(noteName("日本_語")).toBe("日本_語");
   });
   it("cleans tags", () => {
     expect(cleanTags("idea, #project/alpha  idea  bad!tag 2024 #nested/ok_1")).toEqual(["idea", "project/alpha", "nested/ok_1"]); expect(cleanTags("")).toEqual([]); expect(cleanTags("##a")).toEqual(["a"]);

@@ -365,3 +365,14 @@ describe('Retire window wiring', () => {
     const write = vi.spyOn(plugin.safety, 'writeBackup').mockResolvedValue('saved.json'); const backup = (retire.mock.calls[0] as any)[1]; expect(await backup([{ path: 'a.md', before: 'x' }], { renames: [] })).toBe('saved.json'); expect(write).toHaveBeenCalledWith('retire', [{ path: 'a.md', before: 'x' }], { renames: [] });
   });
 });
+describe('renaming a note a task became', () => {
+  it('updates where the task points, only for such notes and only while writes are allowed', async () => {
+    const { h, plugin } = await loaded(); h.layout[0](); const task = await plugin.repo.create('Tracked'); await plugin.repo.update(task.id, t => ({ ...t, converted_to: 'Notes/Tracked.md' }));
+    const note: any = await h.add('Notes/Tracked.md', 'x'); const rename = h.events.rename[0];
+    const spy = vi.spyOn(plugin.service, 'followRename'); note.path = 'Notes/Tracked_v2.md'; rename(note, 'Notes/Tracked.md'); await flush();
+    expect(spy).toHaveBeenCalledExactlyOnceWith('Notes/Tracked.md', 'Notes/Tracked_v2.md'); expect((await plugin.repo.read(task.id)).converted_to).toBe('Notes/Tracked_v2.md');
+    rename({ ...note, path: 'Other.md' }, 'Unrelated.md'); await flush(); expect(spy).toHaveBeenCalledTimes(1);
+    plugin.safety.writable = false; await plugin.repo.update(task.id, t => ({ ...t, converted_to: 'Notes/Again.md' })); rename(note, 'Notes/Again.md'); await flush(); expect(spy).toHaveBeenCalledTimes(1); expect((await plugin.repo.read(task.id)).converted_to).toBe('Notes/Again.md');
+  });
+});
+
