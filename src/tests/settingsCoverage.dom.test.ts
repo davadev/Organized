@@ -11,7 +11,7 @@ describe('settings completeness and validation', () => {
   it('renders every setting in classic and modern hosts, validates changes before save', () => {
     const h = harness(); const owner = { settings: { ...DEFAULT_SETTINGS, displayProperties: [] }, saveSettings: vi.fn() } as any;
     const tab = new OrganizedSettingsTab(h.app, owner); Setting.instances.length = 0; tab.display();
-    expect(Setting.instances.filter(s => s.controls.length)).toHaveLength(13 + DISPLAY_PROPERTIES.length - 1);
+    expect(Setting.instances.filter(s => s.controls.length)).toHaveLength(14 + DISPLAY_PROPERTIES.length - 1);
     const controls = (name: string) => Setting.instances.find(s => s.nameText === name)!.controls[0];
     const type = (control: any, value: string) => { control.inputEl.value = value; control.inputEl.dispatchEvent(new Event('input')); };
     type(controls('Task folder'), 'Work'); expect(owner.settings.taskFolder).toBe('Work'); type(controls('Task folder'), '.tasks'); expect(owner.settings.taskFolder).toBe('Work'); expect(Notice.instances.at(-1)?.message).toContain('visible');
@@ -24,6 +24,7 @@ describe('settings completeness and validation', () => {
     select('What retired tasks keep', 'all'); expect(owner.settings.retentionDetail).toBe('all'); select('What retired tasks keep', 'bogus'); expect(owner.settings.retentionDetail).toBe('all'); select('What retired tasks keep', 'description'); expect(owner.settings.retentionDetail).toBe('description');
     select('Missing sections', 'ask'); expect(owner.settings.missingSection).toBe('ask'); select('Missing sections', 'recreate'); expect(owner.settings.missingSection).toBe('recreate');
     select('Priority sort scope', 'none'); expect(owner.settings.sortScope).toBe('none');
+    select('Alignment', 'right'); expect(owner.settings.propertiesAlign).toBe('right'); select('Alignment', 'bogus'); expect(owner.settings.propertiesAlign).toBe('text');
     controls('Show scheduled date link').toggle(); expect(owner.settings.showScheduledDate).toBe(false); controls('Show scheduled date link').toggle(); expect(owner.settings.showScheduledDate).toBe(true);
     for (const p of DISPLAY_PROPERTIES.filter(p => p !== 'scheduled')) { controls(PROPERTY_LABELS[p]).toggle(); expect(owner.settings.displayProperties).toContain(p); controls(PROPERTY_LABELS[p]).toggle(); expect(owner.settings.displayProperties).not.toContain(p); }
     const retire = vi.fn(); owner.retireTasks = retire; const showCard = vi.fn(); owner.showOnboarding = showCard; Setting.instances.length = 0; tab.display(); Setting.instances.find(s => s.nameText === 'Onboarding card')!.controls[0].buttonEl.click(); expect(showCard).toHaveBeenCalledWith(false); Setting.instances.find(s => s.nameText === 'Retire tasks')!.controls[0].buttonEl.click(); expect(retire).toHaveBeenCalledOnce();

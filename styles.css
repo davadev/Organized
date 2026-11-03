@@ -291,6 +291,10 @@ body.is-mobile .modal-container.organized-modal-host { overflow-y: auto; }
 .organized-notice-undo:hover { background: var(--interactive-accent); color: var(--text-on-accent); }
 .organized-forwarded { color: var(--text-faint); }
 .organized-projection { margin-inline-start: var(--size-4-2); white-space: normal; overflow-wrap: anywhere; }
+/* Aligned to the right edge: beside the text the symbols float to the end of the line (they drop to their own right-aligned row when the text leaves no room); in a block row of their own they are end-aligned, while descriptions and sources keep reading from the start. */
+span.organized-projection.organized-align-right { float: inline-end; max-width: 100%; }
+div.organized-projection.organized-align-right { text-align: end; }
+div.organized-projection.organized-align-right .organized-rich-property { text-align: start; }
 .organized-property, .organized-date { display: inline-block; margin-inline-end: var(--size-4-2); max-inline-size: 100%; }
 .organized-rich-property { display: block; margin-block: var(--size-4-1); }
 .organized-glyph, .organized-task-line .organized-checkbox {

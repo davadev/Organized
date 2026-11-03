@@ -26,7 +26,7 @@ try {
   for (const width of [240, 320, 360, 390, 412, 768].filter(width => scale === 1 || width <= 412)) for (const dark of [false, true]) for (const rtl of [false, true]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(({ dark, rtl }) => { document.body.className = `${dark ? 'theme-dark' : 'theme-light'} is-mobile`; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, { dark, rtl });
-    for (const tab of ['Calendar', 'Week', 'Day', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Favorites', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'SessionModal', 'NoteModal', 'RetireModal', 'Onboarding1', 'Onboarding2', 'Onboarding3', 'Onboarding4', 'Onboarding5', 'Onboarding6', 'Onboarding7', 'Onboarding8', 'Onboarding9', 'Onboarding10', 'Eof']) {
+    for (const tab of ['Calendar', 'Week', 'Day', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Favorites', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'SessionModal', 'NoteModal', 'RetireModal', 'Onboarding1', 'Onboarding2', 'Onboarding3', 'Onboarding4', 'Onboarding5', 'Onboarding6', 'Onboarding7', 'Onboarding8', 'Onboarding9', 'Onboarding10', 'Eof', 'AlignRight']) {
       await page.evaluate(tab => window.scene(tab), tab);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       if (overflow) throw Error(`${engine}: horizontal overflow at ${width}${scale === 1 ? '' : ` with ${scale}x text`}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
@@ -175,6 +175,15 @@ try {
       if (tab === 'Eof') {
         const projection = page.locator('.organized-projection');
         if (await projection.count() !== 1 || !(await projection.locator('[aria-label="Priority: none"]').count())) throw Error('Final-line task properties are missing at EOF');
+      }
+      if (tab === 'AlignRight') {
+        // Every group of symbols ends at the line's right edge (left edge in RTL), however much text is beside it.
+        const gaps = await page.locator('.cm-line').evaluateAll(lines => lines.map(line => {
+          const box = line.getBoundingClientRect(); const symbols = line.querySelector('.organized-projection')?.getBoundingClientRect();
+          const rtl = getComputedStyle(line).direction === 'rtl';
+          return symbols ? (rtl ? symbols.left - box.left : box.right - symbols.right) : null;
+        }));
+        if (gaps.length !== 2 || gaps.some(gap => gap === null || gap > 16 || gap < -1)) throw Error(`Right-aligned properties are not at the line edge at ${width}: ${JSON.stringify(gaps)}`);
       }
       if (tab === 'LivePreview' || tab === 'Source') {
         const visible = await page.locator('.cm-content').innerText();

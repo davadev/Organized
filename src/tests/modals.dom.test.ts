@@ -14,6 +14,12 @@ const decorated = (modal: { modalEl: HTMLElement; containerEl: HTMLElement }) =>
   expect(modal.containerEl.classList.contains("organized-modal-host")).toBe(true);
 };
 describe("native task, date, source and project modals", () => {
+  it("puts the text typed before it opened back in the search box, after Obsidian cleared it, and filters by it", async () => {
+    const h = harness(); const picker = new TaskPicker(h.app, [newTask("Clean kitchen", "task1234")], async () => undefined, "c", true);
+    const filtered = vi.fn(); picker.inputEl.addEventListener("input", filtered);
+    picker.inputEl.value = ""; picker.open();
+    expect(picker.inputEl.value).toBe("c"); expect(picker.inputEl.selectionStart).toBe(1); expect(filtered).toHaveBeenCalledOnce(); picker.close();
+  });
   it("filters existing records and offers only explicit nonempty creation", async () => {
     const h = harness(); const task = newTask('A task', 'task1234'); const scheduled = { ...task, id: 'task5678', title: 'Later', scheduled: '2026-01-01' }; const choose = vi.fn(async () => undefined);
     const picker = new TaskPicker(h.app, [task, scheduled], choose);
