@@ -2,7 +2,7 @@ import { Editor, MarkdownView, Notice, Plugin, TFile, TFolder, WorkspaceLeaf } f
 import { Transaction } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
 import { ACTION_MARKERS, parseTasks, NOTE_MARKER, NoteSection, PROJECT_MARKER, SECTION_MARKERS, TaskLine, writeNoteSection } from "./codec";
-import { DEFAULT_SETTINGS, elapsed, localDate, object, Settings, Task } from "./model";
+import { DEFAULT_SETTINGS, elapsed, localDate, object, Settings, Status, Task } from "./model";
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
 import { Context, report, TaskService } from "./service";
@@ -300,27 +300,32 @@ export default class Organized extends Plugin {
     const title = lines[0].title; const task = await this.repo.read(id); if (task.title === title) return;
     await this.run(() => this.service.title(id, title));
   }
+  /** A running timer stops when its `[/]` line is removed or its marker is changed, wherever the cursor is and even while another action runs (the stop queues behind it). Only the person's own edits count: a note reloaded after a sync or rewritten by another plugin must not stop a timer. */
+  private stopEditedTimers(update: ViewUpdate): void {
+    const active = this.activeEditor(); if (!active || active.editor.getValue() !== update.state.doc.toString()) return;
+    const after = new Map(parseTasks(update.state.doc.toString()).flatMap(t => t.id ? [[t.id, t.marker] as const] : []));
+    const status = (marker: string | undefined): Status | null => marker === undefined || marker === " " ? "open" : marker === "x" || marker === "X" ? "completed" : marker === "-" ? "canceled" : null;
+    for (const line of parseTasks(update.startState.doc.toString())) {
+      const id = line.id; if (!id || line.marker !== "/") continue; const next = status(after.get(id)); if (next === null) continue;
+      void this.run(async () => {
+        // The task may have been stopped, finished or deleted since; then there is nothing to stop.
+        const running = await this.repo.read(id).catch(() => null); if (!running?.time_tracking_started_at) return;
+        await this.service.status(id, next); const task = await this.repo.read(id);
+        new Notice(`Timer stopped for "${task.title}" because ${after.has(id) ? "its marker changed" : "its todo was removed"}. ${formatMinutes(Math.floor(task.time_tracked_seconds / 60))} tracked so far.`);
+      }).catch(report);
+    }
+  }
   onEditorUpdate(update: ViewUpdate): void {
     if (update.selectionSet) this.followCursor();
     if (update.docChanged) this.watchEditedTitle(update);
-    if (!update.docChanged || this.busy || this.pickerOpen) return;
+    if (!update.docChanged || this.pickerOpen) return;
     const events = update.transactions.map(t => t.annotation(Transaction.userEvent));
     if (events.some(event => event && ["paste", "drop", "undo", "redo"].some(ignored => event.includes(ignored)))) return;
     const user = events.some(event => event && !event.startsWith("input.organized"));
+    if (user) this.stopEditedTimers(update);
+    if (this.busy) return;
     const active = this.activeEditor(); if (!active || active.editor.getValue() !== update.state.doc.toString()) return;
     this.lastNoteEditor = active;
-    // Deletion is meaningful even when the cursor no longer sits on a task.
-    const remaining = new Set(parseTasks(update.state.doc.toString()).map(t => t.id));
-    // Only the person's own edits count: a note reloaded after a sync or rewritten by another plugin must not stop a timer.
-    for (const removed of user ? parseTasks(update.startState.doc.toString()).filter(t => t.id && t.marker === "/" && !remaining.has(t.id)) : []) {
-      const id = removed.id!;
-      void this.run(async () => {
-        // The task may have been stopped, finished or deleted since the line was removed; then there is nothing to stop.
-        const running = await this.repo.read(id).catch(() => null); if (!running?.time_tracking_started_at) return;
-        await this.service.status(id, "open"); const task = await this.repo.read(id);
-        new Notice(`Timer stopped for "${task.title}" because its todo was removed. ${formatMinutes(Math.floor(task.time_tracked_seconds / 60))} tracked so far.`);
-      }).catch(report);
-    }
     // Ticking a checkbox in Live Preview replaces one marker character, often with no user event and without moving the cursor onto the line.
     if (this.tickedLinkedTask(update, active, user)) return;
     let touchedLines = 0; update.changes.iterChanges((_a, _b, from, to) => { touchedLines += update.state.doc.lineAt(to).number - update.state.doc.lineAt(from).number + 1; });
