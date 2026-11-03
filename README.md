@@ -82,7 +82,16 @@ flowchart TB
 
 The first time Organized starts it shows a short **onboarding card**: nine steps with small illustrations: the two settings to make first, the idea behind the plugin, the side panel and calendar, the checkbox letters, and how to start and leave. Skip it whenever you like; it appears once. Reopen it with the command **Organized: Show onboarding card** or the **Onboarding card** button in **Settings → Organized → Help**.
 
-## Try the beta
+## Leaving Organized
+
+Organized never locks your notes in. To retire it after long use, run **Organized: Convert all tasks in the vault back to todos** (or the per-note command), confirm, and check the summary; **Undo** restores every note it changed. Then disable and remove the plugin.
+
+What the vault-wide command does: every linked checkbox in every note becomes a plain `- [ ]` line (text and state kept; the hidden `<!--organized:...-->` comments and recurrence stop). What it leaves on purpose, all ordinary Markdown you can keep or delete:
+
+- **Task notes** in your task folder (`Tasks/<id>.md`): description, sources, notes and tracked time, now unlinked. Delete the folder if you do not want them.
+- **Project notes**: their `organized_type`, `organized_start` and `organized_color` properties and the Open / In progress / Ongoing / Done headings.
+- **Retired-task lines** such as `Worked 2026-03-02: 09:00–09:30` under a checkbox, and any `[>]` forwarded or `[<]` scheduled markers: they stay as written.
+
 
 Use a **test vault**. In BRAT, add **`davadev/Organized`** and select the beta release. Alternatively download `main.js`, `manifest.json`, `styles.css` from the same GitHub release into `<test vault>/.obsidian/plugins/organized/`, then restart and enable Organized.
 

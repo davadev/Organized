@@ -53,7 +53,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "Starting, and leaving",
-    text: "To start, run Convert unchecked todos to tasks in a note you already have. To leave, convert back, in one note or the whole vault, before you remove Organized. Your task notes are kept.",
+    text: "To start, run Convert unchecked todos to tasks in a note you already have. To leave after long use, run Convert all tasks in the vault back to todos before you remove Organized. Your task and project notes stay as ordinary Markdown files, safe to keep or delete.",
     figure: "commands",
   },
   {

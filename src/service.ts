@@ -398,7 +398,7 @@ export class TaskService {
     const count = found.reduce((sum, item) => sum + item.todos.length, 0);
     if (!count) { new Notice(`No linked tasks to convert back in ${scope}.`); return; }
     const noun = `${count} linked task${count === 1 ? "" : "s"} in ${found.length} note${found.length === 1 ? "" : "s"}`;
-    if (!(await this.confirm(`Turn ${noun} back into plain todos? The checkboxes keep their text and state. Recurrence stops. The task notes (descriptions, notes, tracked time) stay in your task folder, unlinked, and you can undo this right afterwards.`, "Convert back to todos", "Convert"))) return;
+    if (!(await this.confirm(`Turn ${noun} back into plain todos? The checkboxes keep their text and state. Recurrence stops. The task notes (descriptions, notes, tracked time) and project notes are not changed: they stay as ordinary Markdown files, and you can undo this right afterwards.`, "Convert back to todos", "Convert"))) return;
     const changes: Change[] = [];
     for (const { file, text, todos } of found) {
       // The note may have changed while the prompt was open; skip it rather than overwrite.

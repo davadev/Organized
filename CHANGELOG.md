@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The onboarding card now recommends the vault-wide command for leaving Organized after long use, and says what stays behind (task and project notes as ordinary Markdown). The README has a new **Leaving Organized** section listing exactly what the command changes and what it leaves.
 - **Convert back to todos.** Two new commands undo the linking, so you can leave Organized cleanly: **Convert tasks in this note back to todos** and **Convert all tasks in the vault back to todos**. They confirm first, remove the hidden id and recurrence comments from the checkboxes (text and state stay), keep every task note in your task folder, and offer Undo.
 - The onboarding card is rewritten around the ideas behind the plugin, in nine short steps: it starts with the two settings that must match your daily notes (and asks you to read to the end), then the daily note and forwarding, the side panel and its tabs, what the Month, Week and Day views are for, how the Task tab gives an overview (hide forwarded, scheduled and done todos), that priorities float important todos up in the note itself, the checkbox letters including `[n]` for a standalone note, how to start and leave, and how to reopen the card.
 - Fixed the edges of Organized's dialogs (including the onboarding card) blending into the note behind them in dark themes, most visibly at the bottom on iOS: the dialog now has an opaque background and a clearer border, and the note behind it is dimmed.
