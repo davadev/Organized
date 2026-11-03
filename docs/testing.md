@@ -155,3 +155,13 @@ On a **copy** of a vault with task notes named after ids (made by an older beta)
 
 On a **copy** of a vault: open **Retire tasks…** and try each combination (links + rename, plain + keep, strip properties with a user-added `tags` property, trash). Check: the status line matches what happens; file names read as the todo titles (duplicates numbered); links in daily and project notes open the renamed notes in your link style (wikilink and Markdown); a stripped note keeps only your own properties and the text; a running timer was logged; `note-backups/retire-*.json` holds the old text; **Undo** restores text and names; a trash run offers no Undo and the notes are in Obsidian's trash; the vault opened with the plugin disabled reads naturally. Try a phone width and a large system font.
 
+## Subtasks (manual check on a copied vault)
+
+1. In a daily note, write `- [ ] Parent`, press Enter, Tab, type a title and choose **Create new task**: the parent's task note gets `subtasks: ["[[…]]"]` about a second after you stop typing, and no note text changes.
+2. Shift-Tab the subtask: the list empties. Tab it again, then select both lines and Shift-Tab/Tab as a block: the lists follow, once.
+3. Move a subtask under a different parent (cut and paste): it leaves the first list and joins the second.
+4. Delete a subtask line, then undo (Ctrl/Cmd-Z): the link goes and comes back.
+5. Enable **Subtask progress**: `0/2` gray, `1/2` accent, `2/2` green; right alignment keeps the symbol left of the fixed ones.
+6. Rename a subtask's title in the panel: the parent's list shows the new link.
+7. Run **Add subtask** on a parent that already has nested notes: the new line lands after them and the picker opens.
+8. Edit a note with Organized disabled (indent a linked todo), re-enable, run **Repair subtask links in this note**.

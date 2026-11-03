@@ -1,7 +1,7 @@
 import { Editor, MarkdownView, Notice, Plugin, TFile, TFolder, WorkspaceLeaf } from "obsidian";
 import { Transaction } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
-import { ACTION_MARKERS, parseTasks, NOTE_MARKER, NoteSection, PROJECT_MARKER, SECTION_MARKERS, TaskLine, writeNoteSection } from "./codec";
+import { ACTION_MARKERS, parentIds, parseTasks, sameNesting, NOTE_MARKER, NoteSection, PROJECT_MARKER, SECTION_MARKERS, TaskLine, writeNoteSection } from "./codec";
 import { DEFAULT_SETTINGS, elapsed, localDate, object, Settings, Status, Task } from "./model";
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
@@ -26,6 +26,7 @@ export default class Organized extends Plugin {
   selectedTaskId: string | null = null;
   private shownNote: string | null = null;
   private readonly titleTimers = new Map<string, number>();
+  private readonly structure = new Map<string, { before: Map<string, string | null>; timer: number }>();
   private lastNoteEditor: { editor: Editor; file: TFile } | null = null;
   revision = 0;
   readonly projectionListeners = new Set<() => void>();
@@ -56,6 +57,8 @@ export default class Organized extends Plugin {
       this.addCommand({ id: "duplicate-task", name: "Duplicate as new task", editorCallback: (editor, view) => { if (view.file) void this.pickTask(editor, view.file, true).catch(report); } });
       this.addCommand({ id: "convert-todos", name: "Convert unchecked todos to tasks", editorCallback: (_editor, view) => { if (view.file) void this.convertTodos(view.file).catch(report); } });
       this.addCommand({ id: "unlink-note-tasks", name: "Convert tasks in this note back to todos", editorCallback: (_editor, view) => { if (view.file) void this.run(() => this.service.unlinkTasks([view.file!], "this note")).catch(report); } });
+      this.addCommand({ id: "add-subtask", name: "Add subtask", editorCallback: (editor, view) => { if (view.file) void this.addSubtask(editor, view.file).catch(report); } });
+      this.addCommand({ id: "repair-subtasks", name: "Repair subtask links in this note", editorCallback: (_editor, view) => { const file = view.file; if (file) void this.run(() => this.service.repairSubtasks(file)).catch(report); } });
       this.addCommand({ id: "retire-tasks", name: "Retire tasks…", callback: () => { this.retireTasks(); } });
       this.addCommand({ id: "rename-task-notes", name: "Rename task notes to their titles", callback: () => { void this.run(() => this.migrateTaskNoteNames(true)).catch(report); } });
       this.addCommand({ id: "show-onboarding", name: "Show onboarding card", callback: () => { this.showOnboarding(false); } });
@@ -89,7 +92,7 @@ export default class Organized extends Plugin {
     } catch (error) { report(error); throw error; }
   }
   onunload(): void {
-    this.loaded = false; this.unloaded = true; for (const timer of this.titleTimers.values()) window.clearTimeout(timer); this.titleTimers.clear(); if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer); this.refreshTimer = null;
+    this.loaded = false; this.unloaded = true; for (const timer of this.titleTimers.values()) window.clearTimeout(timer); this.titleTimers.clear(); for (const { timer } of this.structure.values()) window.clearTimeout(timer); this.structure.clear(); if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer); this.refreshTimer = null;
     void writeCrashState(this.app.vault.adapter, crashStatePath(this.manifest, this.app.vault.configDir), DEFAULT_CRASH_STATE);
   }
   assertWritable(): void { if (!this.safety.writable) throw new Error("Writes paused to protect newer/unreadable settings. Restore a compatible backup or update Organized."); }
@@ -302,6 +305,31 @@ export default class Organized extends Plugin {
     const id = now.id; window.clearTimeout(this.titleTimers.get(id));
     this.titleTimers.set(id, window.setTimeout(() => { this.titleTimers.delete(id); void this.syncEditedTitle(active.file, id).catch(report); }, 800));
   }
+  /** Indenting, outdenting or moving a linked todo changes whose subtask it is. The first change of a burst remembers how the note was nested; once typing pauses, the parents' lists are brought in step (nothing is written when the nesting did not change). */
+  private watchStructure(update: ViewUpdate): void {
+    if (update.transactions.every(t => t.annotation(Transaction.userEvent)?.startsWith("input.organized"))) return;
+    const active = this.activeEditor(); if (!active || this.repo.isTaskRecord(active.file.path) || active.editor.getValue() !== update.state.doc.toString()) return;
+    const key = active.file.path; const pending = this.structure.get(key); window.clearTimeout(pending?.timer);
+    const before = pending?.before ?? parentIds(update.startState.doc.toString());
+    const timer = window.setTimeout(() => {
+      this.structure.delete(key);
+      void (async () => {
+        const after = parentIds(await this.repo.readText(active.file)); if (sameNesting(before, after)) return;
+        await this.run(() => this.service.syncSubtasks(before, after));
+      })().catch(report);
+    }, 800);
+    this.structure.set(key, { before, timer });
+  }
+  /** Adds an empty todo one level in under the todo at the cursor (after everything already nested under it) and asks which task it is. */
+  async addSubtask(editor: Editor, file: TFile): Promise<void> {
+    const context = this.current(editor, file); if (!context?.line.id) throw new Error("Put the cursor on a linked todo to add a subtask under it.");
+    const lines = editor.getValue().split("\n"); const indent = (line: string) => /^\s*/.exec(line)![0].replace(/\t/g, "    ").length; const own = indent(context.line.raw);
+    let end = context.line.line + 1; while (end < lines.length && lines[end].trim() && indent(lines[end]) > own) end++;
+    const at = { line: end - 1, ch: lines[end - 1].replace(/\r$/, "").length };
+    const child = `${/^\s*/.exec(context.line.raw)![0]}  - [ ] `;
+    editor.replaceRange(`\n${child}`, at); editor.setCursor({ line: end, ch: child.length });
+    await this.pickTask(editor, file, false, true);
+  }
   private async syncEditedTitle(file: TFile, id: string): Promise<void> {
     const lines = parseTasks(await this.repo.readText(file)).filter(t => t.id === id); if (lines.length !== 1 || !lines[0].title) return;
     const title = lines[0].title; const task = await this.repo.read(id); if (task.title === title) return;
@@ -324,7 +352,7 @@ export default class Organized extends Plugin {
   }
   onEditorUpdate(update: ViewUpdate): void {
     if (update.selectionSet) this.followCursor();
-    if (update.docChanged) this.watchEditedTitle(update);
+    if (update.docChanged) { this.watchEditedTitle(update); this.watchStructure(update); }
     if (!update.docChanged || this.pickerOpen) return;
     const events = update.transactions.map(t => t.annotation(Transaction.userEvent));
     if (events.some(event => event && ["paste", "drop", "undo", "redo"].some(ignored => event.includes(ignored)))) return;

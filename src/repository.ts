@@ -64,8 +64,8 @@ export class Repository {
     if (hit?.stamp === stamp) return hit.frontmatter;
     const frontmatter = splitNote(await this.readText(file)).frontmatter; this.parsed.set(file.path, { stamp, frontmatter }); return frontmatter;
   }
-  private link(notePath: string, id: string): void { this.touched?.add(notePath); Repository.add(this.byId, this.idOfPath, notePath, id); }
-  private unlink(notePath: string): void { this.parsed.delete(notePath); this.touched?.add(notePath); Repository.remove(this.byId, this.idOfPath, notePath); }
+  private link(notePath: string, id: string): void { if (this.idOfPath.get(notePath) !== id) this.names = null; this.touched?.add(notePath); Repository.add(this.byId, this.idOfPath, notePath, id); }
+  private unlink(notePath: string): void { this.names = null; this.parsed.delete(notePath); this.touched?.add(notePath); Repository.remove(this.byId, this.idOfPath, notePath); }
   /** The id a note claims: its frontmatter `id` when that is a valid id, otherwise its file name (an invalid note then fails `taskFrom`, as before). */
   idOf(file: TFile, frontmatter: Record<string, unknown>): string { return validId(frontmatter.id) ? frontmatter.id : file.basename; }
   /** Rebuilds the id -> file lookup from the notes' own text. The old lookup stays usable until the new one is ready, so nothing is "missing" meanwhile. */
@@ -81,8 +81,36 @@ export class Repository {
       const ids = await inBatches(files, async file => { try { return this.idOf(file, await this.properties(file)); } catch { return null; } });
       files.forEach((file, i) => { const id = ids[i]; if (id !== null) Repository.add(byId, idOfPath, file.path, id); });
       for (const notePath of touched) { Repository.remove(byId, idOfPath, notePath); const id = this.idOfPath.get(notePath); if (id !== undefined) Repository.add(byId, idOfPath, notePath, id); }
-      this.byId = byId; this.idOfPath = idOfPath;
+      this.byId = byId; this.idOfPath = idOfPath; this.names = null;
     } finally { this.touched = null; }
+  }
+  /** Task note paths by lower-case file name, built when a link is resolved and dropped whenever a note is linked, unlinked or swapped in. */
+  private names: Map<string, string[]> | null = null;
+  /** The link a parent's `subtasks` list holds for a task note: its file name, which is unique across the vault. */
+  linkOf(file: TFile): string { return `[[${file.basename}]]`; }
+  /** The task note a `[[Name]]` link points at; null when there is none (a stale link) or when two notes share the name. */
+  fileOfLink(link: string): TFile | null {
+    if (!this.names) { this.names = new Map(); for (const notePath of this.idOfPath.keys()) { const name = notePath.slice(notePath.lastIndexOf("/") + 1).replace(/\.md$/i, "").toLowerCase(); this.names.set(name, [...(this.names.get(name) ?? []), notePath]); } }
+    const paths = this.names.get(link.slice(2, -2).toLowerCase()); return paths?.length === 1 ? this.file(paths[0]) : null;
+  }
+  /** The subtasks of a task that can still be found, in the order of its list. Recurring tasks are never subtasks. */
+  async subtasksOf(task: Task): Promise<Task[]> {
+    const found: Task[] = [];
+    for (const link of task.subtasks) {
+      const file = this.fileOfLink(link); if (!file) continue;
+      try { const properties = await this.properties(file); const child = taskFrom(properties, this.idOf(file, properties)); if (!child.recurring && !found.some(t => t.id === child.id)) found.push(child); } catch { /* A note that is not a valid task is not a subtask. */ }
+    }
+    return found;
+  }
+  /** How many of a task's subtasks are done out of those still counted (canceled ones are left out); null when there are none. */
+  async progress(task: Task): Promise<{ done: number; total: number } | null> {
+    const counted = (await this.subtasksOf(task)).filter(t => t.status !== "canceled");
+    return counted.length ? { done: counted.filter(t => t.status === "completed").length, total: counted.length } : null;
+  }
+  /** The task this one is a subtask of, if any task's list links to its note. */
+  async parentOf(id: string): Promise<Task | null> {
+    const file = this.taskFile(id); if (!file) return null;
+    return (await this.list()).find(t => t.subtasks.some(link => this.fileOfLink(link) === file)) ?? null;
   }
   /** Learns what one task note claims (after it was created, changed or synced in). */
   async track(file: TFile): Promise<void> {

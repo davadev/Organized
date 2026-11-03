@@ -79,5 +79,6 @@ export function fakeEditor(initial: string) {
     transaction: vi.fn((spec: { changes: { from: typeof cursor; to: typeof cursor; text: string }[] }) => {
       for (const c of spec.changes) value = value.slice(0, offset(c.from)) + c.text + value.slice(offset(c.to));
     }),
+    replaceRange: (text: string, from: typeof cursor, to = from) => { value = value.slice(0, offset(from)) + text + value.slice(offset(to)); },
   };
 }

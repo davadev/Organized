@@ -23,10 +23,12 @@ export interface Task {
   daily_note_section_path: Section[]; work_sessions: WorkSession[];
   /** Path of the standalone note this task became. Set only when the task note is kept for the time it tracked; such a task has no todo line and is hidden from every list. */
   converted_to: string | null;
+  /** Links to the task notes of this task's subtasks (`[[Name]]`), kept in step with the todos nested under it in the notes. */
+  subtasks: string[];
 }
 /** One small icon per task status, shared by the panel and the onboarding card's figures. */
 export const STATUS_ICONS: Record<Task["status"], string> = { open: "circle", in_progress: "play", completed: "check", canceled: "x" };
-export const DISPLAY_PROPERTIES = ["status", "priority", "scheduled", "created", "time_tracked_seconds", "recurring", "starred", "projects", "movement_history", "sources", "description"] as const;
+export const DISPLAY_PROPERTIES = ["status", "priority", "scheduled", "created", "time_tracked_seconds", "recurring", "starred", "projects", "movement_history", "subtasks", "sources", "description"] as const;
 export type DisplayProperty = typeof DISPLAY_PROPERTIES[number];
 /** What a retired task leaves in the note: its title only, plus its description, or everything worth keeping (description and time worked). */
 export const RETENTION_DETAILS = ["title", "description", "all"] as const;
@@ -111,6 +113,8 @@ export function settingsFrom(value: unknown): Settings {
   for (const [notePath, keys] of Object.entries(object(v.collapsedHeadings))) { const kept = [...new Set(strings(keys))]; if (kept.length) s.collapsedHeadings[notePath] = kept; }
   return s;
 }
+/** A link to a task note as the parent's `subtasks` list writes it: `[[Name]]`, nothing else. */
+export const isNoteLink = (value: string): boolean => /^\[\[[^[\]|#]+\]\]$/.test(value);
 export function taskFrom(value: unknown, expectedId: string): Task {
   const v = object(value);
   if (v.schema_version !== undefined && v.schema_version !== 1) throw new Error("This task uses an unsupported schema; update Organized before editing it.");
@@ -131,6 +135,7 @@ export function taskFrom(value: unknown, expectedId: string): Task {
     projects: strings(v.projects).filter(p => { try { return path(p) === p && p.endsWith(".md"); } catch { return false; } }),
     movement_history: history as unknown as Movement[], daily_note_section_path: sections as unknown as Section[], work_sessions: sessions,
     converted_to: typeof v.converted_to === "string" && v.converted_to.endsWith(".md") ? v.converted_to : null,
+    subtasks: [...new Set(strings(v.subtasks).filter(isNoteLink))],
   };
 }
 export function visibleFolder(value: string): string {

@@ -6,7 +6,7 @@ import { report } from "./service";
 export const PROPERTY_LABELS: Record<DisplayProperty, string> = {
   status: "Status", priority: "Priority", scheduled: "Scheduled date", created: "Created date",
   time_tracked_seconds: "Tracked time", recurring: "Recurrence", starred: "Favorite",
-  projects: "Project links", movement_history: "Movement history", sources: "Source references", description: "Description",
+  projects: "Project links", movement_history: "Movement history", subtasks: "Subtask progress", sources: "Source references", description: "Description",
 };
 interface Row { name: string; desc?: string; render: (setting: Setting) => void }
 interface Group { type: "group"; heading: string; items: Row[] }

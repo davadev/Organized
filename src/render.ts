@@ -28,7 +28,7 @@ export function symbol(host: HTMLElement, compact: Symbol): void {
 }
 const STATUS_LABELS: Record<Task["status"], string> = { open: "open", in_progress: "in progress", completed: "completed", canceled: "canceled" };
 /** The compact symbol for a displayed property, or null when there is nothing to show (no moves yet). */
-export function symbolOf(property: Exclude<DisplayProperty, "scheduled" | "projects" | "description" | "sources">, task: Task): Symbol | null {
+export function symbolOf(property: Exclude<DisplayProperty, "scheduled" | "projects" | "description" | "sources">, task: Task, progress: { done: number; total: number } | null = null): Symbol | null {
   const minutes = formatMinutes(Math.floor(elapsed(task) / 60));
   switch (property) {
     case "status": return { icon: STATUS_ICONS[task.status], cls: `organized-status-${task.status}`, label: `Status: ${STATUS_LABELS[task.status]}` };
@@ -37,6 +37,7 @@ export function symbolOf(property: Exclude<DisplayProperty, "scheduled" | "proje
     case "recurring": return { icon: "repeat", cls: task.recurring ? "organized-symbol-recurring" : "organized-symbol-off", label: `Recurring: ${task.recurring ? "on" : "off"}` };
     case "time_tracked_seconds": return { icon: "timer", cls: task.time_tracking_started_at ? "organized-symbol-running" : "organized-symbol-muted", label: `Time tracked: ${minutes}${task.time_tracking_started_at ? ", running" : ""}`, text: minutes };
     case "created": { const day = localDate(new Date(task.created)); return { icon: "calendar", cls: "organized-symbol-muted", label: `Created ${day}`, text: day }; }
+    case "subtasks": return progress ? { icon: "list-checks", cls: progress.done === progress.total ? "organized-symbol-complete" : progress.done ? "organized-symbol-partial" : "organized-symbol-muted", label: `Subtasks: ${progress.done} of ${progress.total} done`, text: `${progress.done}/${progress.total}` } : null;
     case "movement_history": return task.movement_history.length ? { icon: "arrow-right", cls: "organized-symbol-muted", label: `Moved ${task.movement_history.length} time${task.movement_history.length === 1 ? "" : "s"}`, text: String(task.movement_history.length) } : null;
   }
 }
@@ -49,7 +50,7 @@ function projectLinks(owner: Organized, host: HTMLElement, task: Task): void {
   }
 }
 /** Properties whose width or presence differs between todos. */
-const VARYING: DisplayProperty[] = ["projects", "movement_history", "time_tracked_seconds"];
+const VARYING: DisplayProperty[] = ["projects", "movement_history", "time_tracked_seconds", "subtasks"];
 /** `live` turns false once a newer draw or a teardown owns `host`, so an older projection stops appending after its awaits. */
 export async function projection(owner: Organized, host: HTMLElement, task: Task, component: Component, live: () => boolean = () => true): Promise<void> {
   host.addClass("organized-projection"); const right = owner.settings.propertiesAlign === "right"; host.classList.toggle("organized-align-right", right);
@@ -70,7 +71,7 @@ export async function projection(owner: Organized, host: HTMLElement, task: Task
       const content = noteSection(body, property === "description" ? "Description" : "Sources");
       const block = host.createDiv({ cls: "organized-rich-property" }); await MarkdownRenderer.render(owner.app, content, block, file.path, component);
     } else {
-      const compact = symbolOf(property, task); if (compact) symbol(host, compact);
+      const compact = symbolOf(property, task, property === "subtasks" ? await owner.repo.progress(task) : null); if (!live()) return; if (compact) symbol(host, compact);
     }
   }
 }

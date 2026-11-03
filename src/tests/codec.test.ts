@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { insertTask, readNote, hasLegacyHeading, migrateNote, noteSection, parseTasks, removeUnique, replaceTask, sortTasks, taskText, writeNoteSection } from "../codec";
+import { descendants, insertTask, readNote, hasLegacyHeading, migrateNote, noteSection, parseTasks, removeUnique, replaceTask, sortTasks, taskText, writeNoteSection } from "../codec";
 
 describe("Markdown task codec", () => {
   it('uses real Markdown structure for nested fences, indented code, comments and setext headings', () => {
@@ -108,5 +108,18 @@ describe("Markdown task codec", () => {
     const titles = (out: string) => out.split('\n').map(l => l.replace(/^- \[.\] | <!--.*$/g, ''));
     expect(titles(sortTasks(text, 2, 'list', priorities))).toEqual(['Low but running', 'Plain running', 'Medium', 'None', 'Forwarded high', 'Scheduled high']);
     expect(titles(sortTasks(text, 2, 'none', priorities))).toEqual(titles(text)); expect(titles(sortTasks(text, 4, 'first', priorities))[0]).toBe('Low but running');
+  });
+  it('knows which todo each todo is nested under, through plain bullets, and ignores plain-bullet and code parents', () => {
+    const text = ['- [ ] Top', '  - [ ] Child', '    - [ ] Grandchild', '  - A note', '    - [ ] Under a note', '- [ ] Second', '- Plain', '  - [ ] Not a subtask', '```', '- [ ] fenced', '```', '- [ ] Last'].join('\n');
+    const tasks = parseTasks(text); const parents = Object.fromEntries(tasks.map(t => [t.title, t.parent === null ? null : tasks.find(p => p.line === t.parent)!.title]));
+    expect(parents).toEqual({ Top: null, Child: 'Top', Grandchild: 'Child', 'Under a note': 'Top', Second: null, 'Not a subtask': null, Last: null });
+    expect(descendants(tasks, 0).map(t => t.title)).toEqual(['Child', 'Grandchild', 'Under a note']); expect(descendants(tasks, 5)).toEqual([]);
+    expect(parseTasks('- [ ] Two ids <!--organized:aaaaaaaa--> <!--organized:bbbbbbbb-->\n  - [ ] Child')[0].parent).toBeNull();
+  });
+  it('sorts subtasks only among the subtasks of the same parent, in every scope', () => {
+    const priorities = new Map([['aaaaaaa1', 'none'], ['aaaaaaa2', 'high'], ['bbbbbbb1', 'none'], ['bbbbbbb2', 'high']] as const);
+    const text = ['- [ ] A <!--organized:aaaaaaa0-->', '  - [ ] A low <!--organized:aaaaaaa1-->', '  - [ ] A high <!--organized:aaaaaaa2-->', '- [ ] B <!--organized:bbbbbbb0-->', '  - [ ] B low <!--organized:bbbbbbb1-->', '  - [ ] B high <!--organized:bbbbbbb2-->'].join('\n');
+    const titles = (out: string) => out.split('\n').map(l => l.replace(/^\s*- \[.\] | <!--.*$/g, ''));
+    for (const scope of ['list', 'section', 'first'] as const) expect(titles(sortTasks(text, 2, scope, priorities)), scope).toEqual(['A', 'A high', 'A low', 'B', 'B low', 'B high']);
   });
 });

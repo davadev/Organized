@@ -22,6 +22,7 @@ const tasks: Task[] = [
   make('budget0001', 'Check the team budget', { priority: 'low', projects: [review], work_sessions: [{ start: at(4, 11, 15), end: at(4, 12, 15) }, { start: at(3, 16, 45), end: at(3, 17, 30) }] }),
   make('canceled01', 'Renew the old domain', { status: 'canceled' }),
 ];
+const subtasks = [make('churn000001', 'Get the churn numbers from Sam', { status: 'completed', closed_at: at(3, 17) }), make('summary0001', 'Write the summary', { status: 'in_progress' }), make('review00001', 'Ask Anna to review', {})];
 const byId = new Map(tasks.map(t => [t.id, t]));
 const marker = (t: Task) => ({ completed: 'x', in_progress: '/', canceled: '-' } as Record<string, string>)[t.status] ?? ' ';
 const line = (t: Task) => `- [${marker(t)}] ${t.title} <!--organized:${t.id}-->`;
@@ -44,6 +45,7 @@ const owner: any = {
   repo: {
     projectFolder: () => 'Tasks/Projects', taskColor: (t: Task) => (t.projects[0] ? colors[t.projects[0]] : null), projectColor: (p: string) => colors[p] ?? null,
     list: async () => tasks, file: (path: string) => (files.has(path) ? { path } : null), read: async (id: string) => byId.get(id)!, taskPath: (id: string) => `Tasks/${id}.md`, sourcePath: (id: string) => `Tasks/${id}.md`, taskFile: (id: string) => ({ path: `Tasks/${id}.md` }), resolve: async (id: string) => ({ path: `Tasks/${id}.md` }),
+    parentOf: async () => null, subtasksOf: async (t: Task) => t.id === 'q1review01' ? subtasks : [], progress: async () => null,
     readText: async (f: { path: string }) => dailies[f.path.slice(6, 16)] ?? notes[f.path.slice(6, -3)] ?? '',
   },
   service: { daily: { path: (d: string) => `Daily/${d}.md`, open: async () => null }, refs: async () => [], retiredWork: async () => [], reconcile: async () => undefined, resolve: async () => undefined },

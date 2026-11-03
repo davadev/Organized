@@ -2,7 +2,8 @@ import type { Section, Settings, Priority } from "./model";
 import { PRIORITIES } from "./model";
 import { parser } from "@lezer/markdown";
 
-export interface TaskLine { line: number; raw: string; prefix: string; marker: string; title: string; id: string | null; repeat: boolean; section: Section[] }
+/** `parent` is the line of the nearest todo this one is nested under (through plain bullets too), or null for a todo at the top of its list. */
+export interface TaskLine { line: number; raw: string; prefix: string; marker: string; title: string; id: string | null; repeat: boolean; section: Section[]; parent: number | null }
 export const ID = /<!--organized:([a-zA-Z0-9_-]{8,80})-->/g;
 const TASK = /^(\s*(?:[-+*]|\d+[.)]) \[)([^\]])(\] )(.*)$/;
 /** The two parts of a task note's body: the description (the text itself, no heading) and an optional `## Sources` block. */
@@ -84,7 +85,7 @@ export function parseTasks(text: string, onHeading?: (line: number, section: Sec
     while (low + 1 < high) { const mid = (low + high) >>> 1; if (lines[mid].from <= position) low = mid; else high = mid; }
     return lines[low];
   };
-  const section: Section[] = []; const counts = new Map<string, number>();
+  const section: Section[] = []; const counts = new Map<string, number>(); const enclosing: { to: number; task: number | null }[] = [];
   parser.parse(text.slice(bodyStart)).iterate({ enter(node) {
     // A real Markdown tree, not regex heuristics, defines which text is code,
     // HTML, quoted content or an actual list item (including nested fences).
@@ -98,14 +99,31 @@ export function parseTasks(text: string, onHeading?: (line: number, section: Sec
       section.push({ level, text: title, ordinal }); headings.push({ line, section: section.map(s => ({ ...s })) });
     }
     if (node.name !== "ListItem") return;
-    const match = TASK.exec(raw.replace(/\r$/, "")); if (!match) return;
-    const ids = [...match[4].matchAll(ID)]; if (ids.length > 1) return;
-    tasks.push({ line, raw, prefix: match[1], marker: match[2], title: match[4].replace(ID, "").replace(/<!--organized:repeat-->/g, "").trim(), id: ids[0]?.[1] ?? null, repeat: match[4].includes("<!--organized:repeat-->"), section: section.map(s => ({ ...s })) });
+    // The list items this one is nested in: a todo is a subtask of the nearest enclosing todo.
+    while (enclosing.length && enclosing[enclosing.length - 1].to <= node.from) enclosing.pop();
+    const match = TASK.exec(raw.replace(/\r$/, "")); const ids = match ? [...match[4].matchAll(ID)] : [];
+    const parent = [...enclosing].reverse().find(item => item.task !== null)?.task ?? null;
+    enclosing.push({ to: node.to, task: match && ids.length <= 1 ? line : null });
+    if (!match || ids.length > 1) return;
+    tasks.push({ line, raw, prefix: match[1], marker: match[2], title: match[4].replace(ID, "").replace(/<!--organized:repeat-->/g, "").trim(), id: ids[0]?.[1] ?? null, repeat: match[4].includes("<!--organized:repeat-->"), section: section.map(s => ({ ...s })), parent });
   } });
   cache.set(text, { tasks, headings }); if (cache.size > 4) cache.delete(cache.keys().next().value!);
   for (const h of headings) onHeading?.(h.line, h.section);
   return tasks;
 }
+/** The todos nested under the todo on `line`, at any depth, in document order. */
+export function descendants(tasks: TaskLine[], line: number): TaskLine[] {
+  const family = new Set([line]);
+  return tasks.filter(t => t.parent !== null && family.has(t.parent) && (family.add(t.line), true));
+}
+/** For every linked todo in the note that occurs once: the id of the todo it is nested under (null at the top of its list, or under a todo that is not linked or occurs twice). */
+export function parentIds(text: string): Map<string, string | null> {
+  const tasks = parseTasks(text); const seen = new Map<string, number>(); for (const t of tasks) if (t.id) seen.set(t.id, (seen.get(t.id) ?? 0) + 1);
+  const unique = (t: TaskLine | undefined): string | null => t?.id && seen.get(t.id) === 1 ? t.id : null;
+  return new Map(tasks.flatMap(t => unique(t) ? [[t.id!, unique(tasks.find(p => p.line === t.parent)) ] as const] : []));
+}
+/** Whether two maps from `parentIds` describe the same nesting. */
+export const sameNesting = (a: Map<string, string | null>, b: Map<string, string | null>): boolean => [...new Set([...a.keys(), ...b.keys()])].every(id => (a.get(id) ?? null) === (b.get(id) ?? null));
 export function taskText(task: TaskLine, updates: { title?: string; marker?: string; id?: string | null; repeat?: boolean }): string {
   const id = Object.prototype.hasOwnProperty.call(updates, "id") ? updates.id : task.id; const repeat = updates.repeat ?? task.repeat;
   return `${task.prefix}${updates.marker ?? task.marker}] ${updates.title ?? task.title}${id ? ` <!--organized:${id}-->` : ""}${repeat ? " <!--organized:repeat-->" : ""}${task.raw.endsWith("\r") ? "\r" : ""}`;
@@ -182,7 +200,7 @@ export function sortTasks(text: string, line: number, scope: Settings["sortScope
   const lines = text.split("\n");
   const indentation = (raw: string) => /^\s*/.exec(raw)![0].replace(/\t/g, "    ").length;
   const indent = indentation(target.raw);
-  let group = tasks.filter(t => JSON.stringify(t.section) === JSON.stringify(target.section) && indentation(t.raw) === indent);
+  let group = tasks.filter(t => JSON.stringify(t.section) === JSON.stringify(target.section) && indentation(t.raw) === indent && t.parent === target.parent);
   const endOfBlock = (task: TaskLine) => {
     let end = task.line + 1;
     while (end < lines.length && lines[end].trim() && indentation(lines[end]) > indent) end++;
