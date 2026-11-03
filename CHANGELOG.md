@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Removing a running todo's line now stops its timer only when you made the edit and the timer is actually running. A note reloaded after a sync, or rewritten by another plugin, no longer stops a timer, and a task that was already stopped or deleted no longer produces a notice or an error.
 - Housekeeping before submission: `PLAN.md` is now short design notes that match the product, the crash-guard source lost its leftover scaffold header, and no document refers to private tooling.
 - The rendered *Recurring* property beside a todo is now a repeat symbol instead of the text `recurring: false`: green when the task repeats, gray when it does not (with a screen-reader label).
 - The task panel's bottom actions (Open task note, Make standalone note, Delete task) now sit in an even grid of bordered buttons instead of loose text, with Delete task on its own full-width row.

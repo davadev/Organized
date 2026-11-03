@@ -298,9 +298,12 @@ export default class Organized extends Plugin {
     this.lastNoteEditor = active;
     // Deletion is meaningful even when the cursor no longer sits on a task.
     const remaining = new Set(parseTasks(update.state.doc.toString()).map(t => t.id));
-    for (const removed of parseTasks(update.startState.doc.toString()).filter(t => t.id && t.marker === "/" && !remaining.has(t.id))) {
+    // Only the person's own edits count: a note reloaded after a sync or rewritten by another plugin must not stop a timer.
+    for (const removed of user ? parseTasks(update.startState.doc.toString()).filter(t => t.id && t.marker === "/" && !remaining.has(t.id)) : []) {
       const id = removed.id!;
       void this.run(async () => {
+        // The task may have been stopped, finished or deleted since the line was removed; then there is nothing to stop.
+        const running = await this.repo.read(id).catch(() => null); if (!running?.time_tracking_started_at) return;
         await this.service.status(id, "open"); const task = await this.repo.read(id);
         new Notice(`Timer stopped for "${task.title}" because its todo was removed. ${Math.floor(task.time_tracked_seconds / 60)} min tracked so far.`);
       }).catch(report);
