@@ -227,17 +227,29 @@ export class TaskService {
       await this.repo.update(parentId, t => ({ ...t, subtasks: t.subtasks.filter(link => !drop(link)) })); return true;
     } catch { return false; }
   }
-  /** Adds a task to its parent's `subtasks` list. Nothing happens for a recurring task, a task that cannot be found, or a parent that is the task's own descendant. */
-  private async linkSubtask(parentId: string, childId: string): Promise<boolean> {
-    const file = this.repo.taskFile(childId); if (!file || parentId === childId) return false;
+  /** Adds a task to its parent's `subtasks` list and says what happened: nothing changes for a recurring task, a task that cannot be found, itself, or a parent that is the task's own descendant. A task has one parent, so it leaves the list it was in. */
+  private async linkSubtask(parentId: string, childId: string): Promise<"linked" | "already" | "recurring" | "loop" | "missing"> {
+    const file = this.repo.taskFile(childId); if (!file) return "missing"; if (parentId === childId) return "loop";
     try {
-      const [parent, child] = [await this.repo.read(parentId), await this.repo.read(childId)]; if (parent.recurring || child.recurring) return false;
-      for (let up: Task | null = parent, depth = 0; up && depth < 64; depth++) { up = await this.repo.parentOf(up.id); if (up?.id === childId) return false; }
-      // A task has one parent: it leaves the list it was in.
+      const [parent, child] = [await this.repo.read(parentId), await this.repo.read(childId)]; if (parent.recurring || child.recurring) return "recurring";
+      for (let up: Task | null = parent, depth = 0; up && depth < 64; depth++) { up = await this.repo.parentOf(up.id); if (up?.id === childId) return "loop"; }
       const current = await this.repo.parentOf(childId); if (current && current.id !== parentId) await this.dropLinks(current.id, link => this.repo.fileOfLink(link) === file);
-      const link = this.repo.linkOf(file); if (parent.subtasks.includes(link)) return false;
-      await this.repo.update(parentId, t => ({ ...t, subtasks: [...t.subtasks, link] })); return true;
-    } catch { return false; }
+      const link = this.repo.linkOf(file); if (parent.subtasks.includes(link)) return "already";
+      await this.repo.update(parentId, t => ({ ...t, subtasks: [...t.subtasks, link] })); return "linked";
+    } catch { return "missing"; }
+  }
+  /** Makes `childId` a subtask of `parentId` from the panel, without moving any todo line (the nesting in a note is only read when the person changes it). */
+  async makeSubtask(parentId: string, childId: string): Promise<void> {
+    const result = await this.linkSubtask(parentId, childId);
+    if (result === "recurring") throw new Error("Recurring tasks cannot be parents or subtasks.");
+    if (result === "loop") throw new Error("A task cannot be a subtask of itself or of one of its own subtasks.");
+    if (result === "missing") throw new Error("The task note could not be found.");
+    if (result === "already") new Notice("It is already a subtask of that task."); else this.changed();
+  }
+  /** Takes a task out of its parent's list; the todo lines stay where they are. */
+  async detachSubtask(childId: string): Promise<void> {
+    const file = this.repo.taskFile(childId); const parent = await this.repo.parentOf(childId); if (!file || !parent) return;
+    await this.dropLinks(parent.id, link => this.repo.fileOfLink(link) === file); this.changed();
   }
   /**
    * Keeps the parents' `subtasks` lists in step with how todos are nested in a note: `before` and `after` map each linked todo to the todo it sits under.
@@ -249,7 +261,7 @@ export class TaskService {
       const was = before.get(id) ?? null; const now = after.get(id) ?? null; if (was === now) continue;
       const file = this.repo.taskFile(id);
       if (was && file && await this.dropLinks(was, link => this.repo.fileOfLink(link) === file)) changed++;
-      if (now && await this.linkSubtask(now, id)) changed++;
+      if (now && await this.linkSubtask(now, id) === "linked") changed++;
     }
     return changed;
   }

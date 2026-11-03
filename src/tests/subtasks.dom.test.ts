@@ -84,6 +84,21 @@ describe("links to task notes", () => {
   });
 });
 
+describe("linking tasks from the panel", () => {
+  it("makes a task a subtask of another, once, and says why it cannot", async () => {
+    const f = await fixture(); await f.service.makeSubtask(f.parent.id, f.a.id); expect(await f.subtasks(f.parent.id)).toEqual(["[[Sub A]]"]);
+    Notice.instances.length = 0; await f.service.makeSubtask(f.parent.id, f.a.id); expect(String(Notice.instances.at(-1)!.message)).toContain("already a subtask");
+    await f.service.makeSubtask(f.other.id, f.a.id); expect(await f.subtasks(f.parent.id)).toEqual([]); expect(await f.subtasks(f.other.id)).toEqual(["[[Sub A]]"]);
+    await expect(f.service.makeSubtask(f.a.id, f.a.id)).rejects.toThrow("cannot be a subtask of itself"); await expect(f.service.makeSubtask(f.a.id, f.other.id)).rejects.toThrow("cannot be a subtask of itself");
+    const recurring = await f.make("Repeats", { recurring: true }); await expect(f.service.makeSubtask(f.parent.id, recurring.id)).rejects.toThrow("Recurring tasks cannot");
+    await expect(f.service.makeSubtask(f.parent.id, "missing12345")).rejects.toThrow("could not be found");
+  });
+  it("takes a task out of its parent's list, and does nothing for one without a parent", async () => {
+    const f = await fixture(); await f.service.makeSubtask(f.parent.id, f.a.id); await f.service.detachSubtask(f.a.id); expect(await f.subtasks(f.parent.id)).toEqual([]);
+    await f.service.detachSubtask(f.a.id); await f.service.detachSubtask("missing12345");
+  });
+});
+
 describe("keeping the lists right when tasks are renamed, deleted and repaired", () => {
   it("renames a subtask's link when its note is renamed after a new title", async () => {
     const f = await fixture(); await f.service.syncSubtasks(new Map(), new Map([[f.a.id, f.parent.id], [f.b.id, f.parent.id]]));

@@ -56,6 +56,9 @@ try {
         const rows = await page.locator('.organized-subtask').evaluateAll(els => els.map(el => { const box = el.getBoundingClientRect(); const toggle = el.querySelector('.organized-subtask-toggle').getBoundingClientRect(); const title = el.querySelector('.organized-subtask-title'); return { right: box.right, toggle: Math.min(toggle.width, toggle.height), clipped: title.scrollWidth > title.clientWidth + 1 }; }));
         const bar = await page.locator('.organized-progress').evaluate(el => ({ right: el.parentElement.getBoundingClientRect().right, filled: el.getBoundingClientRect().width / el.parentElement.getBoundingClientRect().width })); const card = bar.right;
         if (bar.filled < 0.8) throw Error(`The progress bar is not as wide as its card (${bar.filled.toFixed(2)}) at ${width}`);
+        // A mobile theme styles every button as a filled pill; subtask rows are plain rows and must not pick that up.
+        const filled = await page.locator('.organized-subtask button').evaluateAll(els => els.filter(el => getComputedStyle(el).backgroundColor !== 'rgba(0, 0, 0, 0)' || getComputedStyle(el).borderRadius !== '0px').length);
+        if (filled) throw Error(`Subtask rows picked up the button pill styling at ${width}`);
         if (rows.length !== 4 || rows.some(row => row.clipped || row.toggle < 24 || row.right > card + 1)) throw Error(`Subtask rows are clipped, cramped or overflowing at ${width}: ${JSON.stringify(rows)}`);
       }
       if (tab === 'Week' || tab === 'Day') {

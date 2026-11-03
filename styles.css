@@ -603,13 +603,15 @@ SOFTWARE.
 .organized-progress { inline-size: 100%; block-size: 6px; border-radius: 3px; background: var(--background-modifier-border); overflow: hidden; margin-block: var(--size-4-1) var(--size-4-2); }
 .organized-progress-bar { block-size: 100%; inline-size: var(--organized-progress, 0%); background: var(--interactive-accent); }
 .organized-progress-bar.organized-progress-complete { background: var(--color-green, #2f9e44); }
+.organized-subtask-actions { display: flex; flex-wrap: wrap; gap: var(--size-4-1); margin-block-start: var(--size-4-2); }
 .organized-subtask { display: flex; align-items: center; gap: var(--size-4-2); min-inline-size: 0; }
-.organized-subtask-toggle, .organized-subtask-title { background: none; border: 0; box-shadow: none; padding: 0; color: inherit; cursor: pointer; }
-.organized-subtask-toggle { display: inline-flex; align-items: center; justify-content: center; min-inline-size: 28px; min-block-size: 28px; }
+/* Same specificity as the panel's own buttons, so a mobile theme's pill styling for every button does not turn a row into two blobs. */
+.organized-view .organized-panel button.organized-subtask-toggle, .organized-view .organized-panel button.organized-subtask-title { appearance: none; display: inline-flex; align-items: center; block-size: auto; min-block-size: 28px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: inherit; font-size: inherit; font-weight: normal; cursor: pointer; }
+.organized-view .organized-panel button.organized-subtask-toggle { justify-content: center; flex: 0 0 28px; inline-size: 28px; }
 .organized-subtask-toggle svg { inline-size: 1em; block-size: 1em; }
-.organized-subtask[data-status="completed"] .organized-subtask-toggle { color: var(--color-green, #2f9e44); }
-.organized-subtask[data-status="completed"] .organized-subtask-title, .organized-subtask[data-status="canceled"] .organized-subtask-title { color: var(--text-muted); text-decoration: line-through; }
-.organized-subtask-title { text-align: start; overflow-wrap: anywhere; min-inline-size: 0; }
+.organized-view .organized-panel .organized-subtask[data-status="completed"] button.organized-subtask-toggle { color: var(--color-green, #2f9e44); }
+.organized-view .organized-panel .organized-subtask[data-status="completed"] button.organized-subtask-title, .organized-view .organized-panel .organized-subtask[data-status="canceled"] button.organized-subtask-title { color: var(--text-muted); text-decoration: line-through; }
+.organized-view .organized-panel button.organized-subtask-title { text-align: start; overflow-wrap: anywhere; min-inline-size: 0; flex: 1 1 auto; }
 .organized-symbol { display: inline-flex; align-items: center; gap: 3px; vertical-align: middle; color: var(--text-muted); }
 .organized-symbol-icon { display: inline-flex; }
 .organized-symbol-icon svg { inline-size: 1em; block-size: 1em; }
