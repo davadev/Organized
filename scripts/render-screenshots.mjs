@@ -1,7 +1,7 @@
 // Renders the README screenshots from the real inspector view and the real styles.css (fixture data, no vault).
 //   node scripts/render-screenshots.mjs            write resources/screenshots/<scene>-<light|dark>.png
 //   node scripts/render-screenshots.mjs --check    render into a temp dir, write nothing, exit 1 on any problem
-//   node scripts/render-screenshots.mjs day week   only these scenes (`--all` adds the onboarding steps, `--out <dir>` writes elsewhere)
+//   node scripts/render-screenshots.mjs day week   only these scenes (`--all` adds the onboarding steps, `--out <dir>` writes elsewhere, `--phone` shows the onboarding steps on a phone)
 // The clock is fixed to Wed 4 March 2026, 15:20, so the "today" ring, the running timer and the now-line never drift.
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
@@ -12,10 +12,11 @@ import { join, resolve } from 'node:path';
 /** scene -> [description (the README alt text says the same), in the default set?, element to capture]. The onboarding steps are for review (`--all`), the README does not use them. */
 const PANEL = '#frame';
 const SCENES = { month: ['Month calendar', true, PANEL], week: ['Week view', true, PANEL], day: ['Day view with time blocks', true, PANEL], task: ['Task details', true, PANEL], projects: ['Projects', true, PANEL],
-  ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => [`onboarding-${n}`, [`Onboarding card, step ${n}`, false, '.organized-modal-window']])) };
+  ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => [`onboarding-${n}`, [`Onboarding card, step ${n}`, false, '.organized-modal-window']])) };
 const WIDTH = 400; // CSS px, a typical side-panel width; images are 2x
 const args = process.argv.slice(2);
 const check = args.includes('--check');
+const phone = args.includes('--phone'); // onboarding steps on a 390 x 640 phone with a mobile theme that inflates buttons
 const outArg = args.indexOf('--out');
 const outDir = outArg >= 0 ? args[outArg + 1] : null;
 const wanted = args.filter((a, i) => !a.startsWith('--') && i !== outArg + 1);
@@ -41,19 +42,20 @@ try {
     await page.clock.setFixedTime(new Date(2026, 2, 4, 15, 20));
     await page.setContent(`<!doctype html><html><head></head><body class="theme-${theme}"><div id="frame"><main id="app"></main></div></body></html>`);
     await page.addStyleTag({ content: host + css });
+    if (phone) { await page.evaluate(() => document.body.classList.add('is-mobile')); await page.addStyleTag({ content: '.is-mobile button { block-size: 48px; margin-block: 6px; border-radius: 999px; padding: 18px 24px; font-size: 20px; } .modal-container { padding: 0 }' }); }
     await page.addScriptTag({ content: bundle.outputFiles[0].text });
     await page.waitForFunction(() => typeof window.scene === 'function');
     for (const scene of scenes) {
       await page.evaluate(name => window.scene(name), scene);
       await page.evaluate(() => document.fonts.ready);
       const modal = scene.startsWith('onboarding-');
-      await page.setViewportSize({ width: modal ? 520 : WIDTH + 32, height: 900 });
+      await page.setViewportSize({ width: modal ? (phone ? 390 : 520) : WIDTH + 32, height: phone ? 640 : 900 });
       const state = await page.evaluate(modal => ({ overflow: document.documentElement.scrollWidth > innerWidth + 1, empty: modal ? !document.querySelector('.organized-modal-window .organized-welcome-title') : !document.querySelector('#app .organized-view *'), missing: window.missingIcons(), height: document.querySelector(modal ? '.organized-modal-window' : '#frame').getBoundingClientRect().height }), modal);
-      if (state.overflow) problems.push(`${theme}/${scene}: horizontal overflow`);
+      if (state.overflow && !phone) problems.push(`${theme}/${scene}: horizontal overflow`);
       if (state.empty) problems.push(`${theme}/${scene}: nothing rendered`);
       if (state.missing.length) problems.push(`${theme}/${scene}: no glyph for icon(s) ${state.missing.join(', ')}; add them to scripts/screenshots/icons.json`);
-      await page.setViewportSize({ width: modal ? 520 : WIDTH + 32, height: Math.max(900, Math.ceil(state.height) + 64) });
-      await page.locator(SCENES[scene][2]).screenshot({ path: join(out, `${scene}-${theme}.png`) });
+      await page.setViewportSize({ width: modal ? (phone ? 390 : 520) : WIDTH + 32, height: phone ? 640 : Math.max(900, Math.ceil(state.height) + 64) });
+      if (phone) await page.screenshot({ path: join(out, `${scene}-${theme}.png`) }); else await page.locator(SCENES[scene][2]).screenshot({ path: join(out, `${scene}-${theme}.png`) });
     }
     await context.close();
   }

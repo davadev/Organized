@@ -6,9 +6,9 @@ import { STATUS_ICONS } from "./model";
  * screenshots: they follow the user's theme and font, add almost nothing to the plugin's size and cannot go stale the way
  * a picture does. They are decoration (aria-hidden, not interactive); the step's text carries the meaning.
  */
-export type FigureId = "settings" | "tabs" | "calendar" | "follow" | "forward" | "card" | "keys" | "commands";
+export type FigureId = "settings" | "tabs" | "calendar" | "follow" | "forward" | "card" | "props" | "keys" | "commands";
 /** Every figure id; the tests walk it so a new figure cannot ship undrawn. */
-export const FIGURE_IDS: FigureId[] = ["settings", "tabs", "calendar", "follow", "forward", "card", "keys", "commands"];
+export const FIGURE_IDS: FigureId[] = ["settings", "tabs", "calendar", "follow", "forward", "card", "props", "keys", "commands"];
 
 const box = (host: HTMLElement, marker: string): void => {
   const b = host.createSpan({ cls: "organized-welcome-fig-box", text: marker === "x" ? "" : marker.trim(), attr: { "data-marker": marker } });
@@ -104,6 +104,15 @@ function calendarFigure(fig: HTMLElement): void {
   }
 }
 
+function propsFigure(fig: HTMLElement): void {
+  const note = fig.createDiv({ cls: "organized-welcome-fig-note" });
+  note.createDiv({ cls: "organized-welcome-fig-caption", text: "In your note" });
+  const row = line(note, " ", "Draft the Q1 review");
+  const props = row.createSpan({ cls: "organized-welcome-fig-props" });
+  props.createSpan({ cls: "organized-property organized-priority-high", text: "priority: high" });
+  props.createSpan({ cls: "organized-property", text: "tracked time: 2 h" });
+}
+
 const COMMANDS = ["Convert unchecked todos to tasks", "Convert tasks in this note back to todos", "Convert all tasks in the vault back to todos"];
 function commandsFigure(fig: HTMLElement): void {
   const list = fig.createDiv({ cls: "organized-welcome-fig-rows" });
@@ -114,7 +123,7 @@ function commandsFigure(fig: HTMLElement): void {
   }
 }
 
-const BUILDERS: Record<FigureId, (fig: HTMLElement) => void> = { settings: settingsFigure, tabs: tabsFigure, calendar: calendarFigure, follow: followFigure, forward: forwardFigure, card: cardFigure, keys: keysFigure, commands: commandsFigure };
+const BUILDERS: Record<FigureId, (fig: HTMLElement) => void> = { settings: settingsFigure, tabs: tabsFigure, calendar: calendarFigure, follow: followFigure, forward: forwardFigure, card: cardFigure, props: propsFigure, keys: keysFigure, commands: commandsFigure };
 
 /** Draw the illustration `id` into `parent`. */
 export function renderFigure(parent: HTMLElement, id: FigureId): HTMLElement {

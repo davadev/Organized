@@ -47,6 +47,11 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     figure: "card",
   },
   {
+    title: "Show details right in the note",
+    text: "Under Settings → Organized → Rendered task properties you choose which details (priority, tracked time, projects, notes…) appear on the todo line itself, in Reading view and Live Preview. It is off by default, and your Markdown does not change.",
+    figure: "props",
+  },
+  {
     title: "Type a letter in the checkbox",
     text: "No menus needed: put a letter between the brackets. `[n]` gives a todo its own note, for things that deserve more than a line. The first six are below; the README lists them all.",
     figure: "keys",

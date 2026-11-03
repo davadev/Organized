@@ -301,6 +301,17 @@ body.is-mobile .modal-container.organized-modal-host { overflow-y: auto; }
 .organized-task-line .organized-checkbox::after { display: none; }
 .organized-glyph[data-marker=">"], .organized-task-line .organized-checkbox[data-organized-marker=">"] { transform: rotate(90deg); }
 
+/* The card is a column: the steps scroll in their own area and the buttons stay in view, in one row even under a mobile theme that stacks them. */
+.organized-modal-window .organized-modal.organized-onboarding { display: flex; flex-direction: column; overflow: hidden; }
+.organized-welcome-body { flex: 1 1 auto; min-block-size: 0; overflow-x: hidden; overflow-y: auto; }
+.organized-modal-window .organized-onboarding > .setting-item { flex: 0 0 auto; margin-block-start: 10px; }
+.organized-modal-window .organized-onboarding > .setting-item .setting-item-control { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; }
+.organized-modal-window .organized-onboarding > .setting-item button { flex: 1 1 5rem; min-inline-size: 0; max-inline-size: 9rem; }
+@media (max-width: 600px) {
+  .organized-modal-window .organized-onboarding .organized-welcome-text { font-size: var(--font-ui-small, 13px); line-height: 1.45; }
+  .organized-modal-window .organized-onboarding h3.organized-welcome-title { font-size: 15px; }
+  .organized-welcome-figure { padding: 8px; }
+}
 /* Onboarding card: figures are drawn from the panel's own elements; decoration only. */
 .organized-welcome-progress { display: flex; gap: 6px; margin-block-end: 10px; }
 .organized-welcome-dot { inline-size: 8px; block-size: 8px; border-radius: 999px; background: var(--background-modifier-border); }
@@ -336,6 +347,8 @@ body.is-mobile .modal-container.organized-modal-host { overflow-y: auto; }
 .organized-welcome-fig-keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 8px 12px; }
 .organized-welcome-fig-key { display: flex; align-items: center; gap: 8px; min-inline-size: 0; color: var(--text-normal); font-size: var(--font-ui-small, 13px); }
 .organized-welcome-fig-cap { flex: 0 0 auto; min-inline-size: 2.4rem; padding: 2px 6px; border: 1px solid var(--background-modifier-border); border-block-end-width: 2px; border-radius: var(--radius-s, 5px); background: var(--background-secondary); color: var(--text-normal); font-family: var(--font-monospace, monospace); font-size: 12px; text-align: center; }
+.organized-welcome-fig-props { display: inline-flex; flex-wrap: wrap; gap: 2px 8px; color: var(--text-muted); font-size: 11px; }
+.organized-welcome-fig-props .organized-property { margin-inline-end: 0; }
 .organized-welcome-fig-rows { display: flex; flex-direction: column; gap: 8px; }
 .organized-welcome-fig-row { display: flex; align-items: center; gap: 10px; min-inline-size: 0; font-size: var(--font-ui-small, 13px); }
 .organized-welcome-fig-row-name { flex: 0 0 auto; color: var(--text-normal); font-weight: 600; }

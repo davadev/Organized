@@ -197,13 +197,15 @@ export class OnboardingModal extends Modal {
   private draw(): void {
     const step = this.steps[this.index]; const last = this.index === this.steps.length - 1; const el = this.contentEl;
     el.empty(); el.addClass("organized-onboarding");
-    const progress = el.createDiv({ cls: "organized-welcome-progress", attr: { role: "img", "aria-label": `Step ${this.index + 1} of ${this.steps.length}` } });
+    // The steps scroll inside their own area; the buttons stay in view on a short phone screen.
+    const body = el.createDiv({ cls: "organized-welcome-body" });
+    const progress = body.createDiv({ cls: "organized-welcome-progress", attr: { role: "img", "aria-label": `Step ${this.index + 1} of ${this.steps.length}` } });
     this.steps.forEach((_, i) => progress.createSpan({ cls: "organized-welcome-dot", attr: i === this.index ? { "aria-current": "step" } : {} }));
-    el.createEl("h3", { cls: "organized-welcome-title", text: step.title });
+    body.createEl("h3", { cls: "organized-welcome-title", text: step.title });
     // `like this` in a step text is shown as code.
-    const copy = el.createEl("p", { cls: "organized-modal-copy organized-welcome-text" });
+    const copy = body.createEl("p", { cls: "organized-modal-copy organized-welcome-text" });
     step.text.split("`").forEach((part, i) => { if (i % 2) copy.createEl("code", { text: part }); else copy.appendText(part); });
-    if (step.figure) renderFigure(el, step.figure);
+    if (step.figure) renderFigure(body, step.figure);
     const footer = new Setting(el);
     if (!last) footer.addButton(b => b.setButtonText("Skip").onClick(() => this.close()));
     if (this.index > 0) footer.addButton(b => b.setButtonText("Back").onClick(() => this.go(-1)));

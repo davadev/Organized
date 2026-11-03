@@ -9,7 +9,7 @@ installObsidianDom();
 const css = readFileSync("styles.css", "utf8");
 describe("onboarding content and figures", () => {
   it("has short, complete steps and only known figures", () => {
-    expect(ONBOARDING_STEPS).toHaveLength(9);
+    expect(ONBOARDING_STEPS).toHaveLength(10);
     for (const step of ONBOARDING_STEPS) {
       expect(step.title.trim()).not.toBe(""); expect(step.text.trim()).not.toBe("");
       expect(step.text.length).toBeLessThan(400);
@@ -35,7 +35,7 @@ describe("onboarding content and figures", () => {
     const main = readFileSync("src/main.ts", "utf8");
     for (const row of renderFigure(createDiv(), "commands").querySelectorAll(".organized-welcome-fig-row-role")) expect(main, row.textContent!).toContain(`name: "${row.textContent}`);
     const view = readFileSync("src/view.ts", "utf8"); for (const mode of ["Month", "Week", "Day"]) expect(view).toContain(`"${mode}"`);
-    const settings = readFileSync("src/settings.ts", "utf8");
+    const settings = readFileSync("src/settings.ts", "utf8"); expect(settings).toContain('heading: "Rendered task properties"'); expect(ONBOARDING_STEPS.some(s => s.text.includes("Rendered task properties"))).toBe(true);
     for (const name of renderFigure(createDiv(), "settings").querySelectorAll(".organized-welcome-fig-row-name")) expect(settings, name.textContent!).toContain(`row("${name.textContent}"`);
   });
   it("names the panel's four tabs in order, as the panel shows them", () => {
