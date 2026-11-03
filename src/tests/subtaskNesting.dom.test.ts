@@ -4,7 +4,7 @@ import Organized from "../main";
 import { harness } from "./harness";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
 import { Notice } from "./__mocks__/obsidian";
-import { nestUnder, parseTasks } from "../codec";
+import { fixIndent, nestUnder, parseTasks } from "../codec";
 
 installObsidianDom();
 const flush = async () => { for (let i = 0; i < 100; i++) await Promise.resolve(); };
@@ -15,21 +15,32 @@ const line = (indent: number, title: string, id?: string) => `${" ".repeat(inden
 describe("moving a todo under another", () => {
   it("indents the todo with everything under it, below what is already nested under the parent, whichever comes first", () => {
     const text = [line(0, "Parent", A), line(2, "Old kid"), "    - note", line(0, "Loose", B), "  - detail", line(0, "Other")].join("\n");
-    expect(nestUnder(text, B, A)).toBe([line(0, "Parent", A), line(2, "Old kid"), "    - note", line(2, "Loose", B), "    - detail", line(0, "Other")].join("\n"));
+    expect(nestUnder(text, B, A, false, "  ")).toBe([line(0, "Parent", A), line(2, "Old kid"), "    - note", line(2, "Loose", B), "    - detail", line(0, "Other")].join("\n"));
     const before = [line(0, "Loose", B), line(0, "Parent", A), line(2, "Old kid")].join("\n");
-    expect(nestUnder(before, B, A)).toBe([line(0, "Parent", A), line(2, "Old kid"), line(2, "Loose", B)].join("\n"));
+    expect(nestUnder(before, B, A, false, "  ")).toBe([line(0, "Parent", A), line(2, "Old kid"), line(2, "Loose", B)].join("\n"));
   });
   it("re-indents from any depth, keeps the line endings, and moves nothing when it should not", () => {
-    const deep = [line(0, "Parent", A), line(0, "Other", C), line(4, "Deep", B), line(6, "Deeper")].join("\n"); expect(nestUnder(deep, B, A, true)).toBe([line(0, "Parent", A), line(2, "Deep", B), line(4, "Deeper"), line(0, "Other", C)].join("\n"));
-    expect(nestUnder(deep, B, A)).toBeNull();
-    expect(nestUnder(`${line(0, "Parent", A)}\r\n${line(0, "Loose", B)}\r\n`, B, A)).toBe(`${line(0, "Parent", A)}\n${line(2, "Loose", B)}\n`.replace(/\n/g, "\r\n"));
-    const nested = [line(0, "Parent", A), line(2, "Kid", B)].join("\n"); expect(nestUnder(nested, B, A, true)).toBeNull();
-    const cycle = [line(0, "Kid", B), line(2, "Parent", A)].join("\n"); expect(nestUnder(cycle, B, A)).toBeNull(); expect(nestUnder(cycle, B, A, true)).toBeNull();
-    expect(nestUnder(line(0, "Only", A), B, A)).toBeNull(); expect(nestUnder([line(0, "P", A), line(0, "K", B), line(0, "K", B)].join("\n"), B, A)).toBeNull();
-    expect(nestUnder([line(0, "P", A), line(0, "Q", C), line(2, "K", B)].join("\n"), B, A)).toBeNull();
-    expect(nestUnder([line(0, "P", A), line(0, "Q", C), line(2, "K", B)].join("\n"), B, A, true)).toBe([line(0, "P", A), line(2, "K", B), line(0, "Q", C)].join("\n"));
+    const deep = [line(0, "Parent", A), line(0, "Other", C), line(4, "Deep", B), line(6, "Deeper")].join("\n"); expect(nestUnder(deep, B, A, true, "  ")).toBe([line(0, "Parent", A), line(2, "Deep", B), line(4, "Deeper"), line(0, "Other", C)].join("\n"));
+    expect(nestUnder(deep, B, A, false, "  ")).toBeNull();
+    expect(nestUnder(`${line(0, "Parent", A)}\r\n${line(0, "Loose", B)}\r\n`, B, A, false, "  ")).toBe(`${line(0, "Parent", A)}\n${line(2, "Loose", B)}\n`.replace(/\n/g, "\r\n"));
+    const nested = [line(0, "Parent", A), line(2, "Kid", B)].join("\n"); expect(nestUnder(nested, B, A, true, "  ")).toBeNull();
+    const cycle = [line(0, "Kid", B), line(2, "Parent", A)].join("\n"); expect(nestUnder(cycle, B, A, false, "  ")).toBeNull(); expect(nestUnder(cycle, B, A, true, "  ")).toBeNull();
+    expect(nestUnder(line(0, "Only", A), B, A, false, "  ")).toBeNull(); expect(nestUnder([line(0, "P", A), line(0, "K", B), line(0, "K", B)].join("\n"), B, A, false, "  ")).toBeNull();
+    expect(nestUnder([line(0, "P", A), line(0, "Q", C), line(2, "K", B)].join("\n"), B, A, false, "  ")).toBeNull();
+    expect(nestUnder([line(0, "P", A), line(0, "Q", C), line(2, "K", B)].join("\n"), B, A, true, "  ")).toBe([line(0, "P", A), line(2, "K", B), line(0, "Q", C)].join("\n"));
+  });
+  it("indents with a tab by default, and with the configured spaces, and fixes a subtask indented differently", () => {
+    const text = [line(0, "Parent", A), line(0, "Loose", B), "  - detail"].join("\n");
+    expect(nestUnder(text, B, A)).toBe([line(0, "Parent", A), `\t- [ ] Loose <!--organized:${B}-->`, "\t  - detail"].join("\n"));
+    expect(nestUnder(text, B, A, false, "    ")).toBe([line(0, "Parent", A), line(4, "Loose", B), "      - detail"].join("\n"));
+    const twoSpaces = [line(0, "Parent", A), line(2, "Kid", B), "    - detail", line(0, "Other", C)].join("\n");
+    expect(fixIndent(twoSpaces, B, A)).toBe([line(0, "Parent", A), `\t- [ ] Kid <!--organized:${B}-->`, "\t  - detail", line(0, "Other", C)].join("\n"));
+    expect(fixIndent(fixIndent(twoSpaces, B, A)!, B, A)).toBeNull(); expect(fixIndent(twoSpaces, B, "dddddddd")).toBeNull(); expect(fixIndent(`${line(0, "Parent", A)}\r\n${line(2, "Kid", B)}`, B, A)).toBe(`${line(0, "Parent", A)}\r\n\t- [ ] Kid <!--organized:${B}-->`.replace(/\n/g, "\r\n").replace("\r\r", "\r"));
+    expect(fixIndent([line(0, "Parent", A), line(2, "Kid", B), "\t- mixed"].join("\n"), B, A)).toBe([line(0, "Parent", A), `\t- [ ] Kid <!--organized:${B}-->`, "\t- mixed"].join("\n"));
+    expect(fixIndent([line(0, "Parent", A), line(0, "Kid", B)].join("\n"), B, A)).toBeNull(); expect(fixIndent([line(0, "Parent", A), line(2, "Mid", C), line(4, "Kid", B)].join("\n"), B, A)).toBeNull();
   });
 });
+
 
 async function fixture() {
   const h = harness(); const parent = await h.repo.create("Parent"); const kid = await h.repo.create("Kid"); const other = await h.repo.create("Other");
@@ -43,7 +54,7 @@ describe("linking a subtask from the panel indents its todo", () => {
     const f = await fixture(); const second: any = await f.add("Daily/2026-03-02.md", f.text.replace("# Today", "# Next")); const lonely: any = await f.add("Daily/2026-03-03.md", `- [ ] Kid <!--organized:${f.kid.id}-->`);
     Notice.instances.length = 0; await f.service.makeSubtask(f.parent.id, f.kid.id);
     expect(f.nested(f.day.path, f.kid.id)).toBe("Parent"); expect(f.nested(second.path, f.kid.id)).toBe("Parent"); expect(f.texts.get(lonely.path)).toBe(`- [ ] Kid <!--organized:${f.kid.id}-->`);
-    expect(f.texts.get(f.day.path)).toContain(`  - [ ] Kid <!--organized:${f.kid.id}-->\n    - a note`); expect(f.service.undoChanges.length).toBe(2);
+    expect(f.texts.get(f.day.path)).toContain(`\t- [ ] Kid <!--organized:${f.kid.id}-->\n\t  - a note`); expect(f.service.undoChanges.length).toBe(2);
     await f.service.undo(); expect(f.texts.get(f.day.path)).toBe(f.text);
     f.texts.set(f.day.path, f.text); await f.service.makeSubtask(f.parent.id, f.kid.id); expect(f.nested(f.day.path, f.kid.id)).toBe("Parent");
     Notice.instances.length = 0; await f.service.makeSubtask(f.parent.id, f.kid.id); expect(said(Notice.instances.at(-1)!)).toContain("already a subtask");
@@ -76,18 +87,28 @@ describe("fixing missing indentation once after updating", () => {
     await plugin.nestSubtasks(true); expect(said(Notice.instances.at(-1)!)).toContain("already indented");
     const parent = await h.repo.create("Parent"); const kid = await h.repo.create("Kid"); await h.repo.update(parent.id, t => ({ ...t, subtasks: ["[[Kid]]"] }));
     const day: any = await h.add("Daily/2026-03-01.md", `- [ ] Parent <!--organized:${parent.id}-->\n- [ ] Kid <!--organized:${kid.id}-->`);
-    plugin.settings.subtaskNestingMigrated = false; plugin.safety.writable = false; await plugin.nestSubtasks(); expect(h.texts.get(day.path)).not.toContain("  - [ ] Kid"); plugin.safety.writable = true;
+    plugin.settings.subtaskNestingMigrated = false; plugin.safety.writable = false; await plugin.nestSubtasks(); expect(h.texts.get(day.path)).not.toContain("\t- [ ] Kid"); plugin.safety.writable = true;
     const failing = vi.spyOn(plugin.safety, "writeBackup").mockRejectedValueOnce(new Error("no space")); await plugin.nestSubtasks();
     expect(said(Notice.instances.at(-1)!)).toContain("nothing was changed"); expect(plugin.settings.subtaskNestingMigrated).toBe(false);
     failing.mockRejectedValueOnce("plain failure"); await plugin.nestSubtasks(); expect(said(Notice.instances.at(-1)!)).toContain("plain failure"); failing.mockRestore();
     h.raw.vault.process.mockImplementationOnce(async () => { throw new Error("busy"); });
     await plugin.nestSubtasks(); expect(plugin.settings.subtaskNestingMigrated).toBe(false); expect(said(Notice.instances.at(-1)!)).toContain("could not be updated and will be retried");
-    await plugin.nestSubtasks(); expect(plugin.settings.subtaskNestingMigrated).toBe(true); expect(h.texts.get(day.path)).toContain(`  - [ ] Kid`);
+    await plugin.nestSubtasks(); expect(plugin.settings.subtaskNestingMigrated).toBe(true); expect(h.texts.get(day.path)).toContain(`\t- [ ] Kid`);
   });
   it("leaves notes alone whose subtasks are already indented", async () => {
     const { h, plugin } = await loaded(); const parent = await h.repo.create("Parent"); const kid = await h.repo.create("Kid"); await h.repo.update(parent.id, t => ({ ...t, subtasks: ["[[Kid]]"] }));
-    const text = `- [ ] Parent <!--organized:${parent.id}-->\n  - [ ] Kid <!--organized:${kid.id}-->`; const day: any = await h.add("Daily/2026-03-01.md", text); await h.add("Daily/2026-03-02.md", "- [ ] unlinked <!--organized:zzzzzzzz1-->");
+    const text = `- [ ] Parent <!--organized:${parent.id}-->\n\t- [ ] Kid <!--organized:${kid.id}-->`; const day: any = await h.add("Daily/2026-03-01.md", text); await h.add("Daily/2026-03-02.md", "- [ ] unlinked <!--organized:zzzzzzzz1-->");
     Notice.instances.length = 0; await plugin.nestSubtasks(true); expect(said(Notice.instances.at(-1)!)).toContain("already indented"); expect(h.texts.get(day.path)).toBe(text); expect(backups(h)).toHaveLength(0);
+  });
+  it("gives subtasks indented with two spaces the vault's indentation, and follows the configured spaces", async () => {
+    const { h, plugin } = await loaded(); const parent = await h.repo.create("Parent"); const kid = await h.repo.create("Kid"); await h.repo.update(parent.id, t => ({ ...t, subtasks: ["[[Kid]]"] }));
+    const text = `- [ ] Parent <!--organized:${parent.id}-->\n  - [ ] Kid <!--organized:${kid.id}-->\n    - detail`; const day: any = await h.add("Daily/2026-03-01.md", text);
+    plugin.settings.subtaskNestingMigrated = true; plugin.settings.subtaskIndentMigrated = false; await plugin.nestSubtasks(); expect(plugin.settings.subtaskIndentMigrated).toBe(true);
+    expect(h.texts.get(day.path)).toBe(`- [ ] Parent <!--organized:${parent.id}-->\n\t- [ ] Kid <!--organized:${kid.id}-->\n\t  - detail`);
+    h.texts.set(`${h.app.vault.configDir}/app.json`, JSON.stringify({ useTab: false, tabSize: 3 })); expect(await h.repo.indentUnit()).toBe("   ");
+    h.texts.set(`${h.app.vault.configDir}/app.json`, JSON.stringify({ useTab: false, tabSize: "x" })); expect(await h.repo.indentUnit()).toBe("    ");
+    h.texts.set(`${h.app.vault.configDir}/app.json`, JSON.stringify({ useTab: true, tabSize: 2 })); expect(await h.repo.indentUnit()).toBe("\t");
+    h.texts.set(`${h.app.vault.configDir}/app.json`, "not json"); expect(await h.repo.indentUnit()).toBe("\t"); h.texts.delete(`${h.app.vault.configDir}/app.json`); expect(await h.repo.indentUnit()).toBe("\t");
   });
   it("has a command that runs it again", async () => {
     const { plugin } = await loaded(); const nest = vi.spyOn(plugin, "nestSubtasks").mockResolvedValue(undefined as never); (plugin as any).commands.find((c: any) => c.id === "nest-subtasks").callback(); await flush(); expect(nest).toHaveBeenCalledWith(true);

@@ -84,6 +84,13 @@ export class Repository {
       this.byId = byId; this.idOfPath = idOfPath; this.names = null;
     } finally { this.touched = null; }
   }
+  /** What one level of list indentation is in this vault: a tab or the configured number of spaces, as Obsidian's own Tab key writes it (a tab when the setting is absent, which is its default). */
+  async indentUnit(): Promise<string> {
+    try {
+      const settings = object(JSON.parse(await this.app.vault.adapter.read(`${this.app.vault.configDir}/app.json`)));
+      return settings.useTab === false ? " ".repeat(Number.isInteger(settings.tabSize) && Number(settings.tabSize) > 0 ? Number(settings.tabSize) : 4) : "\t";
+    } catch { return "\t"; }
+  }
   /** Task note paths by lower-case file name, built when a link is resolved and dropped whenever a note is linked, unlinked or swapped in. */
   private names: Map<string, string[]> | null = null;
   /** The link a parent's `subtasks` list holds for a task note: its file name, which is unique across the vault. */

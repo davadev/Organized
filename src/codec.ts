@@ -196,22 +196,28 @@ export function removeUnique(text: string, id: string, repeatOnly = false): stri
 }
 const indentation = (raw: string): number => /^\s*/.exec(raw)![0].replace(/\t/g, "    ").length;
 /** Inserts `line` as the last subtask of the todo `parentId`, after everything already nested under it; null when that todo is not in the text exactly once. */
-export function insertUnder(text: string, parentId: string, line: string): string | null {
+export function insertUnder(text: string, parentId: string, line: string, unit = "\t"): string | null {
   const parents = parseTasks(text).filter(t => t.id === parentId); if (parents.length !== 1) return null;
   const newline = text.includes("\r\n") ? "\r\n" : "\n"; const lines = text.split(/\r?\n/); const own = lines[parents[0].line];
   let end = parents[0].line + 1; while (end < lines.length && lines[end].trim() && indentation(lines[end]) > indentation(own)) end++;
-  lines.splice(end, 0, `${/^\s*/.exec(own)![0]}  ${line}`); return lines.join(newline);
+  lines.splice(end, 0, `${/^\s*/.exec(own)![0]}${unit}${line}`); return lines.join(newline);
 }
 /** Where a todo's block (the todo and everything nested under it) ends, as a line index. */
 function blockEnd(lines: string[], line: number): number {
   let end = line + 1; while (end < lines.length && lines[end].trim() && indentation(lines[end]) > indentation(lines[line])) end++;
   return end;
 }
+/** Gives a block of lines a new base indentation: the whitespace of its first line is swapped for `base`, so everything nested keeps its relative depth. */
+function rebase(block: string[], base: string): string[] {
+  const old = /^\s*/.exec(block[0])![0];
+  return block.map(row => row.startsWith(old) ? base + row.slice(old.length) : base + row.trimStart());
+}
 /**
- * Moves the todo `childId` (with everything nested under it) to be the last subtask of the todo `parentId`, indented one level in. Null when nothing should move: either
- * todo is missing or occurs twice, the child is already under the parent, the parent is under the child, or (unless `force`) the child is already nested under another todo.
+ * Moves the todo `childId` (with everything nested under it) to be the last subtask of the todo `parentId`, indented one `unit` in (what Obsidian's own Tab key
+ * inserts). Null when nothing should move: either todo is missing or occurs twice, the child is already under the parent, the parent is under the child, or (unless
+ * `force`) the child is already nested under another todo.
  */
-export function nestUnder(text: string, childId: string, parentId: string, force = false): string | null {
+export function nestUnder(text: string, childId: string, parentId: string, force = false, unit = "\t"): string | null {
   const tasks = parseTasks(text); const children = tasks.filter(t => t.id === childId); const parents = tasks.filter(t => t.id === parentId);
   if (children.length !== 1 || parents.length !== 1) return null;
   const [child] = children; const [parent] = parents;
@@ -219,9 +225,15 @@ export function nestUnder(text: string, childId: string, parentId: string, force
   const newline = text.includes("\r\n") ? "\r\n" : "\n"; const lines = text.split(/\r?\n/);
   const block = lines.splice(child.line, blockEnd(lines, child.line) - child.line);
   const moved = parseTasks(lines.join("\n")).find(t => t.id === parentId)!;
-  const delta = indentation(lines[moved.line]) + 2 - indentation(block[0]);
-  const shifted = block.map(row => delta >= 0 ? " ".repeat(delta) + row : row.replace(new RegExp(`^ {1,${-delta}}`), ""));
-  lines.splice(blockEnd(lines, moved.line), 0, ...shifted); return lines.join(newline);
+  lines.splice(blockEnd(lines, moved.line), 0, ...rebase(block, `${/^\s*/.exec(lines[moved.line])![0]}${unit}`)); return lines.join(newline);
+}
+/** Re-indents a subtask that is already directly under its parent but not by one `unit` (for example two spaces where Obsidian's Tab inserts a tab); null when it is right or is not a direct subtask. */
+export function fixIndent(text: string, childId: string, parentId: string, unit = "\t"): string | null {
+  const tasks = parseTasks(text); const children = tasks.filter(t => t.id === childId); const parents = tasks.filter(t => t.id === parentId);
+  if (children.length !== 1 || parents.length !== 1 || children[0].parent !== parents[0].line) return null;
+  const newline = text.includes("\r\n") ? "\r\n" : "\n"; const lines = text.split(/\r?\n/); const base = `${/^\s*/.exec(lines[parents[0].line])![0]}${unit}`;
+  if (/^\s*/.exec(lines[children[0].line])![0] === base) return null;
+  const end = blockEnd(lines, children[0].line); lines.splice(children[0].line, end - children[0].line, ...rebase(lines.slice(children[0].line, end), base)); return lines.join(newline);
 }
 export function sortTasks(text: string, line: number, scope: Settings["sortScope"], priorities: Map<string, Priority>): string {
   if (scope === "none") return text;

@@ -1,6 +1,6 @@
 import { inBatches } from "./batches";
 import { Notice, TFile } from "obsidian";
-import { descendants, insertTask, insertUnder, migrateNote, moveTask, nestUnder, noteSection, parentIds, parseTasks, projectSection, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
+import { descendants, fixIndent, insertTask, insertUnder, migrateNote, moveTask, nestUnder, noteSection, parentIds, parseTasks, projectSection, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, Status, Task, taskFrom, WorkSession } from "./model";
 import { seconds } from "./sessions";
@@ -79,7 +79,7 @@ export class TaskService {
     const text = await this.repo.readText(file);
     if (parseTasks(text).some(t => t.id === task.id)) return;
     const line = `- [${marker}] ${task.title} <!--organized:${task.id}-->${repeat ? " <!--organized:repeat-->" : ""}`;
-    const nested = under ? insertUnder(text, under, line) : null;
+    const nested = under ? insertUnder(text, under, line, await this.repo.indentUnit()) : null;
     const result = nested === null ? insertTask(text, line, task.daily_note_section_path) : { text: nested, missing: false };
     if (result.missing && this.repo.settings().missingSection === "ask" && !(await this.confirm(`The heading path is missing in ${file.path}. Recreate it?`))) throw new Error("Insertion canceled; no task occurrence was written.");
     await this.edit(file, text, result.text, changes);
@@ -245,9 +245,9 @@ export class TaskService {
     if (result === "loop") throw new Error("A task cannot be a subtask of itself or of one of its own subtasks.");
     if (result === "missing") throw new Error("The task note could not be found.");
     // The todo lines follow the relation: wherever both are in one note, the subtask is indented under its parent.
-    const changes: Change[] = []; const parent = await this.repo.read(parentId); const child = await this.repo.read(childId); let notes = 0;
+    const changes: Change[] = []; const parent = await this.repo.read(parentId); const child = await this.repo.read(childId); const unit = await this.repo.indentUnit(); let notes = 0;
     for (const occurrence of await this.repo.occurrences(childId)) {
-      const after = nestUnder(occurrence.text, childId, parentId, true); if (after === null) continue;
+      const after = nestUnder(occurrence.text, childId, parentId, true, unit) ?? fixIndent(occurrence.text, childId, parentId, unit); if (after === null) continue;
       await this.edit(occurrence.file, occurrence.text, after, changes); notes++;
     }
     if (notes) this.summarize(changes, "Subtask indented", `“${child.title}” now sits under “${parent.title}” in ${plural(notes, "note")}.`);
@@ -255,17 +255,17 @@ export class TaskService {
   }
   /**
    * Indents todos under their parents wherever a parent's `subtasks` list says so and both are in one note but the subtask is still at the top of its list
-   * (relations made before the panel indented lines). Notes are read, planned and backed up before any is written; a note that cannot be written is left as it was.
+   * (relations made before the panel indented lines), and gives subtasks that are indented differently from Obsidian's own Tab the vault's indentation. Notes are read, planned and backed up before any is written; a note that cannot be written is left as it was.
    */
   async nestSubtaskLines(backup: (files: { path: string; before: string }[]) => Promise<string>): Promise<{ changes: Change[]; failed: string[] }> {
-    const pairs: [string, string][] = [];
+    const pairs: [string, string][] = []; const unit = await this.repo.indentUnit();
     for (const parent of await this.repo.list()) for (const child of await this.repo.subtasksOf(parent)) pairs.push([parent.id, child.id]);
     const changes: Change[] = []; const failed: string[] = []; if (!pairs.length) return { changes, failed };
     const pending: { file: TFile; before: string; after: string }[] = [];
     for (const file of this.repo.app.vault.getMarkdownFiles()) {
       if (this.repo.isTaskRecord(file.path)) continue;
       const before = await this.repo.readText(file); if (!before.includes("<!--organized:")) continue;
-      let after = before; for (const [parentId, childId] of pairs) after = nestUnder(after, childId, parentId) ?? after;
+      let after = before; for (const [parentId, childId] of pairs) after = nestUnder(after, childId, parentId, false, unit) ?? fixIndent(after, childId, parentId, unit) ?? after;
       if (after !== before) pending.push({ file, before, after });
     }
     if (!pending.length) return { changes, failed };

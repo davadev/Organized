@@ -190,11 +190,11 @@ export default class Organized extends Plugin {
   }
   /** One-time (and on demand): indent todos under their parents where a parent's subtask list says so but the lines are not nested yet, after saving the old text of every note it changes. */
   async nestSubtasks(again = false): Promise<void> {
-    if ((this.settings.subtaskNestingMigrated && !again) || !this.safety.writable) return;
+    if ((this.settings.subtaskNestingMigrated && this.settings.subtaskIndentMigrated && !again) || !this.safety.writable) return;
     let result: Awaited<ReturnType<TaskService["nestSubtaskLines"]>>;
     try { result = await this.service.nestSubtaskLines(files => this.safety.writeBackup("subtask-indent", files)); }
     catch (error) { new Notice(`Subtasks were not indented (nothing was changed): ${error instanceof Error ? error.message : String(error)}`, 12000); return; }
-    if (!result.failed.length) { this.settings.subtaskNestingMigrated = true; this.saveSettings(false); }
+    if (!result.failed.length) { this.settings.subtaskNestingMigrated = true; this.settings.subtaskIndentMigrated = true; this.saveSettings(false); }
     if (!result.changes.length && !result.failed.length) { if (again) new Notice("Every subtask is already indented under its parent."); return; }
     const notes = new Set(result.changes.map(c => c.file.path)).size;
     this.service.summarize(result.changes, "Subtasks indented", `${notes} note${notes === 1 ? "" : "s"} updated: subtasks now sit under their parents. The old text is saved in the plugin folder (note-backups).${result.failed.length ? ` ${result.failed.length} could not be updated and will be retried next start.` : ""}`);
@@ -338,7 +338,7 @@ export default class Organized extends Plugin {
     const lines = editor.getValue().split("\n"); const indent = (line: string) => /^\s*/.exec(line)![0].replace(/\t/g, "    ").length; const own = indent(context.line.raw);
     let end = context.line.line + 1; while (end < lines.length && lines[end].trim() && indent(lines[end]) > own) end++;
     const at = { line: end - 1, ch: lines[end - 1].replace(/\r$/, "").length };
-    const child = `${/^\s*/.exec(context.line.raw)![0]}  - [ ] `;
+    const child = `${/^\s*/.exec(context.line.raw)![0]}${await this.repo.indentUnit()}- [ ] `;
     editor.replaceRange(`\n${child}`, at); editor.setCursor({ line: end, ch: child.length });
     await this.pickTask(editor, file, false, true);
   }
