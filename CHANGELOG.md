@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The task panel's bottom actions (Open task note, Make standalone note, Delete task) now sit in an even grid of bordered buttons instead of loose text, with Delete task on its own full-width row.
 - Sorting by priority now keeps every open todo above finished, canceled, forwarded and scheduled ones, including open todos without a priority.
 - **Daily-note polish.**
   - Removing an in-progress todo (its `/` line) no longer asks anything: the timer stops, the time is kept, and a notice says so.
