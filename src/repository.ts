@@ -1,3 +1,4 @@
+import { inBatches } from "./batches";
 import { App, Editor, TFile, parseYaml, stringifyYaml } from "obsidian";
 import { validColor } from "./colors";
 import { localDate, makeId, newTask, object, path, Task, taskFrom, Settings, validDate, validId } from "./model";
@@ -52,8 +53,19 @@ export class Repository {
     const id = idOfPath.get(notePath); if (id === undefined) return;
     idOfPath.delete(notePath); const paths = byId.get(id); paths?.delete(notePath); if (paths?.size === 0) byId.delete(id);
   }
+  /** Parsed properties of task notes by path, valid while the note's modified time and size are unchanged; a note this plugin writes, or a modify, rename or delete event, drops its entry. */
+  private parsed = new Map<string, { stamp: string; frontmatter: Record<string, unknown> }>();
+  /** The properties of a task note. The text is read and parsed only when the note changed since last time, so redrawing the panel does not read the whole task folder again. */
+  async properties(file: TFile): Promise<Record<string, unknown>> {
+    // Unsaved text in the editor is newer than the disk, so it is never cached.
+    if (this.activeEditor()?.file.path === file.path) return splitNote(await this.readText(file)).frontmatter;
+    // The stamp is taken before reading: a change during the read leaves a stamp that no longer matches, so the next call reads again.
+    const stamp = `${file.stat.mtime}:${file.stat.size}`; const hit = this.parsed.get(file.path);
+    if (hit?.stamp === stamp) return hit.frontmatter;
+    const frontmatter = splitNote(await this.readText(file)).frontmatter; this.parsed.set(file.path, { stamp, frontmatter }); return frontmatter;
+  }
   private link(notePath: string, id: string): void { this.touched?.add(notePath); Repository.add(this.byId, this.idOfPath, notePath, id); }
-  private unlink(notePath: string): void { this.touched?.add(notePath); Repository.remove(this.byId, this.idOfPath, notePath); }
+  private unlink(notePath: string): void { this.parsed.delete(notePath); this.touched?.add(notePath); Repository.remove(this.byId, this.idOfPath, notePath); }
   /** The id a note claims: its frontmatter `id` when that is a valid id, otherwise its file name (an invalid note then fails `taskFrom`, as before). */
   idOf(file: TFile, frontmatter: Record<string, unknown>): string { return validId(frontmatter.id) ? frontmatter.id : file.basename; }
   /** Rebuilds the id -> file lookup from the notes' own text. The old lookup stays usable until the new one is ready, so nothing is "missing" meanwhile. */
@@ -64,7 +76,10 @@ export class Repository {
   private async rebuild(): Promise<void> {
     const byId = new Map<string, Set<string>>(); const idOfPath = new Map<string, string>(); const touched = new Set<string>(); this.touched = touched; this.indexedAt = Date.now();
     try {
-      for (const file of this.app.vault.getMarkdownFiles()) if (this.isTaskRecord(file.path)) { try { Repository.add(byId, idOfPath, file.path, this.idOf(file, splitNote(await this.readText(file)).frontmatter)); } catch { /* An unreadable note claims nothing. */ } }
+      const files = this.app.vault.getMarkdownFiles().filter(file => this.isTaskRecord(file.path));
+      // An unreadable note claims nothing.
+      const ids = await inBatches(files, async file => { try { return this.idOf(file, await this.properties(file)); } catch { return null; } });
+      files.forEach((file, i) => { const id = ids[i]; if (id !== null) Repository.add(byId, idOfPath, file.path, id); });
       for (const notePath of touched) { Repository.remove(byId, idOfPath, notePath); const id = this.idOfPath.get(notePath); if (id !== undefined) Repository.add(byId, idOfPath, notePath, id); }
       this.byId = byId; this.idOfPath = idOfPath;
     } finally { this.touched = null; }
@@ -72,7 +87,8 @@ export class Repository {
   /** Learns what one task note claims (after it was created, changed or synced in). */
   async track(file: TFile): Promise<void> {
     if (!this.isTaskRecord(file.path)) return;
-    try { this.link(file.path, this.idOf(file, splitNote(await this.readText(file)).frontmatter)); } catch { this.unlink(file.path); }
+    this.parsed.delete(file.path);
+    try { this.link(file.path, this.idOf(file, await this.properties(file))); } catch { this.unlink(file.path); }
   }
   /** A note was renamed or moved: it keeps its id at the new path, and stops being a task note when it left the task folder. */
   moved(oldPath: string, file: TFile): void {
@@ -172,18 +188,16 @@ export class Repository {
   }
   async read(id: string): Promise<Task> {
     const file = await this.resolve(id, "reading").catch((error: unknown) => { throw new Error(error instanceof Error && error.message.startsWith("Two notes") ? error.message : `Missing task ${id}. Use attach/create on the occurrence to repair or relink it.`); });
-    return taskFrom(splitNote(await this.readText(file)).frontmatter, id);
+    return taskFrom(await this.properties(file), id);
   }
   /** Every task note; one kept only for the time it tracked after becoming a standalone note is left out unless `withConverted`. */
   async list(withConverted = false): Promise<Task[]> {
     const files = this.app.vault.getMarkdownFiles().filter(f => this.isTaskRecord(f.path));
     const read: { task: Task; file: TFile }[] = []; const claims = new Map<string, number>();
-    for (const file of files) {
-      try {
-        const frontmatter = splitNote(await this.readText(file)).frontmatter; const id = this.idOf(file, frontmatter); const task = taskFrom(frontmatter, id);
-        this.link(file.path, id); claims.set(id, (claims.get(id) ?? 0) + 1); read.push({ task, file });
-      } catch { /* Invalid task notes remain available for manual repair, never overwritten. */ }
-    }
+    const parsed = await inBatches(files, async file => {
+      try { const frontmatter = await this.properties(file); const id = this.idOf(file, frontmatter); return { task: taskFrom(frontmatter, id), file }; } catch { return null; } // Invalid task notes remain available for manual repair, never overwritten.
+    });
+    for (const entry of parsed) if (entry) { this.link(entry.file.path, entry.task.id); claims.set(entry.task.id, (claims.get(entry.task.id) ?? 0) + 1); read.push(entry); }
     // A copied note repeats its id: neither copy is listed until the person removes one.
     return read.filter(({ task }) => claims.get(task.id) === 1 && (withConverted || !task.converted_to)).map(({ task }) => task);
   }
@@ -193,6 +207,7 @@ export class Repository {
     await this.app.fileManager.processFrontMatter(file, (raw: Record<string, unknown>) => {
       result = taskFrom(mutate(taskFrom(raw, id)), id); Object.assign(raw, result);
     });
+    this.parsed.delete(file.path);
     if (!result) throw new Error("The frontmatter update did not complete."); return result;
   }
   async write(file: TFile, before: string, after: string): Promise<void> {
@@ -218,6 +233,7 @@ export class Repository {
     } else {
       await this.app.vault.process(file, current => { if (current !== before) throw new Error(`${file.path} changed concurrently; preserved. Retry the action.`); return after; });
     }
+    this.parsed.delete(file.path);
   }
   /** Ids of task notes that remember `notePath` as the note they became (read from the metadata cache, so this is cheap enough for every rename). */
   convertedTo(notePath: string): string[] {

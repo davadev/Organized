@@ -1,3 +1,4 @@
+import { inBatches } from "./batches";
 import { Notice, TFile } from "obsidian";
 import { insertTask, migrateNote, moveTask, noteSection, parseTasks, projectSection, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
@@ -408,7 +409,7 @@ export class TaskService {
     do {
       if (!this.references) {
         this.references = new Map();
-        this.referenceBuild = (async () => { for (const file of this.repo.app.vault.getMarkdownFiles()) await this.index(file); })();
+        this.referenceBuild = inBatches(this.repo.app.vault.getMarkdownFiles(), file => this.index(file)).then(() => undefined);
       }
       map = this.references; await this.referenceBuild;
     } while (map !== this.references);
