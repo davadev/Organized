@@ -277,7 +277,8 @@ export default class Organized extends Plugin {
     const captured = editor.getValue(); const selection = editor.listSelections();
     this.pickerOpen = true;
     // A failed read must not leave editor handling disabled for good.
-    const tasks = duplicate ? [] : await this.repo.list().catch((error: unknown) => { this.pickerOpen = false; throw error; });
+    // Finished tasks are history: offering them would bury a chore you repeat under every time you did it. Creating a new task stays one choice away.
+    const tasks = duplicate ? [] : (await this.repo.list().catch((error: unknown) => { this.pickerOpen = false; throw error; })).filter(task => task.status === "open" || task.status === "in_progress");
     const picker = new TaskPicker(this.app, tasks, async choice => {
       if (isKeepAsTodo(choice)) return;
       await this.run(async () => {
