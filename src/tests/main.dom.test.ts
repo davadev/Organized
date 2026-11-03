@@ -179,7 +179,11 @@ describe('plugin lifecycle and user-only editor actions', () => {
     editor.setValue(old.replace('Managed', 'Edited title')); plugin.onEditorUpdate(update(old, editor.getValue())); await flush(); expect(trigger).toHaveBeenCalledOnce();
     editor.setValue('- [!] First'); plugin.onEditorUpdate(update('- [ ] First', editor.getValue())); await flush(); expect(await plugin.repo.list()).toHaveLength(2); expect(parseTasks(editor.getValue())[0].id).toBeTruthy(); expect(trigger).toHaveBeenCalledTimes(2);
     const confirm = vi.spyOn(plugin, 'confirm').mockResolvedValue(true); const status = vi.spyOn(plugin.service, 'status').mockResolvedValue();
-    editor.setValue('- [ ] remains'); plugin.onEditorUpdate(update(next, editor.getValue())); await flush(); expect(confirm).not.toHaveBeenCalled(); expect(status).toHaveBeenCalledWith(task.id, 'open'); expect(Notice.instances.at(-1)?.message).toContain('Timer stopped for');
+    editor.setValue('prose'); plugin.onEditorUpdate(update(next, editor.getValue())); await flush(); expect(status).not.toHaveBeenCalled(); // a timer that is not running has nothing to stop
+    await plugin.repo.update(task.id, t => ({ ...t, status: 'in_progress', time_tracking_started_at: new Date().toISOString() }));
+    plugin.onEditorUpdate(update(next, editor.getValue(), null)); await flush(); expect(status).not.toHaveBeenCalled(); // not the person's own edit (a reload or another plugin)
+    plugin.onEditorUpdate(update(next, editor.getValue())); await flush(); expect(confirm).not.toHaveBeenCalled(); expect(status).toHaveBeenCalledWith(task.id, 'open'); expect(Notice.instances.at(-1)?.message).toContain('Timer stopped for');
+    status.mockClear();
     confirm.mockResolvedValue(false); plugin.onEditorUpdate(update(next, editor.getValue())); await flush(); expect(status).toHaveBeenCalledOnce();
   });
   it('coalesces picker microtasks, handles new linked lines and never asks about a removed timer', async () => {
@@ -188,7 +192,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
     plugin.onEditorUpdate(update('- [', '- [ ] ')); plugin.onEditorUpdate(update('- [', '- [ ] ')); await flush(); expect(picker).toHaveBeenCalledOnce();
     plugin.onEditorUpdate(update('- [', '- [ ] ')); await flush(); expect(picker).toHaveBeenCalledOnce(); (plugin as any).pickerOpen = false;
     const trigger = vi.spyOn(plugin, 'trigger').mockResolvedValue(); editor.setValue('- [/] Existing <!--organized:task1234-->'); plugin.onEditorUpdate(update('', editor.getValue())); await flush(); expect(trigger).toHaveBeenCalledOnce();
-    const confirm = vi.spyOn(plugin, 'confirm').mockResolvedValue(false); const status = vi.spyOn(plugin.service, 'status').mockResolvedValue(); const old = editor.getValue(); editor.setValue('ordinary prose'); plugin.onEditorUpdate(update(old, editor.getValue())); await flush(); expect(confirm).not.toHaveBeenCalled(); expect(status).toHaveBeenCalledWith('task1234', 'open');
+    const confirm = vi.spyOn(plugin, 'confirm').mockResolvedValue(false); const status = vi.spyOn(plugin.service, 'status').mockResolvedValue(); const old = editor.getValue(); editor.setValue('ordinary prose'); plugin.onEditorUpdate(update(old, editor.getValue())); await flush(); expect(confirm).not.toHaveBeenCalled(); expect(status).not.toHaveBeenCalled(); expect(Notice.instances.at(-1)?.message ?? '').not.toContain('Organized:'); // the task note is gone: nothing to stop, no error
   });
   it('migrates linked projects once after layout ready, announces it with an undo, and never moves anything when writes are paused', async () => {
     const { h, plugin } = await loaded(); const folder = plugin.repo.projectFolder();
