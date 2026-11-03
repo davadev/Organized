@@ -21,7 +21,7 @@ async function fixture() {
   const origin: any = await h.add(ORIGIN, text); const target: any = await h.add(TARGET, "# Work\n");
   const ctx = () => ({ file: origin, line: parseTasks(h.texts.get(ORIGIN)!).find(t => t.id === parent.id)! });
   // One entry per todo: nesting level, marker (_ for open), title.
-  const titles = (path: string) => parseTasks(h.texts.get(path)!).map(t => `${(t.raw.length - t.raw.trimStart().length) / 2}${t.marker === " " ? "_" : t.marker}:${t.title}`);
+  const titles = (path: string) => parseTasks(h.texts.get(path)!).map(t => `${/^\s*/.exec(t.raw)![0].replace(/\t/g, "  ").length / 2}${t.marker === " " ? "_" : t.marker}:${t.title}`);
   return { ...h, make, parent, open, grand, running, done, dropped, origin, target, ctx, titles };
 }
 
@@ -54,7 +54,7 @@ describe("forwarding or scheduling a parent takes its unfinished subtasks along"
     expect(f.titles(TARGET)).toEqual(["0_:Open"]);
     await f.add("Daily/2020-01-03.md", `# Work\n- [ ] Parent <!--organized:${f.parent.id}-->\n  - note\n- [ ] After`);
     await f.service.schedule({ file: f.origin, line: parseTasks(f.texts.get(ORIGIN)!).find(t => t.id === f.running.id)! }, "2020-01-03", "forward");
-    expect(f.texts.get("Daily/2020-01-03.md")).toBe(`# Work\n- [ ] Parent <!--organized:${f.parent.id}-->\n  - note\n  - [/] Running <!--organized:${f.running.id}-->\n- [ ] After`);
+    expect(f.texts.get("Daily/2020-01-03.md")).toBe(`# Work\n- [ ] Parent <!--organized:${f.parent.id}-->\n  - note\n\t- [/] Running <!--organized:${f.running.id}-->\n- [ ] After`);
   });
   it("carries a grandchild under the nearest moved ancestor when the subtask between them is not moving", async () => {
     const f = await fixture(); await f.repo.update(f.open.id, t => ({ ...t, status: "completed" })); await f.service.schedule(f.ctx(), "2020-01-02", "forward");
@@ -79,9 +79,10 @@ describe("scheduling from the panel and auto-forward move the family too", () =>
 describe("inserting under a todo", () => {
   it("adds the line after everything nested under the todo, keeps its indent and line endings, and says no when the todo is missing or twice", () => {
     const text = "- [ ] A <!--organized:aaaaaaaa-->\n  - note\n    - deeper\n- [ ] B";
-    expect(insertUnder(text, "aaaaaaaa", "- [ ] New")).toBe("- [ ] A <!--organized:aaaaaaaa-->\n  - note\n    - deeper\n  - [ ] New\n- [ ] B");
-    expect(insertUnder("  - [ ] A <!--organized:aaaaaaaa-->", "aaaaaaaa", "- [ ] New")).toBe("  - [ ] A <!--organized:aaaaaaaa-->\n    - [ ] New");
-    expect(insertUnder("- [ ] A <!--organized:aaaaaaaa-->\r\n- [ ] B", "aaaaaaaa", "- [ ] New")).toBe("- [ ] A <!--organized:aaaaaaaa-->\r\n  - [ ] New\r\n- [ ] B");
+    expect(insertUnder(text, "aaaaaaaa", "- [ ] New")).toBe("- [ ] A <!--organized:aaaaaaaa-->\n  - note\n    - deeper\n\t- [ ] New\n- [ ] B");
+    expect(insertUnder(text, "aaaaaaaa", "- [ ] New", "    ")).toBe("- [ ] A <!--organized:aaaaaaaa-->\n  - note\n    - deeper\n    - [ ] New\n- [ ] B");
+    expect(insertUnder("  - [ ] A <!--organized:aaaaaaaa-->", "aaaaaaaa", "- [ ] New")).toBe("  - [ ] A <!--organized:aaaaaaaa-->\n  \t- [ ] New");
+    expect(insertUnder("- [ ] A <!--organized:aaaaaaaa-->\r\n- [ ] B", "aaaaaaaa", "- [ ] New")).toBe("- [ ] A <!--organized:aaaaaaaa-->\r\n\t- [ ] New\r\n- [ ] B");
     expect(insertUnder(text, "bbbbbbbb", "- [ ] New")).toBeNull(); expect(insertUnder(`${text}\n- [ ] A <!--organized:aaaaaaaa-->`, "aaaaaaaa", "- [ ] New")).toBeNull();
   });
 });
