@@ -4,7 +4,7 @@ import { StateEffect, StateField, RangeSetBuilder, EditorState, Extension, Prec 
 import { editorLivePreviewField } from "obsidian";
 import type Organized from "./main";
 import { noteSection, parseTasks } from "./codec";
-import { elapsed, Task } from "./model";
+import { DisplayProperty, elapsed, localDate, STATUS_ICONS, Task } from "./model";
 import { projectName, splitNote } from "./repository";
 import { rgbOf } from "./colors";
 import { report } from "./service";
@@ -18,6 +18,27 @@ export function icon(host: HTMLElement, marker: string): void {
 }
 /** Notes and sources render as Markdown blocks and need their own row; every other property is a short label that sits beside the title. */
 export function hasRichProperties(owner: Organized): boolean { return owner.settings.displayProperties.some(p => p === "description" || p === "sources"); }
+/** A property shown as a small symbol instead of `name: value`: an icon, a state class for its colour, a label for screen readers and, when the value matters, a short text. */
+export interface Symbol { icon: string; cls: string; label: string; text?: string }
+export function symbol(host: HTMLElement, compact: Symbol): void {
+  const span = host.createSpan({ cls: `organized-property organized-symbol ${compact.cls}`, attr: { role: "img", "aria-label": compact.label } });
+  setIcon(span.createSpan({ cls: "organized-symbol-icon", attr: { "aria-hidden": "true" } }), compact.icon);
+  if (compact.text) span.createSpan({ cls: "organized-symbol-text", text: compact.text });
+}
+const STATUS_LABELS: Record<Task["status"], string> = { open: "open", in_progress: "in progress", completed: "completed", canceled: "canceled" };
+/** The compact symbol for a displayed property, or null when there is nothing to show (no moves yet). */
+export function symbolOf(property: Exclude<DisplayProperty, "scheduled" | "projects" | "description" | "sources">, task: Task): Symbol | null {
+  const minutes = `${Math.floor(elapsed(task) / 60)} min`;
+  switch (property) {
+    case "status": return { icon: STATUS_ICONS[task.status], cls: `organized-status-${task.status}`, label: `Status: ${STATUS_LABELS[task.status]}` };
+    case "priority": return { icon: "flag", cls: `organized-priority-${task.priority}`, label: `Priority: ${task.priority}` };
+    case "starred": return { icon: "star", cls: task.starred ? "organized-symbol-starred" : "organized-symbol-off", label: task.starred ? "Starred" : "Not starred" };
+    case "recurring": return { icon: "repeat", cls: task.recurring ? "organized-symbol-recurring" : "organized-symbol-off", label: `Recurring: ${task.recurring ? "on" : "off"}` };
+    case "time_tracked_seconds": return { icon: "timer", cls: task.time_tracking_started_at ? "organized-symbol-running" : "organized-symbol-muted", label: `Time tracked: ${minutes}${task.time_tracking_started_at ? ", running" : ""}`, text: minutes };
+    case "created": { const day = localDate(new Date(task.created)); return { icon: "calendar", cls: "organized-symbol-muted", label: `Created ${day}`, text: day }; }
+    case "movement_history": return task.movement_history.length ? { icon: "arrow-right", cls: "organized-symbol-muted", label: `Moved ${task.movement_history.length} time${task.movement_history.length === 1 ? "" : "s"}`, text: String(task.movement_history.length) } : null;
+  }
+}
 /** The task's projects as links showing only the project name, in the project's colour (darker on a light theme, brighter on a dark one) when it has one. */
 function projectLinks(owner: Organized, host: HTMLElement, task: Task): void {
   for (const project of task.projects) {
@@ -38,20 +59,13 @@ export async function projection(owner: Organized, host: HTMLElement, task: Task
     if (!live()) return;
     if (property === "scheduled") continue;
     if (property === "projects") { projectLinks(owner, host, task); continue; }
-    if (property === "recurring") {
-      const state = task.recurring ? "on" : "off";
-      setIcon(host.createSpan({ cls: `organized-property organized-recurring organized-recurring-${state}`, attr: { role: "img", "aria-label": `Recurring: ${state}` } }), "repeat"); continue;
-    }
     if (property === "description" || property === "sources") {
       const file = owner.repo.file(owner.repo.taskPath(task.id)); if (!file) continue;
       const body = splitNote(await owner.repo.readText(file)).body; if (!live()) return;
       const content = noteSection(body, property === "description" ? "Description" : "Sources");
       const block = host.createDiv({ cls: "organized-rich-property" }); await MarkdownRenderer.render(owner.app, content, block, file.path, component);
     } else {
-      const value = property === "time_tracked_seconds" ? `${Math.floor(elapsed(task) / 60)} min` : typeof task[property] === "object" ? JSON.stringify(task[property]) : String(task[property]);
-      const span = host.createSpan({ cls: "organized-property", text: `${property.replace(/_/g, " ")}: ${value}` });
-      // Priority is coloured: high red, medium orange, low yellow.
-      if (property === "priority") span.addClass(`organized-priority-${task.priority}`);
+      const compact = symbolOf(property, task); if (compact) symbol(host, compact);
     }
   }
 }

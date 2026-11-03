@@ -1,5 +1,6 @@
 import { setIcon } from "obsidian";
 import { STATUS_ICONS } from "./model";
+import { symbol } from "./render";
 
 /**
  * Small illustrations for the onboarding card, drawn from the plugin's own interface elements instead of shipped as
@@ -109,8 +110,9 @@ function propsFigure(fig: HTMLElement): void {
   note.createDiv({ cls: "organized-welcome-fig-caption", text: "In your note" });
   const row = line(note, " ", "Draft the Q1 review");
   const props = row.createSpan({ cls: "organized-welcome-fig-props" });
-  props.createSpan({ cls: "organized-property organized-priority-high", text: "priority: high" });
-  props.createSpan({ cls: "organized-property", text: "tracked time: 2 h" });
+  symbol(props, { icon: "flag", cls: "organized-priority-high", label: "Priority: high" });
+  symbol(props, { icon: "star", cls: "organized-symbol-starred", label: "Starred" });
+  symbol(props, { icon: "timer", cls: "organized-symbol-muted", label: "Time tracked: 2 h", text: "2 h" });
 }
 
 const COMMANDS = ["Convert unchecked todos to tasks", "Convert tasks in this note back to todos", "Retire tasks…"];

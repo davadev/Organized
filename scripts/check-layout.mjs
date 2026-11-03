@@ -174,7 +174,7 @@ try {
       }
       if (tab === 'Eof') {
         const projection = page.locator('.organized-projection');
-        if (await projection.count() !== 1 || !(await projection.innerText()).includes('priority: none')) throw Error('Final-line task properties are missing at EOF');
+        if (await projection.count() !== 1 || !(await projection.locator('[aria-label="Priority: none"]').count())) throw Error('Final-line task properties are missing at EOF');
       }
       if (tab === 'LivePreview' || tab === 'Source') {
         const visible = await page.locator('.cm-content').innerText();
