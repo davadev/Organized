@@ -145,3 +145,7 @@ The images in `resources/screenshots/` are rendered, not captured: `scripts/rend
 
 On a **copy** of a vault with task notes from an older beta: install the beta, restart Obsidian, and confirm the notice "Task notes updated" appears once. Open several task notes as plain Markdown (description text first, `## Sources` last, no `## Description` or `## Notes`), and in the Task tab (Description and Sources cards, `[[links]]` clickable when not editing). Check `.obsidian/plugins/organized/note-backups/` holds the old text, press Undo and confirm the old text returns, restart twice and confirm nothing is written again.
 
+## Retire window (manual)
+
+On a **copy** of a vault: open **Retire tasks…** and try each combination (links + rename, plain + keep, strip properties with a user-added `tags` property, trash). Check: the status line matches what happens; file names read as the todo titles (duplicates numbered); links in daily and project notes open the renamed notes in your link style (wikilink and Markdown); a stripped note keeps only your own properties and the text; a running timer was logged; `note-backups/retire-*.json` holds the old text; **Undo** restores text and names; a trash run offers no Undo and the notes are in Obsidian's trash; the vault opened with the plugin disabled reads naturally. Try a phone width and a large system font.
+

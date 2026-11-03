@@ -67,10 +67,10 @@ export class DataSafety {
    * Copies of note text taken before Organized rewrites many notes at once, kept apart from the settings backups. The three newest of
    * each kind are kept. Throws when the copy cannot be written, so the caller changes nothing.
    */
-  async writeBackup(kind: string, files: { path: string; before: string }[]): Promise<string> {
+  async writeBackup(kind: string, files: { path: string; before: string }[], extra: Record<string, unknown> = {}): Promise<string> {
     const folder = normalizePath(`${this.folder}/note-backups`); if (!(await this.adapter.exists(folder))) await this.adapter.mkdir(folder);
     const name = normalizePath(`${folder}/${kind}-${Date.now()}.json`);
-    await this.atomicWrite(name, JSON.stringify({ version: this.version, kind, at: new Date().toISOString(), files }));
+    await this.atomicWrite(name, JSON.stringify({ version: this.version, kind, at: new Date().toISOString(), ...extra, files }));
     const older = (await this.adapter.list(folder)).files.filter(f => f.includes(`/${kind}-`) && f !== name).sort().reverse().slice(2);
     for (const file of older) await this.adapter.remove(file);
     return name;

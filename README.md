@@ -84,14 +84,21 @@ The first time Organized starts it shows a short **onboarding card**: ten steps 
 
 ## Leaving Organized
 
-Organized never locks your notes in. To retire it after long use, run **Organized: Convert all tasks in the vault back to todos** (or the per-note command), confirm, and check the summary; **Undo** restores every note it changed. Then disable and remove the plugin.
+Organized never locks your notes in. A task note already reads naturally without the plugin (properties, then the description as plain text, then your sources), and the only thing Organized adds to a todo is a hidden `<!--organized:...-->` comment. When you want to leave, or just tidy up finished tasks, run **Organized: Retire tasks…** (also under **Settings → Organized → Help**). It opens a window; nothing changes until you press **Retire**, the old text is saved under `note-backups` in the plugin folder first, and **Undo** restores the notes and their names. Run it on one device and let sync settle.
 
-What the vault-wide command does: every linked checkbox in every note becomes a plain `- [ ]` line (text and state kept; the hidden `<!--organized:...-->` comments and recurrence stop). What it leaves on purpose, all ordinary Markdown you can keep or delete:
+| Choice | Options |
+|---|---|
+| **Which tasks** | Only completed or canceled tasks older than N days (what the automatic cleanup does), or all tasks. |
+| **Todos in your notes become** | A plain todo (title only), or a link to the task note (`- [ ] [[Plan release]]`, marker kept; the link style follows your Obsidian setting). |
+| **Task notes** | Keep where they are, rename to the todo title (so the folder reads like a list of your tasks), or move to Obsidian's trash. |
+| **Properties of task notes** | Keep all, or remove Organized's properties and keep only the title (as the file name) and the text. Properties you added yourself (tags, aliases…) are never removed. |
+| **Kept under the todo** | When a task note is removed or stripped, what stays in your daily note as a quote under the todo: nothing, the description, or description, sources and time worked. |
 
-- **Task notes** in your task folder (`Tasks/<id>.md`): description, sources and tracked time, now unlinked. Delete the folder if you do not want them.
-- **Project notes**: their `organized_type`, `organized_start` and `organized_color` properties and the Open / In progress / Ongoing / Done headings.
-- **Retired-task lines** such as `Worked 2026-03-02: 09:00–09:30` under a checkbox, and any `[>]` forwarded or `[<]` scheduled markers: they stay as written.
+Combinations that cannot work are switched for you (removing properties needs the rename; a trashed note cannot be linked to) and a line at the bottom says exactly what will happen. Choosing the trash or removing properties asks once more; a run that trashes notes offers no Undo (restore them from Obsidian's trash). A task that cannot be retired (for example a note that changed while the window was open) is left exactly as it was and reported. **Convert tasks in this note back to todos** does the plain, keep-everything version for one note.
 
+What the window never touches: project notes (their `organized_type`, `organized_start` and `organized_color` properties and the Open / In progress / Ongoing / Done headings) and lines such as `Worked 2026-03-02: 09:00–09:30` under a checkbox, and `[>]` or `[<]` markers. They are ordinary Markdown you can keep or delete.
+
+## Try the beta
 
 Use a **test vault**. In BRAT, add **`davadev/Organized`** and select the beta release. Alternatively download `main.js`, `manifest.json`, `styles.css` from the same GitHub release into `<test vault>/.obsidian/plugins/organized/`, then restart and enable Organized.
 
@@ -107,7 +114,7 @@ The Task tab keeps your selection while you scroll or edit the sidebar. When the
 
 Typing a new `- [ ] ` or inserting one with Obsidian's mobile checkbox toolbar opens the native task picker. Choose an existing task, **Create new task**, or **Keep as regular todo**. The last option closes the picker and leaves an ordinary unlinked checkbox. Pasted task blocks are not converted automatically. Use **Attach/create task** on an existing checkbox; **Duplicate as new task** creates an independent ID. Missing links are never silently replaced. Markdown links in task titles and task-note sections open from the picker and inspector; title editing keeps the raw Markdown syntax.
 
-Run **Organized: Convert unchecked todos to tasks** on a regular note to convert its ordinary unchecked todos into canonical tasks. It confirms first, skips linked, completed, in-progress and empty items, and preserves indentation and line endings. To leave Organized cleanly, **Organized: Convert tasks in this note back to todos** (or **Convert all tasks in the vault back to todos**) turns linked checkboxes back into plain todos after a confirmation: the text and state stay, the hidden comments go, task notes are kept, and Undo restores the notes.
+Run **Organized: Convert unchecked todos to tasks** on a regular note to convert its ordinary unchecked todos into canonical tasks. It confirms first, skips linked, completed, in-progress and empty items, and preserves indentation and line endings. To leave Organized, see [Leaving Organized](#leaving-organized): **Organized: Retire tasks…** turns tasks back into ordinary Markdown with options, and **Convert tasks in this note back to todos** does the simple version for one note.
 
 Each canonical task is `Tasks/<id>.md`, with its properties in standard YAML and the description as the note text, followed by an optional `## Sources` heading, so the note reads naturally even without the plugin. Occurrences contain `<!--organized:<id>-->`. A copied ID remains the same task. Selected properties render read-only in Reading/Live Preview; no generated dates/properties are written into occurrence source. The inspector edits the canonical note.
 

@@ -6,6 +6,7 @@ import { seconds } from "./sessions";
 import { projectTemplate, Repository, splitNote } from "./repository";
 import { parseWorked, retiredLines } from "./retention";
 import { buildNote, freePath, noteName } from "./notes";
+import { losesNote, normalizeRetire, planNames, plural, selectTasks, stripOrganized, type RetireOptions, type RetireScan } from "./retire";
 
 export interface Change { file: TFile; before: string; after: string }
 export interface Context { file: TFile; line: TaskLine }
@@ -22,6 +23,8 @@ export class TaskService {
   private reconciled = "";
   private retentionReconciled = "";
   undoChanges: Change[] = [];
+  /** Task notes renamed by the last batch, so Undo can give them their names back. */
+  private undoRenames: { file: TFile; from: string }[] = [];
   constructor(readonly repo: Repository, readonly changed: () => void, readonly confirm: (message: string, heading?: string, confirmLabel?: string) => Promise<boolean>) { this.daily = new DailyNotes(repo, repo.settings); }
   async edit(file: TFile, before: string, after: string, changes?: Change[]): Promise<void> {
     await this.repo.write(file, before, after); if (before !== after) changes?.push({ file, before, after });
@@ -32,12 +35,15 @@ export class TaskService {
       for (const c of [...this.undoChanges].reverse()) {
         try { await this.repo.write(c.file, c.after, c.before); } catch { failures.push(c.file.path); }
       }
-      this.undoChanges = []; this.changed();
+      for (const rename of [...this.undoRenames].reverse()) {
+        try { await this.repo.app.fileManager.renameFile(rename.file, rename.from); } catch { failures.push(rename.from); }
+      }
+      this.undoChanges = []; this.undoRenames = []; this.references = null; this.changed();
       new Notice(failures.length ? `Undo preserved concurrent edits in: ${failures.join(", ")}` : "Organized changes undone. Created notes are preserved.");
     });
   }
-  summarize(changes: Change[], title: string, detail = ""): void {
-    this.undoChanges = changes;
+  summarize(changes: Change[], title: string, detail = "", renames: { file: TFile; from: string }[] = []): void {
+    this.undoChanges = changes; this.undoRenames = renames;
     const notes = new Set(changes.map(c => c.file.path)).size;
     const fragment = createFragment();
     const notice = fragment.createDiv({ cls: "organized-notice" });
@@ -246,7 +252,7 @@ export class TaskService {
             const current = parseTasks(after).find(item => item.line === line.line);
             if (!current || current.id !== task.id || current.raw !== line.raw) throw new Error(`Changed occurrence in ${occurrence.file.path}`);
             after = replaceTask(after, current, { id: null, repeat: false });
-            if (occurrence === target && line.line === last) after = insertBelow(after, line.line, keep, current.prefix, current.raw.endsWith("\r"));
+            if (occurrence === target && line.line === last) after = insertBelow(after, line.line, keep, line.prefix, line.raw.endsWith("\r"));
           }
           await this.edit(occurrence.file, occurrence.text, after);
         }
@@ -426,6 +432,83 @@ export class TaskService {
       await this.edit(file, text, lines.join("\n"), changes);
     }
     this.summarize(changes, `Converted ${count} task${count === 1 ? "" : "s"} back to todos`);
+  }
+  /** Reads the vault once for the Retire window: the tasks, and the notes that hold a todo for each. */
+  async scanRetire(): Promise<RetireScan> {
+    const files = new Map<string, TFile[]>(); const lines = new Map<string, number>();
+    for (const file of this.repo.app.vault.getMarkdownFiles()) {
+      if (this.repo.isTaskRecord(file.path)) continue;
+      const text = await this.repo.readText(file); if (!text.includes("<!--organized:")) continue;
+      for (const todo of parseTasks(text)) {
+        if (!todo.id) continue;
+        lines.set(todo.id, (lines.get(todo.id) ?? 0) + 1);
+        const known = files.get(todo.id) ?? []; if (!known.includes(file)) known.push(file); files.set(todo.id, known);
+      }
+    }
+    return { tasks: await this.repo.list(), files, lines };
+  }
+  /**
+   * Retires tasks so the vault reads as plain Obsidian again: the todos lose their ids (becoming plain text or links to the task note),
+   * and each task note is kept, renamed to its title, stripped of Organized's properties, or moved to the trash. Per task: the todos are
+   * checked, the note renamed, the todos rewritten, then the properties stripped and the note trashed, and a task that fails at any step is
+   * restored and reported while the others go on. The text that will change is saved through `backup` first. Undo restores the notes and
+   * the names (never a trashed note, so a trashing run offers none).
+   */
+  async retireTasks(raw: RetireOptions, backup: (files: { path: string; before: string }[], extra: Record<string, unknown>) => Promise<string>, now = Date.now()): Promise<void> {
+    const o = normalizeRetire(raw); const scan = await this.scanRetire(); const chosen = selectTasks(scan.tasks, o, now);
+    if (!chosen.length) { new Notice("No tasks match, so nothing was retired."); return; }
+    const folder = this.repo.settings().taskFolder;
+    const names = o.notes === "rename" ? planNames(chosen, folder, this.repo.app.vault.getMarkdownFiles().map(f => f.path)) : new Map<string, string>();
+    const saved = new Map<string, string>();
+    for (const task of chosen) {
+      for (const file of scan.files.get(task.id) ?? []) if (!saved.has(file.path)) saved.set(file.path, await this.repo.readText(file));
+      const note = this.repo.file(this.repo.taskPath(task.id)); if (note && (o.yaml === "strip" || task.time_tracking_started_at)) saved.set(note.path, await this.repo.readText(note));
+    }
+    const backupPath = await backup([...saved].map(([path, before]) => ({ path, before })), { renames: [...names].map(([id, to]) => ({ from: this.repo.taskPath(id), to })) });
+    const changes: Change[] = []; const renames: { file: TFile; from: string }[] = []; const failed: string[] = [];
+    let renamed = 0, stripped = 0, trashed = 0, done = 0, todos = 0;
+    const progress = new Notice(`Retiring tasks… 0 of ${chosen.length}`, 0);
+    try {
+      for (const [index, listed] of chosen.entries()) {
+        progress.setMessage(`Retiring tasks… ${index} of ${chosen.length}`);
+        const note = this.repo.file(this.repo.taskPath(listed.id)); let from: string | null = null;
+        try {
+          if (!note) throw new Error(`Task note missing for ${listed.id}`);
+          // A running timer is logged first, so the time worked is not left running in a note nothing tracks any more.
+          const task = listed.time_tracking_started_at ? await this.repo.update(listed.id, t => setStatus(t, "open")) : listed;
+          const keep = losesNote(o) && o.keep !== "title" ? retiredLines(task, splitNote(await this.repo.readText(note)).body, o.keep, "") : [];
+          const occurrences: { file: TFile; text: string; todos: TaskLine[] }[] = [];
+          for (const file of scan.files.get(task.id) ?? []) {
+            const text = await this.repo.readText(file); const found = parseTasks(text).filter(t => t.id === task.id); if (found.length) occurrences.push({ file, text, todos: found });
+          }
+          const target = keep.length && occurrences.length ? occurrences.reduce((best, item) => (this.daily.date(item.file.path) ?? "") >= (this.daily.date(best.file.path) ?? "") ? item : best) : null;
+          if (names.has(task.id)) { from = note.path; await this.repo.app.fileManager.renameFile(note, names.get(task.id)!); }
+          const alias = o.notes === "keep" ? task.title.replace(/[|[\]]/g, " ").replace(/\s+/g, " ").trim() : undefined;
+          for (const occurrence of occurrences) {
+            let after = occurrence.text; const last = Math.max(...occurrence.todos.map(line => line.line));
+            for (const line of [...occurrence.todos].sort((a, b) => b.line - a.line)) {
+              const link = o.lines === "link" ? this.repo.app.fileManager.generateMarkdownLink(note, occurrence.file.path, undefined, alias) : null;
+              after = replaceTask(after, line, { id: null, repeat: false, ...(link === null ? {} : { title: link }) });
+              if (occurrence === target && line.line === last) after = insertBelow(after, line.line, keep, line.prefix, line.raw.endsWith("\r"));
+            }
+            await this.edit(occurrence.file, occurrence.text, after, changes); todos += occurrence.todos.length;
+          }
+          if (o.yaml === "strip") { const text = await this.repo.readText(note); await this.edit(note, text, stripOrganized(text), changes); stripped++; }
+          if (o.notes === "trash") { await this.repo.app.fileManager.trashFile(note); trashed++; }
+          if (from !== null) { renames.push({ file: note, from }); renamed++; }
+          done++;
+        } catch {
+          failed.push(listed.title);
+          // Put the name back so the task is found again by its id; the todos it did not reach keep their ids.
+          if (from !== null && note && note.path !== from) { try { await this.repo.app.fileManager.renameFile(note, from); } catch { /* The report below names the task. */ } }
+        }
+      }
+    } finally { progress.hide(); }
+    this.references = null;
+    const failedNames = failed.slice(0, 3).join(", ");
+    const detail = `${done} of ${plural(chosen.length, "task")} retired · ${plural(todos, "todo")} unlinked${renamed ? ` · ${renamed} renamed` : ""}${stripped ? ` · ${stripped} stripped` : ""}${trashed ? ` · ${trashed} moved to Obsidian's trash` : ""}${failed.length ? ` · ${failed.length} left unchanged (${failedNames})` : ""}. Old text saved in note-backups (${backupPath.split("/").pop()}).`;
+    if (trashed) { this.undoChanges = []; this.undoRenames = []; new Notice(`${detail} Trashed task notes can be restored from Obsidian's trash; Undo is not offered because it would relink todos to them.`, 20000); this.changed(); }
+    else this.summarize(changes, "Tasks retired", detail, renames);
   }
   async deleteTask(id: string, onConfirmed?: () => void): Promise<boolean> {
     // The inspector must clear its now-invalid selection before occurrence or

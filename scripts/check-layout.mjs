@@ -26,7 +26,7 @@ try {
   for (const width of [240, 320, 360, 390, 412, 768].filter(width => scale === 1 || width <= 412)) for (const dark of [false, true]) for (const rtl of [false, true]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(({ dark, rtl }) => { document.body.className = `${dark ? 'theme-dark' : 'theme-light'} is-mobile`; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, { dark, rtl });
-    for (const tab of ['Calendar', 'Week', 'Day', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Favorites', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'SessionModal', 'NoteModal', 'Onboarding1', 'Onboarding2', 'Onboarding3', 'Onboarding4', 'Onboarding5', 'Onboarding6', 'Onboarding7', 'Onboarding8', 'Onboarding9', 'Onboarding10', 'Eof']) {
+    for (const tab of ['Calendar', 'Week', 'Day', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Favorites', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'SessionModal', 'NoteModal', 'RetireModal', 'Onboarding1', 'Onboarding2', 'Onboarding3', 'Onboarding4', 'Onboarding5', 'Onboarding6', 'Onboarding7', 'Onboarding8', 'Onboarding9', 'Onboarding10', 'Eof']) {
       await page.evaluate(tab => window.scene(tab), tab);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       if (overflow) throw Error(`${engine}: horizontal overflow at ${width}${scale === 1 ? '' : ` with ${scale}x text`}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
@@ -71,6 +71,13 @@ try {
         if (day.tasks < 2 || day.firstTask >= day.gridTop) throw Error('Day view does not list its tasks above the time grid');
         const fold = await page.evaluate(() => { const head = document.querySelector('.organized-section-fold'); if (!head) return null; const box = head.getBoundingClientRect(); return { expanded: head.getAttribute('aria-expanded'), height: box.height, width: box.width, host: document.querySelector('.organized-panel').getBoundingClientRect().width }; });
         if (!fold || fold.expanded !== 'true' || fold.height > 44 || fold.width < fold.host - 2) throw Error(`Day task list has no compact, full-width fold button: ${JSON.stringify(fold)}`);
+      }
+      if (tab === 'RetireModal') {
+        // Every option is a native control inside the window; on a short phone the window scrolls, the buttons stay reachable and nothing leaves the screen.
+        await page.setViewportSize({ width, height: 600 });
+        const retire = await page.evaluate(() => { const win = document.querySelector('.organized-modal-window'); if (!win) return null; const w = win.getBoundingClientRect(); const inside = el => { const b = el.getBoundingClientRect(); return b.left >= w.left - 1 && b.right <= w.right + 1; }; const controls = [...win.querySelectorAll('select, input')].filter(el => el.offsetParent !== null); return { bottom: w.bottom, viewport: innerHeight, width: w.width, screen: innerWidth, controls: controls.length, outside: controls.filter(el => !inside(el)).length, status: win.querySelector('[role=status]')?.textContent ?? '', buttons: [...win.querySelectorAll('button')].map(b => b.textContent.trim()) }; });
+        await page.setViewportSize({ width, height: 900 });
+        if (!retire || retire.controls < 5 || retire.outside || retire.width > retire.screen + 1 || retire.bottom > retire.viewport + 1 || !retire.buttons.includes('Retire') || !retire.buttons.includes('Cancel')) throw Error(`${engine}: Retire window does not fit at ${width}${scale === 1 ? '' : ` with ${scale}x text`}: ${JSON.stringify(retire)}`);
       }
       if (tab.startsWith('Onboarding')) {
         // A short phone screen: the card stays inside it, the steps scroll in their own area and the buttons remain visible in one row.

@@ -12,6 +12,7 @@ import { join, resolve } from 'node:path';
 /** scene -> [description (the README alt text says the same), in the default set?, element to capture]. The onboarding steps are for review (`--all`), the README does not use them. */
 const PANEL = '#frame';
 const SCENES = { month: ['Month calendar', true, PANEL], week: ['Week view', true, PANEL], day: ['Day view with time blocks', true, PANEL], task: ['Task details', true, PANEL], projects: ['Projects', true, PANEL],
+  retire: ['Retire window', false, '.organized-modal-window'],
   ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => [`onboarding-${n}`, [`Onboarding card, step ${n}`, false, '.organized-modal-window']])) };
 const WIDTH = 400; // CSS px, a typical side-panel width; images are 2x
 const args = process.argv.slice(2);
@@ -48,9 +49,9 @@ try {
     for (const scene of scenes) {
       await page.evaluate(name => window.scene(name), scene);
       await page.evaluate(() => document.fonts.ready);
-      const modal = scene.startsWith('onboarding-');
+      const modal = scene.startsWith('onboarding-') || scene === 'retire';
       await page.setViewportSize({ width: modal ? (phone ? 390 : 520) : WIDTH + 32, height: phone ? 640 : 900 });
-      const state = await page.evaluate(modal => ({ overflow: document.documentElement.scrollWidth > innerWidth + 1, empty: modal ? !document.querySelector('.organized-modal-window .organized-welcome-title') : !document.querySelector('#app .organized-view *'), missing: window.missingIcons(), height: document.querySelector(modal ? '.organized-modal-window' : '#frame').getBoundingClientRect().height }), modal);
+      const state = await page.evaluate(modal => ({ overflow: document.documentElement.scrollWidth > innerWidth + 1, empty: modal ? !document.querySelector('.organized-modal-window .modal-title') : !document.querySelector('#app .organized-view *'), missing: window.missingIcons(), height: document.querySelector(modal ? '.organized-modal-window' : '#frame').getBoundingClientRect().height }), modal);
       if (state.overflow && !phone) problems.push(`${theme}/${scene}: horizontal overflow`);
       if (state.empty) problems.push(`${theme}/${scene}: nothing rendered`);
       if (state.missing.length) problems.push(`${theme}/${scene}: no glyph for icon(s) ${state.missing.join(', ')}; add them to scripts/screenshots/icons.json`);

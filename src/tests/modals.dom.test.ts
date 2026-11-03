@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
-import { TaskPicker, PriorityPicker, DatePicker, ConfirmModal, ProjectPicker, SessionModal, NoteConversionModal, OnboardingModal, KEEP_AS_TODO } from "../modals";
+import { TaskPicker, PriorityPicker, DatePicker, ConfirmModal, ProjectPicker, SessionModal, NoteConversionModal, OnboardingModal, RetireModal, KEEP_AS_TODO } from "../modals";
 import { newTask } from "../model";
 import { harness } from "./harness";
 import { Notice, Setting } from "./__mocks__/obsidian";
@@ -135,5 +135,37 @@ describe("onboarding card", () => {
   it("Skip closes the card", () => {
     const h = harness(); const done = vi.fn(); const modal = new OnboardingModal(h.app, done); modal.open();
     Setting.instances.at(-1)!.controls[0].buttonEl.click(); expect(done).toHaveBeenCalledTimes(1); expect(modal.contentEl.children).toHaveLength(0);
+  });
+});
+
+describe("Retire window", () => {
+  const scan = (tasks = 2) => ({ tasks: Array.from({ length: tasks }, (_v, i) => newTask(`Task ${i}`, `task000${i}`)), files: new Map(Array.from({ length: tasks }, (_v, i) => [`task000${i}`, [{ path: `Daily/${i}.md` } as never]])), lines: new Map(Array.from({ length: tasks }, (_v, i) => [`task000${i}`, 1])) });
+  const base = { which: "all" as const, olderThanDays: 7, lines: "plain" as const, keep: "title" as const, notes: "keep" as const, yaml: "keep" as const };
+  const select = (modal: RetireModal, label: string) => modal.contentEl.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!;
+  const choose = (field: HTMLSelectElement, value: string) => { field.value = value; field.dispatchEvent(new Event("change")); };
+  const status = (modal: RetireModal) => modal.contentEl.querySelector('[role="status"]')!.textContent;
+  const go = (modal: RetireModal) => [...modal.contentEl.querySelectorAll("button")].find(b => b.textContent === "Retire")!;
+  it("waits for the scan, previews the result and switches combinations that cannot work", async () => {
+    const h = harness(); const run = vi.fn(async () => undefined); let resolve!: (value: ReturnType<typeof scan>) => void;
+    const modal = new RetireModal(h.app, base, () => new Promise(r => { resolve = r; }), run); decorated(modal); modal.open();
+    expect(status(modal)).toBe("Reading your notes…"); expect(go(modal).disabled).toBe(true); go(modal).click(); expect(run).not.toHaveBeenCalled();
+    resolve(scan()); await flush(); expect(status(modal)).toBe("2 tasks · 2 todos in 2 notes unlinked."); expect(go(modal).disabled).toBe(false);
+    expect(select(modal, "Kept under the todo").style.display).toBe("none"); expect(modal.contentEl.querySelector<HTMLInputElement>('input[aria-label="Older than (days)"]')!.style.display).toBe("none"); expect([...modal.contentEl.querySelectorAll("label")].find(l => l.textContent === "Older than (days)")!.style.display).toBe("none");
+    choose(select(modal, "Properties of task notes"), "strip"); expect(select(modal, "Task notes").value).toBe("rename"); expect(select(modal, "Kept under the todo").style.display).not.toBe("none"); expect(status(modal)).toContain("2 task notes stripped of properties. Status, dates and tracked time are lost");
+    expect([...select(modal, "Task notes").options].map(o => o.disabled)).toEqual([true, false, true]);
+    choose(select(modal, "Task notes"), "trash"); expect(select(modal, "Properties of task notes").value).toBe("keep"); expect(select(modal, "Todos in your notes become").value).toBe("plain");
+    expect([...select(modal, "Properties of task notes").options].map(o => o.disabled)).toEqual([false, true]); expect([...select(modal, "Todos in your notes become").options].map(o => o.disabled)).toEqual([false, true]); expect(status(modal)).toContain("moved to Obsidian's trash");
+    choose(select(modal, "Task notes"), "rename"); expect([...select(modal, "Todos in your notes become").options].map(o => o.disabled)).toEqual([false, false]);
+    choose(select(modal, "Todos in your notes become"), "link"); choose(select(modal, "Kept under the todo"), "all"); choose(select(modal, "Which tasks"), "closed");
+    const days = modal.contentEl.querySelector<HTMLInputElement>('input[aria-label="Older than (days)"]')!; expect(days.style.display).not.toBe("none"); days.value = "30"; days.dispatchEvent(new Event("input"));
+    expect(status(modal)).toBe("No tasks match. Nothing will change."); expect(go(modal).disabled).toBe(true); choose(select(modal, "Which tasks"), "all"); expect(go(modal).disabled).toBe(false);
+    go(modal).click(); await flush(); expect(run).toHaveBeenCalledWith({ which: "all", olderThanDays: 30, lines: "link", keep: "all", notes: "rename", yaml: "keep" }); expect(modal.contentEl.children).toHaveLength(0);
+  });
+  it("cancels, and reports a scan that failed or a run that failed", async () => {
+    const h = harness(); const cancelled = new RetireModal(h.app, base, async () => scan(1), async () => undefined); cancelled.open(); await flush();
+    [...cancelled.contentEl.querySelectorAll("button")].find(b => b.textContent === "Cancel")!.click(); expect(cancelled.contentEl.children).toHaveLength(0);
+    const broken = new RetireModal(h.app, base, async () => { throw new Error("vault unreadable"); }, async () => undefined); broken.open(); await flush(); expect(status(broken)).toBe("Could not read your notes: vault unreadable"); expect(go(broken).disabled).toBe(true);
+    const text = new RetireModal(h.app, base, async () => { throw "odd"; }, async () => undefined); text.open(); await flush(); expect(status(text)).toBe("Could not read your notes: odd");
+    const failing = new RetireModal(h.app, base, async () => scan(1), async () => { throw new Error("write failed"); }); failing.open(); await flush(); go(failing).click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain("write failed");
   });
 });

@@ -6,6 +6,7 @@ import { report } from "./service";
 import { renderMarkdownLinks } from "./markdown";
 import { ONBOARDING_STEPS, OnboardingStep } from "./onboarding";
 import { renderFigure } from "./onboardingFigures";
+import { describePreview, losesNote, normalizeRetire, retirePreview, type RetireOptions, type RetireScan } from "./retire";
 
 /** Share the compact inspector surface with native modal chrome. */
 function decorate(modal: Modal): void {
@@ -214,4 +215,54 @@ export class OnboardingModal extends Modal {
     primary[0].focus();
   }
   onClose(): void { this.contentEl.empty(); if (!this.settled) { this.settled = true; this.done(); } }
+}
+
+const CHOICES: Record<string, [string, string][]> = {
+  which: [["closed", "Only completed or canceled tasks older than…"], ["all", "All tasks"]],
+  lines: [["plain", "Plain todo (title only)"], ["link", "Link to the task note"]],
+  keep: [["title", "Nothing"], ["description", "The description"], ["all", "Description, sources and time worked"]],
+  notes: [["keep", "Keep where they are"], ["rename", "Rename to the todo title"], ["trash", "Move to Obsidian's trash"]],
+  yaml: [["keep", "Keep all properties"], ["strip", "Remove Organized's properties (keep title and text)"]],
+};
+/**
+ * The Retire window: how to leave Organized, or clean up finished tasks, in one pass. Every option is a plain choice; combinations that
+ * cannot work are switched for you (removing properties needs the title as the file name, a trashed note cannot be linked to) and the
+ * line at the bottom says what will happen before anything does.
+ */
+export class RetireModal extends Modal {
+  constructor(app: App, readonly defaults: RetireOptions, readonly inspect: () => Promise<RetireScan>, readonly run: (options: RetireOptions) => Promise<void>) { super(app); decorate(this); }
+  onOpen(): void {
+    const el = this.contentEl; this.titleEl.setText("Retire tasks"); el.addClass("organized-modal");
+    el.createEl("p", { cls: "organized-modal-copy", text: "Turn Organized's tasks back into ordinary Markdown. Nothing is deleted unless you choose the trash, and the old text is saved in the plugin folder first. Run this on one device and let sync settle." });
+    const fields: Record<string, HTMLSelectElement> = {}; const labels: Record<string, HTMLElement> = {};
+    const add = (key: Exclude<keyof RetireOptions, "olderThanDays">, label: string): void => {
+      labels[key] = el.createEl("label", { cls: "organized-modal-label", text: label });
+      const select = el.createEl("select", { attr: { "aria-label": label } }); for (const [value, text] of CHOICES[key]) select.createEl("option", { text, value });
+      select.value = String(this.defaults[key]); fields[key] = select;
+    };
+    add("which", "Which tasks");
+    labels.days = el.createEl("label", { cls: "organized-modal-label", text: "Older than (days)" });
+    const days = el.createEl("input", { type: "number", attr: { "aria-label": "Older than (days)", min: "0", step: "1" } }); days.value = String(this.defaults.olderThanDays);
+    add("lines", "Todos in your notes become"); add("notes", "Task notes"); add("yaml", "Properties of task notes"); add("keep", "Kept under the todo");
+    const status = el.createDiv({ cls: "organized-modal-copy organized-session-note", attr: { role: "status" } });
+    let scan: RetireScan | null = null; let go: HTMLButtonElement | null = null;
+    const read = (): RetireOptions => normalizeRetire({ which: fields.which.value as RetireOptions["which"], olderThanDays: Number(days.value), lines: fields.lines.value as RetireOptions["lines"], keep: fields.keep.value as RetireOptions["keep"], notes: fields.notes.value as RetireOptions["notes"], yaml: fields.yaml.value as RetireOptions["yaml"] });
+    const paint = (): void => {
+      const o = read(); fields.notes.value = o.notes; fields.yaml.value = o.yaml; fields.lines.value = o.lines;
+      days.toggle(o.which === "closed"); labels.days.toggle(o.which === "closed"); fields.keep.toggle(losesNote(o)); labels.keep.toggle(losesNote(o));
+      // A trashed note cannot be stripped or linked to; removing properties needs the rename.
+      for (const option of Array.from(fields.yaml.options)) option.disabled = o.notes === "trash" && option.value === "strip";
+      for (const option of Array.from(fields.lines.options)) option.disabled = o.notes === "trash" && option.value === "link";
+      for (const option of Array.from(fields.notes.options)) option.disabled = o.yaml === "strip" && option.value !== "rename";
+      if (!scan) { status.setText("Reading your notes…"); return; }
+      const preview = retirePreview(scan, o, Date.now());
+      status.setText(`${describePreview(preview)}${o.yaml === "strip" ? " Status, dates and tracked time are lost unless you keep them under the todo." : ""}`); go?.toggleAttribute("disabled", !preview.tasks);
+    };
+    for (const field of [...Object.values(fields), days]) { field.addEventListener("change", paint); field.addEventListener("input", paint); }
+    new Setting(el).addButton(b => b.setButtonText("Cancel").onClick(() => this.close()))
+      .addButton(b => { b.setButtonText("Retire").setCta(); go = b.buttonEl; b.buttonEl.setAttribute("disabled", "true"); b.onClick(() => { const o = read(); this.close(); void this.run(o).catch(report); }); });
+    paint();
+    void this.inspect().then(found => { scan = found; paint(); }).catch(error => { status.setText(`Could not read your notes: ${error instanceof Error ? error.message : String(error)}`); status.addClass("organized-session-problem"); });
+  }
+  onClose(): void { this.contentEl.empty(); }
 }
