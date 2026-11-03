@@ -246,7 +246,9 @@
 .organized-modal { max-block-size: 80vh; overflow-y: auto; }
 .modal-container.organized-modal-host { align-items: flex-start; padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px)); }
 body.is-mobile .modal-container.organized-modal-host { overflow-y: auto; }
-.organized-modal-window { inline-size: min(92vw, 460px); max-inline-size: 92vw; max-block-size: calc(100vh - 32px); display: flex; flex-direction: column; border: 1px solid var(--background-modifier-border); border-block-start: 3px solid var(--interactive-accent); border-radius: var(--radius-m, 8px); box-shadow: var(--shadow-l, 0 12px 32px #0003); padding: 0; }
+.organized-modal-window { inline-size: min(92vw, 460px); max-inline-size: 92vw; max-block-size: calc(100vh - 32px); display: flex; flex-direction: column; background: var(--background-primary); border: 1px solid var(--background-modifier-border-hover, var(--background-modifier-border)); border-block-start: 3px solid var(--interactive-accent); border-radius: var(--radius-m, 8px); box-shadow: 0 0 0 1px var(--background-modifier-border-hover, var(--background-modifier-border)), var(--shadow-l, 0 12px 32px #0003); padding: 0; }
+/* A dark theme hides the shadow and the card's own edge, so the note behind shows straight through to the bottom border: dim what is behind the card. */
+.modal-container.organized-modal-host > .modal-bg { background-color: rgba(0, 0, 0, 0.55); opacity: 1; }
 .organized-modal-window .modal-title { margin: 0; padding: 14px 16px 0; color: var(--text-normal); font-size: 16px; font-weight: 600; line-height: 1.4; }
 .organized-modal-window .modal-content { padding: 12px 16px 16px; overflow-y: auto; min-block-size: 0; }
 .organized-modal-window .modal-content p { margin-block: 0 12px; }

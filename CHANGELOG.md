@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed the edges of Organized's dialogs (including the onboarding card) blending into the note behind them in dark themes, most visibly at the bottom on iOS: the dialog now has an opaque background and a clearer border, and the note behind it is dimmed.
 - The onboarding card now explains the side panel (how to open it, what its four icon tabs are for, that the Task tab follows your cursor) and the picker that appears when you type a new checkbox.
 - **Onboarding card.** The first time you start the plugin (once, including for existing beta testers) a short card explains the idea in eight steps: your daily note stays your daily note, how to open the side panel and what its tabs do, unfinished work follows you, a todo grows only when it needs to, the checkbox letters, the Day and Week time blocks, and that everything stays plain Markdown. Its small illustrations are drawn from the panel's own elements, so they follow your theme and font. Skip it any time. Reopen it with the command **Show onboarding card** or the **Onboarding card** button under **Settings → Organized → Help**. Nothing is written to your notes; only a flag in the plugin's settings records that you have seen it.
 - Development dependencies: obsidian typings 1.14.4 with the matching CodeMirror state and view packages (both are provided by Obsidian at runtime, so the plugin bundle is unaffected).
