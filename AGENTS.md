@@ -35,7 +35,7 @@ Read the applicable `.claude/skills/<name>/SKILL.md` before its task.
 - No stable promotion or community submission without explicit approval; real-device testing is required before stable.
 
 ## Reference
-- `PLAN.md`: intended feature specification and original constraints.
+- `PLAN.md`: design notes: what the plugin is for, the principles behind it, and where the code keeps them.
 - `docs/architecture.md`: code and safety boundaries.
 - `docs/releasing.md`: standalone release procedure.
 - `docs/testing.md`: verified checks and remaining device limitations.

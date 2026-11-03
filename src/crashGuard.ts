@@ -1,19 +1,4 @@
-// TEMPLATE: src/crashGuard.ts
-// WHAT: crash-loop protection. A plugin that crashes Obsidian during load can make a vault unusable (the user cannot reach
-//       Settings to disable it because the app dies first). Each launch increments a durable counter BEFORE risky work,
-//       a launch that survives ~30 s resets it, and enough consecutive failures make the plugin disable itself.
-// CHANGE: replace <PLUGIN_NAME> in the two console.warn strings. Wire it into onload() (sketch below). The state file is
-//         `crash-state.json` in the plugin folder.
-// GUARDS: an iOS crash loop caused by an automatic startup download left testers unable to open the vault. The unit tests
-//         (tests/crashGuard.test.ts) pin the 6th-consecutive-crash trip, durability ordering and fail-open reads.
-//
-//   const adapter = this.app.vault.adapter;
-//   const path = crashStatePath(this.manifest, this.app.vault.configDir);
-//   const decision = decideOnLoad(await readCrashState(adapter, path), 5);
-//   await writeCrashState(adapter, path, decision.next);          // awaited: durable BEFORE the risky work
-//   if (decision.action === "trip-threshold") { /* disable the plugin and tell the user, then return */ }
-//   /* ... risky work ... */
-//   this.registerInterval(window.setTimeout(() => void writeCrashState(adapter, path, DEFAULT_CRASH_STATE), 30_000));
+// Crash-loop protection: a durable launch counter that makes the plugin disable itself after repeated failed starts (wired into `onload` in main.ts).
 
 import { normalizePath } from "obsidian";
 

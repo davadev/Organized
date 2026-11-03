@@ -1,6 +1,6 @@
 # Testing and compatibility
 
-Use Node 24 and npm >=11.10. Install with `npm ci`. Dependencies are lockfile-pinned; install scripts are denied and new resolutions have a 14-day minimum age. Obsidian 1.13.1 types are pinned because its CodeMirror peer versions match the playbook; accepting a newer caret currently selects incompatible peers.
+Use Node 24 and npm >=11.10. Install with `npm ci`. Dependencies are lockfile-pinned; install scripts are denied and new resolutions have a 14-day minimum age. Obsidian 1.13.1 types are pinned because its CodeMirror peer versions match the project's pinned editor packages; accepting a newer caret currently selects incompatible peers.
 
 CI and release assert the actual Node/npm versions before installation (`npm run check:toolchain`). The public community-plugin registry was checked on 2026-10-31: neither the ID `organized` nor the name `Organized` was present among 9,748 entries. This is a point-in-time uniqueness check, not a reserved directory name or community submission.
 
