@@ -326,6 +326,39 @@ describe('lifecycle and picker races', () => {
     const other = await plugin.repo.create('Panel task'); plugin.selectedTaskId = 'someone-else'; const fake: any = { module: 'x', editingModule: 'y', editingTitle: true, render: async () => undefined }; vi.spyOn(plugin, 'eachView').mockImplementation(cb => cb(fake)); plugin.convertToNote(other); const panel = Modal.instances.at(-1) as unknown as NoteConversionModal; Array.from(panel.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Create note')!.click(); await flush(); await vi.advanceTimersByTimeAsync(0); await flush(); expect(plugin.selectedTaskId).toBe('someone-else'); expect([fake.module, fake.editingModule, fake.editingTitle]).toEqual(['', '', false]); expect(h.texts.has('Ideas/Panel task.md')).toBe(true);
   });
 });
+describe('a running timer follows its [/] marker', () => {
+  // The person changes or deletes the slash: the cursor may be anywhere, and another action may be running.
+  const change = (before: string, insert: string, event = 'input.type') => {
+    const from = before.indexOf('/'); const startState = EditorState.create({ doc: before }); const tr = startState.update({ changes: { from, to: from + 1, insert }, annotations: Transaction.userEvent.of(event) });
+    return { startState, state: tr.state, transactions: [tr], changes: tr.changes, docChanged: true, selectionSet: false } as any;
+  };
+  const running = async (marker = '/') => {
+    const { h, plugin } = await loaded(); h.layout[0](); await flush(); const task = await plugin.repo.create('Timed'); await plugin.service.status(task.id, 'in_progress');
+    const before = `- [${marker}] Timed <!--organized:${task.id}-->\nOther line`; const file: any = await h.add('Note.md', before); const editor = h.setActive(file, before); return { h, plugin, task, before, editor };
+  };
+  const timer = async (plugin: any, id: string) => (await plugin.repo.read(id));
+  it('stops when the slash becomes a space with the cursor on another line, and says so', async () => {
+    const { plugin, task, before, editor } = await running(); const u = change(before, ' '); editor.setValue(u.state.doc.toString()); editor.setCursor({ line: 1, ch: 2 });
+    plugin.onEditorUpdate(u); await flush(); const stopped = await timer(plugin, task.id); expect(stopped.time_tracking_started_at).toBeNull(); expect(stopped.status).toBe('open'); expect(String(Notice.instances.at(-1)?.message)).toContain('its marker changed');
+  });
+  it('stops when the slash is deleted from any cursor position, and when the marker becomes done or canceled', async () => {
+    for (const [insert, status] of [['', 'open'], ['x', 'completed'], ['X', 'completed'], ['-', 'canceled']] as const) {
+      const { plugin, task, before, editor } = await running(); const u = change(before, insert, insert ? 'input.type' : 'delete.backward'); editor.setValue(u.state.doc.toString()); editor.setCursor({ line: 0, ch: 4 });
+      plugin.onEditorUpdate(u); await flush(); const result = await timer(plugin, task.id); expect(result.time_tracking_started_at).toBeNull(); expect(result.status).toBe(status);
+    }
+  });
+  it('still stops while another action is running, because the stop queues behind it', async () => {
+    const { plugin, task, before, editor } = await running(); const u = change(before, ' '); editor.setValue(u.state.doc.toString()); editor.setCursor({ line: 1, ch: 2 }); (plugin as any).busy = 1;
+    plugin.onEditorUpdate(u); await flush(); expect((await timer(plugin, task.id)).time_tracking_started_at).toBeNull();
+  });
+  it('leaves the timer running for markers that are not a stop, edits that are not the person\'s, and a note that is not the active one', async () => {
+    for (const [insert, event] of [['!', 'input.type'], [' ', 'input.organized.edit'], [' ', 'undo'], [' ', null]] as const) {
+      const { plugin, task, before, editor } = await running(); const u = change(before, insert, event as string); if (event === null) u.transactions = [{ annotation: () => undefined }]; editor.setValue(u.state.doc.toString()); editor.setCursor({ line: 1, ch: 2 });
+      plugin.onEditorUpdate(u); await flush(); expect((await timer(plugin, task.id)).time_tracking_started_at).not.toBeNull();
+    }
+    const { plugin, task, before, editor } = await running(); const u = change(before, ' '); editor.setValue('something else entirely'); plugin.onEditorUpdate(u); await flush(); expect((await timer(plugin, task.id)).time_tracking_started_at).not.toBeNull();
+  });
+});
 describe('onboarding card at startup', () => {
   const cards = () => Modal.instances.filter(m => m instanceof OnboardingModal) as OnboardingModal[];
   it('opens once after layout-ready, writes nothing until it closes, then never again', async () => {
