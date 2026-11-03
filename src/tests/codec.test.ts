@@ -66,12 +66,14 @@ describe("Markdown task codec", () => {
     expect(migrateNote('## Notes\nOnly notes\n')).toBe('Only notes\n'); expect(migrateNote('## Description\n')).toBe('');
     expect(migrateNote('Same\n## Description\nSame\n')).toBe('Same\n\nSame\n');
   });
-  it("lets plain bullets sit inside a sorted list and ranks finished todos as no priority", () => {
+  it("lets plain bullets sit inside a sorted list and puts finished, forwarded and scheduled todos below open ones, even without a priority", () => {
     const priorities = new Map([['task_aaa', 'low' as const], ['task_bbb', 'high' as const], ['task_ccc', 'medium' as const]]);
     const linked = '- [ ] low <!--organized:task_aaa-->\n- [[Notes/Converted]]\n- [/] high <!--organized:task_bbb-->';
     expect(sortTasks(linked, 2, 'list', priorities)).toBe('- [/] high <!--organized:task_bbb-->\n- [[Notes/Converted]]\n- [ ] low <!--organized:task_aaa-->');
     expect(sortTasks('- [ ] low <!--organized:task_aaa-->\n  - [[Nested]]\n- [/] high <!--organized:task_bbb-->', 2, 'list', priorities)).toBe('- [/] high <!--organized:task_bbb-->\n- [ ] low <!--organized:task_aaa-->\n  - [[Nested]]');
     expect(sortTasks('- [ ] low <!--organized:task_aaa-->\nProse\n- [/] high <!--organized:task_bbb-->', 2, 'list', priorities)).toBe('- [ ] low <!--organized:task_aaa-->\nProse\n- [/] high <!--organized:task_bbb-->');
+    const none = '- [x] done <!--organized:task_ddd1-->\n- [>] fwd <!--organized:task_ddd2-->\n- [<] sched <!--organized:task_ddd3-->\n- [ ] open <!--organized:task_ddd4-->\n- [ ] low <!--organized:task_aaa-->';
+    expect(sortTasks(none, 4, 'list', priorities).split('\n').map(l => l.slice(0, 5))).toEqual(['- [ ] ', '- [ ] ', '- [x] ', '- [>] ', '- [<] '].map(l => l.slice(0, 5)));
     for (const marker of ['x', 'X', '-']) expect(sortTasks(`- [${marker}] high <!--organized:task_bbb-->\n- [ ] medium <!--organized:task_ccc-->\n- [ ] low <!--organized:task_aaa-->`, 0, 'list', priorities)).toBe(`- [ ] medium <!--organized:task_ccc-->\n- [ ] low <!--organized:task_aaa-->\n- [${marker}] high <!--organized:task_bbb-->`);
   });
   it("sorts only safe sibling positions, never prose, headings or subtask blocks", () => {
@@ -100,11 +102,11 @@ describe("Markdown task codec", () => {
     expect(writeNoteSection(note, 'Description', 'New\n\n## Kept')).toBe('New\n\n## Kept\n\n## Sources\nhttps://a.b\n');
     expect(noteSection('## Description\nOnly\n## Notes', 'Description')).toBe('Only'); expect(noteSection('## Description\nOld\n## Idea\nlegacy\n', 'Description')).toBe('Old\n\n## Idea\nlegacy');
   });
-  it("sorts in-progress lines first and ranks forwarded and scheduled lines as no priority", () => {
+  it("sorts in-progress lines first and ranks forwarded and scheduled lines below every open todo", () => {
     const priorities = new Map<string, any>([['aaaaaaaa1', 'high'], ['bbbbbbbb1', 'high'], ['cccccccc1', 'medium'], ['dddddddd1', 'none'], ['eeeeeeee1', 'low']]);
     const text = ['- [>] Forwarded high <!--organized:aaaaaaaa1-->', '- [<] Scheduled high <!--organized:bbbbbbbb1-->', '- [ ] Medium <!--organized:cccccccc1-->', '- [ ] None <!--organized:dddddddd1-->', '- [/] Low but running <!--organized:eeeeeeee1-->', '- [!] Plain running'].join('\n').replace('[!] Plain running', '[/] Plain running');
     const titles = (out: string) => out.split('\n').map(l => l.replace(/^- \[.\] | <!--.*$/g, ''));
-    expect(titles(sortTasks(text, 2, 'list', priorities))).toEqual(['Low but running', 'Plain running', 'Medium', 'Forwarded high', 'Scheduled high', 'None']);
+    expect(titles(sortTasks(text, 2, 'list', priorities))).toEqual(['Low but running', 'Plain running', 'Medium', 'None', 'Forwarded high', 'Scheduled high']);
     expect(titles(sortTasks(text, 2, 'none', priorities))).toEqual(titles(text)); expect(titles(sortTasks(text, 4, 'first', priorities))[0]).toBe('Low but running');
   });
 });
