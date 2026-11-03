@@ -33,13 +33,24 @@ describe('plugin lifecycle and user-only editor actions', () => {
   it('invalidates projections only for task metadata, today or affected indexed references', async () => {
     const { h, plugin } = await loaded(); h.layout[0](); const task = await plugin.repo.create('Selected'); plugin.selectedTaskId = task.id;
     const unrelated: any = await h.add('Unrelated.md', 'text'); const reference: any = await h.add('Reference.md', `- [ ] Selected <!--organized:${task.id}-->`); await plugin.service.refs(task.id);
-    const refresh = vi.spyOn(plugin, 'refresh').mockImplementation(() => undefined);
+    const refresh = vi.spyOn(plugin, 'refreshSoon').mockImplementation(() => undefined);
     h.events.modify[0](unrelated); await flush(); expect(refresh).not.toHaveBeenCalled();
     h.events.modify[0](plugin.repo.taskFile(task.id)); await flush(); expect(refresh).toHaveBeenCalledTimes(1);
     const today: any = await h.add(`Daily/${localDate()}.md`, 'ordinary text'); h.events.modify[0](today); await flush(); expect(refresh).toHaveBeenCalledTimes(2);
     h.texts.set(reference.path, 'removed reference'); h.events.modify[0](reference); await flush(); expect(refresh).toHaveBeenCalledTimes(3);
     h.texts.set(unrelated.path, `- [ ] Selected <!--organized:${task.id}-->`); h.events.modify[0](unrelated); await flush(); expect(refresh).toHaveBeenCalledTimes(4);
     expect(plugin.service.hasReference(null, unrelated.path)).toBe(false);
+  });
+  it('redraws at most once per burst of autosaves, and not at all after unload', async () => {
+    vi.useFakeTimers(); try {
+      const { h, plugin } = await loaded(); h.layout[0](); const refresh = vi.spyOn(plugin, 'refresh').mockImplementation(() => undefined);
+      const today: any = await h.add(`Daily/${localDate()}.md`, 'typing'); await vi.advanceTimersByTimeAsync(1000); refresh.mockClear();
+      for (let i = 0; i < 5; i++) { h.events.modify[0](today); await vi.advanceTimersByTimeAsync(50); }
+      expect(refresh).not.toHaveBeenCalled(); await vi.advanceTimersByTimeAsync(400); expect(refresh).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(2000); expect(refresh).toHaveBeenCalledTimes(1);
+      h.events.modify[0](today); await vi.advanceTimersByTimeAsync(50); plugin.onunload(); await vi.advanceTimersByTimeAsync(1000); expect(refresh).toHaveBeenCalledTimes(1);
+      plugin.refreshSoon(); (plugin as any).loaded = false; await vi.advanceTimersByTimeAsync(1000); expect(refresh).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); }
   });
   it('connects safety notices, section prompts, reading processors and CM refresh to the registered host', async () => {
     const { h, plugin, stub } = await loaded();

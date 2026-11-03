@@ -73,7 +73,7 @@ export default class Organized extends Plugin {
         this.registerEvent(this.app.vault.on("modify", file => { if (file instanceof TFile) {
           void this.repo.track(file); const id = this.selectedTaskId; const wasReference = this.service.hasReference(id, file.path);
           void this.service.index(file).then(() => {
-            if (file.path.startsWith(`${this.settings.taskFolder}/`) || this.service.daily.date(file.path) === localDate() || wasReference || this.service.hasReference(id, file.path)) this.refresh();
+            if (file.path.startsWith(`${this.settings.taskFolder}/`) || this.service.daily.date(file.path) === localDate() || wasReference || this.service.hasReference(id, file.path)) this.refreshSoon();
           }).catch(report);
         } }));
         this.registerEvent(this.app.vault.on("rename", (file, oldPath) => { this.service.forget(oldPath); if (file instanceof TFile) { this.repo.moved(oldPath, file); void this.service.index(file).then(() => this.refresh()).catch(report); if (this.safety.writable && this.repo.convertedTo(oldPath).length) void this.run(() => this.service.followRename(oldPath, file.path)); } }));
@@ -89,7 +89,7 @@ export default class Organized extends Plugin {
     } catch (error) { report(error); throw error; }
   }
   onunload(): void {
-    this.loaded = false; this.unloaded = true; for (const timer of this.titleTimers.values()) window.clearTimeout(timer); this.titleTimers.clear();
+    this.loaded = false; this.unloaded = true; for (const timer of this.titleTimers.values()) window.clearTimeout(timer); this.titleTimers.clear(); if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer); this.refreshTimer = null;
     void writeCrashState(this.app.vault.adapter, crashStatePath(this.manifest, this.app.vault.configDir), DEFAULT_CRASH_STATE);
   }
   assertWritable(): void { if (!this.safety.writable) throw new Error("Writes paused to protect newer/unreadable settings. Restore a compatible backup or update Organized."); }
@@ -229,6 +229,12 @@ export default class Organized extends Plugin {
   }
   eachView(callback: (view: OrganizedInspectorView) => void): void {
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) if (leaf.view instanceof OrganizedInspectorView) callback(leaf.view);
+  }
+  private refreshTimer: number | null = null;
+  /** Autosaves of the note being typed in arrive every second or two; the panel is redrawn for them at most about twice a second, not once per save. */
+  refreshSoon(): void {
+    if (this.refreshTimer !== null) return;
+    this.refreshTimer = window.setTimeout(() => { this.refreshTimer = null; if (this.loaded) this.refresh(); }, 400);
   }
   refresh(): void {
     this.revision++;
