@@ -141,3 +141,13 @@ describe('project links beside a todo', () => {
     const none = createDiv(); await projection(owner, none, task, new Component() as any); expect(none.querySelector('.organized-project-link')).toBeNull();
   });
 });
+
+describe('recurring symbol beside a todo', () => {
+  it('shows a green repeat symbol when the task recurs and a gray one when it does not, with a text label for screen readers', async () => {
+    const { owner, task, repo } = await fixture(); owner.settings.displayProperties = ['recurring'];
+    const off = createDiv(); await projection(owner, off, task, new Component() as any); const gray = off.querySelector('.organized-recurring')!;
+    expect(gray.classList.contains('organized-recurring-off')).toBe(true); expect(gray.getAttribute('aria-label')).toBe('Recurring: off'); expect(off.textContent).not.toContain('recurring: false');
+    const on = createDiv(); await projection(owner, on, await repo.update(task.id, t => ({ ...t, recurring: true })), new Component() as any);
+    expect(on.querySelector('.organized-recurring')!.classList.contains('organized-recurring-on')).toBe(true); expect(on.querySelector('.organized-recurring')!.getAttribute('aria-label')).toBe('Recurring: on');
+  });
+});

@@ -1,4 +1,4 @@
-import { Component, MarkdownPostProcessorContext, MarkdownRenderer, MarkdownRenderChild, Notice } from "obsidian";
+import { Component, MarkdownPostProcessorContext, MarkdownRenderer, MarkdownRenderChild, Notice, setIcon } from "obsidian";
 import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetType, keymap } from "@codemirror/view";
 import { StateEffect, StateField, RangeSetBuilder, EditorState, Extension, Prec } from "@codemirror/state";
 import { editorLivePreviewField } from "obsidian";
@@ -38,6 +38,10 @@ export async function projection(owner: Organized, host: HTMLElement, task: Task
     if (!live()) return;
     if (property === "scheduled") continue;
     if (property === "projects") { projectLinks(owner, host, task); continue; }
+    if (property === "recurring") {
+      const state = task.recurring ? "on" : "off";
+      setIcon(host.createSpan({ cls: `organized-property organized-recurring organized-recurring-${state}`, attr: { role: "img", "aria-label": `Recurring: ${state}` } }), "repeat"); continue;
+    }
     if (property === "description" || property === "sources") {
       const file = owner.repo.file(owner.repo.taskPath(task.id)); if (!file) continue;
       const body = splitNote(await owner.repo.readText(file)).body; if (!live()) return;
