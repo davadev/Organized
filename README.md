@@ -80,7 +80,7 @@ flowchart TB
 
 ## First run
 
-The first time Organized starts it shows a short **onboarding card**: nine steps with small illustrations: the two settings to make first, the idea behind the plugin, the side panel and calendar, the checkbox letters, and how to start and leave. Skip it whenever you like; it appears once. Reopen it with the command **Organized: Show onboarding card** or the **Onboarding card** button in **Settings → Organized → Help**.
+The first time Organized starts it shows a short **onboarding card**: ten steps with small illustrations: the two settings to make first, the idea behind the plugin, the side panel and calendar, showing task properties in the note, the checkbox letters, and how to start and leave. Skip it whenever you like; it appears once. Reopen it with the command **Organized: Show onboarding card** or the **Onboarding card** button in **Settings → Organized → Help**.
 
 ## Leaving Organized
 
