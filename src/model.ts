@@ -59,11 +59,12 @@ export interface Settings {
   taskNotesMigrated: boolean;
   /** Task notes still named after their id were renamed after their todo's title (tried once; the command can run it again). */
   taskNoteNamesMigrated: boolean;
+  subtaskNestingMigrated: boolean;
 }
 export const DEFAULT_SETTINGS: Settings = {
   taskFolder: "Tasks", dailyFolder: "Daily", dailyFormat: "YYYY-MM-DD", autoForward: true,
   missingSection: "recreate", sortScope: "list", displayProperties: [], propertiesAlign: "text", showScheduledDate: true, taskRetentionDays: 0,
-  dailyTemplate: "", knownProjects: [], collapsedHeadings: {}, projectsMigrated: false, projectNotesMarked: false, projectStartsSet: false, retentionDetail: "title", dayTasksCollapsed: false, hideDoneTasks: false, hideClosedProjects: true, noteFolder: "", onboardingSeen: false, taskNotesMigrated: false, taskNoteNamesMigrated: false,
+  dailyTemplate: "", knownProjects: [], collapsedHeadings: {}, projectsMigrated: false, projectNotesMarked: false, projectStartsSet: false, retentionDetail: "title", dayTasksCollapsed: false, hideDoneTasks: false, hideClosedProjects: true, noteFolder: "", onboardingSeen: false, taskNotesMigrated: false, taskNoteNamesMigrated: false, subtaskNestingMigrated: false,
 };
 export function object(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -108,7 +109,7 @@ export function settingsFrom(value: unknown): Settings {
   try { if (typeof v.noteFolder === "string") s.noteFolder = path(v.noteFolder, true); } catch { /* An invalid remembered folder falls back to the vault root. */ }
   try { if (typeof v.dailyTemplate === "string" && v.dailyTemplate.trim()) { const template = path(v.dailyTemplate); if (template.endsWith(".md")) s.dailyTemplate = template; } } catch { /* Invalid persisted paths use safe defaults. */ }
   s.knownProjects = [...new Set(strings(v.knownProjects).filter(p => { try { return path(p) === p && p.endsWith(".md"); } catch { return false; } }))];
-  s.projectsMigrated = v.projectsMigrated === true; s.projectNotesMarked = v.projectNotesMarked === true; s.projectStartsSet = v.projectStartsSet === true; s.retentionDetail = member(v.retentionDetail, RETENTION_DETAILS, "title"); s.dayTasksCollapsed = v.dayTasksCollapsed === true; s.hideDoneTasks = v.hideDoneTasks === true; s.hideClosedProjects = typeof v.hideClosedProjects === "boolean" ? v.hideClosedProjects : true; s.onboardingSeen = v.onboardingSeen === true; s.taskNotesMigrated = v.taskNotesMigrated === true; s.taskNoteNamesMigrated = v.taskNoteNamesMigrated === true;
+  s.projectsMigrated = v.projectsMigrated === true; s.projectNotesMarked = v.projectNotesMarked === true; s.projectStartsSet = v.projectStartsSet === true; s.retentionDetail = member(v.retentionDetail, RETENTION_DETAILS, "title"); s.dayTasksCollapsed = v.dayTasksCollapsed === true; s.hideDoneTasks = v.hideDoneTasks === true; s.hideClosedProjects = typeof v.hideClosedProjects === "boolean" ? v.hideClosedProjects : true; s.onboardingSeen = v.onboardingSeen === true; s.taskNotesMigrated = v.taskNotesMigrated === true; s.taskNoteNamesMigrated = v.taskNoteNamesMigrated === true; s.subtaskNestingMigrated = v.subtaskNestingMigrated === true;
   s.collapsedHeadings = {};
   for (const [notePath, keys] of Object.entries(object(v.collapsedHeadings))) { const kept = [...new Set(strings(keys))]; if (kept.length) s.collapsedHeadings[notePath] = kept; }
   return s;

@@ -1,6 +1,6 @@
 import { inBatches } from "./batches";
 import { Notice, TFile } from "obsidian";
-import { descendants, insertTask, insertUnder, migrateNote, moveTask, noteSection, parentIds, parseTasks, projectSection, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
+import { descendants, insertTask, insertUnder, migrateNote, moveTask, nestUnder, noteSection, parentIds, parseTasks, projectSection, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, Status, Task, taskFrom, WorkSession } from "./model";
 import { seconds } from "./sessions";
@@ -244,7 +244,34 @@ export class TaskService {
     if (result === "recurring") throw new Error("Recurring tasks cannot be parents or subtasks.");
     if (result === "loop") throw new Error("A task cannot be a subtask of itself or of one of its own subtasks.");
     if (result === "missing") throw new Error("The task note could not be found.");
-    if (result === "already") new Notice("It is already a subtask of that task."); else this.changed();
+    // The todo lines follow the relation: wherever both are in one note, the subtask is indented under its parent.
+    const changes: Change[] = []; const parent = await this.repo.read(parentId); const child = await this.repo.read(childId); let notes = 0;
+    for (const occurrence of await this.repo.occurrences(childId)) {
+      const after = nestUnder(occurrence.text, childId, parentId, true); if (after === null) continue;
+      await this.edit(occurrence.file, occurrence.text, after, changes); notes++;
+    }
+    if (notes) this.summarize(changes, "Subtask indented", `“${child.title}” now sits under “${parent.title}” in ${plural(notes, "note")}.`);
+    else if (result === "already") new Notice("It is already a subtask of that task."); else this.changed();
+  }
+  /**
+   * Indents todos under their parents wherever a parent's `subtasks` list says so and both are in one note but the subtask is still at the top of its list
+   * (relations made before the panel indented lines). Notes are read, planned and backed up before any is written; a note that cannot be written is left as it was.
+   */
+  async nestSubtaskLines(backup: (files: { path: string; before: string }[]) => Promise<string>): Promise<{ changes: Change[]; failed: string[] }> {
+    const pairs: [string, string][] = [];
+    for (const parent of await this.repo.list()) for (const child of await this.repo.subtasksOf(parent)) pairs.push([parent.id, child.id]);
+    const changes: Change[] = []; const failed: string[] = []; if (!pairs.length) return { changes, failed };
+    const pending: { file: TFile; before: string; after: string }[] = [];
+    for (const file of this.repo.app.vault.getMarkdownFiles()) {
+      if (this.repo.isTaskRecord(file.path)) continue;
+      const before = await this.repo.readText(file); if (!before.includes("<!--organized:")) continue;
+      let after = before; for (const [parentId, childId] of pairs) after = nestUnder(after, childId, parentId) ?? after;
+      if (after !== before) pending.push({ file, before, after });
+    }
+    if (!pending.length) return { changes, failed };
+    await backup(pending.map(p => ({ path: p.file.path, before: p.before })));
+    for (const p of pending) { try { await this.edit(p.file, p.before, p.after, changes); } catch { failed.push(p.file.path); } }
+    return { changes, failed };
   }
   /** Takes a task out of its parent's list; the todo lines stay where they are. */
   async detachSubtask(childId: string): Promise<void> {
