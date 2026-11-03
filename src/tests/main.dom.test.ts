@@ -175,6 +175,14 @@ describe('plugin lifecycle and user-only editor actions', () => {
     await flush(); expect(pick).not.toHaveBeenCalled(); expect(trigger).not.toHaveBeenCalled();
     h.setActive(file, '- [ ] '); plugin.onEditorUpdate(update('- [', '- [ ] ')); await flush(); expect(pick).toHaveBeenCalledOnce();
   });
+  it('asks when the first character is typed into the blank checkbox that Enter leaves behind, and only then', async () => {
+    const { h, plugin } = await loaded(); const file: any = await h.add('Enter.md'); const pick = vi.spyOn(plugin, 'pickTask').mockResolvedValue();
+    const typed = (before: string, after: string, event: string | null = 'input.type') => { const editor = h.setActive(file, after); const rows = after.split('\n'); editor.setCursor({ line: rows.length - 1, ch: rows.at(-1)!.length }); plugin.onEditorUpdate(update(before, after, event)); };
+    typed('- [ ] Clean kitchen <!--organized:abcdefgh12-->\n', '- [ ] Clean kitchen <!--organized:abcdefgh12-->\n- [ ] ', null); await flush(); expect(pick).not.toHaveBeenCalled();
+    typed('- [ ] Clean kitchen <!--organized:abcdefgh12-->\n- [ ] ', '- [ ] Clean kitchen <!--organized:abcdefgh12-->\n- [ ] c'); await flush(); expect(pick).toHaveBeenCalledOnce();
+    (plugin as any).pickerOpen = false; pick.mockClear();
+    typed('- [ ] c', '- [ ] cl'); await flush(); expect(pick).not.toHaveBeenCalled();
+  });
   it('opens the task picker for the mobile checkbox toolbar insertion without a CM user event', async () => {
     const { h, plugin } = await loaded(); const file: any = await h.add('Toolbar.md');
     const editor = h.setActive(file, '- [ ] '); const pick = vi.spyOn(plugin, 'pickTask').mockResolvedValue();

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed the task dialog not opening when you press Enter on a todo and start typing the next one. The blank `- [ ] ` that Enter leaves now asks (link a task, create one, keep a plain todo) when you type its first character; you no longer have to delete the space and type it again.
 - **Faster with many tasks.** Drawing the panel no longer reads every task note from disk each time: the properties of a note are parsed once and reused until the note changes (any edit, rename, delete or sync drops them, and text you have not saved yet in an open task note is never reused). Typing in today's daily note used to redraw the panel on every autosave; it now redraws at most about twice a second. Task notes and the reference index are read several at a time at startup and on first use.
 - Onboarding and README catch up with the compact symbols, the sort rule, the timer stop on removing `/` and the short time format; the onboarding illustration now shows the recurring symbol and `1h 13min`.
 - Fixed todos showing "Missing task; repair via attach/create" right after starting Obsidian (beta 63 and later). A task looked up while the note index was still being built was reported missing; the lookup now waits for the build to finish.
