@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Sorting by priority now keeps every open todo above finished, canceled, forwarded and scheduled ones, including open todos without a priority.
 - **Daily-note polish.**
   - Removing an in-progress todo (its `/` line) no longer asks anything: the timer stops, the time is kept, and a notice says so.
   - With *Project links* shown beside todos, each project appears by name only, as a clickable link to the project note, in the project's colour (darker on a light theme, brighter on a dark one).

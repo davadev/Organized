@@ -252,8 +252,8 @@ describe("sorting follows status and moves", () => {
     await h.service.status(c.id, "in_progress"); expect(titles(h.texts.get(note.path)!)).toEqual(["Charlie", "Alpha", "Bravo"]);
     await h.service.status(c.id, "open"); expect(titles(h.texts.get(note.path)!)).toEqual(["Alpha", "Bravo", "Charlie"]);
     const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); const context = { file: note, line: parseTasks(h.texts.get(note.path)!)[0] };
-    await h.service.schedule(context, localDate(tomorrow), "forward", "manual"); expect(titles(h.texts.get(note.path)!)).toEqual(["Bravo", "Alpha", "Charlie"]); expect(h.texts.get(note.path)).toContain(`- [>] Alpha`);
-    h.setSettings({ sortScope: "none" }); await h.service.status(c.id, "in_progress"); expect(titles(h.texts.get(note.path)!)).toEqual(["Bravo", "Alpha", "Charlie"]);
+    await h.service.schedule(context, localDate(tomorrow), "forward", "manual"); expect(titles(h.texts.get(note.path)!)).toEqual(["Bravo", "Charlie", "Alpha"]); expect(h.texts.get(note.path)).toContain(`- [>] Alpha`);
+    h.setSettings({ sortScope: "none" }); await h.service.status(c.id, "in_progress"); expect(titles(h.texts.get(note.path)!)).toEqual(["Bravo", "Charlie", "Alpha"]);
   });
   it("leaves project notes in their status sections and survives a sort that cannot be written", async () => {
     const h = harness(); const folder = h.repo.projectFolder(); const a = await h.repo.create("Alpha"); const b = await h.repo.create("Bravo"); await h.service.projects(a.id, [`${folder}/P.md`]); await h.service.projects(b.id, [`${folder}/P.md`]);

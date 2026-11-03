@@ -196,8 +196,8 @@ export function sortTasks(text: string, line: number, scope: Settings["sortScope
     while (end < group.length - 1 && bulletsOnly(endOfBlock(group[end]), group[end + 1].line)) end++;
     group = group.slice(start, end + 1);
   }
-  // What is being worked on comes first; forwarded, scheduled and finished lines are no longer open work, so they rank as no priority whatever they were given.
-  const rank = (task: TaskLine) => task.marker === "/" ? -1 : ["<", ">", "x", "X", "-"].includes(task.marker) ? PRIORITIES.indexOf("none") : PRIORITIES.indexOf(priorities.get(task.id ?? "") ?? "none");
+  // What is being worked on comes first; forwarded, scheduled and finished lines are no longer open work, so they rank below every open todo, even one without a priority.
+  const rank = (task: TaskLine) => task.marker === "/" ? -1 : ["<", ">", "x", "X", "-"].includes(task.marker) ? PRIORITIES.length : PRIORITIES.indexOf(priorities.get(task.id ?? "") ?? "none");
   const sorted = [...group].sort((a, b) => rank(a) - rank(b));
   if (scope === "first") {
     const selected = group.find(t => t.line === line)!;
