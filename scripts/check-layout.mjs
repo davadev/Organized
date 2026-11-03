@@ -51,6 +51,13 @@ try {
         if (!(await page.locator('.organized-task-actions .organized-danger').count())) throw Error('Task inspector is missing its delete action');
         if (await page.locator('.organized-task-details').count() !== 1) throw Error('Task properties are fragmented instead of grouped into one details surface');
       }
+      if (tab === 'Task') {
+        // The subtasks card: every subtask is a readable row (title wraps, nothing clipped), toggles are real tap targets, and the progress bar fills the card.
+        const rows = await page.locator('.organized-subtask').evaluateAll(els => els.map(el => { const box = el.getBoundingClientRect(); const toggle = el.querySelector('.organized-subtask-toggle').getBoundingClientRect(); const title = el.querySelector('.organized-subtask-title'); return { right: box.right, toggle: Math.min(toggle.width, toggle.height), clipped: title.scrollWidth > title.clientWidth + 1 }; }));
+        const bar = await page.locator('.organized-progress').evaluate(el => ({ right: el.parentElement.getBoundingClientRect().right, filled: el.getBoundingClientRect().width / el.parentElement.getBoundingClientRect().width })); const card = bar.right;
+        if (bar.filled < 0.8) throw Error(`The progress bar is not as wide as its card (${bar.filled.toFixed(2)}) at ${width}`);
+        if (rows.length !== 4 || rows.some(row => row.clipped || row.toggle < 24 || row.right > card + 1)) throw Error(`Subtask rows are clipped, cramped or overflowing at ${width}: ${JSON.stringify(rows)}`);
+      }
       if (tab === 'Week' || tab === 'Day') {
         const segment = await page.evaluate(() => [...document.querySelectorAll('.organized-seg-button')].map(button => [button.getBoundingClientRect().height, button.getAttribute('aria-pressed')]));
         if (segment.length !== 3 || segment.some(([height]) => height > 40) || segment.filter(([, pressed]) => pressed === 'true').length !== 1) throw Error(`Calendar view switch is missing, inflated or has no active mode: ${JSON.stringify(segment)}`);

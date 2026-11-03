@@ -7,7 +7,7 @@ import { elapsed, localDate, PRIORITIES, Section, STATUS_ICONS, STATUSES, Task, 
 import { byPriority, report } from "./service";
 import { DatePicker, SessionModal, TaskPicker } from "./modals";
 import { formatMinutes, lengthOf, lengthOfSeconds, seconds } from "./sessions";
-import { NoteSection, NOTE_SECTIONS, noteSection, parseTasks, TaskLine } from "./codec";
+import { descendants, NoteSection, NOTE_SECTIONS, noteSection, parseTasks, TaskLine } from "./codec";
 import { splitNote } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 import { blocksOn, hourRange } from "./timeline";
@@ -206,7 +206,9 @@ export class OrganizedInspectorView extends ItemView {
     const hideDone = this.owner.settings.hideDoneTasks;
     // Done, scheduled (`<`) and forwarded (`>`) lines are finished business for this note; hiding them keeps the list to what is still to do.
     const isDone = (line: TaskLine) => { if (line.marker === "<" || line.marker === ">") return true; const task = line.id ? tasks.get(line.id) : null; return task ? this.shownStatus(task) === "completed" : line.marker.toLowerCase() === "x"; };
-    const visible = hideDone ? lines.filter(line => !isDone(line)) : lines; const doneHidden = lines.length - visible.length;
+    // A finished todo stays while something nested under it is still to do, so the nesting never loses its parent.
+    const visible = hideDone ? lines.filter(line => !isDone(line) || descendants(lines, line.line).some(child => !isDone(child))) : lines; const doneHidden = lines.length - visible.length;
+    const nesting = (line: TaskLine) => { let levels = 0; for (let up = line.parent; up !== null; up = lines.find(l => l.line === up)?.parent ?? null) levels++; return levels; };
     const name = source.file.path.split("/").at(-1)!.replace(/\.md$/i, "");
     const list = this.section(host, name, visible.length); list.addClass("organized-grouped");
     const head = list.querySelector<HTMLElement>(".organized-section-head")!;
@@ -228,7 +230,7 @@ export class OrganizedInspectorView extends ItemView {
       shown = line.section;
       if (hidden) continue;
       // Tasks sit one level inside the heading that owns them.
-      const indent = (row: HTMLElement) => { row.addClass("organized-indented"); row.setCssProps({ "--organized-depth": String(line.section.length) }); };
+      const indent = (row: HTMLElement) => { row.addClass("organized-indented"); row.setCssProps({ "--organized-depth": String(line.section.length + nesting(line)) }); };
       const task = line.id ? tasks.get(line.id) : null;
       if (task) indent(this.taskRow(list, task, () => this.focusNoteTask(source.editor, source.file, line, task.id)));
       else indent(this.noteTaskRow(list, source.file, source.editor, line, line.id ? "Linked task unavailable" : "Regular todo"));
@@ -470,6 +472,8 @@ export class OrganizedInspectorView extends ItemView {
     eyebrow.createSpan({ text: this.origin === "Editor cursor" ? "From editor" : this.origin === "Calendar" ? "From calendar" : this.origin === "Favorites" ? "From favorites" : "From projects" });
     if (this.origin === "Editor cursor") this.iconButton(eyebrow, "All tasks in this note", "list", () => this.showNoteTasks()).addClass("organized-note-overview");
     else this.button(eyebrow, this.origin === "Calendar" ? "Back to calendar" : this.origin === "Favorites" ? "Back to favorites" : "Back to projects", () => { this.tab = this.origin === "Calendar" ? "Calendar" : this.origin === "Favorites" ? "Favorites" : "Projects"; return this.render(); }).addClass("organized-back");
+    const parent = await this.owner.repo.parentOf(id); if (generation !== this.renderId) return;
+    if (parent) { const part = this.button(hero.createDiv({ cls: "organized-part-of" }), `Part of ${parent.title}`, () => this.openTask(parent)); part.setAttribute("aria-label", `Open parent task ${parent.title}`); }
     const header = hero.createDiv({ cls: "organized-task-header" });
     if (this.editingTitle) {
       const input = header.createEl("input", { cls: "organized-title-input", type: "text", attr: { "aria-label": "Task title" } }); input.value = task.title;
@@ -488,11 +492,12 @@ export class OrganizedInspectorView extends ItemView {
     const shown = this.shownStatus(task); setIcon(status.createSpan({ cls: "organized-status-icon", attr: { "data-status": shown, "aria-hidden": "true" } }), task.recurring && shown === "completed" ? "calendar-check" : STATUS_ICONS[task.status]);
     const statusSelect = this.select(status, "Status", this.shownStatus(task), STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(async () => this.owner.service.status(id, value as Task["status"], this.owner.context?.line.id === id ? this.owner.context : task.recurring ? await this.todayContext(id) : undefined)); });
     if (task.recurring) statusSelect.options[STATUSES.indexOf("completed")].text = "done · today";
-    const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Description", "Sources"], value => { this.module = value; this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
+    const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Subtasks", "Description", "Sources"], value => { this.module = value; this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
     const file = await this.owner.repo.resolve(id, "showing the task"); const body = splitNote(await this.owner.repo.readText(file)).body;
     if (generation !== this.renderId) return;
     const details = host.createDiv({ cls: "organized-task-details" });
     await this.moduleCard(details, file.path, id, "Description", noteSection(body, "Description"));
+    await this.subtaskCard(details, task);
     if (task.priority !== "none" || this.module === "Priority") this.select(this.card(details, "Priority", "flag"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.service.setPriority(id, value as Task["priority"], this.owner.context?.line.id === id ? this.owner.context : undefined); this.owner.refresh(); }); });
     if (task.scheduled || this.module === "Schedule") this.button(this.card(details, "Schedule", "calendar"), task.scheduled ?? "Choose date", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined))).open(); });
     if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || this.module === "Timer") {
@@ -536,6 +541,32 @@ export class OrganizedInspectorView extends ItemView {
     this.button(actions, "Delete task", () => this.owner.deleteTask(id)).addClass("organized-danger");
   }
   /** Opens a task from the Projects or Favorites tab; the origin decides which tab Back returns to. */
+  /** Opens another task in the Task tab, keeping where the panel was opened from so Back still leads there. */
+  private openTask(task: Task): Promise<void> {
+    this.owner.selectedTaskId = task.id; this.tab = "Task"; this.module = ""; this.editingModule = ""; this.editingTitle = false; return this.render();
+  }
+  /** The subtasks of a task with how many are done, each with a toggle and a way in, and a button to add one under the todo in the open note. */
+  private async subtaskCard(details: HTMLElement, task: Task): Promise<void> {
+    const children = await this.owner.repo.subtasksOf(task); if (!children.length && this.module !== "Subtasks") return;
+    const card = this.card(details, "Subtasks", "list-checks"); const counted = children.filter(child => child.status !== "canceled"); const done = counted.filter(child => child.status === "completed").length;
+    if (counted.length) {
+      card.createDiv({ cls: "organized-muted", text: `${done} of ${counted.length} done` });
+      const bar = card.createDiv({ cls: "organized-progress", attr: { role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(counted.length), "aria-valuenow": String(done), "aria-label": "Subtasks done" } });
+      bar.createDiv({ cls: done === counted.length ? "organized-progress-bar organized-progress-complete" : "organized-progress-bar" }).setCssProps({ "--organized-progress": `${Math.round(100 * done / counted.length)}%` });
+    }
+    for (const child of children) {
+      const row = card.createDiv({ cls: "organized-subtask", attr: { "data-status": child.status } });
+      const toggle = row.createEl("button", { cls: "organized-subtask-toggle", attr: { "aria-label": child.status === "completed" ? `Reopen ${child.title}` : `Complete ${child.title}`, "aria-pressed": String(child.status === "completed") } }); setIcon(toggle, STATUS_ICONS[child.status]);
+      toggle.addEventListener("click", () => { void this.owner.run(() => this.owner.service.status(child.id, child.status === "completed" ? "open" : "completed")).catch(report); });
+      const open = row.createEl("button", { cls: "organized-subtask-title", text: child.title, attr: { "aria-label": `Open subtask ${child.title}` } });
+      open.addEventListener("click", () => { void this.openTask(child).catch(report); });
+    }
+    this.button(card, "Add subtask", async () => {
+      const source = this.owner.taskSourceEditor(); const lines = source ? parseTasks(source.editor.getValue()).filter(t => t.id === task.id) : [];
+      if (!source || lines.length !== 1) throw new Error("Open the note that holds this todo once, then add the subtask.");
+      source.editor.setCursor({ line: lines[0].line, ch: 0 }); await this.owner.addSubtask(source.editor, source.file);
+    });
+  }
   private chooseTask(task: Task, origin: "Projects" | "Favorites"): Promise<void> {
     this.owner.selectedTaskId = task.id; this.origin = origin; this.tab = "Task"; this.module = ""; this.editingModule = ""; this.editingTitle = false; return this.render();
   }

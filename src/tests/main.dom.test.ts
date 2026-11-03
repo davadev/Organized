@@ -63,7 +63,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
   });
   it('registers capabilities only, defers vault-create handling and cleans durable crash state', async () => {
     const { h, plugin, stub } = await loaded();
-    expect(stub.commands).toHaveLength(10); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
+    expect(stub.commands).toHaveLength(12); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
     const factory = stub.views.get(VIEW_TYPE); expect(factory({ app: h.app })).toBeInstanceOf(OrganizedInspectorView);
     h.layout[0](); expect(h.events.create).toHaveLength(1);
     const created = vi.spyOn(plugin.service, 'onDailyCreated').mockResolvedValue(); const index = vi.spyOn(plugin.service, 'index').mockResolvedValue(); const reconcile = vi.spyOn(plugin.service, 'reconcile').mockResolvedValue(); const refresh = vi.spyOn(plugin, 'refresh').mockImplementation(() => undefined);
@@ -180,6 +180,27 @@ describe('plugin lifecycle and user-only editor actions', () => {
     for (const status of ['completed', 'canceled', 'open', 'in_progress'] as const) { const task = await plugin.repo.create(`Clean kitchen ${status}`); await plugin.repo.update(task.id, t => ({ ...t, status })); }
     await plugin.pickTask(editor as any, file); const picker = Modal.instances.at(-1) as TaskPicker;
     expect(picker.tasks.map(t => t.status).sort()).toEqual(['in_progress', 'open']); expect(picker.getSuggestions('clean kitchen').filter(c => typeof c === 'string')).toEqual(['clean kitchen']); picker.close();
+  });
+  it('brings the parents\' lists in step once nesting stops changing, and writes nothing otherwise', async () => {
+    const { h, plugin } = await loaded(); const parent = await plugin.repo.create('Parent'); const child = await plugin.repo.create('Child');
+    const flat = `- [ ] Parent <!--organized:${parent.id}-->\n- [ ] Child <!--organized:${child.id}-->`; const nested = flat.replace('\n- [ ] Child', '\n  - [ ] Child');
+    const file: any = await h.add('Daily.md', nested); h.setActive(file, nested); const sync = vi.spyOn(plugin.service, 'syncSubtasks');
+    plugin.onEditorUpdate(update(flat, nested)); plugin.onEditorUpdate(update(flat, nested)); await vi.advanceTimersByTimeAsync(700); expect(sync).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(200); expect(sync).toHaveBeenCalledOnce(); expect((await plugin.repo.read(parent.id)).subtasks).toEqual(['[[Child]]']);
+    h.setActive(file, flat); plugin.onEditorUpdate(update(flat, flat + ' ')); h.setActive(file, flat + ' '); await vi.advanceTimersByTimeAsync(900); expect(sync).toHaveBeenCalledOnce();
+    h.setActive(file, flat); plugin.onEditorUpdate(update(nested, flat)); await vi.advanceTimersByTimeAsync(900); expect(sync).toHaveBeenCalledTimes(2); expect((await plugin.repo.read(parent.id)).subtasks).toEqual([]);
+    plugin.onEditorUpdate(update(flat, nested, 'input.organized')); const task: any = await h.add(`Tasks/Hand made.md`, 'x'); h.setActive(task, nested); plugin.onEditorUpdate(update(flat, nested)); h.clearActive(); plugin.onEditorUpdate(update(flat, nested));
+    h.setActive(file, nested); plugin.onEditorUpdate(update(flat, nested)); plugin.onunload(); await vi.advanceTimersByTimeAsync(2000); expect(sync).toHaveBeenCalledTimes(2);
+  });
+  it('adds an empty subtask under the todo at the cursor, after what is already nested, and asks which task it is', async () => {
+    const { h, plugin } = await loaded(); const parent = await plugin.repo.create('Parent'); const pick = vi.spyOn(plugin, 'pickTask').mockResolvedValue();
+    const text = `- [ ] Parent <!--organized:${parent.id}-->\n  - note\n    - deeper\n- [ ] Next`; const file: any = await h.add('Daily.md', text); const editor = h.setActive(file, text); editor.setCursor({ line: 0, ch: 3 });
+    await plugin.addSubtask(editor as any, file); expect(editor.getValue()).toBe(`- [ ] Parent <!--organized:${parent.id}-->\n  - note\n    - deeper\n  - [ ] \n- [ ] Next`); expect(editor.getCursor()).toEqual({ line: 3, ch: 8 }); expect(pick).toHaveBeenCalledWith(editor, file, false, true);
+    const last = `- [ ] Parent <!--organized:${parent.id}-->`; const solo = h.setActive(file, last); solo.setCursor({ line: 0, ch: 0 }); await plugin.addSubtask(solo as any, file); expect(solo.getValue()).toBe(`${last}\n  - [ ] `);
+    const plain = h.setActive(file, '- [ ] Plain'); plain.setCursor({ line: 0, ch: 0 }); await expect(plugin.addSubtask(plain as any, file)).rejects.toThrow('linked todo');
+    const stub: any = plugin; const add = vi.spyOn(plugin, 'addSubtask').mockResolvedValue(); const repair = vi.spyOn(plugin.service, 'repairSubtasks').mockResolvedValue();
+    for (const id of ['add-subtask', 'repair-subtasks']) { const command = stub.commands.find((c: any) => c.id === id); command.editorCallback(editor, { file }); command.editorCallback(editor, {}); }
+    await vi.advanceTimersByTimeAsync(10); expect(add).toHaveBeenCalledOnce(); expect(repair).toHaveBeenCalledOnce();
   });
   it('asks when the first character is typed into the blank checkbox that Enter leaves behind, and only then', async () => {
     const { h, plugin } = await loaded(); const file: any = await h.add('Enter.md'); const pick = vi.spyOn(plugin, 'pickTask').mockResolvedValue();

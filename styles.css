@@ -599,14 +599,25 @@ SOFTWARE.
 .organized-session-day { margin-block: 8px 2px; color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
 .organized-view .organized-panel button.organized-show-more { inline-size: 100%; margin-block-start: 6px; block-size: auto; min-block-size: 0; padding: 4px 8px; color: var(--text-muted); font-size: var(--font-ui-small); }
 
+.organized-part-of { margin-block-start: var(--size-4-1); }
+.organized-progress { inline-size: 100%; block-size: 6px; border-radius: 3px; background: var(--background-modifier-border); overflow: hidden; margin-block: var(--size-4-1) var(--size-4-2); }
+.organized-progress-bar { block-size: 100%; inline-size: var(--organized-progress, 0%); background: var(--interactive-accent); }
+.organized-progress-bar.organized-progress-complete { background: var(--color-green, #2f9e44); }
+.organized-subtask { display: flex; align-items: center; gap: var(--size-4-2); min-inline-size: 0; }
+.organized-subtask-toggle, .organized-subtask-title { background: none; border: 0; box-shadow: none; padding: 0; color: inherit; cursor: pointer; }
+.organized-subtask-toggle { display: inline-flex; align-items: center; justify-content: center; min-inline-size: 28px; min-block-size: 28px; }
+.organized-subtask-toggle svg { inline-size: 1em; block-size: 1em; }
+.organized-subtask[data-status="completed"] .organized-subtask-toggle { color: var(--color-green, #2f9e44); }
+.organized-subtask[data-status="completed"] .organized-subtask-title, .organized-subtask[data-status="canceled"] .organized-subtask-title { color: var(--text-muted); text-decoration: line-through; }
+.organized-subtask-title { text-align: start; overflow-wrap: anywhere; min-inline-size: 0; }
 .organized-symbol { display: inline-flex; align-items: center; gap: 3px; vertical-align: middle; color: var(--text-muted); }
 .organized-symbol-icon { display: inline-flex; }
 .organized-symbol-icon svg { inline-size: 1em; block-size: 1em; }
 .organized-symbol-text { font-variant-numeric: tabular-nums; }
 .organized-symbol-off, .organized-status-open, .organized-status-canceled, .organized-priority-none { color: var(--text-faint); }
 .organized-symbol-muted { color: var(--text-muted); }
-.organized-symbol-recurring, .organized-symbol-running, .organized-status-completed { color: var(--color-green, #2f9e44); }
-.organized-status-in_progress { color: var(--interactive-accent); }
+.organized-symbol-recurring, .organized-symbol-running, .organized-symbol-complete, .organized-status-completed { color: var(--color-green, #2f9e44); }
+.organized-status-in_progress, .organized-symbol-partial { color: var(--interactive-accent); }
 .organized-symbol-starred { color: var(--color-yellow, #e0ac00); }
 .organized-symbol-starred svg { fill: currentcolor; }
 .organized-symbol.organized-priority-high { color: var(--color-red, #d64545); }

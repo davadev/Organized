@@ -1,6 +1,6 @@
 import { inBatches } from "./batches";
 import { Notice, TFile } from "obsidian";
-import { insertTask, migrateNote, moveTask, noteSection, parseTasks, projectSection, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
+import { insertTask, migrateNote, moveTask, noteSection, parentIds, parseTasks, projectSection, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, Status, Task, taskFrom, WorkSession } from "./model";
 import { seconds } from "./sessions";
@@ -66,7 +66,9 @@ export class TaskService {
     const { text, line } = await this.resolve(context);
     if (line.id && !duplicate) throw new Error("This task is already linked. Use duplicate as new task for independent copies.");
     await this.edit(context.file, text, replaceTask(text, line, { title: task.title, id: task.id, repeat: false }));
-    const fresh = parseTasks(await this.repo.readText(context.file)).find(t => t.line === line.line)!;
+    const written = await this.repo.readText(context.file); const fresh = parseTasks(written).find(t => t.line === line.line)!;
+    // A todo linked while nested under another becomes its subtask.
+    await this.syncSubtasks(parentIds(text), parentIds(written));
     this.changed(); return { file: context.file, line: fresh };
   }
   async clean(context: Context, marker = " "): Promise<void> {
@@ -160,7 +162,48 @@ export class TaskService {
     const wanted = readableName(task.title).toLowerCase(); const current = file.basename.toLowerCase();
     if (current === wanted || current.replace(/ \d+$/, "") === wanted) return;
     const target = path(freePath(this.repo.settings().taskFolder, readableName(task.title), this.repo.nameTaken(file)));
-    try { await this.repo.renameNote(file, target); } catch { /* The old name stays; the next title edit tries again. */ }
+    const parent = await this.repo.parentOf(id); const was = this.repo.linkOf(file);
+    try { await this.repo.renameNote(file, target); } catch { return; /* The old name stays; the next title edit tries again. */ }
+    // Obsidian rewrites links to a renamed note; the parent's list is made right here too, so it does not depend on that setting.
+    if (parent) { const now = this.repo.linkOf(file); await this.repo.update(parent.id, t => ({ ...t, subtasks: t.subtasks.map(link => link.toLowerCase() === was.toLowerCase() ? now : link) })).catch(() => undefined); }
+  }
+  private async dropLinks(parentId: string, drop: (link: string) => boolean): Promise<boolean> {
+    try {
+      const parent = await this.repo.read(parentId); if (!parent.subtasks.some(drop)) return false;
+      await this.repo.update(parentId, t => ({ ...t, subtasks: t.subtasks.filter(link => !drop(link)) })); return true;
+    } catch { return false; }
+  }
+  /** Adds a task to its parent's `subtasks` list. Nothing happens for a recurring task, a task that cannot be found, or a parent that is the task's own descendant. */
+  private async linkSubtask(parentId: string, childId: string): Promise<boolean> {
+    const file = this.repo.taskFile(childId); if (!file || parentId === childId) return false;
+    try {
+      const [parent, child] = [await this.repo.read(parentId), await this.repo.read(childId)]; if (parent.recurring || child.recurring) return false;
+      for (let up: Task | null = parent, depth = 0; up && depth < 64; depth++) { up = await this.repo.parentOf(up.id); if (up?.id === childId) return false; }
+      // A task has one parent: it leaves the list it was in.
+      const current = await this.repo.parentOf(childId); if (current && current.id !== parentId) await this.dropLinks(current.id, link => this.repo.fileOfLink(link) === file);
+      const link = this.repo.linkOf(file); if (parent.subtasks.includes(link)) return false;
+      await this.repo.update(parentId, t => ({ ...t, subtasks: [...t.subtasks, link] })); return true;
+    } catch { return false; }
+  }
+  /**
+   * Keeps the parents' `subtasks` lists in step with how todos are nested in a note: `before` and `after` map each linked todo to the todo it sits under.
+   * Only task notes' properties change, never a note's text. Returns how many lists changed.
+   */
+  async syncSubtasks(before: Map<string, string | null>, after: Map<string, string | null>): Promise<number> {
+    let changed = 0;
+    for (const id of new Set([...before.keys(), ...after.keys()])) {
+      const was = before.get(id) ?? null; const now = after.get(id) ?? null; if (was === now) continue;
+      const file = this.repo.taskFile(id);
+      if (was && file && await this.dropLinks(was, link => this.repo.fileOfLink(link) === file)) changed++;
+      if (now && await this.linkSubtask(now, id)) changed++;
+    }
+    return changed;
+  }
+  /** Makes the parents' lists match how the todos of one note are nested, and drops links to task notes that no longer exist. */
+  async repairSubtasks(file: TFile): Promise<void> {
+    const parents = parentIds(await this.repo.readText(file)); let fixed = await this.syncSubtasks(new Map(), parents);
+    for (const id of new Set([...parents.values()])) if (id && await this.dropLinks(id, link => !this.repo.fileOfLink(link))) fixed++;
+    new Notice(fixed ? `Repaired ${plural(fixed, "subtask list")} for the todos in this note.` : "The subtasks of the todos in this note are already in order."); this.changed();
   }
   async priority(context: Context, priority: Priority): Promise<void> {
     const { line } = await this.resolve(context); if (!line.id) throw new Error("Attach the task first.");
@@ -444,7 +487,7 @@ export class TaskService {
       const task = await this.repo.create(todo.title);
       lines[todo.line] = taskText(todo, { id: task.id, repeat: false });
     }
-    await this.edit(file, text, lines.join("\n"));
+    await this.edit(file, text, lines.join("\n")); await this.syncSubtasks(parentIds(text), parentIds(lines.join("\n")));
     this.changed(); new Notice(`Converted ${count} into Organized tasks.`);
   }
   /**
@@ -561,16 +604,18 @@ export class TaskService {
   async deleteTask(id: string, onConfirmed?: () => void): Promise<boolean> {
     // The inspector must clear its now-invalid selection before occurrence or
     // trash events can trigger a refresh, so the confirmed hook runs first.
-    const task = await this.repo.read(id);
-    if (!(await this.confirm(`Delete “${task.title}”? Its task note moves to Obsidian's trash and every linked occurrence is removed. This cannot be undone from Organized.`, "Delete task", "Delete"))) return false;
+    const task = await this.repo.read(id); const subtasks = (await this.repo.subtasksOf(task)).length;
+    const kept = subtasks ? ` Its ${plural(subtasks, "subtask")} stay as separate tasks.` : "";
+    if (!(await this.confirm(`Delete “${task.title}”? Its task note moves to Obsidian's trash and every linked occurrence is removed.${kept} This cannot be undone from Organized.`, "Delete task", "Delete"))) return false;
     onConfirmed?.();
     for (const occurrence of await this.repo.occurrences(id)) {
       const removed = new Set(occurrence.tasks.map(line => line.line));
       const text = occurrence.text.split("\n").filter((_, index) => !removed.has(index)).join("\n");
       await this.edit(occurrence.file, occurrence.text, text);
     }
-    const file = await this.repo.resolve(id, "deleting");
+    const file = await this.repo.resolve(id, "deleting"); const parent = await this.repo.parentOf(id);
     await this.repo.trashNote(file);
+    if (parent) await this.dropLinks(parent.id, link => link.toLowerCase() === `[[${file.basename.toLowerCase()}]]`);
     this.references = null; return true;
   }
   /** Turns a task into a standalone note and leaves a link in its place: the note is titled after the task and holds its description (then sources and notes), in the chosen folder with the chosen tags and template. The task's other copies are removed and its task note moves to the trash. */

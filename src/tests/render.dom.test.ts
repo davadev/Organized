@@ -125,6 +125,16 @@ describe('read-only projections and bundled visual markers', () => {
       expect(span.textContent).toBe(''); expect(span.getAttribute('aria-label')).toBe(`Priority: ${priority}`); expect(span.classList.contains(`organized-priority-${priority}`)).toBe(true);
     }
   });
+  it('shows how many subtasks are done, green when all are, accent partway, muted at none, and nothing without subtasks', async () => {
+    const { owner, task } = await fixture(); const component: any = new Component(); owner.settings.displayProperties = ['subtasks'];
+    const one = await owner.repo.create('One'); const two = await owner.repo.create('Two'); await owner.repo.update(task.id, t => ({ ...t, subtasks: ['[[One]]', '[[Two]]'] }));
+    const shown = async () => { const host = createDiv(); await projection(owner, host, await owner.repo.read(task.id), component); const span = host.querySelector('.organized-symbol'); return span ? `${span.getAttribute('aria-label')}|${span.className.replace('organized-property organized-symbol ', '')}|${span.textContent}` : null; };
+    expect(await shown()).toBe('Subtasks: 0 of 2 done|organized-symbol-muted|0/2');
+    await owner.repo.update(one.id, t => ({ ...t, status: 'completed' })); expect(await shown()).toBe('Subtasks: 1 of 2 done|organized-symbol-partial|1/2');
+    await owner.repo.update(two.id, t => ({ ...t, status: 'completed' })); expect(await shown()).toBe('Subtasks: 2 of 2 done|organized-symbol-complete|2/2');
+    await owner.repo.update(task.id, t => ({ ...t, subtasks: [] })); expect(await shown()).toBeNull();
+    const stale = createDiv(); await projection(owner, stale, { ...task, subtasks: ['[[One]]'] }, component, (() => { let calls = 0; return () => calls++ < 1; })()); expect(stale.querySelector('.organized-symbol')).toBeNull();
+  });
   it('shows status, star, time, created date and moves as compact symbols', async () => {
     const { owner, task } = await fixture(); const component: any = new Component(); owner.settings.displayProperties = ['status', 'starred', 'time_tracked_seconds', 'created', 'movement_history'];
     const labels = (host: HTMLElement) => Array.from(host.querySelectorAll('.organized-symbol')).map(el => `${el.getAttribute('aria-label')}|${el.className.replace('organized-property organized-symbol ', '')}|${el.textContent}`);
