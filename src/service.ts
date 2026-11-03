@@ -125,8 +125,29 @@ export class TaskService {
     } catch { new Notice("Previous scheduled occurrence is missing, ambiguous or changed. Preserved existing lines; use the references list to repair."); }
   }
   private isProjectFile(file: TFile): boolean { return this.repo.isProjectNote(file) || file.path.startsWith(`${this.repo.projectFolder()}/`); }
+  /**
+   * Sets a task's status in its note and on every line that shows it. Completing or canceling a task also completes or cancels its subtasks that are still open
+   * (done and canceled ones are never changed, reopening and starting do not cascade), with one notice that can undo exactly what happened to the subtasks.
+   */
   async status(id: string, status: Status, context?: Context): Promise<void> {
+    const before = await this.repo.read(id); await this.applyStatus(id, status, context);
+    if ((status !== "completed" && status !== "canceled") || before.status === status || before.recurring) return;
+    const changes: Change[] = []; const changed = await this.cascadeStatus(before, status, changes, new Set([id]));
+    if (changed.length) this.summarize(changes, status === "completed" ? "Subtasks completed" : "Subtasks canceled", `${status === "completed" ? "Completed" : "Canceled"} ${plural(changed.length, "subtask")} of “${before.title}”: ${changed.join(", ")}.`);
+  }
+  private async cascadeStatus(parent: Task, status: Status, changes: Change[], seen: Set<string>): Promise<string[]> {
+    const changed: string[] = [];
+    for (const child of await this.repo.subtasksOf(parent)) {
+      if (seen.has(child.id)) continue; seen.add(child.id);
+      if (child.status === "open" || child.status === "in_progress") { await this.applyStatus(child.id, status, undefined, changes); changed.push(`“${child.title}”`); }
+      if (child.status !== "canceled") changed.push(...await this.cascadeStatus(child, status, changes, seen));
+    }
+    return changed;
+  }
+  private async applyStatus(id: string, status: Status, context?: Context, changes?: Change[]): Promise<void> {
+    const note = changes ? this.repo.taskFile(id) : null; const noteBefore = note ? await this.repo.readText(note) : "";
     const task = await this.repo.update(id, t => setStatus(t, status));
+    if (note) changes!.push({ file: note, before: noteBefore, after: await this.repo.readText(note) });
     const marker = task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.time_tracking_started_at ? "/" : " ";
     const today = localDate();
     for (const occurrence of await this.repo.occurrences(id)) {
@@ -140,8 +161,8 @@ export class TaskService {
       }
       // In a project note the line also moves to the heading for the new status.
       if (occurrence.tasks.length === 1 && this.isProjectFile(occurrence.file)) after = moveTask(after, id, projectSection(task));
-      await this.edit(occurrence.file, occurrence.text, after);
-      if (!this.isProjectFile(occurrence.file)) await this.resortAfter(occurrence.file, task);
+      await this.edit(occurrence.file, occurrence.text, after, changes);
+      if (!this.isProjectFile(occurrence.file)) await this.resortAfter(occurrence.file, task, changes);
     }
     this.changed();
   }

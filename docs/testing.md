@@ -165,3 +165,5 @@ On a **copy** of a vault: open **Retire tasks…** and try each combination (lin
 6. Rename a subtask's title in the panel: the parent's list shows the new link.
 7. Run **Add subtask** on a parent that already has nested notes: the new line lands after them and the picker opens.
 8. Edit a note with Organized disabled (indent a linked todo), re-enable, run **Repair subtask links in this note**.
+9. Complete a parent that has an open, a running (timer) and a done subtask: the open and running ones complete, the timer stops, the done one is untouched; the notice names them; **Undo** reopens them and restarts nothing else. Cancel a parent: open subtasks cancel, done ones stay done.
+10. Complete the last open subtask by hand: the parent stays open, `n/n` turns green, and the Task tab shows **Complete parent**.
