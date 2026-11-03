@@ -210,6 +210,23 @@ describe("repository and explicit task actions", () => {
     h.confirm.mockClear(); await h.service.convertTodos(file); expect(h.confirm).not.toHaveBeenCalled(); expect(Notice.instances.at(-1)?.message).toContain('No unchecked todos');
     const single: any = await h.add('Single.md', '- [ ] Only one'); h.confirm.mockResolvedValueOnce(true); await h.service.convertTodos(single); expect(h.confirm).toHaveBeenLastCalledWith('Convert 1 unchecked todo in Single.md into Organized tasks?', 'Convert todos', 'Convert');
   });
+  it("turns linked tasks back into plain todos, keeps task notes, can be undone and refuses stale notes", async () => {
+    const h = harness();
+    const a = await h.repo.create('Alpha'); const b = await h.repo.create('Beta');
+    const first: any = await h.add('One.md', `# Work\n- [x] Alpha <!--organized:${a.id}-->\n- [/] Beta <!--organized:${b.id}--> <!--organized:repeat-->\n- [ ] Plain\n`);
+    const second: any = await h.add('Two.md', `- [ ] Alpha <!--organized:${a.id}-->\r\n  - [ ] Nested <!--organized:repeat-->\r\n`);
+    const untouched: any = await h.add('Three.md', '- [ ] Nothing linked\nProse mentioning <!--organized:abc--> is not a task line.\n');
+    h.confirm.mockResolvedValueOnce(false); const plain: any = await h.add('Four.md', '- [ ] No comments at all\n'); await h.service.unlinkTasks([first, second, untouched, plain], 'the vault');
+    expect(h.confirm).toHaveBeenLastCalledWith(expect.stringContaining('Turn 4 linked tasks in 2 notes back into plain todos?'), 'Convert back to todos', 'Convert'); expect(h.texts.get('One.md')).toContain('organized:');
+    h.confirm.mockResolvedValueOnce(true); await h.service.unlinkTasks([first, second, untouched, { path: `Tasks/${a.id}.md` } as any], 'the vault');
+    expect(h.texts.get('One.md')).toBe('# Work\n- [x] Alpha\n- [/] Beta\n- [ ] Plain\n'); expect(h.texts.get('Two.md')).toBe('- [ ] Alpha\r\n  - [ ] Nested\r\n'); expect(h.texts.get('Three.md')).toBe('- [ ] Nothing linked\nProse mentioning <!--organized:abc--> is not a task line.\n');
+    expect((await h.repo.list()).map(t => t.title).sort()).toEqual(['Alpha', 'Beta']);
+    await h.service.undo(); expect(h.texts.get('One.md')).toContain(`<!--organized:${a.id}-->`); expect(h.texts.get('Two.md')).toContain('<!--organized:repeat-->');
+    h.confirm.mockClear(); await h.service.unlinkTasks([untouched], 'this note'); expect(h.confirm).not.toHaveBeenCalled(); expect(Notice.instances.at(-1)?.message).toBe('No linked tasks to convert back in this note.');
+    h.confirm.mockImplementationOnce(async () => { h.texts.set('Two.md', `${h.texts.get('Two.md')}edited\n`); return true; });
+    await expect(h.service.unlinkTasks([second], 'this note')).rejects.toThrow('changed while confirming');
+    const single: any = await h.add('Single.md', `- [ ] One <!--organized:${a.id}-->`); h.confirm.mockResolvedValueOnce(true); await h.service.unlinkTasks([single], 'this note'); expect(h.confirm).toHaveBeenLastCalledWith(expect.stringContaining('Turn 1 linked task in 1 note back'), 'Convert back to todos', 'Convert');
+  });
   it("preserves CRLF and indentation while converting and refuses task notes", async () => {
     const h = harness(); const file: any = await h.add('Crlf.md', '- [ ] One\r\n  - [ ] Two\r\n');
     h.confirm.mockResolvedValueOnce(true); await h.service.convertTodos(file);

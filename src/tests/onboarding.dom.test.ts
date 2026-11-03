@@ -9,7 +9,7 @@ installObsidianDom();
 const css = readFileSync("styles.css", "utf8");
 describe("onboarding content and figures", () => {
   it("has short, complete steps and only known figures", () => {
-    expect(ONBOARDING_STEPS).toHaveLength(8);
+    expect(ONBOARDING_STEPS).toHaveLength(9);
     for (const step of ONBOARDING_STEPS) {
       expect(step.title.trim()).not.toBe(""); expect(step.text.trim()).not.toBe("");
       expect(step.text.length).toBeLessThan(400);
@@ -30,12 +30,13 @@ describe("onboarding content and figures", () => {
     }
   });
   it("refuses an unknown figure instead of drawing nothing", () => { expect(() => renderFigure(createDiv(), "nope" as never)).toThrow(/Unknown onboarding figure/); });
-  it("draws the day figure's blocks inside its hour grid", () => {
-    const fig = renderFigure(createDiv(), "day");
-    const blocks = [...fig.querySelectorAll<HTMLElement>(".organized-welcome-fig-block")];
-    expect(blocks).toHaveLength(3);
-    for (const block of blocks) { const top = Number(block.style.getPropertyValue("--organized-top")); const height = Number(block.style.getPropertyValue("--organized-height")); expect(top).toBeGreaterThanOrEqual(0); expect(top + height).toBeLessThanOrEqual(100); }
-    expect(fig.querySelectorAll(".organized-welcome-fig-hour")).toHaveLength(5);
+  it("shows the calendar's three modes and the commands it names", () => {
+    expect([...renderFigure(createDiv(), "calendar").querySelectorAll(".organized-welcome-fig-pill")].map(n => n.textContent)).toEqual(["Month", "Week", "Day"]);
+    const main = readFileSync("src/main.ts", "utf8");
+    for (const row of renderFigure(createDiv(), "commands").querySelectorAll(".organized-welcome-fig-row-role")) expect(main, row.textContent!).toContain(`name: "${row.textContent}`);
+    const view = readFileSync("src/view.ts", "utf8"); for (const mode of ["Month", "Week", "Day"]) expect(view).toContain(`"${mode}"`);
+    const settings = readFileSync("src/settings.ts", "utf8");
+    for (const name of renderFigure(createDiv(), "settings").querySelectorAll(".organized-welcome-fig-row-name")) expect(settings, name.textContent!).toContain(`row("${name.textContent}"`);
   });
   it("names the panel's four tabs in order, as the panel shows them", () => {
     const names = [...renderFigure(createDiv(), "tabs").querySelectorAll(".organized-welcome-fig-tab-name")].map(n => n.textContent);

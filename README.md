@@ -80,7 +80,7 @@ flowchart TB
 
 ## First run
 
-The first time Organized starts it shows a short **onboarding card**: eight steps with small illustrations: the idea behind the plugin, how to open the side panel and what its tabs do, and the basics. Skip it whenever you like; it appears once. Reopen it with the command **Organized: Show onboarding card** or the **Onboarding card** button in **Settings → Organized → Help**.
+The first time Organized starts it shows a short **onboarding card**: nine steps with small illustrations: the two settings to make first, the idea behind the plugin, the side panel and calendar, the checkbox letters, and how to start and leave. Skip it whenever you like; it appears once. Reopen it with the command **Organized: Show onboarding card** or the **Onboarding card** button in **Settings → Organized → Help**.
 
 ## Try the beta
 
@@ -98,7 +98,7 @@ The Task tab keeps your selection while you scroll or edit the sidebar. When the
 
 Typing a new `- [ ] ` or inserting one with Obsidian's mobile checkbox toolbar opens the native task picker. Choose an existing task, **Create new task**, or **Keep as regular todo**. The last option closes the picker and leaves an ordinary unlinked checkbox. Pasted task blocks are not converted automatically. Use **Attach/create task** on an existing checkbox; **Duplicate as new task** creates an independent ID. Missing links are never silently replaced. Markdown links in task titles and task-note sections open from the picker and inspector; title editing keeps the raw Markdown syntax.
 
-Run **Organized: Convert unchecked todos to tasks** on a regular note to convert its ordinary unchecked todos into canonical tasks. It confirms first, skips linked, completed, in-progress and empty items, and preserves indentation and line endings.
+Run **Organized: Convert unchecked todos to tasks** on a regular note to convert its ordinary unchecked todos into canonical tasks. It confirms first, skips linked, completed, in-progress and empty items, and preserves indentation and line endings. To leave Organized cleanly, **Organized: Convert tasks in this note back to todos** (or **Convert all tasks in the vault back to todos**) turns linked checkboxes back into plain todos after a confirmation: the text and state stay, the hidden comments go, task notes are kept, and Undo restores the notes.
 
 Each canonical task is `Tasks/<id>.md`, with standard YAML and Markdown notes. Occurrences contain `<!--organized:<id>-->`. A copied ID remains the same task. Selected properties render read-only in Reading/Live Preview; no generated dates/properties are written into occurrence source. The inspector edits the canonical note.
 

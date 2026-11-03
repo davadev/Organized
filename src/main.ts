@@ -53,6 +53,8 @@ export default class Organized extends Plugin {
       this.addCommand({ id: "attach-task", name: "Attach/create task (or repair missing link)", editorCallback: (editor, view) => { if (view.file) void this.pickTask(editor, view.file).catch(report); } });
       this.addCommand({ id: "duplicate-task", name: "Duplicate as new task", editorCallback: (editor, view) => { if (view.file) void this.pickTask(editor, view.file, true).catch(report); } });
       this.addCommand({ id: "convert-todos", name: "Convert unchecked todos to tasks", editorCallback: (_editor, view) => { if (view.file) void this.convertTodos(view.file).catch(report); } });
+      this.addCommand({ id: "unlink-note-tasks", name: "Convert tasks in this note back to todos", editorCallback: (_editor, view) => { if (view.file) void this.run(() => this.service.unlinkTasks([view.file!], "this note")).catch(report); } });
+      this.addCommand({ id: "unlink-vault-tasks", name: "Convert all tasks in the vault back to todos", callback: () => { void this.run(() => this.service.unlinkTasks(this.app.vault.getMarkdownFiles(), "the vault")).catch(report); } });
       this.addCommand({ id: "show-onboarding", name: "Show onboarding card", callback: () => { this.showOnboarding(false); } });
       this.addCommand({ id: "undo", name: "Undo last recurrence/auto-forward batch", callback: () => { void this.service.undo().catch(report); } });
       this.addCommand({ id: "restore-settings", name: "Restore compatible settings backup (restart required)", callback: () => { void this.confirm("Queue the newest compatible settings backup for restoration on next restart? Task Markdown will not change.").then(yes => yes ? this.safety.queueCompatibleRestore() : undefined).catch(report); } });
