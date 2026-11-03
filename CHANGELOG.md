@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Durations over an hour are written the short way everywhere (`1h 13min`, `2h`, `45 min`): the Timer card, the symbols beside a todo, session lengths and the standalone-note dialog. Time written into a retired todo's notes uses it too, and the older spelling (`1 h 20 min`) is still read back.
 - Removing a running todo's line now stops its timer only when you made the edit and the timer is actually running. A note reloaded after a sync, or rewritten by another plugin, no longer stops a timer, and a task that was already stopped or deleted no longer produces a notice or an error.
 - Housekeeping before submission: `PLAN.md` is now short design notes that match the product, the crash-guard source lost its leftover scaffold header, and no document refers to private tooling.
 - **Compact symbols for rendered properties.** Properties shown beside a todo are small symbols instead of `name: value` text, each with a screen-reader label: *Starred* is a yellow star (gray when not starred), *Recurring* a green repeat symbol (gray when off), *Priority* a flag (red, orange, yellow, or gray for none), *Status* an icon (gray open, accent in progress, green completed, faint canceled), *Time tracked* a timer with the minutes (green while running), *Created* a calendar with the date, and *Movement history* an arrow with the number of moves (hidden when there are none). Project links, scheduled date, description and sources are unchanged.

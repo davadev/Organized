@@ -6,7 +6,7 @@ import type Organized from "./main";
 import { elapsed, localDate, PRIORITIES, Section, STATUS_ICONS, STATUSES, Task, WorkSession } from "./model";
 import { byPriority, report } from "./service";
 import { DatePicker, SessionModal, TaskPicker } from "./modals";
-import { lengthOf, lengthOfSeconds, seconds } from "./sessions";
+import { formatMinutes, lengthOf, lengthOfSeconds, seconds } from "./sessions";
 import { NoteSection, NOTE_SECTIONS, noteSection, parseTasks, TaskLine } from "./codec";
 import { splitNote } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
@@ -497,7 +497,7 @@ export class OrganizedInspectorView extends ItemView {
     if (task.scheduled || this.module === "Schedule") this.button(this.card(details, "Schedule", "calendar"), task.scheduled ?? "Choose date", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined))).open(); });
     if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || this.module === "Timer") {
       const timer = this.card(details, "Timer", "timer"); const row = timer.createDiv({ cls: "organized-timer-row" });
-      row.createDiv({ cls: "organized-timer-value", text: `${Math.floor(elapsed(task) / 60)} min${task.time_tracking_started_at ? " · running" : ""}` });
+      row.createDiv({ cls: "organized-timer-value", text: `${formatMinutes(Math.floor(elapsed(task) / 60))}${task.time_tracking_started_at ? " · running" : ""}` });
       this.button(row, task.time_tracking_started_at ? "Stop timer" : "Start timer", () => this.owner.run(() => this.owner.service.status(id, task.time_tracking_started_at ? "open" : "in_progress", this.owner.context ?? undefined)));
       this.button(row, "Add time", () => this.editSession(task, null, localDate()));
       if (task.work_sessions.length) this.sessionList(timer, task);

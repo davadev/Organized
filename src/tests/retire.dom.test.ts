@@ -56,7 +56,7 @@ describe("retiring tasks", () => {
     expect(h.texts.get(renamed)).toBe("---\ntags:\n  - mine\n---\n\nShip it.\n\n## Sources\nhttps://a.b\n");
     const text = h.texts.get(h.repo.file("Tasks/Plan release 2.md")!.path)!; expect(text).toBe(""); for (const key of ORGANIZED_KEYS) expect(h.texts.get(renamed)).not.toContain(`${key}:`);
     expect(h.texts.get(first.path)).toBe("# Work\n  - [>] Plan release\n  - [ ] Plain todo\n");
-    expect(h.texts.get(last.path)).toBe("- [x] Plan release\r\n  > Ship it.\r\n  > **Sources**\r\n  > https://a.b\r\n  - Worked 2026-01-05: 09:00–10:00 (1 h)\r\n  - Tracked 1 h 30 min\r\n- [ ] Plan release\r\n");
+    expect(h.texts.get(last.path)).toBe("- [x] Plan release\r\n  > Ship it.\r\n  > **Sources**\r\n  > https://a.b\r\n  - Worked 2026-01-05: 09:00–10:00 (1h)\r\n  - Tracked 1h 30min\r\n- [ ] Plan release\r\n");
   });
 });
 
@@ -74,7 +74,7 @@ describe("retiring: trash, selection, timers and failures", () => {
     expect(h.texts.get(first.path)).not.toContain(plan.id); expect(h.texts.get("Daily/2026-01-06.md")).toContain(`organized:${twin.id}`); expect(h.texts.get("Tasks/Projects/Alpha.md")).toContain(`organized:${odd.id}`);
     await h.service.retireTasks({ ...base, keep: "all", yaml: "strip" }, backupOk());
     expect(h.texts.get("Daily/2026-01-06.md")).not.toContain("organized:"); expect(h.texts.get("Tasks/Projects/Alpha.md")).not.toContain("organized:");
-    expect(h.texts.get("Daily/2026-01-06.md")).toContain("- Tracked 24 h"); expect(h.texts.get("Daily/2026-01-06.md")).toContain(`- Worked ${localDate()}`.slice(0, 9));
+    expect(h.texts.get("Daily/2026-01-06.md")).toContain("- Tracked 24h"); expect(h.texts.get("Daily/2026-01-06.md")).toContain(`- Worked ${localDate()}`.slice(0, 9));
   });
   it("logs a running timer even when the task note is kept, and says so nowhere else", async () => {
     const { h, twin } = await setup(); await h.repo.update(twin.id, t => ({ ...t, status: "in_progress", time_tracking_started_at: ago(0.5), time_tracked_seconds: 0 }));

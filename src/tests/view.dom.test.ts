@@ -378,7 +378,7 @@ describe('compact calendar and contextual task inspector', () => {
   });
   it('draws time kept in daily notes by retired tasks and opens that note from the block', async () => {
     const { view, add, service, files, h: _h } = await fixture() as any; vi.setSystemTime(new Date(2026, 2, 4, 15, 0, 0));
-    const note: any = await add(service.daily.path('2026-03-05'), '- [x] Retired plan\n  - Worked 2026-03-04: 09:00–10:00 (1 h)\n');
+    const note: any = await add(service.daily.path('2026-03-05'), '- [x] Retired plan\n  - Worked 2026-03-04: 09:00–10:00 (1h)\n');
     const open = vi.fn(async () => undefined); (view.app.workspace.getLeaf as any).mockReturnValue({ openFile: open });
     view.selectedDate = '2026-03-04'; view.calendarMode = 'Day'; await view.render(); const block = view.contentEl.querySelector('.organized-block') as HTMLElement; expect(block.getAttribute('aria-label')).toBe('Retired plan, 09:00–10:00');
     block.click(); await flush(); expect(open).toHaveBeenCalledWith(note);
@@ -458,7 +458,7 @@ describe('compact calendar and contextual task inspector', () => {
     await view.render(); const blocks = () => Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-block')); expect(blocks()).toHaveLength(2);
     blocks()[1].click(); await flush(); const editor = Modal.instances.at(-1) as unknown as SessionModal; const [from, to] = Array.from(editor.contentEl.querySelectorAll<HTMLInputElement>('input[type=datetime-local]')); expect(from.value).toBe('2026-03-04T12:00'); to.value = '2026-03-04T14:00'; to.dispatchEvent(new Event('input'));
     Array.from(editor.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Save')!.click(); for (let n = 0; n < 6; n++) await flush(); saved = await repo.read(task.id); expect(saved.work_sessions[1].end).toBe(new Date(2026, 2, 4, 14, 0).toISOString()); expect(saved.time_tracked_seconds).toBe(3600 + 7200);
-    owner.selectedTaskId = task.id; view.tab = 'Task'; view.module = 'Timer'; await view.render(); const rows = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-session-row')); expect(rows.map(r => r.textContent)).toEqual(['12:00–14:00 · 2 h', '09:00–10:00 · 1 h']); expect(view.contentEl.querySelector('.organized-session-day')!.textContent).toBe('2026-03-04 · 3 h'); expect(view.contentEl.querySelector('summary')?.textContent).toContain('Sessions (2)');
+    owner.selectedTaskId = task.id; view.tab = 'Task'; view.module = 'Timer'; await view.render(); const rows = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-session-row')); expect(rows.map(r => r.textContent)).toEqual(['12:00–14:00 · 2h', '09:00–10:00 · 1h']); expect(view.contentEl.querySelector('.organized-session-day')!.textContent).toBe('2026-03-04 · 3h'); expect(view.contentEl.querySelector('summary')?.textContent).toContain('Sessions (2)');
     button(view.contentEl, 'Add time').click(); await flush(); const added = Modal.instances.at(-1) as unknown as SessionModal; expect(added.titleEl.textContent).toBe('Add time worked'); expect((added.contentEl.querySelector('input[type=datetime-local]') as HTMLInputElement).value).toBe(`${localDate()}T09:00`); added.close();
     rows[1].click(); await flush(); const old = Modal.instances.at(-1) as unknown as SessionModal; Array.from(old.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Delete')!.click(); for (let n = 0; n < 6; n++) await flush(); saved = await repo.read(task.id); expect(saved.work_sessions).toHaveLength(1); expect(saved.time_tracked_seconds).toBe(7200);
   });
@@ -476,8 +476,8 @@ describe('compact calendar and contextual task inspector', () => {
     await repo.update(task.id, t => ({ ...t, time_tracked_seconds: 1, work_sessions: [{ start: at(2, 9), end: at(2, 10) }, { start: at(4, 9), end: at(4, 9, 30) }, { start: at(4, 13), end: at(4, 14, 15) }, { start: at(3, 8), end: at(3, 8, 45) }] }));
     owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); await flush(); const box = () => view.contentEl.querySelector('details.organized-sessions') as HTMLDetailsElement;
     expect(box().open).toBe(false); expect(box().querySelector('summary')!.textContent).toBe('Sessions (4)');
-    expect(Array.from(box().querySelectorAll('.organized-session-day')).map(el => el.textContent)).toEqual(['2026-03-04 · 1 h 45 min', '2026-03-03 · 45 min', '2026-03-02 · 1 h']);
-    expect(Array.from(box().querySelectorAll('.organized-session-row')).map(el => el.textContent)).toEqual(['13:00–14:15 · 1 h 15 min', '09:00–09:30 · 30 min', '08:00–08:45 · 45 min', '09:00–10:00 · 1 h']);
+    expect(Array.from(box().querySelectorAll('.organized-session-day')).map(el => el.textContent)).toEqual(['2026-03-04 · 1h 45min', '2026-03-03 · 45 min', '2026-03-02 · 1h']);
+    expect(Array.from(box().querySelectorAll('.organized-session-row')).map(el => el.textContent)).toEqual(['13:00–14:15 · 1h 15min', '09:00–09:30 · 30 min', '08:00–08:45 · 45 min', '09:00–10:00 · 1h']);
     box().open = true; box().dispatchEvent(new Event('toggle')); await view.render(); await flush(); expect(box().open).toBe(true); box().open = false; box().dispatchEvent(new Event('toggle')); await view.render(); await flush(); expect(box().open).toBe(false);
     const none = await repo.create('Fresh'); await repo.update(none.id, t => ({ ...t, time_tracked_seconds: 60 })); owner.selectedTaskId = none.id; await view.render(); await flush(); expect(view.contentEl.querySelector('details.organized-sessions')).toBeNull();
   });

@@ -77,7 +77,7 @@ describe("native task, date, source and project modals", () => {
     const save = vi.fn(async () => undefined); const remove = vi.fn(async () => undefined); const open = vi.fn(async () => undefined);
     const modal = new SessionModal(h.app, { heading: "Edit time worked", taskTitle: "Plan", start: at(9), end: at(10, 30), save, remove, openTask: open }, () => now); modal.open(); decorated(modal);
     const [start, end] = Array.from(modal.contentEl.querySelectorAll<HTMLInputElement>('input[type=datetime-local]')); const note = () => modal.contentEl.querySelector('.organized-session-note')!;
-    expect(modal.contentEl.querySelector('.organized-session-task')!.textContent).toBe("Plan"); expect(start.value).toBe("2026-03-04T09:00"); expect(note().textContent).toBe("Length: 1 h 30 min"); expect(modal.contentEl.querySelectorAll("button")).toHaveLength(3);
+    expect(modal.contentEl.querySelector('.organized-session-task')!.textContent).toBe("Plan"); expect(start.value).toBe("2026-03-04T09:00"); expect(note().textContent).toBe("Length: 1h 30min"); expect(modal.contentEl.querySelectorAll("button")).toHaveLength(3);
     end.value = "2026-03-04T08:00"; end.dispatchEvent(new Event("input")); expect(note().textContent).toContain("after the start"); expect(note().classList.contains("organized-session-problem")).toBe(true);
     const buttons = () => Array.from(modal.contentEl.querySelectorAll("button")); buttons().find(b => b.textContent === "Save")!.click(); await flush(); expect(save).not.toHaveBeenCalled();
     end.value = "2026-03-04T09:20"; end.dispatchEvent(new Event("input")); expect(note().textContent).toBe("Length: 20 min"); expect(note().classList.contains("organized-session-problem")).toBe(false);
