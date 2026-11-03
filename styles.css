@@ -149,7 +149,9 @@
 .organized-view .organized-panel button.organized-note-link:hover { color: var(--interactive-accent); }
 .organized-view .organized-panel button.organized-danger { border-color: transparent; color: var(--text-muted); font-size: 12px; }
 .organized-view .organized-panel button.organized-danger:hover { border-color: var(--text-error, #d64545); background: transparent; color: var(--text-error, #d64545); }
-.organized-task-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding-block-start: 4px; }
+.organized-task-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 8px; padding-block-start: 4px; }
+.organized-view .organized-panel .organized-task-actions button { inline-size: 100%; justify-content: center; text-align: center; border-color: var(--background-modifier-border); }
+.organized-view .organized-panel .organized-task-actions button.organized-danger { grid-column: 1 / -1; }
 .organized-section { display: flex; flex-direction: column; gap: 8px; }
 .organized-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .organized-view .organized-panel button.organized-heading-row { display: flex; align-items: center; gap: 6px; inline-size: 100%; margin: 0; padding: 2px 8px; padding-inline-start: calc(4px + var(--organized-depth, 0) * 14px); border-color: transparent; border-radius: var(--radius-s, 5px); background: transparent; box-shadow: none; color: var(--text-muted); font-size: 12px; font-weight: 600; line-height: 1.3; text-align: start; block-size: auto; min-block-size: 28px; }
