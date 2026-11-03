@@ -10,6 +10,8 @@ describe("standalone note helpers", () => {
     expect(noteName("_")).toBe("_"); expect(noteName("__")).toBe("__"); expect(noteName("snake_case_name")).toBe("snake_case_name"); expect(noteName("_private")).toBe("_private"); expect(noteName("trailing_")).toBe("trailing_");
     expect(noteName("_emphasis_ and __strong__ text")).toBe("emphasis and strong text"); expect(noteName("see _this_.")).toBe("see this"); expect(noteName("my_file_ _a_")).toBe("my_file_ a");
     expect(noteName("~5 min and ~~gone~~")).toBe("~5 min and gone"); expect(noteName("use `code` here")).toBe("use code here"); expect(noteName("a ` b")).toBe("a ` b");
+    expect(noteName("a\u0000b\tc")).toBe("a b c");
+    expect(noteName("😀".repeat(150))).toBe("😀".repeat(100)); expect(noteName("  ")).toBe("Untitled"); expect(noteName("...")).toBe("Untitled"); expect(noteName("Ünï cödé")).toBe("Ünï cödé");
     expect(noteName("*bold* and ***both***")).toBe("bold and both"); expect(noteName("5*3")).toBe("5 3"); expect(noteName("**")).toBe("Untitled"); expect(noteName("日本_語")).toBe("日本_語");
   });
   it("cleans tags", () => {

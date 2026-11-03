@@ -9,8 +9,9 @@ function withoutEmphasis(text: string): string {
 /** A filename for a todo's title: links and emphasis reduced to their text, characters Obsidian or the OS reject removed, kept to a sensible length. */
 export function noteName(title: string): string {
   const plain = withoutEmphasis(title.replace(/!?\[\[([^\]|]*\|)?([^\]]*)\]\]/g, "$2").replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/<!--.*?-->/g, ""));
-  const safe = plain.replace(/[\\/:*?"<>|#^[\]]/g, " ").replace(/\s+/g, " ").trim().replace(/^\.+|\.+$/g, "").trim().slice(0, 100).trim();
-  return safe || "Untitled";
+  const safe = plain.replace(/[\\/:*?"<>|#^[\]\p{Cc}]/gu, " ").replace(/\s+/g, " ").trim().replace(/^\.+|\.+$/g, "").trim();
+  const short = Array.from(safe).slice(0, 100).join("").trim();
+  return short || "Untitled";
 }
 /** `a, #b c` as tags `a`, `b`, `c`: leading # dropped, duplicates and anything Obsidian would not accept as a tag ignored. */
 export function cleanTags(input: string): string[] {
