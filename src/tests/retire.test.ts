@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { newTask, taskFrom } from "../model";
-import { describePreview, isDestructive, losesNote, normalizeRetire, ORGANIZED_KEYS, planNames, readableName, retirePreview, selectTasks, stripOrganized, type RetireOptions, type RetireScan } from "../retire";
+import { describePreview, isDestructive, losesNote, normalizeRetire, ORGANIZED_KEYS, planNames, retirePreview, selectTasks, stripOrganized, type RetireOptions, type RetireScan } from "../retire";
+import { readableName } from "../names";
 
 const base: RetireOptions = { which: "all", olderThanDays: 7, lines: "plain", keep: "title", notes: "keep", yaml: "keep" };
 const DAY = 86400000; const now = Date.parse("2026-03-10T12:00:00Z");
@@ -53,15 +54,16 @@ describe("stripping Organized's properties", () => {
 
 describe("retire preview", () => {
   const files = (...paths: string[]) => paths.map(path => ({ path }) as never);
-  const scan: RetireScan = { tasks: [task("aaaaaaaa"), task("bbbbbbbb")], files: new Map([["aaaaaaaa", files("Daily/1.md", "Daily/2.md")], ["bbbbbbbb", files("Daily/2.md")]]), lines: new Map([["aaaaaaaa", 3], ["bbbbbbbb", 1]]) };
+  const scan: RetireScan = { tasks: [task("aaaaaaaa"), task("bbbbbbbb")], files: new Map([["aaaaaaaa", files("Daily/1.md", "Daily/2.md")], ["bbbbbbbb", files("Daily/2.md")]]), lines: new Map([["aaaaaaaa", 3], ["bbbbbbbb", 1]]), unnamed: new Set(["aaaaaaaa", "bbbbbbbb"]) };
   it("counts what would change and describes it", () => {
     expect(retirePreview(scan, base, now)).toEqual({ tasks: 2, todos: 4, notes: 2, renamed: 0, stripped: 0, trashed: 0 });
     expect(retirePreview(scan, { ...base, yaml: "strip" }, now)).toEqual({ tasks: 2, todos: 4, notes: 2, renamed: 2, stripped: 2, trashed: 0 });
     expect(retirePreview(scan, { ...base, notes: "trash" }, now)).toMatchObject({ renamed: 0, trashed: 2 });
-    expect(retirePreview({ tasks: [task("cccccccc")], files: new Map(), lines: new Map() }, base, now)).toEqual({ tasks: 1, todos: 0, notes: 0, renamed: 0, stripped: 0, trashed: 0 });
+    expect(retirePreview({ tasks: [task("cccccccc")], files: new Map(), lines: new Map(), unnamed: new Set() }, base, now)).toEqual({ tasks: 1, todos: 0, notes: 0, renamed: 0, stripped: 0, trashed: 0 });
+    expect(retirePreview({ ...scan, unnamed: new Set(["aaaaaaaa"]) }, { ...base, notes: "rename" }, now)).toMatchObject({ renamed: 1 }); // a note already named after its title is not renamed
     expect(describePreview(retirePreview(scan, { ...base, yaml: "strip" }, now))).toBe("2 tasks · 4 todos in 2 notes unlinked · 2 task notes renamed to its title · 2 task notes stripped of properties.");
     expect(describePreview(retirePreview(scan, { ...base, notes: "trash" }, now))).toContain("2 task notes moved to Obsidian's trash");
-    expect(describePreview(retirePreview({ tasks: [task("dddddddd")], files: new Map([["dddddddd", files("A.md")]]), lines: new Map([["dddddddd", 1]]) }, base, now))).toBe("1 task · 1 todo in 1 note unlinked.");
+    expect(describePreview(retirePreview({ tasks: [task("dddddddd")], files: new Map([["dddddddd", files("A.md")]]), lines: new Map([["dddddddd", 1]]), unnamed: new Set() }, base, now))).toBe("1 task · 1 todo in 1 note unlinked.");
     expect(describePreview(retirePreview(scan, { ...base, which: "closed" }, now))).toBe("No tasks match. Nothing will change.");
   });
 });

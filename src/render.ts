@@ -61,7 +61,7 @@ export async function projection(owner: Organized, host: HTMLElement, task: Task
     if (property === "scheduled") continue;
     if (property === "projects") { projectLinks(owner, host, task); continue; }
     if (property === "description" || property === "sources") {
-      const file = owner.repo.file(owner.repo.taskPath(task.id)); if (!file) continue;
+      const file = owner.repo.taskFile(task.id); if (!file) continue;
       const body = splitNote(await owner.repo.readText(file)).body; if (!live()) return;
       const content = noteSection(body, property === "description" ? "Description" : "Sources");
       const block = host.createDiv({ cls: "organized-rich-property" }); await MarkdownRenderer.render(owner.app, content, block, file.path, component);

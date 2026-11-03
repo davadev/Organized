@@ -49,7 +49,7 @@ The Task view does not show every field a todo can hold. A task shows its title 
 
 Obsidian's strength is that your notes are plain files you own. Organized is built to leave that intact.
 
-- **Files over apps.** Every task is a Markdown note (`Tasks/<id>.md`) with standard YAML. Uninstall the plugin and you keep every task, readable in any editor.
+- **Files over apps.** Every task is a Markdown note named after its todo (`Tasks/Write the Q1 report.md`) with standard YAML. Uninstall the plugin and you keep every task, readable in any editor.
 - **Daily notes are the home base.** Organized works with your existing daily-note setup, folder, filename format and template. It does not replace them or hide them behind its own screen.
 - **Links, not silos.** A todo can become a note, belong to project notes, and cite sources, all with ordinary wiki links and properties that Search, Graph, Bases and other plugins can use.
 - **Local and quiet.** No account, no server, no tracking. It runs on desktop and mobile.
@@ -61,7 +61,7 @@ flowchart TB
         D["Daily note<br/>- [ ] todo"]
     end
     subgraph Files["Plain files in your vault"]
-        T["Tasks/&lt;id&gt;.md<br/>YAML + notes"]
+        T["Tasks/Title.md<br/>YAML + notes"]
         P["Project notes<br/>Open / In progress / Done"]
         N["Standalone notes"]
     end
@@ -90,7 +90,7 @@ Organized never locks your notes in. A task note already reads naturally without
 |---|---|
 | **Which tasks** | Only completed or canceled tasks older than N days (what the automatic cleanup does), or all tasks. |
 | **Todos in your notes become** | A plain todo (title only), or a link to the task note (`- [ ] [[Plan release]]`, marker kept; the link style follows your Obsidian setting). |
-| **Task notes** | Keep where they are, rename to the todo title (so the folder reads like a list of your tasks), or move to Obsidian's trash. |
+| **Task notes** | Keep where they are, rename to the todo title (notes created by recent versions already carry it; only notes still named after an id are renamed), or move to Obsidian's trash. |
 | **Properties of task notes** | Keep all, or remove Organized's properties and keep only the title (as the file name) and the text. Properties you added yourself (tags, aliases…) are never removed. |
 | **Kept under the todo** | When a task note is removed or stripped, what stays in your daily note as a quote under the todo: nothing, the description, or description, sources and time worked. |
 
@@ -116,7 +116,7 @@ Typing a new `- [ ] ` or inserting one with Obsidian's mobile checkbox toolbar o
 
 Run **Organized: Convert unchecked todos to tasks** on a regular note to convert its ordinary unchecked todos into canonical tasks. It confirms first, skips linked, completed, in-progress and empty items, and preserves indentation and line endings. To leave Organized, see [Leaving Organized](#leaving-organized): **Organized: Retire tasks…** turns tasks back into ordinary Markdown with options, and **Convert tasks in this note back to todos** does the simple version for one note.
 
-Each canonical task is `Tasks/<id>.md`, with its properties in standard YAML and the description as the note text, followed by an optional `## Sources` heading, so the note reads naturally even without the plugin. Occurrences contain `<!--organized:<id>-->`. A copied ID remains the same task. Selected properties render read-only in Reading/Live Preview; no generated dates/properties are written into occurrence source. The inspector edits the canonical note.
+Each canonical task is a note in `Tasks/` named after its todo (`Write the Q1 report.md`; a counter is added when a name is taken, and names are unique across the vault so `[[links]]` stay unambiguous), identified by the `id` in its properties, never by its file name, so renaming the note by hand is safe. It has its properties in standard YAML and the description as the note text, followed by an optional `## Sources` heading, so the note reads naturally even without the plugin. Occurrences contain `<!--organized:<id>-->`. A copied ID remains the same task. Selected properties render read-only in Reading/Live Preview; no generated dates/properties are written into occurrence source. The inspector edits the canonical note.
 
 In **Settings → Task storage**, **Keep completed tasks (days)** optionally sets retention from the date a task is completed or canceled. It defaults to `0` (disabled). When enabled, cleanup runs while opening today's daily note: linked checkboxes are unlinked and the canonical task files move to Obsidian's trash. Open/in-progress, recurring, and legacy completed tasks without a recorded completion date are preserved. Keep a vault backup and confirm Obsidian's trash preference before enabling automatic cleanup.
 

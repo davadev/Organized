@@ -12,7 +12,7 @@ afterEach(() => { vi.useRealTimers(); });
 const OLD = "## Description\nWhy we do it.\n\n## Notes\nRemember the budget.\n\n## Sources\nhttps://example.com\n";
 const NEW = "Why we do it.\n\nRemember the budget.\n\n## Sources\nhttps://example.com\n";
 async function note(h: ReturnType<typeof harness>, title: string, body: string) {
-  const task = await h.repo.create(title); const path = h.repo.taskPath(task.id);
+  const task = await h.repo.create(title); const path = h.repo.taskFile(task.id)!.path;
   h.texts.set(path, h.texts.get(path)!.replace(/\n+$/, "\n\n") + body); return { task, path };
 }
 const backupFiles = (h: ReturnType<typeof harness>) => [...h.texts.keys()].filter(k => k.includes("/note-backups/"));
@@ -26,14 +26,14 @@ describe("migrating task notes to the new layout", () => {
   it("rewrites only real task notes in the old layout, saves their old text first and keeps the rest", async () => {
     const h = harness(); const a = await note(h, "Old", OLD); const b = await note(h, "Already new", NEW); const c = await note(h, "Notes only", "## Notes\nJust notes\n");
     h.texts.set("Tasks/Readme.md", "## Notes\nnot a task\n");
-    const newer = await h.repo.create("Newer schema"); h.texts.set(h.repo.taskPath(newer.id), h.texts.get(h.repo.taskPath(newer.id))!.replace("schema_version: 1", "schema_version: 2") + OLD);
-    const unreadable = await h.repo.create("Unreadable"); h.texts.set(h.repo.taskPath(unreadable.id), "---\nid: [broken\n---\n" + OLD);
+    const newer = await h.repo.create("Newer schema"); h.texts.set(h.repo.taskFile(newer.id)!.path, h.texts.get(h.repo.taskFile(newer.id)!.path)!.replace("schema_version: 1", "schema_version: 2") + OLD);
+    const unreadable = await h.repo.create("Unreadable"); h.texts.set(h.repo.taskFile(unreadable.id)!.path, "---\nid: [broken\n---\n" + OLD);
     const backup = vi.fn(async (files: { path: string; before: string }[]) => { expect(files.map(f => f.path).sort()).toEqual([a.path, c.path].sort()); return "backup.json"; });
     const before = h.texts.get(b.path);
     const result = await h.service.migrateTaskBodies(backup);
     expect(result.failed).toEqual([]); expect(result.backupPath).toBe("backup.json"); expect(result.changes.map(c => c.file.path).sort()).toEqual([a.path, c.path].sort());
     expect(h.texts.get(a.path)!.endsWith(`\n\n${NEW}`)).toBe(true); expect(h.texts.get(c.path)!.endsWith("\n\nJust notes\n")).toBe(true);
-    expect(h.texts.get(b.path)).toBe(before); expect(h.texts.get("Tasks/Readme.md")).toBe("## Notes\nnot a task\n"); expect(h.texts.get(h.repo.taskPath(newer.id))).toContain("schema_version: 2");
+    expect(h.texts.get(b.path)).toBe(before); expect(h.texts.get("Tasks/Readme.md")).toBe("## Notes\nnot a task\n"); expect(h.texts.get(h.repo.taskFile(newer.id)!.path)).toContain("schema_version: 2");
     expect((await h.repo.read(a.task.id)).title).toBe("Old"); expect(h.texts.get(a.path)).toContain(`id: ${a.task.id}`);
     // A second pass finds nothing to change and takes no backup.
     backup.mockClear(); expect(await h.service.migrateTaskBodies(backup)).toEqual({ changes: [], failed: [], backupPath: null }); expect(backup).not.toHaveBeenCalled();

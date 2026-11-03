@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildNote, cleanTags, freePath, noteName } from "../notes";
+import { buildNote, cleanTags } from "../notes";
+import { freePath, noteName } from "../names";
 
 describe("standalone note helpers", () => {
   it("makes a safe filename from a todo title", () => {

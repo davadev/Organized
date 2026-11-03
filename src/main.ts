@@ -68,19 +68,19 @@ export default class Organized extends Plugin {
       this.app.workspace.onLayoutReady(() => {
         if (!this.loaded) return;
         // Registration happens AFTER Obsidian's initial existing-file create events.
-        this.registerEvent(this.app.vault.on("create", file => { if (file instanceof TFile) { void this.run(() => this.service.onDailyCreated(file)); void this.service.index(file).catch(report); } }));
+        this.registerEvent(this.app.vault.on("create", file => { if (file instanceof TFile) { void this.repo.track(file); void this.run(() => this.service.onDailyCreated(file)); void this.service.index(file).catch(report); } }));
         this.registerEvent(this.app.vault.on("modify", file => { if (file instanceof TFile) {
-          const id = this.selectedTaskId; const wasReference = this.service.hasReference(id, file.path);
+          void this.repo.track(file); const id = this.selectedTaskId; const wasReference = this.service.hasReference(id, file.path);
           void this.service.index(file).then(() => {
             if (file.path.startsWith(`${this.settings.taskFolder}/`) || this.service.daily.date(file.path) === localDate() || wasReference || this.service.hasReference(id, file.path)) this.refresh();
           }).catch(report);
         } }));
-        this.registerEvent(this.app.vault.on("rename", (file, oldPath) => { this.service.forget(oldPath); if (file instanceof TFile) { void this.service.index(file).then(() => this.refresh()).catch(report); if (this.safety.writable && this.repo.convertedTo(oldPath).length) void this.run(() => this.service.followRename(oldPath, file.path)); } }));
+        this.registerEvent(this.app.vault.on("rename", (file, oldPath) => { this.service.forget(oldPath); if (file instanceof TFile) { this.repo.moved(oldPath, file); void this.service.index(file).then(() => this.refresh()).catch(report); if (this.safety.writable && this.repo.convertedTo(oldPath).length) void this.run(() => this.service.followRename(oldPath, file.path)); } }));
         // The colour is read from the metadata cache, which updates a moment after the note is written.
         this.registerEvent(this.app.metadataCache.on("changed", file => { if (this.repo.isProjectNote(file)) this.refresh(); }));
-        this.registerEvent(this.app.vault.on("delete", file => { this.service.forget(file.path); this.refresh(); }));
+        this.registerEvent(this.app.vault.on("delete", file => { this.repo.forgetPath(file.path); this.service.forget(file.path); this.refresh(); }));
         this.maybeShowOnboarding();
-        void this.run(async () => { await this.migrateProjects(); await this.markProjectNotes(); await this.migrateTaskNotes(); });
+        void this.run(async () => { await this.repo.reindex(); await this.migrateProjects(); await this.markProjectNotes(); await this.migrateTaskNotes(); });
         this.registerEvent(this.app.workspace.on("file-open", file => { this.followCursor(); if (file) void this.run(() => this.service.reconcile(file)); }));
       });
       this.loaded = true;
@@ -255,7 +255,7 @@ export default class Organized extends Plugin {
   }
   async pickTask(editor: Editor, file: TFile, duplicate = false, allowTodo = false): Promise<void> {
     this.assertWritable(); const context = this.current(editor, file); if (!context) throw new Error("Place the cursor on a Markdown task-list item.");
-    if (context.line.id && !duplicate && this.repo.file(this.repo.taskPath(context.line.id))) throw new Error("Task already linked. Use duplicate as new task for a fresh identity.");
+    if (context.line.id && !duplicate && await this.repo.exists(context.line.id)) throw new Error("Task already linked. Use duplicate as new task for a fresh identity.");
     const captured = editor.getValue(); const selection = editor.listSelections();
     this.pickerOpen = true;
     // A failed read must not leave editor handling disabled for good.
@@ -388,7 +388,7 @@ export default class Organized extends Plugin {
     new ProjectPicker(this.app, this.repo.projectNotes(), task.projects, notes => this.run(async () => { await this.service.projects(task.id, notes); this.rememberProjects(notes); if (context) await this.service.clean(context); }), this.repo.projectFolder(), note => this.repo.projectColor(note)).open();
   }
   async saveModule(id: string, section: NoteSection, text: string): Promise<void> {
-    const file = this.repo.file(this.repo.taskPath(id)); if (!file) throw new Error("Task note is missing.");
+    const file = this.repo.taskFile(id); if (!file) throw new Error("Task note is missing.");
     const before = await this.repo.readText(file);
     await this.repo.write(file, before, writeNoteSection(before, section, text)); this.refresh();
   }

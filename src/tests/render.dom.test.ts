@@ -24,7 +24,7 @@ describe('read-only projections and bundled visual markers', () => {
   it('renders every glyph, all schema-selected properties and full notes/sources without writing', async () => {
     const { owner, task, repo, raw } = await fixture(); const host = createDiv(); icon(host, 'unknown'); expect(host.childElementCount).toBe(0); for (const marker of Object.keys(GLYPHS)) icon(host, marker); expect(host.childElementCount).toBe(Object.keys(GLYPHS).length);
     owner.settings.displayProperties = [...DISPLAY_PROPERTIES]; const record = await repo.update(task.id, t => ({ ...t, scheduled: '2026-01-01', starred: true }));
-    const file = repo.file(repo.taskPath(task.id))!; const before = await repo.readText(file); await repo.write(file, before, before + '\n## Sources\n- [Source](https://example.com)\n');
+    const file = repo.taskFile(task.id)!; const before = await repo.readText(file); await repo.write(file, before, before + '\n## Sources\n- [Source](https://example.com)\n');
     raw.vault.process.mockClear(); raw.fileManager.processFrontMatter.mockClear(); await projection(owner, host, record, new Component() as any);
     expect(host.textContent).toContain('2026-01-01'); expect(host.querySelector('a[href="https://example.com"]')).toBeTruthy(); expect(host.querySelector('[aria-label="Priority: none"]')).toBeTruthy(); expect(host.querySelector('.organized-symbol-starred')).toBeTruthy(); expect(raw.vault.process).not.toHaveBeenCalled(); expect(raw.fileManager.processFrontMatter).not.toHaveBeenCalled();
     const open = vi.spyOn(owner.service.daily, 'open').mockResolvedValue(file); host.querySelector<HTMLAnchorElement>('a')!.click(); await flush(); expect(open).toHaveBeenCalledWith('2026-01-01');

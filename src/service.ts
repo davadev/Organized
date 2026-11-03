@@ -5,7 +5,8 @@ import { localDate, makeId, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORIT
 import { seconds } from "./sessions";
 import { projectTemplate, Repository, splitNote } from "./repository";
 import { parseWorked, retiredLines } from "./retention";
-import { buildNote, freePath, noteName } from "./notes";
+import { buildNote } from "./notes";
+import { freePath, noteName, readableName } from "./names";
 import { losesNote, normalizeRetire, planNames, plural, selectTasks, stripOrganized, type RetireOptions, type RetireScan } from "./retire";
 
 export interface Change { file: TFile; before: string; after: string }
@@ -36,7 +37,7 @@ export class TaskService {
         try { await this.repo.write(c.file, c.after, c.before); } catch { failures.push(c.file.path); }
       }
       for (const rename of [...this.undoRenames].reverse()) {
-        try { await this.repo.app.fileManager.renameFile(rename.file, rename.from); } catch { failures.push(rename.from); }
+        try { await this.repo.renameNote(rename.file, rename.from); } catch { failures.push(rename.from); }
       }
       this.undoChanges = []; this.undoRenames = []; this.references = null; this.changed();
       new Notice(failures.length ? `Undo preserved concurrent edits in: ${failures.join(", ")}` : "Organized changes undone. Created notes are preserved.");
@@ -84,7 +85,7 @@ export class TaskService {
     const target = await this.daily.ensure(date);
     const from = this.daily.date(context.file.path) ?? context.file.path;
     const event: Movement = { id: makeId(), kind: kind === "schedule" && oldDate && oldDate !== date ? "reschedule" : kind, source, from, to: date, at: new Date().toISOString() };
-    const taskFile = this.repo.file(this.repo.taskPath(task.id))!; const beforeTask = await this.repo.readText(taskFile);
+    const taskFile = await this.repo.resolve(task.id); const beforeTask = await this.repo.readText(taskFile);
     const next = await this.repo.update(task.id, current => ({ ...current, scheduled: date, daily_note_section_path: line.section,
       movement_history: current.scheduled === date ? current.movement_history : [...current.movement_history, event] }));
     changes.push({ file: taskFile, before: beforeTask, after: await this.repo.readText(taskFile) });
@@ -148,7 +149,17 @@ export class TaskService {
       if (occurrence.tasks.length > 1) { new Notice(`Multiple occurrences in ${occurrence.file.path}; preserved for repair.`); continue; }
       await this.edit(occurrence.file, occurrence.text, replaceTask(occurrence.text, occurrence.tasks[0], { title: title.trim() }));
     }
+    await this.nameNote(id);
     this.changed();
+  }
+  /** Gives the task note the name of its todo's title. Notes that already carry it (with or without a counter), time records and notes that cannot be renamed are left alone; the title is saved either way. */
+  async nameNote(id: string): Promise<void> {
+    const file = this.repo.taskFile(id); if (!file) return;
+    const task = await this.repo.read(id); if (task.converted_to) return;
+    const wanted = readableName(task.title).toLowerCase(); const current = file.basename.toLowerCase();
+    if (current === wanted || current.replace(/ \d+$/, "") === wanted) return;
+    const target = path(freePath(this.repo.settings().taskFolder, readableName(task.title), this.repo.nameTaken(file)));
+    try { await this.repo.renameNote(file, target); } catch { /* The old name stays; the next title edit tries again. */ }
   }
   async priority(context: Context, priority: Priority): Promise<void> {
     const { line } = await this.resolve(context); if (!line.id) throw new Error("Attach the task first.");
@@ -176,7 +187,7 @@ export class TaskService {
   }
   async recurrence(id: string, context?: Context): Promise<void> {
     const today = localDate(); const changes: Change[] = []; const skipped: string[] = [];
-    const file = this.repo.file(this.repo.taskPath(id))!; const before = await this.repo.readText(file);
+    const file = await this.repo.resolve(id); const before = await this.repo.readText(file);
     const task = await this.repo.update(id, t => {
       const periods = t.recurrence_periods.map(p => ({ ...p }));
       if (t.recurring) { const last = [...periods].reverse().find(p => p.stop === null); if (last) last.stop = today; }
@@ -240,7 +251,7 @@ export class TaskService {
     for (const task of await this.repo.list()) {
       if (task.recurring || !["completed", "canceled"].includes(task.status) || !task.closed_at || now - Date.parse(task.closed_at) < days * 86400000) continue;
       try {
-        const taskFile = this.repo.file(this.repo.taskPath(task.id));
+        const taskFile = this.repo.taskFile(task.id);
         if (!taskFile) throw new Error(`Task note missing for ${task.id}`);
         const occurrences = await this.repo.occurrences(task.id);
         // What the user chose to keep goes under one occurrence only (the latest daily note), so forwarded copies are not repeated.
@@ -256,7 +267,7 @@ export class TaskService {
           }
           await this.edit(occurrence.file, occurrence.text, after);
         }
-        await this.repo.app.fileManager.trashFile(taskFile); removed++;
+        await this.repo.trashNote(taskFile); removed++;
       } catch { failed.push(task.title); }
     }
     if (removed) { this.references = null; this.changed(); }
@@ -329,7 +340,7 @@ export class TaskService {
     const pending: { file: TFile; before: string; after: string }[] = [];
     for (const file of this.repo.app.vault.getMarkdownFiles().filter(f => this.repo.isTaskRecord(f.path))) {
       let before: string;
-      try { before = await this.repo.readText(file); taskFrom(splitNote(before).frontmatter, file.basename); } catch { continue; }
+      try { before = await this.repo.readText(file); taskFrom(splitNote(before).frontmatter, this.repo.idOf(file, splitNote(before).frontmatter)); } catch { continue; }
       const after = migrateNote(before); if (after !== null) pending.push({ file, before, after });
     }
     if (!pending.length) return { changes: [], failed: [], backupPath: null };
@@ -445,7 +456,8 @@ export class TaskService {
         const known = files.get(todo.id) ?? []; if (!known.includes(file)) known.push(file); files.set(todo.id, known);
       }
     }
-    return { tasks: await this.repo.list(), files, lines };
+    const tasks = await this.repo.list();
+    return { tasks, files, lines, unnamed: new Set(tasks.filter(task => this.repo.taskFile(task.id)?.basename === task.id).map(task => task.id)) };
   }
   /**
    * Retires tasks so the vault reads as plain Obsidian again: the todos lose their ids (becoming plain text or links to the task note),
@@ -458,11 +470,11 @@ export class TaskService {
     const o = normalizeRetire(raw); const scan = await this.scanRetire(); const chosen = selectTasks(scan.tasks, o, now);
     if (!chosen.length) { new Notice("No tasks match, so nothing was retired."); return; }
     const folder = this.repo.settings().taskFolder;
-    const names = o.notes === "rename" ? planNames(chosen, folder, this.repo.app.vault.getMarkdownFiles().map(f => f.path)) : new Map<string, string>();
+    const names = o.notes === "rename" ? planNames(chosen.filter(task => scan.unnamed.has(task.id)), folder, this.repo.app.vault.getMarkdownFiles().map(f => f.path)) : new Map<string, string>();
     const saved = new Map<string, string>();
     for (const task of chosen) {
       for (const file of scan.files.get(task.id) ?? []) if (!saved.has(file.path)) saved.set(file.path, await this.repo.readText(file));
-      const note = this.repo.file(this.repo.taskPath(task.id)); if (note && (o.yaml === "strip" || task.time_tracking_started_at)) saved.set(note.path, await this.repo.readText(note));
+      const note = this.repo.taskFile(task.id); if (note && (o.yaml === "strip" || task.time_tracking_started_at)) saved.set(note.path, await this.repo.readText(note));
     }
     const backupPath = await backup([...saved].map(([path, before]) => ({ path, before })), { renames: [...names].map(([id, to]) => ({ from: this.repo.taskPath(id), to })) });
     const changes: Change[] = []; const renames: { file: TFile; from: string }[] = []; const failed: string[] = [];
@@ -471,7 +483,7 @@ export class TaskService {
     try {
       for (const [index, listed] of chosen.entries()) {
         progress.setMessage(`Retiring tasks… ${index} of ${chosen.length}`);
-        const note = this.repo.file(this.repo.taskPath(listed.id)); let from: string | null = null;
+        const note = this.repo.taskFile(listed.id); let from: string | null = null;
         try {
           if (!note) throw new Error(`Task note missing for ${listed.id}`);
           // A running timer is logged first, so the time worked is not left running in a note nothing tracks any more.
@@ -482,7 +494,7 @@ export class TaskService {
             const text = await this.repo.readText(file); const found = parseTasks(text).filter(t => t.id === task.id); if (found.length) occurrences.push({ file, text, todos: found });
           }
           const target = keep.length && occurrences.length ? occurrences.reduce((best, item) => (this.daily.date(item.file.path) ?? "") >= (this.daily.date(best.file.path) ?? "") ? item : best) : null;
-          if (names.has(task.id)) { from = note.path; await this.repo.app.fileManager.renameFile(note, names.get(task.id)!); }
+          if (names.has(task.id)) { from = note.path; await this.repo.renameNote(note, names.get(task.id)!); }
           const alias = o.notes === "keep" ? task.title.replace(/[|[\]]/g, " ").replace(/\s+/g, " ").trim() : undefined;
           for (const occurrence of occurrences) {
             let after = occurrence.text; const last = Math.max(...occurrence.todos.map(line => line.line));
@@ -494,13 +506,13 @@ export class TaskService {
             await this.edit(occurrence.file, occurrence.text, after, changes); todos += occurrence.todos.length;
           }
           if (o.yaml === "strip") { const text = await this.repo.readText(note); await this.edit(note, text, stripOrganized(text), changes); stripped++; }
-          if (o.notes === "trash") { await this.repo.app.fileManager.trashFile(note); trashed++; }
+          if (o.notes === "trash") { await this.repo.trashNote(note); trashed++; }
           if (from !== null) { renames.push({ file: note, from }); renamed++; }
           done++;
         } catch {
           failed.push(listed.title);
           // Put the name back so the task is found again by its id; the todos it did not reach keep their ids.
-          if (from !== null && note && note.path !== from) { try { await this.repo.app.fileManager.renameFile(note, from); } catch { /* The report below names the task. */ } }
+          if (from !== null && note && note.path !== from) { try { await this.repo.renameNote(note, from); } catch { /* The report below names the task. */ } }
         }
       }
     } finally { progress.hide(); }
@@ -526,13 +538,13 @@ export class TaskService {
       const text = occurrence.text.split("\n").filter((_, index) => !removed.has(index)).join("\n");
       await this.edit(occurrence.file, occurrence.text, text);
     }
-    const file = this.repo.file(this.repo.taskPath(id)); if (!file) throw new Error("Task note is missing; relink or repair before deleting.");
-    await this.repo.app.fileManager.trashFile(file);
+    const file = await this.repo.resolve(id, "deleting");
+    await this.repo.trashNote(file);
     this.references = null; return true;
   }
   /** Turns a task into a standalone note and leaves a link in its place: the note is titled after the task and holds its description (then sources and notes), in the chosen folder with the chosen tags and template. The task's other copies are removed and its task note moves to the trash. */
   async convertToNote(id: string, options: { folder: string; tags: string[]; template: string | null; clash: "new" | "existing" }, context?: Context): Promise<TFile> {
-    const taskFile = this.repo.file(this.repo.taskPath(id)); if (!taskFile) throw new Error("Task note is missing; relink or repair before converting.");
+    const taskFile = await this.repo.resolve(id, "converting");
     const task = await this.repo.read(id); const folder = path(options.folder, true); const occurrences = await this.repo.occurrences(id);
     const body = splitNote(await this.repo.readText(taskFile)).body; const name = noteName(task.title);
     const wanted = folder ? `${folder}/${name}.md` : `${name}.md`; const existing = this.repo.file(wanted);
@@ -555,7 +567,7 @@ export class TaskService {
     // A running timer is stopped and logged first. Tracked time keeps its task note (hidden from lists) so the calendar still shows it.
     const stopped = setStatus(task, task.status === "in_progress" ? "open" : task.status);
     if (stopped.work_sessions.length) await this.repo.update(task.id, () => ({ ...stopped, converted_to: note.path }));
-    else await this.repo.app.fileManager.trashFile(taskFile);
+    else await this.repo.trashNote(taskFile);
     this.references = null; this.changed();
     return note;
   }

@@ -43,7 +43,7 @@ const owner: any = {
   setHideClosedProjects() {}, saveModule: async () => undefined, refresh() {},
   repo: {
     projectFolder: () => 'Tasks/Projects', taskColor: (t: Task) => (t.projects[0] ? colors[t.projects[0]] : null), projectColor: (p: string) => colors[p] ?? null,
-    list: async () => tasks, file: (path: string) => (files.has(path) ? { path } : null), read: async (id: string) => byId.get(id)!, taskPath: (id: string) => `Tasks/${id}.md`,
+    list: async () => tasks, file: (path: string) => (files.has(path) ? { path } : null), read: async (id: string) => byId.get(id)!, taskPath: (id: string) => `Tasks/${id}.md`, sourcePath: (id: string) => `Tasks/${id}.md`, taskFile: (id: string) => ({ path: `Tasks/${id}.md` }), resolve: async (id: string) => ({ path: `Tasks/${id}.md` }),
     readText: async (f: { path: string }) => dailies[f.path.slice(6, 16)] ?? notes[f.path.slice(6, -3)] ?? '',
   },
   service: { daily: { path: (d: string) => `Daily/${d}.md`, open: async () => null }, refs: async () => [], retiredWork: async () => [], reconcile: async () => undefined, resolve: async () => undefined },

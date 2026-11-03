@@ -86,7 +86,7 @@ describe('compact calendar and contextual task inspector', () => {
     const recurrence = vi.spyOn(owner.service, 'recurrence').mockResolvedValue(); button(view.contentEl, 'Recurring').click(); await flush(); expect(recurrence).toHaveBeenCalledWith(task.id, owner.context);
   });
   it('renders existing rich modules without duplicates and collapses history/references', async () => {
-    const { owner, view, repo } = await fixture(); const task = await repo.create('Notes'); const file = repo.file(repo.taskPath(task.id))!; const before = await repo.readText(file);
+    const { owner, view, repo } = await fixture(); const task = await repo.create('Notes'); const file = repo.taskFile(task.id)!; const before = await repo.readText(file);
     await repo.write(file, before, before + 'Loose notes\n## Information\nOnly information\n## Idea\nAn idea\n## Question\nA question\n## Sources\nhttps://example.com\n## Notes\nMore notes\n');
     await repo.update(task.id, t => ({ ...t, movement_history: [{ id: 'move', kind: 'forward', source: 'manual', from: '2026-01-01', to: '2026-01-02', at: '2026-01-01T00:00:00Z' }] })); owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render();
     expect(titles(view)).toEqual(['Description', 'Sources']); expect(view.contentEl.textContent).toContain('More notes'); expect(view.contentEl.textContent).toContain('An idea'); expect(view.contentEl.textContent).toContain('A question'); expect(view.contentEl.textContent!.match(/Only information/g)).toHaveLength(1); expect(view.contentEl.textContent).toContain('Loose notes'); expect(view.contentEl.querySelector('details')!.open).toBe(false);
@@ -134,14 +134,14 @@ describe('compact calendar and contextual task inspector', () => {
   it('opens internal Markdown links from the task inspector using the task note as source', async () => {
     const { owner, view, repo } = await fixture();
     const linked = await repo.create('Review [[Recovery_plan]]'); owner.selectedTaskId = linked.id; view.tab = 'Task';
-    const file = repo.file(repo.taskPath(linked.id))!; const before = await repo.readText(file);
+    const file = repo.taskFile(linked.id)!; const before = await repo.readText(file);
     await repo.write(file, before, `${before}\nSee also [[Recovery_plan]].\n`);
     const open = vi.fn(async () => undefined); (owner.app.workspace as any).openLinkText = open;
     await view.render(); await flush(); const anchor = view.contentEl.querySelector<HTMLAnchorElement>('.organized-task-title a')!;
     expect(anchor).toBeTruthy(); anchor.click(); await flush();
-    expect(open).toHaveBeenCalledWith('Recovery_plan', repo.taskPath(linked.id));
+    expect(open).toHaveBeenCalledWith('Recovery_plan', repo.taskFile(linked.id)!.path);
     const noteAnchor = view.contentEl.querySelector<HTMLAnchorElement>('.organized-task-notes a')!;
-    noteAnchor.click(); await flush(); expect(open).toHaveBeenLastCalledWith('Recovery_plan', repo.taskPath(linked.id));
+    noteAnchor.click(); await flush(); expect(open).toHaveBeenLastCalledWith('Recovery_plan', repo.taskFile(linked.id)!.path);
   });
   it('lists current-note tasks without a task cursor and moves the editor cursor when one is selected', async () => {
     const { owner, view, repo, add, setActive, clearActive, files } = await fixture();
@@ -216,7 +216,7 @@ describe('compact calendar and contextual task inspector', () => {
     const { owner, view, repo, add, files, texts } = await fixture(); await add('Project.md'); await add('Gone.md');
     const task = await repo.create('Only'); await repo.update(task.id, t => ({ ...t, projects: ['Project.md', 'Gone.md'] }));
     view.tab = 'Projects'; await view.render(); expect(owner.settings.knownProjects).toEqual(['Project.md', 'Gone.md']);
-    const file = repo.file(repo.taskPath(task.id))!; files.delete(file.path); texts.delete(file.path); files.delete('Gone.md');
+    const file = repo.taskFile(task.id)!; files.delete(file.path); texts.delete(file.path); files.delete('Gone.md');
     await view.render(); const picker = view.contentEl.querySelector<HTMLSelectElement>('#organized-project-filter')!;
     expect(Array.from(picker.options).map(o => o.value)).toEqual(['', 'Project.md']);
     expect(view.contentEl.textContent).toContain('No project links yet.'); owner.rememberProjects(['Project.md']); expect(owner.settings.knownProjects).toEqual(['Project.md', 'Gone.md']);
