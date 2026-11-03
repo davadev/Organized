@@ -63,6 +63,6 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "It is still your Markdown",
-    text: "Every task is a plain note (`Tasks/<id>.md`). No account, no server, no tracking. You can reopen this card any time with the command Show onboarding card, or from Settings. Found a problem in this beta? Open an issue on GitHub (davadev/Organized).",
+    text: "Every task is a plain note named after your todo, in the Tasks folder. No account, no server, no tracking. You can reopen this card any time with the command Show onboarding card, or from Settings. Found a problem in this beta? Open an issue on GitHub (davadev/Organized).",
   },
 ];

@@ -1,7 +1,8 @@
 import { App, Component, Modal, Setting, SuggestModal } from "obsidian";
 import { path, PRIORITIES, Priority, Task, validDate, WorkSession } from "./model";
 import { isoFromInput, lengthOf, localInput, sessionProblem } from "./sessions";
-import { cleanTags, freePath, noteName } from "./notes";
+import { cleanTags } from "./notes";
+import { freePath, noteName } from "./names";
 import { report } from "./service";
 import { rgbOf } from "./colors";
 import { projectName } from "./repository";

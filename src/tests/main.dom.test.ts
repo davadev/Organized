@@ -35,7 +35,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
     const unrelated: any = await h.add('Unrelated.md', 'text'); const reference: any = await h.add('Reference.md', `- [ ] Selected <!--organized:${task.id}-->`); await plugin.service.refs(task.id);
     const refresh = vi.spyOn(plugin, 'refresh').mockImplementation(() => undefined);
     h.events.modify[0](unrelated); await flush(); expect(refresh).not.toHaveBeenCalled();
-    h.events.modify[0](plugin.repo.file(plugin.repo.taskPath(task.id))); await flush(); expect(refresh).toHaveBeenCalledTimes(1);
+    h.events.modify[0](plugin.repo.taskFile(task.id)); await flush(); expect(refresh).toHaveBeenCalledTimes(1);
     const today: any = await h.add(`Daily/${localDate()}.md`, 'ordinary text'); h.events.modify[0](today); await flush(); expect(refresh).toHaveBeenCalledTimes(2);
     h.texts.set(reference.path, 'removed reference'); h.events.modify[0](reference); await flush(); expect(refresh).toHaveBeenCalledTimes(3);
     h.texts.set(unrelated.path, `- [ ] Selected <!--organized:${task.id}-->`); h.events.modify[0](unrelated); await flush(); expect(refresh).toHaveBeenCalledTimes(4);
@@ -150,7 +150,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
     expect(open).toHaveBeenCalledTimes(3); expect(clean).toHaveBeenCalledTimes(4); expect((await plugin.repo.read(task.id)).recurring).toBe(false);
     await plugin.trigger({ file, line: parseTasks('- [k] visual')[0] }); expect(await plugin.repo.list()).toHaveLength(1);
     const missing = harness(); const p = new Organized(missing.app, {} as any); (p as any).repo = missing.repo; await expect(p.saveModule('missing1', 'Sources', 'text')).rejects.toThrow('missing');
-    const canonical = plugin.repo.file(plugin.repo.taskPath(task.id))!; await plugin.saveModule(task.id, 'Sources', '- [Source](https://example.com)'); expect(await plugin.repo.readText(canonical)).toContain('https://example.com');
+    const canonical = plugin.repo.taskFile(task.id)!; await plugin.saveModule(task.id, 'Sources', '- [Source](https://example.com)'); expect(await plugin.repo.readText(canonical)).toContain('https://example.com');
     await plugin.saveModule(task.id, 'Description', '$1 replacement'); const saved = await plugin.repo.readText(canonical); expect(saved).not.toContain('## Description'); expect(saved).toContain('$1 replacement');
     const todos: any = await h.add('Todos.md', '- [ ] Convert me'); const delegate = vi.spyOn(plugin.service, 'convertTodos').mockResolvedValue(); await plugin.convertTodos(todos); expect(delegate).toHaveBeenCalledWith(todos);
     const confirmed = plugin.confirm('Yes?'); const confirmation = Modal.instances.at(-1) as ConfirmModal; confirmation.done(true); expect(await confirmed).toBe(true); confirmation.close();

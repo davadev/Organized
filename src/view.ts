@@ -133,7 +133,7 @@ export class OrganizedInspectorView extends ItemView {
     });
     const head = open.createDiv({ cls: "organized-list-head" });
     const title = head.createDiv({ cls: "organized-list-title" });
-    void renderMarkdownLinks(this.app, task.title, title, this.owner.repo.taskPath(task.id), this.markdown).catch(report);
+    void renderMarkdownLinks(this.app, task.title, title, this.owner.repo.sourcePath(task.id), this.markdown).catch(report);
     // One small icon per status instead of a word keeps the card compact.
     const shown = this.shownStatus(task); const doneToday = task.recurring && shown === "completed";
     const label = doneToday ? "done · today" : task.status.replace(/_/g, " ");
@@ -479,7 +479,7 @@ export class OrganizedInspectorView extends ItemView {
       input.focus(); input.select();
     } else {
       const title = header.createDiv({ cls: "organized-task-title", attr: { role: "heading", "aria-level": "2" } });
-       void renderMarkdownLinks(this.app, task.title, title, this.owner.repo.taskPath(id), this.markdown).catch(report);
+       void renderMarkdownLinks(this.app, task.title, title, this.owner.repo.sourcePath(id), this.markdown).catch(report);
       this.iconButton(header, "Edit title", "pencil", () => { this.editingTitle = true; return this.render(); });
     }
     const star = this.iconButton(header, "Favorite", "star", () => this.owner.run(async () => { await this.owner.repo.update(id, t => ({ ...t, starred: !t.starred })); this.owner.refresh(); })); star.setAttribute("aria-pressed", String(task.starred));
@@ -489,7 +489,7 @@ export class OrganizedInspectorView extends ItemView {
     const statusSelect = this.select(status, "Status", this.shownStatus(task), STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(async () => this.owner.service.status(id, value as Task["status"], this.owner.context?.line.id === id ? this.owner.context : task.recurring ? await this.todayContext(id) : undefined)); });
     if (task.recurring) statusSelect.options[STATUSES.indexOf("completed")].text = "done · today";
     const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Description", "Sources"], value => { this.module = value; this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
-    const file = this.owner.repo.file(this.owner.repo.taskPath(id))!; const body = splitNote(await this.owner.repo.readText(file)).body;
+    const file = await this.owner.repo.resolve(id, "showing the task"); const body = splitNote(await this.owner.repo.readText(file)).body;
     if (generation !== this.renderId) return;
     const details = host.createDiv({ cls: "organized-task-details" });
     await this.moduleCard(details, file.path, id, "Description", noteSection(body, "Description"));

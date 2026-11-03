@@ -6,7 +6,8 @@ import { Repository } from "../repository";
 import { TaskService } from "../service";
 import { splitNote } from "../repository";
 
-export function harness() {
+/** `legacyNames`: new task notes are renamed to `<id>.md`, the layout notes had before they were named after their titles (for tests of upgrades and of Retire's rename). */
+export function harness(legacyNames = false) {
   const texts = new Map<string, string>(); const files = new Map<string, TFile | TFolder>();
   const events: Record<string, ((...args: any[]) => unknown)[]> = {};
   const layout: (() => void)[] = [];
@@ -55,6 +56,7 @@ export function harness() {
   };
   let settings: Settings = { ...DEFAULT_SETTINGS, displayProperties: [] };
   const repo = new Repository(app as unknown as App, () => settings, () => active as any);
+  if (legacyNames) { const create = repo.create.bind(repo); repo.create = async (title: string) => { const task = await create(title); await repo.renameNote(repo.taskFile(task.id)!, repo.taskPath(task.id)); return task; }; }
   const changed = vi.fn(); const confirm = vi.fn(async () => true);
   const service = new TaskService(repo, changed, confirm);
   const add = async (p: string, text = "") => app.vault.create(p, text);

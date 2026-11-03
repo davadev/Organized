@@ -146,7 +146,7 @@ describe("onboarding card", () => {
 });
 
 describe("Retire window", () => {
-  const scan = (tasks = 2) => ({ tasks: Array.from({ length: tasks }, (_v, i) => newTask(`Task ${i}`, `task000${i}`)), files: new Map(Array.from({ length: tasks }, (_v, i) => [`task000${i}`, [{ path: `Daily/${i}.md` } as never]])), lines: new Map(Array.from({ length: tasks }, (_v, i) => [`task000${i}`, 1])) });
+  const scan = (tasks = 2) => ({ tasks: Array.from({ length: tasks }, (_v, i) => newTask(`Task ${i}`, `task000${i}`)), files: new Map(Array.from({ length: tasks }, (_v, i) => [`task000${i}`, [{ path: `Daily/${i}.md` } as never]])), lines: new Map(Array.from({ length: tasks }, (_v, i) => [`task000${i}`, 1])), unnamed: new Set(Array.from({ length: tasks }, (_v, i) => `task000${i}`)) });
   const base = { which: "all" as const, olderThanDays: 7, lines: "plain" as const, keep: "title" as const, notes: "keep" as const, yaml: "keep" as const };
   const select = (modal: RetireModal, label: string) => modal.contentEl.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!;
   const choose = (field: HTMLSelectElement, value: string) => { field.value = value; field.dispatchEvent(new Event("change")); };

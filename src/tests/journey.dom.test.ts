@@ -34,7 +34,7 @@ describe("a user's whole journey, from install to retiring", () => {
     const daily = await h.add(`Daily/${today}.md`, "# Plan\n- [ ] Write report\n- [ ] Call _ back\n- [ ] Review snake_case names\n\n# Later\n- [x] Already done\n") as TFile;
     await h.add("Ideas.md", "Some idea\n");
     const old = await h.repo.create("Legacy task");
-    const oldPath = h.repo.taskPath(old.id);
+    const oldPath = h.repo.taskFile(old.id)!.path;
     h.texts.set(oldPath, `${h.texts.get(oldPath)!.replace(/\s*$/, "\n")}\n## Description\nOld description\n\n## Notes\nSee [[Ideas]]\n`);
     const before = new Map(h.texts);
 
@@ -52,10 +52,11 @@ describe("a user's whole journey, from install to retiring", () => {
     expect(ids(converted)).toHaveLength(3); expect(converted).toContain("- [x] Already done\n");
     const [report, underscore, snake] = parseTasks(converted).map(line => line.id!);
     expect((await plugin.repo.read(underscore)).title).toBe("Call _ back"); expect((await plugin.repo.read(snake)).title).toBe("Review snake_case names");
+    expect(plugin.repo.taskFile(underscore)!.path).toBe("Tasks/Call _ back.md"); expect(plugin.repo.taskFile(snake)!.path).toBe("Tasks/Review snake_case names.md"); expect(plugin.repo.taskFile(report)!.path).toBe("Tasks/Write report.md"); expect(plugin.repo.taskFile(old.id)!.path).toBe(oldPath); // new notes carry the title; the old id-named one still works
 
     // 3. Everyday use: description in the note body, priority, schedule, status, tracked time, projects.
     await plugin.saveModule(report, "Description", "Cover Q1.\nLink: [[Ideas]]"); await plugin.saveModule(report, "Sources", "https://example.com");
-    expect(readNote(splitNote(h.texts.get(plugin.repo.taskPath(report))!).body)).toEqual({ description: "Cover Q1.\nLink: [[Ideas]]", sources: "https://example.com" });
+    expect(readNote(splitNote(h.texts.get(plugin.repo.taskFile(report)!.path)!).body)).toEqual({ description: "Cover Q1.\nLink: [[Ideas]]", sources: "https://example.com" });
     await plugin.run(() => plugin.service.setPriority(report, "high")); await plugin.run(() => plugin.service.status(report, "in_progress")); await plugin.run(() => plugin.service.status(report, "open"));
     await plugin.run(() => plugin.service.addSession(report, { start: new Date(2026, 2, 4, 9, 0).toISOString(), end: new Date(2026, 2, 4, 10, 30).toISOString() }));
     await plugin.run(() => plugin.service.projects(report, ["Ideas.md"]));
@@ -64,7 +65,7 @@ describe("a user's whole journey, from install to retiring", () => {
     expect((await plugin.repo.read(report)).time_tracked_seconds).toBe(5400);
 
     // 4. Title edits keep the todo line in step, a completed task closes, and a restart changes nothing on disk.
-    await plugin.run(() => plugin.service.title(report, "Write the Q1 report")); expect(h.texts.get(daily.path)).toContain("Write the Q1 report");
+    await plugin.run(() => plugin.service.title(report, "Write the Q1 report")); expect(h.texts.get(daily.path)).toContain("Write the Q1 report"); expect(plugin.repo.taskFile(report)!.path).toBe("Tasks/Write the Q1 report.md");
     await plugin.run(() => plugin.service.status(underscore, "completed")); expect((await plugin.repo.read(underscore)).closed_at).not.toBeNull();
     plugin.onunload?.(); const snapshot = new Map(h.texts);
     const events = h.events; for (const key of Object.keys(events)) delete events[key]; h.layout.length = 0;
@@ -88,14 +89,14 @@ describe("a user's whole journey, from install to retiring", () => {
     await plugin.run(() => plugin.service.retireTasks({ which: "all", olderThanDays: 7, lines: "link", keep: "all", notes: "rename", yaml: "strip" }, (files: any, extra: any) => plugin.safety.writeBackup("retire", files, extra)));
     const after = h.texts.get(daily.path)!; expect(after).not.toMatch(/organized:/); expect(after).toMatch(/- \[x\] \[\[Tasks\/Call _ back\]\]/); expect(after).toMatch(/- \[ \] \[\[Tasks\/Review snake_case names\]\]/); expect(after).toContain("- [x] Already done\n");
     // The record behind a standalone note keeps its tracked time and is not a task any more, so retiring leaves it alone.
-    for (const path of h.texts.keys()) if (path.startsWith("Tasks/") && path.endsWith(".md") && path !== plugin.repo.taskPath(report)) expect(h.texts.get(path)).not.toMatch(/organized:|schema_version|work_sessions/);
-    expect(h.texts.get(plugin.repo.taskPath(report))).toContain("converted_to: Notes/Q1 report.md");
+    for (const path of h.texts.keys()) if (path.startsWith("Tasks/") && path.endsWith(".md") && path !== plugin.repo.taskFile(report)!.path) expect(h.texts.get(path)).not.toMatch(/organized:|schema_version|work_sessions/);
+    expect(h.texts.get(plugin.repo.taskFile(report)!.path)).toContain("converted_to: Notes/Q1 report.md");
     expect(h.app.vault.getMarkdownFiles().some(f => f.path === "Tasks/Call _ back.md")).toBe(true);
     // Every link left in the daily note resolves to a file that exists.
     for (const target of [...after.matchAll(/\[\[([^\]|]+)/g)].map(m => m[1])) expect(h.app.vault.getAbstractFileByPath(`${target}.md`) ?? h.app.vault.getAbstractFileByPath(target), target).not.toBeNull();
     // And Undo puts the vault back as it was before retiring.
     const linked = h.texts.get(daily.path)!; await plugin.service.undo();
-    expect(ids(h.texts.get(daily.path)!)).toHaveLength(2); expect(h.texts.get(daily.path)).not.toBe(linked); expect(h.app.vault.getAbstractFileByPath("Tasks/Call _ back.md")).toBeNull(); expect(h.app.vault.getAbstractFileByPath(plugin.repo.taskPath(underscore))).not.toBeNull();
+    expect(ids(h.texts.get(daily.path)!)).toHaveLength(2); expect(h.texts.get(daily.path)).not.toBe(linked); expect(h.app.vault.getAbstractFileByPath("Tasks/Call _ back.md")).not.toBeNull(); // already named after its title, so Retire has nothing to rename or undo
     expect((await plugin.repo.read(underscore)).title).toBe("Call _ back");
   });
 });

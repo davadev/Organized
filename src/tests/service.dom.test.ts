@@ -142,15 +142,15 @@ describe("repository and explicit task actions", () => {
     const project: any = await h.add('Project.md', text); const past: any = await h.add('Daily/2020-01-01.md', `- [x] Old completed <!--organized:${completed.id}-->`);
     const other: any = await h.add('Other.md', '- [x] Old canceled <!--organized:' + canceled.id + '-->');
     h.setSettings({ taskRetentionDays: 30, autoForward: false });
-    await h.service.reconcile(other); expect(h.repo.file(h.repo.taskPath(completed.id))).toBeTruthy();
+    await h.service.reconcile(other); expect(h.repo.taskFile(completed.id)).toBeTruthy();
     const today: any = await h.add(`Daily/${localDate()}.md`); await h.service.reconcile(today);
     const after = h.texts.get(project.path)!;
     expect(after).not.toContain(completed.id); expect(after).not.toContain(canceled.id);
     expect(after).toContain('- [x] Old completed\n- [-] Old completed again\n- [-] Old canceled');
     expect(after).toContain(fresh.id); expect(after).toContain(open.id); expect(after).toContain(recurring.id); expect(after).toContain(legacy.id);
     expect(h.texts.get(past.path)).toBe('- [x] Old completed'); expect(h.texts.get(other.path)).toBe('- [x] Old canceled');
-    expect(h.repo.file(h.repo.taskPath(completed.id))).toBeNull(); expect(h.repo.file(h.repo.taskPath(canceled.id))).toBeNull();
-    expect(h.repo.file(h.repo.taskPath(fresh.id))).toBeTruthy(); expect(h.raw.fileManager.trashFile).toHaveBeenCalledTimes(2);
+    expect(h.repo.taskFile(completed.id)).toBeNull(); expect(h.repo.taskFile(canceled.id)).toBeNull();
+    expect(h.repo.taskFile(fresh.id)).toBeTruthy(); expect(h.raw.fileManager.trashFile).toHaveBeenCalledTimes(2);
     expect(h.changed).toHaveBeenCalledOnce(); expect((Notice.instances.at(-1)?.message as DocumentFragment).querySelector('.organized-notice-detail')?.textContent).toContain('2 tasks moved');
     await h.service.reconcile(today); expect(h.raw.fileManager.trashFile).toHaveBeenCalledTimes(2);
   });
@@ -160,7 +160,7 @@ describe("repository and explicit task actions", () => {
     await h.add('A.md', `- [x] Conflict <!--organized:${task.id}-->`); await h.add('B.md', `- [x] Conflict <!--organized:${task.id}-->`);
     const write = vi.spyOn(h.repo, 'write').mockRejectedValue(Error('concurrent change'));
     h.setSettings({ taskRetentionDays: 1, autoForward: false }); const today: any = await h.add(`Daily/${localDate()}.md`); await h.service.reconcile(today);
-    expect(h.repo.file(h.repo.taskPath(task.id))).toBeTruthy(); expect(h.raw.fileManager.trashFile).not.toHaveBeenCalled();
+    expect(h.repo.taskFile(task.id)).toBeTruthy(); expect(h.raw.fileManager.trashFile).not.toHaveBeenCalled();
     expect(h.texts.get('A.md')).toContain(task.id); expect(h.texts.get('B.md')).toContain(task.id); expect(write).toHaveBeenCalled();
     expect((Notice.instances.at(-1)?.message as DocumentFragment).querySelector('.organized-notice-detail')?.textContent).toContain('task notes were preserved');
   });
@@ -170,11 +170,11 @@ describe("repository and explicit task actions", () => {
     const note: any = await h.add('Stale.md', `- [x] Stale <!--organized:${stale.id}-->`); const occurrence = (await h.repo.occurrences(stale.id))[0];
     vi.spyOn(h.repo, 'occurrences').mockResolvedValueOnce([{ ...occurrence, tasks: [{ ...occurrence.tasks[0], raw: `${occurrence.tasks[0].raw} changed` }] }]);
     const today: any = await h.add(`Daily/${localDate()}.md`); h.setSettings({ taskRetentionDays: 1, autoForward: false }); await h.service.reconcile(today);
-    expect(h.texts.get(note.path)).toContain(stale.id); expect(h.repo.file(h.repo.taskPath(stale.id))).toBeTruthy();
+    expect(h.texts.get(note.path)).toContain(stale.id); expect(h.repo.taskFile(stale.id)).toBeTruthy();
 
     const second = harness(); const orphan = await second.repo.create('Missing canonical'); const orphan2 = await second.repo.create('Also missing');
     for (const item of [orphan, orphan2]) await second.repo.update(item.id, t => ({ ...t, status: 'canceled', closed_at: new Date(Date.now() - 2 * 86400000).toISOString() }));
-    const find = second.repo.file.bind(second.repo); vi.spyOn(second.repo, 'file').mockImplementation(path => [orphan.id, orphan2.id].some(id => path === second.repo.taskPath(id)) ? null : find(path));
+    const find = second.repo.file.bind(second.repo); vi.spyOn(second.repo, 'file').mockImplementation(path => [orphan.id, orphan2.id].some(id => path === second.repo.taskFile(id)!.path) ? null : find(path));
     second.setSettings({ taskRetentionDays: 1, autoForward: false }); const today2: any = await second.add(`Daily/${localDate()}.md`); await second.service.reconcile(today2);
     expect(second.raw.fileManager.trashFile).not.toHaveBeenCalled(); expect(second.changed).not.toHaveBeenCalled();
     expect((Notice.instances.at(-1)?.message as DocumentFragment).querySelector('.organized-notice-detail')?.textContent).toContain('2 cleanups were incomplete');
@@ -240,18 +240,18 @@ describe("repository and explicit task actions", () => {
     const out = h.texts.get('Crlf.md')!;
     expect(out).toMatch(/^- \[ \] One <!--organized:[a-zA-Z0-9_-]{8,80}-->\r\n {2}- \[ \] Two <!--organized:[a-zA-Z0-9_-]{8,80}-->\r\n$/);
     expect(out.match(/\r\n/g)).toHaveLength(2); expect(out.match(/\n/g)).toHaveLength(2);
-    const task = await h.repo.create('Task note'); await expect(h.service.convertTodos(h.repo.file(h.repo.taskPath(task.id))!)).rejects.toThrow('regular note');
+    const task = await h.repo.create('Task note'); await expect(h.service.convertTodos(h.repo.taskFile(task.id)!)).rejects.toThrow('regular note');
   });
   it("deletes a task only after confirmation, removing every occurrence and trashing its note", async () => {
     const h = harness(); const task = await h.repo.create('Delete me'); const line = `- [ ] Delete me <!--organized:${task.id}-->`;
     await h.add('Daily/2020-01-01.md', `${line}\n- [ ] Keep this`); await h.add('Project.md', line);
-    h.confirm.mockResolvedValue(false); expect(await h.service.deleteTask(task.id)).toBe(false); expect(h.repo.file(h.repo.taskPath(task.id))).toBeTruthy(); expect(h.texts.get('Project.md')).toContain(task.id);
+    h.confirm.mockResolvedValue(false); expect(await h.service.deleteTask(task.id)).toBe(false); expect(h.repo.taskFile(task.id)).toBeTruthy(); expect(h.texts.get('Project.md')).toContain(task.id);
     await h.service.refs(task.id); h.confirm.mockResolvedValue(true); expect(await h.service.deleteTask(task.id)).toBe(true);
     expect(h.confirm).toHaveBeenLastCalledWith(expect.stringContaining('Delete me'), 'Delete task', 'Delete');
     expect(h.texts.get('Daily/2020-01-01.md')).not.toContain(task.id); expect(h.texts.get('Daily/2020-01-01.md')).toContain('Keep this'); expect(h.texts.get('Project.md')).toBe('');
     expect(h.raw.fileManager.trashFile).toHaveBeenCalledOnce(); expect(await h.repo.list()).toEqual([]); expect((h.service as any).references).toBeNull();
     const missing = await h.repo.create('Missing note');
-    h.confirm.mockImplementationOnce(async () => { h.files.delete(h.repo.taskPath(missing.id)); h.texts.delete(h.repo.taskPath(missing.id)); return true; });
+    const gonePath = h.repo.taskFile(missing.id)!.path; h.confirm.mockImplementationOnce(async () => { h.files.delete(gonePath); h.texts.delete(gonePath); return true; });
     await expect(h.service.deleteTask(missing.id)).rejects.toThrow('missing');
   });
   it("renames all safe occurrences including history and reports duplicate repair", async () => {

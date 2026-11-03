@@ -65,9 +65,9 @@ describe('inspector renders racing each other', () => {
   });
   it('a superseded Task render never touches the DOM or scroll state after its note read', async () => {
     const { owner, view, task } = await fixture(); owner.selectedTaskId = task.id; view.tab = 'Task'; view.module = 'Description';
-    const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView'); const gates = [deferred(), deferred()]; let reads = 0; const original = owner.repo.readText.bind(owner.repo);
+    const notePath = owner.repo.taskFile(task.id)!.path; const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView'); const gates = [deferred(), deferred()]; let reads = 0; const original = owner.repo.readText.bind(owner.repo);
     // Reads of the task note: 1 and 3 are each render's task lookup; 2 and 4 are the body read the renders park on.
-    vi.spyOn(owner.repo, 'readText').mockImplementation(async file => { const text = await original(file); if (file.path.includes(task.id)) { const n = ++reads; if (n === 2) await gates[0].promise; if (n === 4) await gates[1].promise; } return text; });
+    vi.spyOn(owner.repo, 'readText').mockImplementation(async file => { const text = await original(file); if (file.path === notePath) { const n = ++reads; if (n === 2) await gates[0].promise; if (n === 4) await gates[1].promise; } return text; });
     const first = view.render(); await flush(); const second = view.render(); await flush();
     gates[0].resolve(); await first; await flush(); expect(scroll).not.toHaveBeenCalled(); expect(view.contentEl.querySelectorAll('.organized-task-details')).toHaveLength(0);
     gates[1].resolve(); await second; expect(scroll).toHaveBeenCalledOnce();
