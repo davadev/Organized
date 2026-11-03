@@ -496,9 +496,10 @@ export class OrganizedInspectorView extends ItemView {
     if (task.priority !== "none" || this.module === "Priority") this.select(this.card(details, "Priority", "flag"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.service.setPriority(id, value as Task["priority"], this.owner.context?.line.id === id ? this.owner.context : undefined); this.owner.refresh(); }); });
     if (task.scheduled || this.module === "Schedule") this.button(this.card(details, "Schedule", "calendar"), task.scheduled ?? "Choose date", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined))).open(); });
     if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || this.module === "Timer") {
-      const timer = this.card(details, "Timer", "timer"); timer.createDiv({ cls: "organized-timer-value", text: `${Math.floor(elapsed(task) / 60)} min${task.time_tracking_started_at ? " · running" : ""}` });
-      this.button(timer, task.time_tracking_started_at ? "Stop timer" : "Start timer", () => this.owner.run(() => this.owner.service.status(id, task.time_tracking_started_at ? "open" : "in_progress", this.owner.context ?? undefined)));
-      this.button(timer, "Add time", () => this.editSession(task, null, localDate()));
+      const timer = this.card(details, "Timer", "timer"); const row = timer.createDiv({ cls: "organized-timer-row" });
+      row.createDiv({ cls: "organized-timer-value", text: `${Math.floor(elapsed(task) / 60)} min${task.time_tracking_started_at ? " · running" : ""}` });
+      this.button(row, task.time_tracking_started_at ? "Stop timer" : "Start timer", () => this.owner.run(() => this.owner.service.status(id, task.time_tracking_started_at ? "open" : "in_progress", this.owner.context ?? undefined)));
+      this.button(row, "Add time", () => this.editSession(task, null, localDate()));
       if (task.work_sessions.length) this.sessionList(timer, task);
     }
     if (task.recurring || task.recurrence_periods.length || this.module === "Recurring") {

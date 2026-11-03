@@ -54,15 +54,22 @@ describe("native task, date, source and project modals", () => {
     done.mockClear(); const confirm = new ConfirmModal(h.app, 'Question?', done); confirm.open(); confirm.contentEl.querySelectorAll('button')[1].click(); expect(done).toHaveBeenCalledExactlyOnceWith(true);
     const deleting = new ConfirmModal(h.app, 'Remove it?', done, 'Delete task', 'Delete'); deleting.open(); expect(deleting.titleEl.textContent).toBe('Delete task'); expect(deleting.contentEl.querySelectorAll('button')[1].textContent).toBe('Delete'); expect((Setting.instances.at(-1)!.controls.at(-1) as any).buttonEl.classList.contains('mod-warning')).toBe(true); deleting.close(); expect(done).toHaveBeenCalledTimes(2);
   });
+  it("lists project names with their colour dot, and the path only when two projects share a name", () => {
+    const h = harness(); const colors: Record<string, string> = { 'Tasks/Projects/Alpha.md': '#3b82f6' };
+    const modal = new ProjectPicker(h.app, ['Tasks/Projects/Alpha.md', 'Tasks/Projects/Beta.md', 'Work/Gamma.md', 'Home/Gamma.md'], [], async () => undefined, 'Tasks/Projects', note => colors[note] ?? null); modal.open();
+    const rows = Array.from(modal.contentEl.querySelectorAll('.organized-project-choice')); expect(rows.map(r => r.textContent)).toEqual(['Alpha', 'Beta', 'Work/Gamma', 'Home/Gamma']);
+    expect(rows[0].querySelector('.organized-project-dot')!.hasAttribute('data-project')).toBe(true); expect(rows[0].querySelector<HTMLElement>('.organized-project-dot')!.style.getPropertyValue('--organized-chip-bg')).toBe('59 130 246');
+    expect(rows[1].querySelector('.organized-project-dot')!.hasAttribute('data-project')).toBe(false);
+  });
   it("multi-selects projects and creates only a chosen valid root note; search keeps input focus", async () => {
     const h = harness(); const save = vi.fn(async () => undefined); const modal = new ProjectPicker(h.app, ['Existing.md', 'Other.md'], ['Selected.md'], save); modal.open(); decorated(modal);
     const input = modal.contentEl.querySelector('input[type=search]') as HTMLInputElement; input.focus(); input.value = 'New'; input.dispatchEvent(new Event('input'));
-    expect(document.activeElement).toBe(input); expect(modal.contentEl.textContent).toContain('New.md (create)');
+    expect(document.activeElement).toBe(input); expect(modal.contentEl.textContent).toContain('New (create)');
     const choice = modal.contentEl.querySelector('input[type=checkbox]') as HTMLInputElement; choice.checked = true; choice.dispatchEvent(new Event('change')); choice.checked = false; choice.dispatchEvent(new Event('change')); choice.checked = true; choice.dispatchEvent(new Event('change'));
     input.value = '../bad'; input.dispatchEvent(new Event('input')); expect(modal.contentEl.querySelectorAll('input[type=checkbox]')).toHaveLength(0);
     input.value = 'bad?'; input.dispatchEvent(new Event('input')); expect(modal.contentEl.querySelectorAll('input[type=checkbox]')).toHaveLength(0);
     modal.contentEl.querySelector('button')!.click(); await flush(); expect(save).toHaveBeenCalledWith(['Selected.md', 'New.md']); expect(h.files.size).toBe(0);
-    const filed = new ProjectPicker(h.app, [], [], save, 'Tasks/Projects'); filed.open(); const filedInput = filed.contentEl.querySelector('input[type=search]') as HTMLInputElement; filedInput.value = 'Plan.md'; filedInput.dispatchEvent(new Event('input')); expect(filed.contentEl.textContent).toContain('Tasks/Projects/Plan.md (create)'); filed.close();
+    const filed = new ProjectPicker(h.app, [], [], save, 'Tasks/Projects'); filed.open(); const filedInput = filed.contentEl.querySelector('input[type=search]') as HTMLInputElement; filedInput.value = 'Plan.md'; filedInput.dispatchEvent(new Event('input')); expect(filed.contentEl.textContent).toContain('Plan (create)'); filed.close();
     const failed = new ProjectPicker(h.app, [], [], async () => { throw Error('project failure'); }); failed.open(); failed.contentEl.querySelector('button')!.click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain('project failure');
   });
   it("adds or edits a session with a live length, refuses a bad range and offers Open task and Delete when editing", async () => {

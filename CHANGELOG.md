@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Daily-note polish.**
+  - Removing an in-progress todo (its `/` line) no longer asks anything: the timer stops, the time is kept, and a notice says so.
+  - With *Project links* shown beside todos, each project appears by name only, as a clickable link to the project note, in the project's colour (darker on a light theme, brighter on a dark one).
+  - The project picker lists project names (the folder only when two projects share a name) with a dot in the project's colour. A task takes the colour of its first coloured project.
+  - Sorting by priority now works around a plain bullet between todos (such as the link a todo leaves after becoming a note), so an in-progress todo still rises to the top. Finished and canceled todos sink to the no-priority group.
+  - After a todo moves because of sorting (for example when you type `/`), the cursor follows it instead of staying on the line that took its place.
+  - The Timer card in the side panel is more compact: time and buttons share one row.
+- A whole-journey test (install, onboarding, convert, daily use, restart, upgrade of old notes, standalone note, retire, Undo) runs in a throwaway in-memory vault as part of the normal test run (about a tenth of a second).
 - Note names are safer on every system: control characters are replaced and a long title made of emoji is cut on a whole character instead of splitting one.
 - Fixed note names dropping characters that belong to a title. Making a standalone note (and the Retire window's renaming) removed every `_`, `~` and backtick, so a todo called `_` became *Untitled* and `snake_case` became `snakecase`. Only emphasis that wraps text (`_this_`, `__this__`, `**this**`, `~~this~~`, `` `this` ``) is removed now. Characters Obsidian or the OS reject (such as `*` or `?`) are still replaced.
 - A task that kept its tracked time when it became a standalone note now follows that note if you rename or move it, so the Day and Week views still open the right note.

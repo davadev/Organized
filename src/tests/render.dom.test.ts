@@ -7,6 +7,7 @@ import { editorExtension, hasRichProperties, stepPastComments, GLYPHS, icon, pro
 import { Component, editorLivePreviewField, MarkdownRenderChild } from './__mocks__/obsidian';
 import { installObsidianDom } from './__mocks__/obsidianDom';
 import { harness } from './harness';
+import { Notice } from './__mocks__/obsidian';
 import { DISPLAY_PROPERTIES } from '../model';
 
 installObsidianDom();
@@ -124,5 +125,19 @@ describe('read-only projections and bundled visual markers', () => {
       expect(span.textContent).toBe(`priority: ${priority}`); expect(span.classList.contains(`organized-priority-${priority}`)).toBe(true);
     }
     const other = createDiv(); owner.settings.displayProperties = ['status']; await projection(owner, other, task, component); expect(other.querySelector('.organized-property')!.className).toBe('organized-property');
+  });
+});
+
+describe('project links beside a todo', () => {
+  it('shows each project by name in its colour and opens the project note on click', async () => {
+    const { owner, task, repo, raw, add } = await fixture(); owner.settings.displayProperties = ['projects'];
+    const coloured: any = await add('Tasks/Projects/Alpha.md', '---\norganized_type: project\norganized_color: "#3b82f6"\n---\n'); await add('Work/Plain.md', 'x');
+    raw.metadataCache.getFileCache = (file: any) => ({ frontmatter: file.path === coloured.path ? { organized_color: '#3b82f6' } : undefined }) as any;
+    const linked = await repo.update(task.id, t => ({ ...t, projects: [coloured.path, 'Work/Plain.md', 'Gone.md'] })); const host = createDiv(); await projection(owner, host, linked, new Component() as any);
+    const links = Array.from(host.querySelectorAll<HTMLAnchorElement>('a.organized-project-link')); expect(links.map(l => l.textContent)).toEqual(['Alpha', 'Plain', 'Gone']);
+    expect(links[0].hasAttribute('data-project')).toBe(true); expect(links[0].style.getPropertyValue('--organized-chip-bg')).toBe('59 130 246'); expect(links[1].hasAttribute('data-project')).toBe(false); expect(host.textContent).not.toContain('Tasks/Projects');
+    const open = vi.fn(async () => undefined); raw.workspace.getLeaf.mockReturnValue({ openFile: open } as any);
+    links[0].click(); expect(open).toHaveBeenCalledWith(coloured); links[2].click(); expect(open).toHaveBeenCalledOnce(); expect(Notice.instances.at(-1)?.message).toContain('Gone.md');
+    const none = createDiv(); await projection(owner, none, task, new Component() as any); expect(none.querySelector('.organized-project-link')).toBeNull();
   });
 });

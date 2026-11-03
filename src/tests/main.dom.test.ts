@@ -48,7 +48,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
     await stub.processors[0](createDiv(), { getSectionInfo: () => null }); expect(h.raw.vault.process).not.toHaveBeenCalled();
     const file: any = await h.add('Note.md', '- [ ] ordinary'); const editor: any = h.setActive(file); editor.cm = { dispatch: vi.fn() }; plugin.refresh(); expect(editor.cm.dispatch).toHaveBeenCalledWith(expect.objectContaining({ effects: expect.anything() }));
     h.raw.workspace.getActiveViewOfType.mockReturnValueOnce({ file, editor, getMode: () => 'preview' } as any); expect(plugin.activeEditor()).toBeNull();
-    const task = await plugin.repo.create('Project'); const projects = vi.spyOn(plugin.service, 'projects').mockResolvedValue(); const clean = vi.spyOn(plugin.service, 'clean').mockResolvedValue(); plugin.pickProjects(task); const modal = Modal.instances.at(-1) as ProjectPicker; await modal.save([]); expect(projects).toHaveBeenCalledWith(task.id, []); expect(clean).not.toHaveBeenCalled(); modal.close();
+    const task = await plugin.repo.create('Project'); const projects = vi.spyOn(plugin.service, 'projects').mockResolvedValue(); const clean = vi.spyOn(plugin.service, 'clean').mockResolvedValue(); plugin.pickProjects(task); const modal = Modal.instances.at(-1) as ProjectPicker; expect(modal.colorOf('Missing.md')).toBeNull(); await modal.save([]); expect(projects).toHaveBeenCalledWith(task.id, []); expect(clean).not.toHaveBeenCalled(); modal.close();
   });
   it('registers capabilities only, defers vault-create handling and cleans durable crash state', async () => {
     const { h, plugin, stub } = await loaded();
@@ -172,23 +172,23 @@ describe('plugin lifecycle and user-only editor actions', () => {
     (plugin as any).pickerOpen = false; pick.mockClear();
     plugin.onEditorUpdate(update('', '- [ ] ', 'input.paste')); await flush(); expect(pick).not.toHaveBeenCalled();
   });
-  it('triggers only changed linked markers, first manages deliberate syntax and prompts for removed active timers', async () => {
+  it('triggers only changed linked markers, first manages deliberate syntax and stops removed active timers with a notice', async () => {
     const { h, plugin } = await loaded(); const task = await plugin.repo.create('Managed'); const file: any = await h.add('Note.md'); const editor = h.setActive(file);
     const trigger = vi.spyOn(plugin, 'trigger').mockResolvedValue();
     const old = `- [ ] Managed <!--organized:${task.id}-->`; const next = old.replace('[ ]', '[/]'); editor.setValue(next); plugin.onEditorUpdate(update(old, next)); await flush(); expect(trigger).toHaveBeenCalledOnce();
     editor.setValue(old.replace('Managed', 'Edited title')); plugin.onEditorUpdate(update(old, editor.getValue())); await flush(); expect(trigger).toHaveBeenCalledOnce();
     editor.setValue('- [!] First'); plugin.onEditorUpdate(update('- [ ] First', editor.getValue())); await flush(); expect(await plugin.repo.list()).toHaveLength(2); expect(parseTasks(editor.getValue())[0].id).toBeTruthy(); expect(trigger).toHaveBeenCalledTimes(2);
     const confirm = vi.spyOn(plugin, 'confirm').mockResolvedValue(true); const status = vi.spyOn(plugin.service, 'status').mockResolvedValue();
-    editor.setValue('- [ ] remains'); plugin.onEditorUpdate(update(next, editor.getValue())); await flush(); expect(confirm).toHaveBeenCalled(); expect(status).toHaveBeenCalledWith(task.id, 'open');
+    editor.setValue('- [ ] remains'); plugin.onEditorUpdate(update(next, editor.getValue())); await flush(); expect(confirm).not.toHaveBeenCalled(); expect(status).toHaveBeenCalledWith(task.id, 'open'); expect(Notice.instances.at(-1)?.message).toContain('Timer stopped for');
     confirm.mockResolvedValue(false); plugin.onEditorUpdate(update(next, editor.getValue())); await flush(); expect(status).toHaveBeenCalledOnce();
   });
-  it('coalesces picker microtasks, handles new linked lines and keeps timer deletion prompts optional', async () => {
+  it('coalesces picker microtasks, handles new linked lines and never asks about a removed timer', async () => {
     const { h, plugin } = await loaded(); const file: any = await h.add('Note.md'); const editor = h.setActive(file, '- [ ] ');
     const picker = vi.spyOn(plugin, 'pickTask').mockImplementation(async () => { (plugin as any).pickerOpen = true; });
     plugin.onEditorUpdate(update('- [', '- [ ] ')); plugin.onEditorUpdate(update('- [', '- [ ] ')); await flush(); expect(picker).toHaveBeenCalledOnce();
     plugin.onEditorUpdate(update('- [', '- [ ] ')); await flush(); expect(picker).toHaveBeenCalledOnce(); (plugin as any).pickerOpen = false;
     const trigger = vi.spyOn(plugin, 'trigger').mockResolvedValue(); editor.setValue('- [/] Existing <!--organized:task1234-->'); plugin.onEditorUpdate(update('', editor.getValue())); await flush(); expect(trigger).toHaveBeenCalledOnce();
-    const confirm = vi.spyOn(plugin, 'confirm').mockResolvedValue(false); const status = vi.spyOn(plugin.service, 'status').mockResolvedValue(); const old = editor.getValue(); editor.setValue('ordinary prose'); plugin.onEditorUpdate(update(old, editor.getValue())); await flush(); expect(confirm).toHaveBeenCalledOnce(); expect(status).not.toHaveBeenCalled();
+    const confirm = vi.spyOn(plugin, 'confirm').mockResolvedValue(false); const status = vi.spyOn(plugin.service, 'status').mockResolvedValue(); const old = editor.getValue(); editor.setValue('ordinary prose'); plugin.onEditorUpdate(update(old, editor.getValue())); await flush(); expect(confirm).not.toHaveBeenCalled(); expect(status).toHaveBeenCalledWith('task1234', 'open');
   });
   it('migrates linked projects once after layout ready, announces it with an undo, and never moves anything when writes are paused', async () => {
     const { h, plugin } = await loaded(); const folder = plugin.repo.projectFolder();
