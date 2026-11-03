@@ -57,6 +57,7 @@ export default class Organized extends Plugin {
       this.addCommand({ id: "convert-todos", name: "Convert unchecked todos to tasks", editorCallback: (_editor, view) => { if (view.file) void this.convertTodos(view.file).catch(report); } });
       this.addCommand({ id: "unlink-note-tasks", name: "Convert tasks in this note back to todos", editorCallback: (_editor, view) => { if (view.file) void this.run(() => this.service.unlinkTasks([view.file!], "this note")).catch(report); } });
       this.addCommand({ id: "retire-tasks", name: "Retire tasks…", callback: () => { this.retireTasks(); } });
+      this.addCommand({ id: "rename-task-notes", name: "Rename task notes to their titles", callback: () => { void this.run(() => this.migrateTaskNoteNames(true)).catch(report); } });
       this.addCommand({ id: "show-onboarding", name: "Show onboarding card", callback: () => { this.showOnboarding(false); } });
       this.addCommand({ id: "undo", name: "Undo last recurrence/auto-forward batch", callback: () => { void this.service.undo().catch(report); } });
       this.addCommand({ id: "restore-settings", name: "Restore compatible settings backup (restart required)", callback: () => { void this.confirm("Queue the newest compatible settings backup for restoration on next restart? Task Markdown will not change.").then(yes => yes ? this.safety.queueCompatibleRestore() : undefined).catch(report); } });
@@ -80,7 +81,7 @@ export default class Organized extends Plugin {
         this.registerEvent(this.app.metadataCache.on("changed", file => { if (this.repo.isProjectNote(file)) this.refresh(); }));
         this.registerEvent(this.app.vault.on("delete", file => { this.repo.forgetPath(file.path); this.service.forget(file.path); this.refresh(); }));
         this.maybeShowOnboarding();
-        void this.run(async () => { await this.repo.reindex(); await this.migrateProjects(); await this.markProjectNotes(); await this.migrateTaskNotes(); });
+        void this.run(async () => { await this.repo.reindex(); await this.migrateProjects(); await this.markProjectNotes(); await this.migrateTaskNotes(); await this.migrateTaskNoteNames(); });
         this.registerEvent(this.app.workspace.on("file-open", file => { this.followCursor(); if (file) void this.run(() => this.service.reconcile(file)); }));
       });
       this.loaded = true;
@@ -171,6 +172,17 @@ export default class Organized extends Plugin {
     if (!result.changes.length && !result.failed.length) return;
     const count = result.changes.length;
     this.service.summarize(result.changes, "Task notes updated", `${count} task note${count === 1 ? "" : "s"} now keep the description as the note text. The old text is saved in the plugin folder (note-backups).${result.failed.length ? ` ${result.failed.length} could not be updated and will be retried next start.` : ""}`);
+  }
+  /** One-time (and on demand): name task notes that still carry their id after the title of their todo, after saving the plan. Tried once; the command runs it again. */
+  async migrateTaskNoteNames(again = false): Promise<void> {
+    if ((this.settings.taskNoteNamesMigrated && !again) || !this.safety.writable) return;
+    let result: Awaited<ReturnType<TaskService["migrateTaskNames"]>>;
+    try { result = await this.service.migrateTaskNames(extra => this.safety.writeBackup("task-names", [], extra)); }
+    catch (error) { new Notice(`Task notes were not renamed (nothing was changed): ${error instanceof Error ? error.message : String(error)}`, 12000); return; }
+    this.settings.taskNoteNamesMigrated = true; this.saveSettings(false);
+    if (!result.renames.length && !result.failed.length) { if (again) new Notice("Every task note already carries its title."); return; }
+    const count = result.renames.length;
+    this.service.summarize([], "Task notes renamed", `${count} task note${count === 1 ? "" : "s"} now carry the title of their todo. The planned names are saved in the plugin folder (note-backups). Update Organized on your other devices too: an older version looks for task notes by their id.${result.failed.length ? ` ${result.failed.length} could not be renamed and keep their id (${result.failed.join(", ")}); the command Rename task notes to their titles tries again.` : ""}`, result.renames);
   }
   private remapKnownProjects(moved: { from: string; to: string }[]): void {
     const target = new Map(moved.map(m => [m.from, m.to]));

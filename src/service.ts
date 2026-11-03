@@ -336,6 +336,36 @@ export class TaskService {
    * touched (unreadable or newer-schema ones are left alone), a note already in the new layout is not written, and the text of
    * every note that will change is saved through `backup` first; when that fails nothing is changed.
    */
+  /**
+   * Renames task notes that are still named after their id to the title of their todo (oldest first, so a duplicate title gets its counter in
+   * a stable order; names are unique across the vault). Time records of standalone notes, unreadable, newer-schema and ambiguous notes are left
+   * alone. The planned renames are saved through `backup` first (nothing is renamed when that fails); a note that cannot be renamed stays as it was.
+   */
+  async migrateTaskNames(backup: (extra: { renames: { from: string; to: string }[] }) => Promise<string>): Promise<{ renames: { file: TFile; from: string }[]; failed: string[] }> {
+    await this.repo.reindex(); const folder = this.repo.settings().taskFolder; const candidates: { file: TFile; task: Task }[] = [];
+    for (const file of this.repo.app.vault.getMarkdownFiles()) {
+      if (!this.repo.isTaskRecord(file.path)) continue;
+      let task: Task; try { const frontmatter = splitNote(await this.repo.readText(file)).frontmatter; task = taskFrom(frontmatter, this.repo.idOf(file, frontmatter)); } catch { continue; }
+      if (file.basename === task.id && !task.converted_to && this.repo.taskFile(task.id) === file) candidates.push({ file, task });
+    }
+    candidates.sort((a, b) => a.task.created.localeCompare(b.task.created) || a.task.id.localeCompare(b.task.id));
+    const taken = this.repo.nameTaken(); const planned = new Set<string>(); const plan: { file: TFile; from: string; to: string; title: string }[] = [];
+    for (const { file, task } of candidates) {
+      const to = path(freePath(folder, readableName(task.title), candidate => taken(candidate) || planned.has(candidate.toLowerCase()))); planned.add(to.toLowerCase());
+      plan.push({ file, from: file.path, to, title: task.title });
+    }
+    const renames: { file: TFile; from: string }[] = []; const failed: string[] = [];
+    if (!plan.length) return { renames, failed };
+    await backup({ renames: plan.map(({ from, to }) => ({ from, to })) });
+    const progress = plan.length > 50 ? new Notice(`Naming task notes after their titles… 0 of ${plan.length}`, 0) : null;
+    try {
+      for (const [index, item] of plan.entries()) {
+        try { await this.repo.renameNote(item.file, item.to); renames.push({ file: item.file, from: item.from }); } catch { failed.push(item.title); }
+        if (progress && (index + 1) % 10 === 0) progress.setMessage(`Naming task notes after their titles… ${index + 1} of ${plan.length}`);
+      }
+    } finally { progress?.hide(); this.references = null; }
+    return { renames, failed };
+  }
   async migrateTaskBodies(backup: (files: { path: string; before: string }[]) => Promise<string>): Promise<{ changes: Change[]; failed: string[]; backupPath: string | null }> {
     const pending: { file: TFile; before: string; after: string }[] = [];
     for (const file of this.repo.app.vault.getMarkdownFiles().filter(f => this.repo.isTaskRecord(f.path))) {
