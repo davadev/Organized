@@ -177,13 +177,14 @@ try {
         if (await projection.count() !== 1 || !(await projection.locator('[aria-label="Priority: none"]').count())) throw Error('Final-line task properties are missing at EOF');
       }
       if (tab === 'AlignRight') {
-        // Every group of symbols ends at the line's right edge (left edge in RTL), however much text is beside it.
-        const gaps = await page.locator('.cm-line').evaluateAll(lines => lines.map(line => {
+        // Every group of symbols ends at the line's right edge (left edge in RTL) and stays inside its own todo line, so it never hangs into the note under it.
+        const rows = await page.locator('.cm-line').evaluateAll(lines => lines.map(line => {
           const box = line.getBoundingClientRect(); const symbols = line.querySelector('.organized-projection')?.getBoundingClientRect();
           const rtl = getComputedStyle(line).direction === 'rtl';
-          return symbols ? (rtl ? symbols.left - box.left : box.right - symbols.right) : null;
+          return symbols ? { gap: rtl ? symbols.left - box.left : box.right - symbols.right, inside: symbols.bottom <= box.bottom + 1 } : null;
         }));
-        if (gaps.length !== 2 || gaps.some(gap => gap === null || gap > 16 || gap < -1)) throw Error(`Right-aligned properties are not at the line edge at ${width}: ${JSON.stringify(gaps)}`);
+        const shown = rows.filter(Boolean);
+        if (rows.length !== 4 || shown.length !== 3 || shown.some(row => row.gap > 16 || row.gap < -1 || !row.inside)) throw Error(`Right-aligned properties are misplaced at ${width}: ${JSON.stringify(rows)}`);
       }
       if (tab === 'LivePreview' || tab === 'Source') {
         const visible = await page.locator('.cm-content').innerText();

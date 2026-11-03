@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed right-aligned symbols hanging into the line below when the todo text left no room for them: they sat next to the note under the todo and looked like part of it. They now stay inside their own todo's line (on a row of their own under the text), and a nested list in Reading view starts below them. The layout check reproduces the old behaviour and covers it.
+- With *Alignment* set to the right edge, the symbols that every todo has (status, priority, star, recurring, created) now sit in one column at the edge, and what varies from todo to todo (project names, the number of moves, the time) is placed to their left, still against the edge. A forwarded todo's extra arrow no longer pushes the other symbols out of line.
 - **Alignment of the symbols on a todo line.** A new setting under Settings → Organized → Rendered task properties, *Alignment*, puts the symbols (priority, star, recurring, time…) either right after the todo text (the default, as before) or at the right edge of the line. On a narrow phone screen the symbols drop to their own right-aligned row when the text leaves no room; descriptions and sources keep reading from the start. The layout check covers four widths, light and dark, left-to-right and right-to-left.
 - Fixed the task dialog losing the first letter you typed into a new todo: the letter now stays in the search box, with the cursor after it, and the list is filtered by it.
 - The picker that links a new todo to a task now lists only unfinished tasks (open and in progress). Completed and canceled ones no longer bury a chore you repeat under every time you did it; typing the title still offers **Create new task**.
