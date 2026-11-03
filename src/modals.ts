@@ -27,8 +27,12 @@ export function isKeepAsTodo(value: TaskChoice): value is typeof KEEP_AS_TODO {
 
 export class TaskPicker extends SuggestModal<TaskChoice> {
   readonly markdown = new Component();
-  constructor(app: App, readonly tasks: Task[], readonly choose: (choice: TaskChoice) => Promise<void>, query = "", readonly allowTodo = false, readonly allowCreate = true) {
+  constructor(app: App, readonly tasks: Task[], readonly choose: (choice: TaskChoice) => Promise<void>, private readonly query = "", readonly allowTodo = false, readonly allowCreate = true) {
     super(app); this.markdown.load(); decorate(this); this.setPlaceholder("Find an existing task or create a new one"); this.inputEl.value = query;
+  }
+  /** Obsidian clears the search box while it opens the dialog, so what was typed into the todo before it opened (its first letter) is put back and the list filtered by it. */
+  onOpen(): void {
+    void super.onOpen(); const query = this.query; this.inputEl.value = query; this.inputEl.setSelectionRange(query.length, query.length); this.inputEl.dispatchEvent(new Event("input"));
   }
   onClose(): void { super.onClose(); this.markdown.unload(); }
   getSuggestions(query: string): TaskChoice[] {
