@@ -27,14 +27,14 @@ const countProperty = (host: HTMLElement) => host.querySelectorAll('.organized-p
 
 describe('projection draws racing each other', () => {
   it('an older draw finishing late does not append a second copy of the properties', async () => {
-    const { owner, task, add } = await fixture(); owner.settings.displayProperties = ['notes', 'priority'];
+    const { owner, task, add } = await fixture(); owner.settings.displayProperties = ['description', 'priority'];
     const { child, host } = await projectionChild(owner, task, add); expect(countProperty(host)).toBe(1);
     const gate = deferred(); const render = vi.spyOn(MarkdownRenderer, 'render').mockImplementationOnce(async () => { await gate.promise; });
     const first = child.draw(); await flush(); const second = child.draw(); await second; expect(render).toHaveBeenCalledTimes(2);
     gate.resolve(); await first; expect(countProperty(host)).toBe(1);
   });
   it('an older draw stops before reading notes once a newer draw owns the host', async () => {
-    const { owner, task, add, repo } = await fixture(); owner.settings.displayProperties = ['notes', 'priority'];
+    const { owner, task, add, repo } = await fixture(); owner.settings.displayProperties = ['description', 'priority'];
     const { child, host } = await projectionChild(owner, task, add);
     const gate = deferred(); const original = repo.readText.bind(repo); let held = 0;
     vi.spyOn(repo, 'readText').mockImplementation(async file => { if (++held === 2) await gate.promise; return original(file); });
@@ -47,7 +47,7 @@ describe('projection draws racing each other', () => {
     const first = child.draw(); await child.draw(); gate.reject(new Error('gone')); await first; expect(host.textContent).not.toContain('Missing/invalid'); expect(countProperty(host)).toBe(1);
   });
   it('a destroyed editor widget stops drawing properties into its detached host', async () => {
-    const { owner, task } = await fixture(); owner.settings.displayProperties = ['notes', 'priority'];
+    const { owner, task } = await fixture(); owner.settings.displayProperties = ['description', 'priority'];
     const field = (editorExtension(owner) as any[])[0] as StateField<DecorationSet>; const state = EditorState.create({ doc: `- [ ] Raced <!--organized:${task.id}-->`, extensions: [editorLivePreviewField, field] });
     let widget: any; state.field(field).between(0, 100, (_f, _t, d) => { widget = d.spec.widget; });
     const gate = deferred(); vi.spyOn(MarkdownRenderer, 'render').mockImplementationOnce(async () => { await gate.promise; });

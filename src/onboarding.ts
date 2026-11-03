@@ -43,12 +43,12 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "A todo grows only when it needs to",
-    text: "A task starts as a title and a status. Priority, a date, a description, projects or a timer appear when you ask. Set a priority with `[!]` and, with sorting on, the note itself floats the important todos up, so the panel is nice to have, not required.",
+    text: "A task starts as a title and a status. Priority, a date, a description, projects or a timer appear when you ask. Set a priority with `[!]` and, with sorting on, the note itself floats the important todos up, so the panel is nice to have, not required. Write `[[Note]]` in a description to link any note.",
     figure: "card",
   },
   {
     title: "Show details right in the note",
-    text: "Under Settings → Organized → Rendered task properties you choose which details (priority, tracked time, projects, notes…) appear on the todo line itself, in Reading view and Live Preview. It is off by default, and your Markdown does not change.",
+    text: "Under Settings → Organized → Rendered task properties you choose which details (priority, tracked time, projects, description…) appear on the todo line itself, in Reading view and Live Preview. It is off by default, and your Markdown does not change.",
     figure: "props",
   },
   {

@@ -1,4 +1,4 @@
-import { NOTE_SECTIONS, noteLoose, noteSection } from "./codec";
+import { noteSection } from "./codec";
 import { makeId, newTask, RetentionDetail, Task, WorkSession } from "./model";
 
 const pad = (n: number): string => String(n).padStart(2, "0");
@@ -26,11 +26,7 @@ export function retiredLines(task: Task, source: string, detail: RetentionDetail
   if (detail === "title") return lines;
   const description = noteSection(body, "Description"); if (description) lines.push(...quote(description));
   if (detail === "all") {
-    for (const section of NOTE_SECTIONS) {
-      if (section === "Description") continue;
-      const text = section === "Notes" ? `${noteSection(body, section)}\n${noteLoose(body)}`.trim() : noteSection(body, section);
-      if (text) lines.push(...quote(`**${section}**\n${text}`));
-    }
+    const sources = noteSection(body, "Sources"); if (sources) lines.push(...quote(`**Sources**\n${sources}`));
     lines.push(...workedLines(task.work_sessions));
     if (task.time_tracked_seconds >= 60) lines.push(`- Tracked ${hours(Math.round(task.time_tracked_seconds / 60))}`);
   }

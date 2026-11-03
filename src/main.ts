@@ -78,7 +78,7 @@ export default class Organized extends Plugin {
         this.registerEvent(this.app.metadataCache.on("changed", file => { if (this.repo.isProjectNote(file)) this.refresh(); }));
         this.registerEvent(this.app.vault.on("delete", file => { this.service.forget(file.path); this.refresh(); }));
         this.maybeShowOnboarding();
-        void this.run(async () => { await this.migrateProjects(); await this.markProjectNotes(); });
+        void this.run(async () => { await this.migrateProjects(); await this.markProjectNotes(); await this.migrateTaskNotes(); });
         this.registerEvent(this.app.workspace.on("file-open", file => { this.followCursor(); if (file) void this.run(() => this.service.reconcile(file)); }));
       });
       this.loaded = true;
@@ -147,6 +147,17 @@ export default class Organized extends Plugin {
     if (this.settings.projectStartsSet || !this.safety.writable) return;
     const updated = await this.service.markProjects(); this.settings.projectNotesMarked = true; this.settings.projectStartsSet = true; this.saveSettings(false);
     if (updated) new Notice(`${updated} project note${updated === 1 ? "" : "s"} updated: marked as projects and given a start date (today).`, 12000);
+  }
+  /** One-time: rewrite task notes from the old layout in the new one, after saving their old text. Retries on the next start when anything failed. */
+  async migrateTaskNotes(): Promise<void> {
+    if (this.settings.taskNotesMigrated || !this.safety.writable) return;
+    let result: Awaited<ReturnType<TaskService["migrateTaskBodies"]>>;
+    try { result = await this.service.migrateTaskBodies(files => this.safety.writeBackup("task-notes", files)); }
+    catch (error) { new Notice(`Task notes were not updated (nothing was changed): ${error instanceof Error ? error.message : String(error)}`, 12000); return; }
+    if (!result.failed.length) { this.settings.taskNotesMigrated = true; this.saveSettings(false); }
+    if (!result.changes.length && !result.failed.length) return;
+    const count = result.changes.length;
+    this.service.summarize(result.changes, "Task notes updated", `${count} task note${count === 1 ? "" : "s"} now keep the description as the note text. The old text is saved in the plugin folder (note-backups).${result.failed.length ? ` ${result.failed.length} could not be updated and will be retried next start.` : ""}`);
   }
   private remapKnownProjects(moved: { from: string; to: string }[]): void {
     const target = new Map(moved.map(m => [m.from, m.to]));

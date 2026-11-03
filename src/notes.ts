@@ -19,10 +19,10 @@ export function freePath(folder: string, name: string, taken: (path: string) => 
   for (let n = 1; n < 1000; n++) { const candidate = at(n === 1 ? "" : ` ${n}`); if (!taken(candidate)) return candidate; }
   return at(` ${Date.now()}`);
 }
-export interface NoteParts { title: string; description: string; sources: string; notes: string; template: string | null; tags: string[]; today: string }
+export interface NoteParts { title: string; description: string; sources: string; template: string | null; tags: string[]; today: string }
 /** The content of the standalone note: the template (if any, with `{{title}}`, `{{date}}` and `{{content}}` filled in) around the description, then the task's other sections, with the tags merged into the frontmatter. */
 export function buildNote(parts: NoteParts): string {
-  const sections = [parts.description.trim(), ...(parts.sources.trim() ? [`## Sources\n${parts.sources.trim()}`] : []), ...(parts.notes.trim() ? [`## Notes\n${parts.notes.trim()}`] : [])].filter(Boolean);
+  const sections = [parts.description.trim(), ...(parts.sources.trim() ? [`## Sources\n${parts.sources.trim()}`] : [])].filter(Boolean);
   const content = sections.join("\n\n");
   const filled = parts.template === null ? null : parts.template.replace(/\{\{\s*title\s*\}\}/gi, parts.title).replace(/\{\{\s*date\s*\}\}/gi, parts.today);
   const withContent = filled === null ? content : /\{\{\s*content\s*\}\}/i.test(filled) ? filled.replace(/\{\{\s*content\s*\}\}/gi, () => content) : `${filled.replace(/\s+$/, "")}${content ? `\n\n${content}` : ""}`;

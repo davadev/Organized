@@ -10,12 +10,12 @@ The side panel, rendered from the plugin's own code and styles with sample data 
 
 <table><tr><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/day-dark.png"><img src="resources/screenshots/day-light.png" alt="Day view: the day's tasks above a time grid with blocks for when each task was in progress, overlapping blocks side by side, and a now-line." width="300"></picture><br><sub>Day</sub></td><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/week-dark.png"><img src="resources/screenshots/week-light.png" alt="Week view: seven day rows, each with its done and total counts and a thin timeline of when work happened." width="300"></picture><br><sub>Week</sub></td><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/month-dark.png"><img src="resources/screenshots/month-light.png" alt="Month calendar with a dot on days that have a daily note, and active, done-today and timer counts." width="300"></picture><br><sub>Month</sub></td></tr></table>
 
-<table><tr><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/task-dark.png"><img src="resources/screenshots/task-light.png" alt="Task tab: a task with its status, description, priority, schedule, running timer, projects, sources and notes." width="300"></picture><br><sub>Task</sub></td><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/projects-dark.png"><img src="resources/screenshots/projects-light.png" alt="Projects tab: tasks grouped by project with a filter, colour dots and counts." width="300"></picture><br><sub>Projects</sub></td></tr></table>
+<table><tr><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/task-dark.png"><img src="resources/screenshots/task-light.png" alt="Task tab: a task with its status, description, priority, schedule, running timer, projects and sources." width="300"></picture><br><sub>Task</sub></td><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/projects-dark.png"><img src="resources/screenshots/projects-light.png" alt="Projects tab: tasks grouped by project with a filter, colour dots and counts." width="300"></picture><br><sub>Projects</sub></td></tr></table>
 
 ## Why use it
 
 - **Unfinished work follows you.** Open today's daily note and yesterday's open todos are already there. Nothing is copied by hand and nothing silently disappears.
-- **A todo can grow when it needs to.** Priority, a scheduled date, a description, sources, notes, a recurrence, projects, tracked time: each one is added only when you ask for it.
+- **A todo can grow when it needs to.** Priority, a scheduled date, a description (write `[[Note]]` in it to link any note), sources, a recurrence, projects, tracked time: each one is added only when you ask for it.
 - **It is still your Markdown.** A todo is a normal `- [ ]` line in a normal note. The details live in a plain note file, so search, links, sync and backups work as they always did.
 - **Keyboard first.** Type a letter in the checkbox (`[!]`, `[<]`, `[/]` ...) and the todo does that. No menus required.
 
@@ -27,7 +27,7 @@ Organized does not ask you to adopt a system. Stay at the first level forever, o
 |---|---|---|
 | **1. Forwarder** | Write todos in your daily note as usual. Change nothing else. | Unfinished tasks carry over to the next day automatically; the old line is marked as forwarded so history stays honest. |
 | **2. Organised** | Press `[!]` for priority, `[<]` to schedule for a date, `[*]` to favourite. | The daily note sorts by priority and keeps what you are working on at the top; scheduled tasks arrive on their day. |
-| **3. Full workflow** | Add a description, sources and notes, attach projects, repeat tasks, start a timer, turn a todo into a standalone note. | A calendar with the time you really spent, project pages with Open / In progress / Done, recurring routines, and notes that came from todos. |
+| **3. Full workflow** | Add a description and sources, attach projects, repeat tasks, start a timer, turn a todo into a standalone note. | A calendar with the time you really spent, project pages with Open / In progress / Done, recurring routines, and notes that came from todos. |
 
 ```mermaid
 flowchart LR
@@ -36,14 +36,14 @@ flowchart LR
     B -- no --> D["Tomorrow's daily note<br/>gets it automatically"]
     D --> B
     A -. "only when needed" .-> E["Priority / schedule"]
-    A -. "only when needed" .-> F["Description / sources / notes"]
+    A -. "only when needed" .-> F["Description / sources"]
     A -. "only when needed" .-> G["Projects / recurrence / timer"]
     F -. "grows into" .-> H["Standalone note"]
 ```
 
 ## Simple on purpose
 
-The Task view does not show every field a todo can hold. A task shows its title and status first. Everything else sits behind one **Add details** menu, and optional sections such as sources or notes stay hidden until they hold something. The idea is that a todo should cost nothing until you decide it deserves more, so you only ever see what you chose to use. An empty form with twenty fields is how a todo list turns into chores.
+The Task view does not show every field a todo can hold. A task shows its title and status first. Everything else sits behind one **Add details** menu, and optional sections such as sources stay hidden until they hold something. The idea is that a todo should cost nothing until you decide it deserves more, so you only ever see what you chose to use. An empty form with twenty fields is how a todo list turns into chores.
 
 ## How it fits Obsidian
 
@@ -88,7 +88,7 @@ Organized never locks your notes in. To retire it after long use, run **Organize
 
 What the vault-wide command does: every linked checkbox in every note becomes a plain `- [ ]` line (text and state kept; the hidden `<!--organized:...-->` comments and recurrence stop). What it leaves on purpose, all ordinary Markdown you can keep or delete:
 
-- **Task notes** in your task folder (`Tasks/<id>.md`): description, sources, notes and tracked time, now unlinked. Delete the folder if you do not want them.
+- **Task notes** in your task folder (`Tasks/<id>.md`): description, sources and tracked time, now unlinked. Delete the folder if you do not want them.
 - **Project notes**: their `organized_type`, `organized_start` and `organized_color` properties and the Open / In progress / Ongoing / Done headings.
 - **Retired-task lines** such as `Worked 2026-03-02: 09:00–09:30` under a checkbox, and any `[>]` forwarded or `[<]` scheduled markers: they stay as written.
 
@@ -101,7 +101,7 @@ Open **Settings → Organized** and match **Daily-note folder** and **Filename f
 
 Open the ribbon calendar or run **Organized: Open inspector**. Its tabs, shown as icons at the top right, are Calendar, Task, Projects and Favorites (a star). Selecting a day in the month view explicitly opens/creates its daily note. The **Week** and **Day** views show tasks and the time they were In Progress (recorded from the moment you update); they never create notes. Merely browsing months creates nothing. Time worked can be added or corrected by hand: the **+** beside the Day view's Time heading, a tap on a block, or the Task tab's Timer card, whose foldable Sessions list shows every session newest first by day.
 
-The Task tab keeps your selection while you scroll or edit the sidebar. When the cursor is not on a task, it lists task lines from the current note; tap a linked task to jump the editor cursor there and show its details. Optional cards show populated details or the section you request with a shortcut or **Add details…**; history and references are collapsed. Editing the title or any task note section happens inline in the sidebar, with Save and Cancel above the field so the mobile keyboard cannot cover them. **Description** sits above Idea; legacy `## Information` notes are read as Description and migrate to the canonical heading when saved. The Projects tab is grouped into Favorites, Projects and Canceled cards with a project filter and counts. Use **Delete task** on the Task tab to confirm removal of the canonical note and all linked occurrences. Fully restart Obsidian after updating to refresh the setting groups.
+The Task tab keeps your selection while you scroll or edit the sidebar. When the cursor is not on a task, it lists task lines from the current note; tap a linked task to jump the editor cursor there and show its details. Optional cards show populated details or the section you request with a shortcut or **Add details…**; history and references are collapsed. Editing the title or any task note section happens inline in the sidebar, with Save and Cancel above the field so the mobile keyboard cannot cover them. **Description** is the text of the task note itself, so write `[[Note]]` in it to link any note; it shows as a clickable link when you are not editing. **Sources** (external links and `[[notes]]`) sit below it. Task notes from older versions (with `## Description`, `## Notes`, `## Idea` headings) are rewritten once after updating, with a backup and an Undo button, so the description becomes the plain text of the note. The Projects tab is grouped into Favorites, Projects and Canceled cards with a project filter and counts. Use **Delete task** on the Task tab to confirm removal of the canonical note and all linked occurrences. Fully restart Obsidian after updating to refresh the setting groups.
 
 ## Link or create tasks
 
@@ -109,11 +109,11 @@ Typing a new `- [ ] ` or inserting one with Obsidian's mobile checkbox toolbar o
 
 Run **Organized: Convert unchecked todos to tasks** on a regular note to convert its ordinary unchecked todos into canonical tasks. It confirms first, skips linked, completed, in-progress and empty items, and preserves indentation and line endings. To leave Organized cleanly, **Organized: Convert tasks in this note back to todos** (or **Convert all tasks in the vault back to todos**) turns linked checkboxes back into plain todos after a confirmation: the text and state stay, the hidden comments go, task notes are kept, and Undo restores the notes.
 
-Each canonical task is `Tasks/<id>.md`, with standard YAML and Markdown notes. Occurrences contain `<!--organized:<id>-->`. A copied ID remains the same task. Selected properties render read-only in Reading/Live Preview; no generated dates/properties are written into occurrence source. The inspector edits the canonical note.
+Each canonical task is `Tasks/<id>.md`, with its properties in standard YAML and the description as the note text, followed by an optional `## Sources` heading, so the note reads naturally even without the plugin. Occurrences contain `<!--organized:<id>-->`. A copied ID remains the same task. Selected properties render read-only in Reading/Live Preview; no generated dates/properties are written into occurrence source. The inspector edits the canonical note.
 
 In **Settings → Task storage**, **Keep completed tasks (days)** optionally sets retention from the date a task is completed or canceled. It defaults to `0` (disabled). When enabled, cleanup runs while opening today's daily note: linked checkboxes are unlinked and the canonical task files move to Obsidian's trash. Open/in-progress, recurring, and legacy completed tasks without a recorded completion date are preserved. Keep a vault backup and confirm Obsidian's trash preference before enabling automatic cleanup.
 
-**What retired tasks keep** chooses what the checkbox leaves behind: *the title only* (default), *add description* (the description as a quote under the checkbox) or *add everything* (also sources and notes, plus one line per day of time worked, such as `- Worked 2026-03-02: 09:00–09:30, 10:00–10:20 (50 min)`). It is written under the latest daily note only and reads as ordinary nested list items. The Day and Week views read those `Worked` lines back, so time blocks of retired tasks stay on the calendar; only the daily notes of the viewed days and the following month are read, and each is read once until it changes.
+**What retired tasks keep** chooses what the checkbox leaves behind: *the title only* (default), *add description* (the description as a quote under the checkbox) or *add everything* (also sources, plus one line per day of time worked, such as `- Worked 2026-03-02: 09:00–09:30, 10:00–10:20 (50 min)`). It is written under the latest daily note only and reads as ordinary nested list items. The Day and Week views read those `Worked` lines back, so time blocks of retired tasks stay on the calendar; only the daily notes of the viewed days and the following month are read, and each is read once until it changes.
 
 Identity and recurrence comments stay hidden in Live Preview, including the line being edited. Switch to source mode to inspect the original Markdown.
 
@@ -129,7 +129,7 @@ Identity and recurrence comments stay hidden in Live Preview, including the line
 | `[*]` | Toggle favorite |
 | `[s]` | Open the Sources section for inline Markdown references (URLs/Obsidian links, optional labels/citations) |
 | `[j]` | Multi-select project notes; missing selected notes are created in `<task folder>/Projects/` with `organized_type: project` and an `organized_start` date in their frontmatter and **Open / In progress / Ongoing / Done** headings that linked tasks move between as their status changes, and only such notes are listed. A project can have a colour (`organized_color: "#rrggbb"`, set from the Projects tab) shown as a dot beside its name on task cards and as the fill of its blocks in the calendar |
-| `[n]` | Make a standalone note: asks for a folder, optional tags and an optional template, creates a note titled after the todo holding its description (then sources and notes), and replaces the todo with a link to it. If a note of that name exists you can number the new one or link the existing one. The task's other copies are removed and its task note moves to Obsidian's trash. Also on the Task tab as **Make standalone note** Tracked time is kept: a running timer is logged, and a task with tracked sessions keeps a hidden task note so the calendar still shows (and links to) its time. |
+| `[n]` | Make a standalone note: asks for a folder, optional tags and an optional template, creates a note titled after the todo holding its description (then sources), and replaces the todo with a link to it. If a note of that name exists you can number the new one or link the existing one. The task's other copies are removed and its task note moves to Obsidian's trash. Also on the Task tab as **Make standalone note** Tracked time is kept: a running timer is logged, and a task with tracked sessions keeps a hidden task note so the calendar still shows (and links to) its time. |
 | `[r]` | Toggle recurrence in existing/current/future and subsequently created daily notes; clear after success |
 
 Only the markers above act. Every other character, including the old action letters `[i]`, `[I]`, `[?]`, `["]`, `[b]` and `[f]` and the theme glyphs `[d]`, `[p]`, `[k]`, `[l]`, `[S]`, `[c]`, `[w]`, `[u]`, `[D]`, `[P]`, `[M]`, is **formatting only**: it shows its icon and never changes metadata or storage. Use them freely to style a todo without side effects. Things-style glyphs are bundled, so the Things theme is not required.

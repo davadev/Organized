@@ -26,7 +26,7 @@ export interface Task {
 }
 /** One small icon per task status, shared by the panel and the onboarding card's figures. */
 export const STATUS_ICONS: Record<Task["status"], string> = { open: "circle", in_progress: "play", completed: "check", canceled: "x" };
-export const DISPLAY_PROPERTIES = ["status", "priority", "scheduled", "created", "time_tracked_seconds", "recurring", "starred", "projects", "movement_history", "sources", "notes"] as const;
+export const DISPLAY_PROPERTIES = ["status", "priority", "scheduled", "created", "time_tracked_seconds", "recurring", "starred", "projects", "movement_history", "sources", "description"] as const;
 export type DisplayProperty = typeof DISPLAY_PROPERTIES[number];
 /** What a retired task leaves in the note: its title only, plus its description, or everything worth keeping (description and time worked). */
 export const RETENTION_DETAILS = ["title", "description", "all"] as const;
@@ -51,11 +51,13 @@ export interface Settings {
   noteFolder: string;
   /** The one-time onboarding card has been shown (or skipped). */
   onboardingSeen: boolean;
+  /** Task notes written in the old layout (headings for Description and Notes) have been rewritten in the new one. */
+  taskNotesMigrated: boolean;
 }
 export const DEFAULT_SETTINGS: Settings = {
   taskFolder: "Tasks", dailyFolder: "Daily", dailyFormat: "YYYY-MM-DD", autoForward: true,
   missingSection: "recreate", sortScope: "list", displayProperties: [], showScheduledDate: true, taskRetentionDays: 0,
-  dailyTemplate: "", knownProjects: [], collapsedHeadings: {}, projectsMigrated: false, projectNotesMarked: false, projectStartsSet: false, retentionDetail: "title", dayTasksCollapsed: false, hideDoneTasks: false, hideClosedProjects: true, noteFolder: "", onboardingSeen: false,
+  dailyTemplate: "", knownProjects: [], collapsedHeadings: {}, projectsMigrated: false, projectNotesMarked: false, projectStartsSet: false, retentionDetail: "title", dayTasksCollapsed: false, hideDoneTasks: false, hideClosedProjects: true, noteFolder: "", onboardingSeen: false, taskNotesMigrated: false,
 };
 export function object(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -92,13 +94,14 @@ export function settingsFrom(value: unknown): Settings {
   s.autoForward = typeof v.autoForward === "boolean" ? v.autoForward : true;
   s.missingSection = member(v.missingSection, ["recreate", "ask"], "recreate");
   s.sortScope = member(v.sortScope, ["list", "section", "first", "none"], "list");
-  s.displayProperties = strings(v.displayProperties).filter((p): p is DisplayProperty => DISPLAY_PROPERTIES.includes(p as DisplayProperty));
+  // The old "notes" property showed the whole note; it became "description", so a saved choice carries over.
+  s.displayProperties = [...new Set(strings(v.displayProperties).map(p => p === "notes" ? "description" : p).filter((p): p is DisplayProperty => DISPLAY_PROPERTIES.includes(p as DisplayProperty)))];
   s.showScheduledDate = typeof v.showScheduledDate === "boolean" ? v.showScheduledDate : true;
   s.taskRetentionDays = Number.isInteger(v.taskRetentionDays) && Number(v.taskRetentionDays) >= 0 && Number(v.taskRetentionDays) <= 36500 ? Number(v.taskRetentionDays) : 0;
   try { if (typeof v.noteFolder === "string") s.noteFolder = path(v.noteFolder, true); } catch { /* An invalid remembered folder falls back to the vault root. */ }
   try { if (typeof v.dailyTemplate === "string" && v.dailyTemplate.trim()) { const template = path(v.dailyTemplate); if (template.endsWith(".md")) s.dailyTemplate = template; } } catch { /* Invalid persisted paths use safe defaults. */ }
   s.knownProjects = [...new Set(strings(v.knownProjects).filter(p => { try { return path(p) === p && p.endsWith(".md"); } catch { return false; } }))];
-  s.projectsMigrated = v.projectsMigrated === true; s.projectNotesMarked = v.projectNotesMarked === true; s.projectStartsSet = v.projectStartsSet === true; s.retentionDetail = member(v.retentionDetail, RETENTION_DETAILS, "title"); s.dayTasksCollapsed = v.dayTasksCollapsed === true; s.hideDoneTasks = v.hideDoneTasks === true; s.hideClosedProjects = typeof v.hideClosedProjects === "boolean" ? v.hideClosedProjects : true; s.onboardingSeen = v.onboardingSeen === true;
+  s.projectsMigrated = v.projectsMigrated === true; s.projectNotesMarked = v.projectNotesMarked === true; s.projectStartsSet = v.projectStartsSet === true; s.retentionDetail = member(v.retentionDetail, RETENTION_DETAILS, "title"); s.dayTasksCollapsed = v.dayTasksCollapsed === true; s.hideDoneTasks = v.hideDoneTasks === true; s.hideClosedProjects = typeof v.hideClosedProjects === "boolean" ? v.hideClosedProjects : true; s.onboardingSeen = v.onboardingSeen === true; s.taskNotesMigrated = v.taskNotesMigrated === true;
   s.collapsedHeadings = {};
   for (const [notePath, keys] of Object.entries(object(v.collapsedHeadings))) { const kept = [...new Set(strings(keys))]; if (kept.length) s.collapsedHeadings[notePath] = kept; }
   return s;

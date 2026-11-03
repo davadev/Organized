@@ -4,19 +4,21 @@ import { parseWorked, retiredLines } from "../retention";
 
 const at = (y: number, m: number, d: number, h: number, min: number, s = 0) => new Date(y, m - 1, d, h, min, s).toISOString();
 const task = (extra: Record<string, unknown> = {}) => ({ ...newTask("Plan release", "abcdefgh12"), ...extra });
-const body = "## Description\nShip it.\n\nSecond line\n\n## Sources\nhttps://example.com\n\n## Notes\nremember\n\nloose text\n";
+const body = "Ship it.\n\nSecond line\n\n## Sources\nhttps://example.com\n";
+const legacy = "## Description\nShip it.\n\nSecond line\n\n## Sources\nhttps://example.com\n\n## Notes\nremember\n\nloose text\n";
 
 describe("retention details", () => {
   it("keeps nothing for title only and the description alone for description", () => {
     expect(retiredLines(task(), body, "title", "  ")).toEqual([]);
     expect(retiredLines(task(), body, "description", "  ")).toEqual(["  > Ship it.", "  >", "  > Second line"]);
     expect(retiredLines(task(), "## Sources\nOnly a source", "description", "")).toEqual([]);
+    expect(retiredLines(task(), legacy, "description", "")).toEqual(["> Ship it.", ">", "> Second line", ">", "> remember", ">", "> loose text"]);
     expect(retiredLines(task(), "## Description\r\nHas <!--organized:abcdefgh12--> id\r\n", "description", "")).toEqual(["> Has  id"]);
   });
   it("keeps every section, the days worked and the tracked total for everything", () => {
     const sessions = [{ start: at(2026, 3, 2, 9, 0, 40), end: at(2026, 3, 2, 9, 30, 10) }, { start: at(2026, 3, 2, 10, 0), end: at(2026, 3, 2, 10, 20) }, { start: at(2026, 3, 2, 23, 30), end: at(2026, 3, 3, 0, 20) }, { start: at(2026, 3, 1, 8, 0), end: at(2026, 3, 1, 9, 30) }];
     const lines = retiredLines(task({ work_sessions: sessions, time_tracked_seconds: 4500 + 20 }), body, "all", "");
-    expect(lines).toEqual(["> Ship it.", ">", "> Second line", "> **Sources**", "> https://example.com", "> **Notes**", "> remember", ">", "> loose text",
+    expect(lines).toEqual(["> Ship it.", ">", "> Second line", "> **Sources**", "> https://example.com",
       "- Worked 2026-03-01: 08:00–09:30 (1 h 30 min)", "- Worked 2026-03-02: 09:00–09:30, 10:00–10:20, 23:30–2026-03-03 00:20 (1 h 40 min)", "- Tracked 1 h 15 min"]);
     expect(retiredLines(task({ time_tracked_seconds: 59 }), "", "all", "")).toEqual([]); expect(retiredLines(task({ time_tracked_seconds: 600 }), "", "all", ">")).toEqual([">- Tracked 10 min"]);
   });

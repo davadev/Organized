@@ -7,7 +7,7 @@ import { elapsed, localDate, PRIORITIES, Section, STATUS_ICONS, STATUSES, Task, 
 import { byPriority, report } from "./service";
 import { DatePicker, SessionModal, TaskPicker } from "./modals";
 import { lengthOf, lengthOfSeconds, seconds } from "./sessions";
-import { NoteSection, NOTE_SECTIONS, noteLoose, noteSection, parseTasks, TaskLine } from "./codec";
+import { NoteSection, NOTE_SECTIONS, noteSection, parseTasks, TaskLine } from "./codec";
 import { splitNote } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 import { blocksOn, hourRange } from "./timeline";
@@ -156,7 +156,7 @@ export class OrganizedInspectorView extends ItemView {
     if (this.editingModule === section) { this.inlineEditor(box, id, section, text); return; }
     if (text) await renderMarkdownLinks(this.app, text, box.createDiv({ cls: "organized-task-notes" }), filePath, this.markdown);
     // Only Description renders without text; other empty sections stay hidden.
-    else box.createDiv({ cls: "organized-muted", text: "Add context, details or links." });
+    else box.createDiv({ cls: "organized-muted", text: "Add context, details or links. Write [[Note]] to link a note." });
     this.button(box, `${text ? "Edit" : "Add"} ${section.toLowerCase()}`, () => { this.editingModule = section; this.module = section; return this.render(); });
   }
   /** Moves the editor cursor off every task line, which is what switches the Task tab back to the note overview. */
@@ -488,7 +488,7 @@ export class OrganizedInspectorView extends ItemView {
     const shown = this.shownStatus(task); setIcon(status.createSpan({ cls: "organized-status-icon", attr: { "data-status": shown, "aria-hidden": "true" } }), task.recurring && shown === "completed" ? "calendar-check" : STATUS_ICONS[task.status]);
     const statusSelect = this.select(status, "Status", this.shownStatus(task), STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(async () => this.owner.service.status(id, value as Task["status"], this.owner.context?.line.id === id ? this.owner.context : task.recurring ? await this.todayContext(id) : undefined)); });
     if (task.recurring) statusSelect.options[STATUSES.indexOf("completed")].text = "done · today";
-    const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Description", "Sources", "Notes"], value => { this.module = value; this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
+    const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Description", "Sources"], value => { this.module = value; this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
     const file = this.owner.repo.file(this.owner.repo.taskPath(id))!; const body = splitNote(await this.owner.repo.readText(file)).body;
     if (generation !== this.renderId) return;
     const details = host.createDiv({ cls: "organized-task-details" });
@@ -510,14 +510,8 @@ export class OrganizedInspectorView extends ItemView {
       const projects = this.card(details, "Projects", "folder"); for (const project of task.projects) projects.createDiv({ text: this.projectLabel(project) });
       this.button(projects, "Link projects or topics", () => this.owner.pickProjects(task));
     }
-    const loose = noteLoose(body);
-    for (const section of NOTE_SECTIONS) {
-      if (section === "Description") continue;
-      let text = noteSection(body, section);
-      if (section === "Notes") text = `${text}\n${loose}`.trim();
-      if (!text && this.module !== section) continue;
-      await this.moduleCard(details, file.path, id, section, text);
-    }
+    const sources = noteSection(body, "Sources");
+    if (sources || this.module === "Sources") await this.moduleCard(details, file.path, id, "Sources", sources);
     if (generation !== this.renderId) return;
     const moduleKey = `${id}:${this.module}`;
     if (this.module && this.scrolledModule !== moduleKey) {

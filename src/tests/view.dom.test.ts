@@ -89,8 +89,8 @@ describe('compact calendar and contextual task inspector', () => {
     const { owner, view, repo } = await fixture(); const task = await repo.create('Notes'); const file = repo.file(repo.taskPath(task.id))!; const before = await repo.readText(file);
     await repo.write(file, before, before + 'Loose notes\n## Information\nOnly information\n## Idea\nAn idea\n## Question\nA question\n## Sources\nhttps://example.com\n## Notes\nMore notes\n');
     await repo.update(task.id, t => ({ ...t, movement_history: [{ id: 'move', kind: 'forward', source: 'manual', from: '2026-01-01', to: '2026-01-02', at: '2026-01-01T00:00:00Z' }] })); owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render();
-    expect(titles(view)).toEqual(['Description', 'Sources', 'Notes']); expect(view.contentEl.textContent).toContain('An idea'); expect(view.contentEl.textContent).toContain('A question'); expect(view.contentEl.textContent!.match(/Only information/g)).toHaveLength(1); expect(view.contentEl.textContent).toContain('Loose notes'); expect(view.contentEl.querySelector('details')!.open).toBe(false);
-    for (const [label, heading] of [['description', 'Description'], ['sources', 'Sources'], ['notes', 'Notes']]) { button(view.contentEl, `Edit ${label}`).click(); await flush(); const editor = view.contentEl.querySelector<HTMLTextAreaElement>(`textarea[aria-label="${heading}"]`)!; expect(editor).toBeTruthy(); editor.blur(); await flush(); expect(view.editingModule).toBe(''); }
+    expect(titles(view)).toEqual(['Description', 'Sources']); expect(view.contentEl.textContent).toContain('More notes'); expect(view.contentEl.textContent).toContain('An idea'); expect(view.contentEl.textContent).toContain('A question'); expect(view.contentEl.textContent!.match(/Only information/g)).toHaveLength(1); expect(view.contentEl.textContent).toContain('Loose notes'); expect(view.contentEl.querySelector('details')!.open).toBe(false);
+    for (const [label, heading] of [['description', 'Description'], ['sources', 'Sources']]) { button(view.contentEl, `Edit ${label}`).click(); await flush(); const editor = view.contentEl.querySelector<HTMLTextAreaElement>(`textarea[aria-label="${heading}"]`)!; expect(editor).toBeTruthy(); editor.blur(); await flush(); expect(view.editingModule).toBe(''); }
     const refs = Array.from(view.contentEl.querySelectorAll('details')).at(-1)!; refs.open = true; refs.dispatchEvent(new Event('toggle')); await flush(); expect(view.contentEl.textContent).toContain('No references found'); refs.open = false; refs.dispatchEvent(new Event('toggle')); expect(view.referencesOpen).toBe(false);
   });
   it('sorts project/favorite browsing, restores cancellation and clears stale module selection', async () => {
@@ -135,7 +135,7 @@ describe('compact calendar and contextual task inspector', () => {
     const { owner, view, repo } = await fixture();
     const linked = await repo.create('Review [[Recovery_plan]]'); owner.selectedTaskId = linked.id; view.tab = 'Task';
     const file = repo.file(repo.taskPath(linked.id))!; const before = await repo.readText(file);
-    await repo.write(file, before, `${before}\n## Description\nSee also [[Recovery_plan]].\n`);
+    await repo.write(file, before, `${before}\nSee also [[Recovery_plan]].\n`);
     const open = vi.fn(async () => undefined); (owner.app.workspace as any).openLinkText = open;
     await view.render(); await flush(); const anchor = view.contentEl.querySelector<HTMLAnchorElement>('.organized-task-title a')!;
     expect(anchor).toBeTruthy(); anchor.click(); await flush();

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { insertTask, NOTE_SECTIONS, noteLoose, noteSection, parseTasks, removeUnique, replaceTask, sortTasks, taskText, writeNoteSection } from "../codec";
+import { insertTask, readNote, hasLegacyHeading, migrateNote, noteSection, parseTasks, removeUnique, replaceTask, sortTasks, taskText, writeNoteSection } from "../codec";
 
 describe("Markdown task codec", () => {
   it('uses real Markdown structure for nested fences, indented code, comments and setext headings', () => {
@@ -35,21 +35,36 @@ describe("Markdown task codec", () => {
     expect(() => removeUnique(line + '\n' + line, 'task1234')).toThrow(); expect(() => removeUnique(line, 'task1234', true)).toThrow();
     expect(removeUnique(line + ' <!--organized:repeat-->', 'task1234', true)).toBe('');
   });
-  it("reads legacy Information as Description and writes canonical sections without dropping neighbours", () => {
-    const note = '# Notes\n## Information\nLegacy context\n## Idea\nAn idea\n';
-    expect(NOTE_SECTIONS[0]).toBe('Description');
-    expect(noteSection(note, 'Description')).toBe('Legacy context');
-    expect(noteSection(note, 'Notes')).toBe('');
-    expect(noteSection(note, 'Sources')).toBe('');
-    const migrated = writeNoteSection(note, 'Description', 'New context');
-    expect(migrated).toContain('## Description\nNew context\n'); expect(migrated).not.toContain('## Information'); expect(migrated).toContain('## Idea\nAn idea');
-    expect(noteSection(migrated, 'Description')).toBe('New context');
-    expect(writeNoteSection('# Notes\n## Description\nOld\n## Idea\nKeep\n', 'Description', 'Fresh')).toContain('## Idea\nKeep');
-    expect(writeNoteSection('# Notes\n', 'Sources', 'Line\n')).toContain('## Sources\nLine\n');
-    expect(writeNoteSection('# Notes', 'Notes', 'No newline')).toBe('# Notes\n## Notes\nNo newline\n');
-    expect(writeNoteSection('', 'Sources', 'Why?')).toBe('## Sources\nWhy?\n');
-    expect(noteLoose(note)).toBe('# Notes\n\n## Idea\nAn idea');
-    expect(noteLoose('Prose\n## Sources\nhttps://example.com\n')).toBe('Prose');
+  it("writes the description as the note text, with `## Sources` as the only heading", () => {
+    expect(writeNoteSection('---\nid: x\n---\n\n', 'Description', 'Plan the trip.')).toBe('---\nid: x\n---\n\nPlan the trip.\n');
+    const withSources = writeNoteSection('---\nid: x\n---\n\nPlan the trip.\n', 'Sources', 'https://a.b\n');
+    expect(withSources).toBe('---\nid: x\n---\n\nPlan the trip.\n\n## Sources\nhttps://a.b\n');
+    expect(noteSection(withSources.split('---\n')[2], 'Description')).toBe('Plan the trip.'); expect(noteSection(withSources.split('---\n')[2], 'Sources')).toBe('https://a.b');
+    expect(writeNoteSection(withSources, 'Description', 'Changed')).toBe('---\nid: x\n---\n\nChanged\n\n## Sources\nhttps://a.b\n');
+    expect(writeNoteSection(withSources, 'Sources', '')).toBe('---\nid: x\n---\n\nPlan the trip.\n');
+    expect(writeNoteSection('', 'Sources', 'Why?')).toBe('## Sources\nWhy?\n'); expect(writeNoteSection('# Title', 'Description', 'No newline')).toBe('No newline\n');
+    expect(writeNoteSection('---\nid: x\n---\n', 'Description', '')).toBe('---\nid: x\n---\n\n');
+  });
+  it("reads either layout and keeps every word of an old note when rewriting it", () => {
+    const old = 'Lead\n## Information\nLegacy context\n## Idea\nAn idea\n## Sources\nhttps://a.b\n## Notes\nn1\n';
+    expect(readNote(old)).toEqual({ description: 'Legacy context\n\nn1\n\nLead\n\n## Idea\nAn idea', sources: 'https://a.b' });
+    expect(hasLegacyHeading(old)).toBe(true); expect(hasLegacyHeading('## Notes\nonly')).toBe(true); expect(hasLegacyHeading('Plain\n## Plan\n')).toBe(false);
+    expect(writeNoteSection('---\nid: x\n---\n\n## Description\nOld\n## Notes\nn\n', 'Sources', 'https://c.d')).toBe('---\nid: x\n---\n\nOld\n\nn\n\n## Sources\nhttps://c.d\n');
+    // A new-format description may hold headings of its own, including `## Notes`.
+    expect(readNote('Intro\n\n## Notes\nmine\n\n## Plan\ntext\n')).toEqual({ description: 'Intro\n\n## Notes\nmine\n\n## Plan\ntext', sources: '' });
+    expect(readNote('Intro\n\n## Sources\nhttps://a.b\n\n## After\ntail\n')).toEqual({ description: 'Intro\n\n## After\ntail', sources: 'https://a.b' });
+    expect(readNote('## Sources\nonly\n')).toEqual({ description: '', sources: 'only' }); expect(readNote('')).toEqual({ description: '', sources: '' });
+    expect(readNote('Old\r\n## Description\r\nbody\r\n')).toEqual({ description: 'body\n\nOld', sources: '' });
+  });
+  it("migrates an old note once, keeping line endings, front matter and duplicated headings", () => {
+    const old = '---\nid: x\ntitle: T\n---\n\n## Description\nOne\n## Notes\nTwo\n## Description\nThree\n## Sources\nhttps://a.b\n';
+    const migrated = migrateNote(old)!;
+    expect(migrated).toBe('---\nid: x\ntitle: T\n---\n\nOne\n\nThree\n\nTwo\n\n## Sources\nhttps://a.b\n');
+    expect(migrateNote(migrated)).toBeNull(); expect(hasLegacyHeading(migrated)).toBe(false);
+    expect(migrateNote('---\nid: x\n---\n\nPlain text\n')).toBeNull(); expect(migrateNote('---\nid: x\n---\n')).toBeNull();
+    expect(migrateNote('---\r\nid: x\r\n---\r\n\r\n## Description\r\nBody\r\n## Notes\r\nMore\r\n')).toBe('---\r\nid: x\r\n---\r\n\r\nBody\r\n\r\nMore\r\n');
+    expect(migrateNote('## Notes\nOnly notes\n')).toBe('Only notes\n'); expect(migrateNote('## Description\n')).toBe('');
+    expect(migrateNote('Same\n## Description\nSame\n')).toBe('Same\n\nSame\n');
   });
   it("sorts only safe sibling positions, never prose, headings or subtask blocks", () => {
     const text = '# A\n- [ ] low <!--organized:task_low-->\n- [ ] high <!--organized:taskhigh-->\n\nProse\n- [ ] medium <!--organized:task_med-->\n# B\n- [ ] other';
@@ -71,11 +86,11 @@ describe("Markdown task codec", () => {
     expect(insertTask('# Day', '- [ ] A', [{ level: 1, text: 'New', ordinal: 0 }]).text).toBe('# Day\n\n# New\n\n- [ ] A\n');
     expect(insertTask('# Day\n- [ ] A\n# Last', '- [ ] B', [{ level: 1, text: 'Day', ordinal: 0 }]).text).toBe('# Day\n- [ ] A\n- [ ] B\n# Last');
   });
-  it("keeps other headings inside a section as its content, ending it only at the next section heading", () => {
+  it("keeps other headings inside an old section as its content, ending it only at the next old section heading", () => {
     const note = '## Description\nIntro\n\n## Plan\n### Deep\ntext\n\n## Sources\nhttps://a.b\n\n## Notes\nn1\n';
-    expect(noteSection(note, 'Description')).toBe('Intro\n\n## Plan\n### Deep\ntext'); expect(noteSection(note, 'Sources')).toBe('https://a.b'); expect(noteSection(note, 'Notes')).toBe('n1');
-    expect(writeNoteSection(note, 'Description', 'New\n\n## Kept')).toBe('## Description\nNew\n\n## Kept\n\n## Sources\nhttps://a.b\n\n## Notes\nn1\n'); expect(noteLoose(note)).toBe('');
-    expect(noteSection('## Description\nOnly\n## Notes', 'Description')).toBe('Only'); expect(noteSection('## Description\nOld\n## Idea\nlegacy\n', 'Description')).toBe('Old');
+    expect(noteSection(note, 'Description')).toBe('Intro\n\n## Plan\n### Deep\ntext\n\nn1'); expect(noteSection(note, 'Sources')).toBe('https://a.b');
+    expect(writeNoteSection(note, 'Description', 'New\n\n## Kept')).toBe('New\n\n## Kept\n\n## Sources\nhttps://a.b\n');
+    expect(noteSection('## Description\nOnly\n## Notes', 'Description')).toBe('Only'); expect(noteSection('## Description\nOld\n## Idea\nlegacy\n', 'Description')).toBe('Old\n\n## Idea\nlegacy');
   });
   it("sorts in-progress lines first and ranks forwarded and scheduled lines as no priority", () => {
     const priorities = new Map<string, any>([['aaaaaaaa1', 'high'], ['bbbbbbbb1', 'high'], ['cccccccc1', 'medium'], ['dddddddd1', 'none'], ['eeeeeeee1', 'low']]);
