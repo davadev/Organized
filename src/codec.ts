@@ -5,8 +5,8 @@ import { parser } from "@lezer/markdown";
 export interface TaskLine { line: number; raw: string; prefix: string; marker: string; title: string; id: string | null; repeat: boolean; section: Section[] }
 export const ID = /<!--organized:([a-zA-Z0-9_-]{8,80})-->/g;
 const TASK = /^(\s*(?:[-+*]|\d+[.)]) \[)([^\]])(\] )(.*)$/;
-/** Idea and Question sections were dropped: text under an old `## Idea` / `## Question` heading is kept and shows with the Notes. */
-export const NOTE_SECTIONS = ["Description", "Sources", "Notes"] as const;
+/** The two parts of a task note's body: the description (the text itself, no heading) and an optional `## Sources` block. */
+export const NOTE_SECTIONS = ["Description", "Sources"] as const;
 export type NoteSection = typeof NOTE_SECTIONS[number];
 /** Markers that act when typed. Any other letter is formatting only, so themes can style it freely. */
 export const SECTION_MARKERS: Record<string, NoteSection> = { a: "Description", s: "Sources" };
@@ -15,31 +15,57 @@ export const RECURRING_MARKER = "r";
 /** Turns a todo into a standalone note and leaves a link to it. */
 export const NOTE_MARKER = "n";
 export const ACTION_MARKERS = `<>/!xX-*${Object.keys(SECTION_MARKERS).join("")}${PROJECT_MARKER}${RECURRING_MARKER}${NOTE_MARKER}`;
-const SECTION_HEADINGS: Record<NoteSection, string[]> = {
-  Description: ["Description", "Information"], Sources: ["Sources"], Notes: ["Notes"],
-};
-/** Headings that start a section of a task note. Any other heading inside a section (a `## Plan` in a description) is content, not the end of it. */
-const SECTION_TITLES = ["Description", "Information", "Idea", "Question", "Sources", "Notes"].join("|");
-function sectionRegex(heading: string): RegExp { return new RegExp(`(^|\\n)## ${heading}\\n([\\s\\S]*?)(?=\\n## (?:${SECTION_TITLES})(?:\\n|$)|$)`); }
-export function noteSection(note: string, section: NoteSection): string {
-  for (const heading of SECTION_HEADINGS[section]) {
-    const match = sectionRegex(heading).exec(note); if (match) return match[2].trim();
-  }
-  return "";
+/**
+ * Task note body: the description is the text itself and `## Sources` is the only heading Organized writes, so the note reads
+ * naturally without the plugin. Older notes used `## Description`, `## Notes` (and `## Idea`/`## Question`) headings; they are
+ * still read, merged into the description with nothing dropped, and rewritten in the new shape when saved or migrated.
+ */
+const FRONTMATTER = /^---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)(?:\r?\n|$)/;
+/** Legacy headings that open a section. Any other heading inside text (a `## Plan` in a description) is content. */
+const LEGACY_TITLES = ["Description", "Information", "Idea", "Question", "Sources", "Notes"].join("|");
+function sectionRegex(headings: string[]): RegExp { return new RegExp(`(^|\\n)## (?:${headings.join("|")})[ \\t]*(?:\\n([\\s\\S]*?))?(?=\\n## (?:${LEGACY_TITLES})[ \\t]*(?:\\n|$)|$)`, "g"); }
+/** Text of every section under one of these headings, joined; a duplicated heading keeps both texts. */
+function legacySections(body: string, headings: string[]): string { return [...body.matchAll(sectionRegex(headings))].map(m => (m[2] ?? "").trim()).filter(Boolean).join("\n\n"); }
+/** Has a heading from the old layout that this version no longer writes (`## Notes` counts, so notes with only that heading migrate too). */
+export function hasLegacyHeading(body: string): boolean { return /(^|\n)## (?:Description|Information|Notes)[ \t]*(?:\n|$)/.test(body); }
+function readLegacy(body: string): { description: string; sources: string } {
+  let loose = body;
+  for (const headings of [["Description", "Information"], ["Sources"], ["Notes"]]) loose = loose.replace(sectionRegex(headings), "$1");
+  const description = [legacySections(body, ["Description", "Information"]), legacySections(body, ["Notes"]), loose.trim()].filter(Boolean).join("\n\n");
+  return { description, sources: legacySections(body, ["Sources"]) };
 }
-/** Writes a canonical heading. Legacy `## Information` is migrated to `## Description`. */
-export function writeNoteSection(note: string, section: NoteSection, text: string): string {
-  const content = text.endsWith("\n") ? text.slice(0, -1) : text;
-  for (const heading of SECTION_HEADINGS[section]) {
-    const regex = sectionRegex(heading);
-    if (regex.test(note)) return note.replace(regex, (_whole, lead: string) => `${lead}## ${section}\n${content}\n`);
-  }
-  return `${note}${note && !note.endsWith("\n") ? "\n" : ""}## ${section}\n${content}\n`;
+/** Description and sources of a note body, in either layout. */
+export function readNote(body: string, broad = false): { description: string; sources: string } {
+  const text = body.replace(/\r\n/g, "\n");
+  if (broad ? hasLegacyHeading(text) : /(^|\n)## (?:Description|Information)[ \t]*(?:\n|$)/.test(text)) return readLegacy(text);
+  const heading = /(^|\n)## Sources[ \t]*\n/.exec(text);
+  if (!heading) return { description: text.trim(), sources: "" };
+  const before = text.slice(0, heading.index), after = text.slice(heading.index + heading[0].length);
+  const next = /\n## /.exec(after);
+  const sources = (next ? after.slice(0, next.index) : after).trim();
+  return { description: [before.trim(), next ? after.slice(next.index + 1).trim() : ""].filter(Boolean).join("\n\n"), sources };
 }
-export function noteLoose(note: string): string {
-  let loose = note;
-  for (const heading of new Set(Object.values(SECTION_HEADINGS).flat())) loose = loose.replace(sectionRegex(heading), "$1");
-  return loose.trim();
+export function noteSection(body: string, section: NoteSection): string { return readNote(body)[section === "Description" ? "description" : "sources"]; }
+function compose(description: string, sources: string, newline: string): string {
+  const parts = [description.trim(), sources.trim() ? `## Sources\n${sources.trim()}` : ""].filter(Boolean);
+  return parts.length ? `${parts.join("\n\n")}\n`.replace(/\n/g, newline) : "";
+}
+function rebuild(text: string, broad: boolean, change: (note: { description: string; sources: string }) => { description: string; sources: string }): string {
+  const front = FRONTMATTER.exec(text)?.[0] ?? ""; const body = text.slice(front.length);
+  const newline = body.includes("\r\n") || (!body && front.includes("\r\n")) ? "\r\n" : "\n";
+  const lead = /^(?:\r?\n)*/.exec(body)![0] || (front ? newline : "");
+  const next = change(readNote(body, broad));
+  return `${front}${lead}${compose(next.description, next.sources, newline)}`;
+}
+/** Writes one part of the note, leaving the other as it is. Any older layout is rewritten in the new one. */
+export function writeNoteSection(text: string, section: NoteSection, value: string): string {
+  return rebuild(text, false, note => section === "Description" ? { ...note, description: value } : { ...note, sources: value });
+}
+/** The body of a note written in the old layout, rewritten in the new one; null when there is nothing to change. */
+export function migrateNote(text: string): string | null {
+  const front = FRONTMATTER.exec(text)?.[0] ?? "";
+  if (!hasLegacyHeading(text.slice(front.length).replace(/\r\n/g, "\n"))) return null;
+  return rebuild(text, true, note => note);
 }
 const cache = new Map<string, { tasks: TaskLine[]; headings: { line: number; section: Section[] }[] }>();
 export function parseTasks(text: string, onHeading?: (line: number, section: Section[]) => void): TaskLine[] {

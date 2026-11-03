@@ -151,7 +151,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
     await plugin.trigger({ file, line: parseTasks('- [k] visual')[0] }); expect(await plugin.repo.list()).toHaveLength(1);
     const missing = harness(); const p = new Organized(missing.app, {} as any); (p as any).repo = missing.repo; await expect(p.saveModule('missing1', 'Sources', 'text')).rejects.toThrow('missing');
     const canonical = plugin.repo.file(plugin.repo.taskPath(task.id))!; await plugin.saveModule(task.id, 'Sources', '- [Source](https://example.com)'); expect(await plugin.repo.readText(canonical)).toContain('https://example.com');
-    await plugin.saveModule(task.id, 'Description', '$1 replacement'); const saved = await plugin.repo.readText(canonical); expect(saved).toContain('## Description'); expect(saved).toContain('$1 replacement');
+    await plugin.saveModule(task.id, 'Description', '$1 replacement'); const saved = await plugin.repo.readText(canonical); expect(saved).not.toContain('## Description'); expect(saved).toContain('$1 replacement');
     const todos: any = await h.add('Todos.md', '- [ ] Convert me'); const delegate = vi.spyOn(plugin.service, 'convertTodos').mockResolvedValue(); await plugin.convertTodos(todos); expect(delegate).toHaveBeenCalledWith(todos);
     const confirmed = plugin.confirm('Yes?'); const confirmation = Modal.instances.at(-1) as ConfirmModal; confirmation.done(true); expect(await confirmed).toBe(true); confirmation.close();
   });

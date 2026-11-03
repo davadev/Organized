@@ -63,6 +63,18 @@ export class DataSafety {
     for (const file of files) { const entry = object(JSON.parse(await this.adapter.read(file))); if (typeof entry.version === "string" && !entry.version.includes("-")) { stable = file; break; } }
     for (const file of files.slice(9)) if (file !== stable) await this.adapter.remove(file);
   }
+  /**
+   * Copies of note text taken before Organized rewrites many notes at once, kept apart from the settings backups. The three newest of
+   * each kind are kept. Throws when the copy cannot be written, so the caller changes nothing.
+   */
+  async writeBackup(kind: string, files: { path: string; before: string }[]): Promise<string> {
+    const folder = normalizePath(`${this.folder}/note-backups`); if (!(await this.adapter.exists(folder))) await this.adapter.mkdir(folder);
+    const name = normalizePath(`${folder}/${kind}-${Date.now()}.json`);
+    await this.atomicWrite(name, JSON.stringify({ version: this.version, kind, at: new Date().toISOString(), files }));
+    const older = (await this.adapter.list(folder)).files.filter(f => f.includes(`/${kind}-`) && f !== name).sort().reverse().slice(2);
+    for (const file of older) await this.adapter.remove(file);
+    return name;
+  }
   async queueCompatibleRestore(): Promise<void> {
     const folder = normalizePath(`${this.folder}/backups`);
     const files = (await this.adapter.list(folder)).files.sort().reverse();

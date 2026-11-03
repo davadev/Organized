@@ -141,3 +141,7 @@ The images in `resources/screenshots/` are rendered, not captured: `scripts/rend
 - The reverse commands (`unlinkTasks` in `src/service.ts`) are covered for one note and the vault, CRLF, unlinked and plain notes, task notes being skipped, a stale note aborting, and Undo. Manual: convert a real daily note and back, confirm no `<!--organized:` comments remain and that Undo restores them.
 - The layout check also shrinks the viewport to 600 px tall for every onboarding step and fails if the card leaves the screen, hides a button or stacks the buttons; `node scripts/render-screenshots.mjs --phone --out <folder> onboarding-8` shows a step on a 390 x 640 phone with the hostile mobile button style.
 
+## Task note migration (manual)
+
+On a **copy** of a vault with task notes from an older beta: install the beta, restart Obsidian, and confirm the notice "Task notes updated" appears once. Open several task notes as plain Markdown (description text first, `## Sources` last, no `## Description` or `## Notes`), and in the Task tab (Description and Sources cards, `[[links]]` clickable when not editing). Check `.obsidian/plugins/organized/note-backups/` holds the old text, press Undo and confirm the old text returns, restart twice and confirm nothing is written again.
+

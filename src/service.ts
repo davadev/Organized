@@ -1,7 +1,7 @@
 import { Notice, TFile } from "obsidian";
-import { insertTask, moveTask, noteLoose, noteSection, parseTasks, projectSection, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
+import { insertTask, migrateNote, moveTask, noteSection, parseTasks, projectSection, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
-import { localDate, makeId, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, Status, Task, WorkSession } from "./model";
+import { localDate, makeId, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, Status, Task, taskFrom, WorkSession } from "./model";
 import { seconds } from "./sessions";
 import { projectTemplate, Repository, splitNote } from "./repository";
 import { parseWorked, retiredLines } from "./retention";
@@ -314,6 +314,24 @@ export class TaskService {
     const file = this.repo.file(notePath); if (!file) throw new Error("The project note was renamed or removed.");
     await this.repo.setProjectColor(file, color); this.changed();
   }
+  /**
+   * One-time: rewrite task notes written in the old layout (`## Description`, `## Notes`) in the new one. Only real task notes are
+   * touched (unreadable or newer-schema ones are left alone), a note already in the new layout is not written, and the text of
+   * every note that will change is saved through `backup` first; when that fails nothing is changed.
+   */
+  async migrateTaskBodies(backup: (files: { path: string; before: string }[]) => Promise<string>): Promise<{ changes: Change[]; failed: string[]; backupPath: string | null }> {
+    const pending: { file: TFile; before: string; after: string }[] = [];
+    for (const file of this.repo.app.vault.getMarkdownFiles().filter(f => this.repo.isTaskRecord(f.path))) {
+      let before: string;
+      try { before = await this.repo.readText(file); taskFrom(splitNote(before).frontmatter, file.basename); } catch { continue; }
+      const after = migrateNote(before); if (after !== null) pending.push({ file, before, after });
+    }
+    if (!pending.length) return { changes: [], failed: [], backupPath: null };
+    const backupPath = await backup(pending.map(p => ({ path: p.file.path, before: p.before })));
+    const changes: Change[] = []; const failed: string[] = [];
+    for (const p of pending) { try { await this.edit(p.file, p.before, p.after, changes); } catch { failed.push(p.file.path); } }
+    return { changes, failed, backupPath };
+  }
   /** Gives every project note that predates the project marker its frontmatter: linked ones, remembered ones and anything already in the project folder. */
   async markProjects(): Promise<number> {
     const folder = this.repo.projectFolder();
@@ -433,7 +451,7 @@ export class TaskService {
     if (existing && options.clash === "existing") return this.linkNote(task, existing, occurrences, context, taskFile);
     const templateFile = options.template ? this.repo.file(path(options.template)) : null; if (options.template && !templateFile) throw new Error(`The template ${options.template} was not found.`);
     const target = freePath(folder, name, candidate => this.repo.file(candidate) !== null);
-    const content = buildNote({ title: task.title, description: noteSection(body, "Description"), sources: noteSection(body, "Sources"), notes: `${noteSection(body, "Notes")}\n${noteLoose(body)}`.trim(), template: templateFile ? await this.repo.readText(templateFile) : null, tags: options.tags, today: localDate() });
+    const content = buildNote({ title: task.title, description: noteSection(body, "Description"), sources: noteSection(body, "Sources"), template: templateFile ? await this.repo.readText(templateFile) : null, tags: options.tags, today: localDate() });
     const file = await this.repo.ensure(target, content);
     return this.linkNote(task, file, occurrences, context, taskFile);
   }

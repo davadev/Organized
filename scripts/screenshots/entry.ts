@@ -32,7 +32,7 @@ const dailies: Record<string, string> = {
   [day(1)]: '## Today\n- [x] Water the plants\n', [day(5)]: '## Today\n',
 };
 const notes: Record<string, string> = {
-  q1review01: '---\ntitle: Draft the Q1 review\n---\n\n## Description\nSummarise what shipped, what slipped and what we learn from it. Two pages, numbers first.\n\n## Sources\n[Q1 metrics dashboard](https://example.com/dashboard)\n[[Q1 retro notes]]\n\n## Notes\nAsk Sam for the churn numbers before Friday.\n',
+  q1review01: '---\ntitle: Draft the Q1 review\n---\n\nSummarise what shipped, what slipped and what we learn from it. Two pages, numbers first. Ask [[Sam]] for the churn numbers before Friday.\n\n## Sources\n[Q1 metrics dashboard](https://example.com/dashboard)\n[[Q1 retro notes]]\n',
 };
 const colors: Record<string, string> = { [review]: '#7b6cd9', [lisbon]: '#e0852d', [workshop]: '#2f9e8f' };
 const files = new Set([...Object.keys(dailies).map(d => `Daily/${d}.md`), review, lisbon, workshop, ...tasks.map(t => `Tasks/${t.id}.md`)]);

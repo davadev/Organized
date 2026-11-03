@@ -6,7 +6,7 @@ import { report } from "./service";
 export const PROPERTY_LABELS: Record<DisplayProperty, string> = {
   status: "Status", priority: "Priority", scheduled: "Scheduled date", created: "Created date",
   time_tracked_seconds: "Tracked time", recurring: "Recurrence", starred: "Favorite",
-  projects: "Project links", movement_history: "Movement history", sources: "Source references", notes: "Task notes",
+  projects: "Project links", movement_history: "Movement history", sources: "Source references", description: "Description",
 };
 interface Row { name: string; desc?: string; render: (setting: Setting) => void }
 interface Group { type: "group"; heading: string; items: Row[] }
@@ -46,8 +46,8 @@ export class OrganizedSettingsTab extends PluginSettingTab {
             });
           });
         }),
-        row("What retired tasks keep", "Applies when the retention above turns a task into a regular checkbox. Title only keeps just the checkbox. Add description writes it as a quote under the checkbox. Add everything also keeps ideas, questions, sources and the time you worked, so older daily notes stay informative and the Day and Week views can still draw that time.", setting => {
-          setting.addDropdown(d => d.addOption("title", "Keep the title only").addOption("description", "Add description if available").addOption("all", "Add everything (description, notes and time worked)")
+        row("What retired tasks keep", "Applies when the retention above turns a task into a regular checkbox. Title only keeps just the checkbox. Add description writes it as a quote under the checkbox. Add everything also keeps sources and the time you worked, so older daily notes stay informative and the Day and Week views can still draw that time.", setting => {
+          setting.addDropdown(d => d.addOption("title", "Keep the title only").addOption("description", "Add description if available").addOption("all", "Add everything (description, sources and time worked)")
             .setValue(this.owner.settings.retentionDetail).onChange(value => { if (RETENTION_DETAILS.includes(value as RetentionDetail)) { this.owner.settings.retentionDetail = value as RetentionDetail; this.owner.saveSettings(); } }));
         }),
       ] },

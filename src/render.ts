@@ -3,7 +3,7 @@ import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetTy
 import { StateEffect, StateField, RangeSetBuilder, EditorState, Extension, Prec } from "@codemirror/state";
 import { editorLivePreviewField } from "obsidian";
 import type Organized from "./main";
-import { parseTasks } from "./codec";
+import { noteSection, parseTasks } from "./codec";
 import { elapsed, Task } from "./model";
 import { splitNote } from "./repository";
 import { report } from "./service";
@@ -16,7 +16,7 @@ export function icon(host: HTMLElement, marker: string): void {
   host.createSpan({ cls: "organized-glyph", attr: { "data-marker": marker, role: "img", "aria-label": label } });
 }
 /** Notes and sources render as Markdown blocks and need their own row; every other property is a short label that sits beside the title. */
-export function hasRichProperties(owner: Organized): boolean { return owner.settings.displayProperties.some(p => p === "notes" || p === "sources"); }
+export function hasRichProperties(owner: Organized): boolean { return owner.settings.displayProperties.some(p => p === "description" || p === "sources"); }
 /** `live` turns false once a newer draw or a teardown owns `host`, so an older projection stops appending after its awaits. */
 export async function projection(owner: Organized, host: HTMLElement, task: Task, component: Component, live: () => boolean = () => true): Promise<void> {
   host.addClass("organized-projection"); const selected = owner.settings.displayProperties;
@@ -28,10 +28,10 @@ export async function projection(owner: Organized, host: HTMLElement, task: Task
   for (const property of selected) {
     if (!live()) return;
     if (property === "scheduled") continue;
-    if (property === "notes" || property === "sources") {
+    if (property === "description" || property === "sources") {
       const file = owner.repo.file(owner.repo.taskPath(task.id)); if (!file) continue;
       const body = splitNote(await owner.repo.readText(file)).body; if (!live()) return;
-      const content = property === "notes" ? body : /(?:^|\n)## Sources\n([\s\S]*?)(?=\n## |$)/.exec(body)?.[1] ?? "";
+      const content = noteSection(body, property === "description" ? "Description" : "Sources");
       const block = host.createDiv({ cls: "organized-rich-property" }); await MarkdownRenderer.render(owner.app, content, block, file.path, component);
     } else {
       const value = property === "time_tracked_seconds" ? `${Math.floor(elapsed(task) / 60)} min` : typeof task[property] === "object" ? JSON.stringify(task[property]) : String(task[property]);

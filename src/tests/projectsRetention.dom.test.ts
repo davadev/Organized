@@ -38,7 +38,7 @@ describe("retired tasks keep what the setting says", () => {
     const h = harness(); h.setSettings({ taskRetentionDays: 30, autoForward: false, retentionDetail: detail });
     const task = await h.repo.create("Plan release");
     await h.repo.update(task.id, t => ({ ...t, status: "completed", closed_at: ago(40), time_tracked_seconds: 5400, work_sessions: [{ start: when(1, 5, 9, 0), end: when(1, 5, 10, 0) }] }));
-    const file = h.repo.file(h.repo.taskPath(task.id))!; h.texts.set(file.path, writeNoteSection(writeNoteSection(h.texts.get(file.path)!, "Description", "Ship it."), "Notes", "Dry run"));
+    const file = h.repo.file(h.repo.taskPath(task.id))!; h.texts.set(file.path, writeNoteSection(writeNoteSection(h.texts.get(file.path)!, "Description", "Ship it."), "Sources", "Dry run"));
     const first: any = await h.add("Daily/2026-01-05.md", `- [>] Plan release <!--organized:${task.id}-->`);
     const last: any = await h.add("Daily/2026-01-06.md", `# Work\n  - [x] Plan release <!--organized:${task.id}-->\n  - [ ] Next\n`);
     const crlf: any = await h.add("Other.md", `1. [x] Plan release <!--organized:${task.id}-->\r\nafter\r\n`);
@@ -54,7 +54,7 @@ describe("retired tasks keep what the setting says", () => {
   });
   it("everything adds notes, days worked and the tracked total", async () => {
     const { h, last } = await retire("all"); const text = h.texts.get(last.path)!;
-    expect(text).toContain("    > Ship it.\n    > **Notes**\n    > Dry run\n    - Worked 2026-01-05: 09:00–10:00 (1 h)\n    - Tracked 1 h 30 min\n  - [ ] Next");
+    expect(text).toContain("    > Ship it.\n    > **Sources**\n    > Dry run\n    - Worked 2026-01-05: 09:00–10:00 (1 h)\n    - Tracked 1 h 30 min\n  - [ ] Next");
   });
   it("picks the latest daily note whatever order the vault lists notes in", async () => {
     const h = harness(); h.setSettings({ taskRetentionDays: 30, autoForward: false, retentionDetail: "description" }); const task = await h.repo.create("Order");
@@ -191,7 +191,7 @@ describe("project sections and start date", () => {
 describe("standalone notes from tasks", () => {
   const setup = async (title = "Plan launch") => {
     const h = harness(); const task = await h.repo.create(title); const file = h.repo.file(h.repo.taskPath(task.id))!;
-    h.texts.set(file.path, writeNoteSection(writeNoteSection(writeNoteSection(h.texts.get(file.path)!, "Description", "Why we launch.\n\n## Plan\nSteps"), "Sources", "https://a.b"), "Notes", "Remember."));
+    h.texts.set(file.path, writeNoteSection(writeNoteSection(h.texts.get(file.path)!, "Description", "Why we launch.\n\n## Plan\nSteps"), "Sources", "https://a.b"));
     const today: any = await h.add(`Daily/${localDate()}.md`, `# Work\n  - [ ] ${title} <!--organized:${task.id}-->\n  - [ ] Other\n`); const old: any = await h.add("Daily/2026-01-05.md", `- [>] ${title} <!--organized:${task.id}-->\n`);
     const project: any = await h.add("Tasks/Projects/Alpha.md", `## Open\n- [ ] ${title} <!--organized:${task.id}-->\n`);
     const context = { file: today, line: parseTasks(h.texts.get(today.path)!)[0] };
@@ -200,7 +200,7 @@ describe("standalone notes from tasks", () => {
   const options = { folder: "Notes", tags: ["idea"], template: null, clash: "new" as const };
   it("creates the note and leaves one link where the task was converted, removing every other copy and the task note", async () => {
     const { h, task, file, today, old, project, context } = await setup(); const made = await h.service.convertToNote(task.id, options, context);
-    expect(made.path).toBe("Notes/Plan launch.md"); expect(h.texts.get(made.path)).toBe("---\ntags:\n  - idea\n---\n\nWhy we launch.\n\n## Plan\nSteps\n\n## Sources\nhttps://a.b\n\n## Notes\nRemember.\n");
+    expect(made.path).toBe("Notes/Plan launch.md"); expect(h.texts.get(made.path)).toBe("---\ntags:\n  - idea\n---\n\nWhy we launch.\n\n## Plan\nSteps\n\n## Sources\nhttps://a.b\n");
     expect(h.texts.get(today.path)).toBe("# Work\n  - [[Notes/Plan launch]]\n  - [ ] Other\n"); expect(h.texts.get(old.path)).toBe(""); expect(h.texts.get(project.path)).toBe("## Open\n");
     expect(h.repo.file(file.path)).toBeNull(); expect(h.raw.fileManager.trashFile).toHaveBeenCalledWith(file); expect(h.changed).toHaveBeenCalled(); expect(h.raw.fileManager.generateMarkdownLink).toHaveBeenCalledWith(made, today.path);
   });
