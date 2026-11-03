@@ -50,7 +50,7 @@ let modal: DatePicker | SessionModal | NoteConversionModal | OnboardingModal | R
   } else if (tab === 'LivePreview' || tab === 'Source' || tab === 'Eof' || tab === 'AlignRight') {
     owner.settings.displayProperties = tab === 'Eof' ? ['priority'] : tab === 'AlignRight' ? ['priority', 'starred', 'recurring', 'time_tracked_seconds'] : [];
     owner.settings.propertiesAlign = tab === 'AlignRight' ? 'right' : 'text';
-    const doc = tab === 'Eof' ? 'intro\n- [ ] Test task <!--organized:task1234-->' : tab === 'AlignRight' ? '- [ ] Short <!--organized:task1234-->\n- [ ] A much longer task title that wraps onto a second line on a phone screen <!--organized:task1234-->' : '- [ ] Test task <!--organized:task1234--> <!--organized:repeat-->';
+    const doc = tab === 'Eof' ? 'intro\n- [ ] Test task <!--organized:task1234-->' : tab === 'AlignRight' ? '- [ ] Short <!--organized:task1234-->\n- [ ] A much longer task title that wraps onto a second line on a phone screen <!--organized:task1234-->\n- [ ] Romeo Schmerzmittel <!--organized:task1234-->\n    - Proverbs 4_18' : '- [ ] Test task <!--organized:task1234--> <!--organized:repeat-->';
     editor = new EditorView({ state: EditorState.create({ doc, selection: { anchor: 0 }, extensions: [EditorView.lineWrapping, ...(tab === 'Source' ? [] : [editorLivePreviewField]), editorExtension(owner)] }), parent: root });
   } else if (tab === 'ScheduleModal') {
     modal = new DatePicker(app, '2026-01-01', async () => undefined);
