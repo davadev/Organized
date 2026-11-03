@@ -93,6 +93,7 @@ export class OrganizedSettingsTab extends PluginSettingTab {
         }));
       })) },
       { type: "group", heading: "Help", items: [
+        row("Retire tasks", "Turn tasks back into ordinary Markdown, or clean up finished ones: links, readable file names, keep or remove properties. Nothing changes until you confirm.", setting => { setting.addButton(b => b.setButtonText("Open").onClick(() => this.owner.retireTasks())); }),
         row("Onboarding card", "A short tour of the idea behind Organized. It also appears once after you first start the plugin.", setting => { setting.addButton(b => b.setButtonText("Show").onClick(() => this.owner.showOnboarding(false))); }),
       ] },
     ];

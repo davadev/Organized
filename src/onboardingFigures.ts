@@ -113,7 +113,7 @@ function propsFigure(fig: HTMLElement): void {
   props.createSpan({ cls: "organized-property", text: "tracked time: 2 h" });
 }
 
-const COMMANDS = ["Convert unchecked todos to tasks", "Convert tasks in this note back to todos", "Convert all tasks in the vault back to todos"];
+const COMMANDS = ["Convert unchecked todos to tasks", "Convert tasks in this note back to todos", "Retire tasks…"];
 function commandsFigure(fig: HTMLElement): void {
   const list = fig.createDiv({ cls: "organized-welcome-fig-rows" });
   for (const name of COMMANDS) {

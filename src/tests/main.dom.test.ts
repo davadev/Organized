@@ -5,7 +5,7 @@ import Organized from "../main";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
 import { harness } from "./harness";
 import { MarkdownView, Modal, Notice, TFolder } from "./__mocks__/obsidian";
-import { ConfirmModal, DatePicker, KEEP_AS_TODO, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, TaskPicker } from "../modals";
+import { ConfirmModal, DatePicker, KEEP_AS_TODO, NoteConversionModal, OnboardingModal, RetireModal, PriorityPicker, ProjectPicker, TaskPicker } from "../modals";
 import { parseTasks } from "../codec";
 import { OrganizedInspectorView, VIEW_TYPE } from "../view";
 import { localDate } from '../model';
@@ -63,8 +63,8 @@ describe('plugin lifecycle and user-only editor actions', () => {
     open.mockRejectedValueOnce(Error('open failed')); stub.ribbon[0].cb(); await flush(); expect(Notice.instances.at(-1)?.message).toContain('open failed');
     const pick = vi.spyOn(plugin, 'pickTask').mockResolvedValue(); stub.commands[1].editorCallback({}, { file }); stub.commands[2].editorCallback({}, { file }); stub.commands[1].editorCallback({}, {}); stub.commands[2].editorCallback({}, {}); await flush(); expect(pick).toHaveBeenCalledTimes(2);
     const convert = vi.spyOn(plugin, 'convertTodos').mockResolvedValue(); stub.commands.find((c: any) => c.id === 'convert-todos').editorCallback({}, { file }); stub.commands.find((c: any) => c.id === 'convert-todos').editorCallback({}, {}); await flush(); expect(convert).toHaveBeenCalledExactlyOnceWith(file);
-    const unlink = vi.spyOn(plugin.service, 'unlinkTasks').mockResolvedValue(); stub.commands.find((c: any) => c.id === 'unlink-note-tasks').editorCallback({}, { file }); stub.commands.find((c: any) => c.id === 'unlink-note-tasks').editorCallback({}, {}); stub.commands.find((c: any) => c.id === 'unlink-vault-tasks').callback(); await flush();
-    expect(unlink).toHaveBeenNthCalledWith(1, [file], 'this note'); expect(unlink).toHaveBeenNthCalledWith(2, expect.any(Array), 'the vault'); expect(unlink).toHaveBeenCalledTimes(2);
+    const unlink = vi.spyOn(plugin.service, 'unlinkTasks').mockResolvedValue(); stub.commands.find((c: any) => c.id === 'unlink-note-tasks').editorCallback({}, { file }); stub.commands.find((c: any) => c.id === 'unlink-note-tasks').editorCallback({}, {}); await flush();
+    expect(unlink).toHaveBeenCalledExactlyOnceWith([file], 'this note');
     const undo = vi.spyOn(plugin.service, 'undo').mockResolvedValue(); stub.commands.find((c: any) => c.id === 'undo').callback(); await flush(); expect(undo).toHaveBeenCalledOnce();
     const confirm = vi.spyOn(plugin, 'confirm').mockResolvedValue(false); const restore = vi.spyOn(plugin.safety, 'queueCompatibleRestore').mockResolvedValue(); // Find restore by stable id, not menu order.
     stub.commands.find((c: any) => c.id === 'restore-settings').callback(); await flush(); expect(restore).not.toHaveBeenCalled(); confirm.mockResolvedValue(true); stub.commands.find((c: any) => c.id === 'restore-settings').callback(); await flush(); expect(restore).toHaveBeenCalledOnce();
@@ -345,5 +345,23 @@ describe('onboarding card at startup', () => {
     stub.commands.find((c: any) => c.id === 'show-onboarding').callback(); expect(cards()).toHaveLength(1); cards()[0].close(); await flush();
     expect(plugin.settings.onboardingSeen).toBe(true);
     plugin.settings.onboardingSeen = false; stub.commands.find((c: any) => c.id === 'show-onboarding').callback(); cards()[1].close(); await flush(); expect(plugin.settings.onboardingSeen).toBe(false);
+  });
+});
+describe('Retire window wiring', () => {
+  const windows = () => Modal.instances.filter(m => m instanceof RetireModal) as RetireModal[];
+  it('opens from the command and the Settings button with defaults taken from the cleanup settings', async () => {
+    Modal.instances.length = 0; const { plugin, stub } = await loaded();
+    stub.commands.find((c: any) => c.id === 'retire-tasks').callback(); expect(windows()).toHaveLength(1); expect(windows()[0].defaults).toEqual({ which: 'all', olderThanDays: 7, lines: 'plain', keep: 'title', notes: 'keep', yaml: 'keep' });
+    plugin.settings.taskRetentionDays = 30; plugin.settings.retentionDetail = 'all'; plugin.retireTasks(); expect(windows()[1].defaults).toEqual({ which: 'closed', olderThanDays: 30, lines: 'plain', keep: 'all', notes: 'keep', yaml: 'keep' });
+    expect(stub.commands.find((c: any) => c.id === 'unlink-vault-tasks')).toBeUndefined();
+  });
+  it('asks once more before removing properties or trashing notes, and not for safe choices', async () => {
+    Modal.instances.length = 0; const { plugin } = await loaded(); const retire = vi.spyOn(plugin.service, 'retireTasks').mockResolvedValue(); const confirm = vi.spyOn(plugin, 'confirm');
+    plugin.retireTasks(); const modal = windows()[0]; const safe = { ...modal.defaults, notes: 'rename' as const, lines: 'link' as const };
+    confirm.mockResolvedValue(true); await modal.run(safe); expect(confirm).not.toHaveBeenCalled(); expect(retire).toHaveBeenCalledTimes(1);
+    await modal.run({ ...safe, yaml: 'strip' }); expect(confirm.mock.calls.at(-1)![0]).toContain('properties'); expect(retire).toHaveBeenCalledTimes(2);
+    await modal.run({ ...safe, notes: 'trash' }); expect(confirm.mock.calls.at(-1)![0]).toContain('trash'); expect(retire).toHaveBeenCalledTimes(3);
+    confirm.mockResolvedValue(false); await modal.run({ ...safe, notes: 'trash' }); expect(retire).toHaveBeenCalledTimes(3);
+    const write = vi.spyOn(plugin.safety, 'writeBackup').mockResolvedValue('saved.json'); const backup = (retire.mock.calls[0] as any)[1]; expect(await backup([{ path: 'a.md', before: 'x' }], { renames: [] })).toBe('saved.json'); expect(write).toHaveBeenCalledWith('retire', [{ path: 'a.md', before: 'x' }], { renames: [] });
   });
 });

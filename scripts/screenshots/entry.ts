@@ -5,7 +5,7 @@ import { OrganizedInspectorView } from '../../src/view';
 import { DEFAULT_SETTINGS, newTask, type Task } from '../../src/model';
 import { parseTasks } from '../../src/codec';
 import { missingIcons } from './obsidianShim';
-import { OnboardingModal } from '../../src/modals';
+import { OnboardingModal, RetireModal } from '../../src/modals';
 
 installObsidianDom();
 const at = (day: number, hour: number, minute = 0) => new Date(2026, 2, day, hour, minute).toISOString();
@@ -54,9 +54,13 @@ const root = document.querySelector('#app')!;
 const page = (window as any);
 page.missingIcons = () => [...missingIcons];
 /** scene name -> what to show */
-let modal: OnboardingModal | null = null;
+let modal: OnboardingModal | RetireModal | null = null;
 page.scene = async (name: string) => {
   modal?.close(); modal = null; root.replaceChildren();
+  if (name === 'retire') {
+    const found = { tasks, files: new Map(tasks.map(t => [t.id, [{ path: `Daily/2026-03-0${tasks.indexOf(t) % 4 + 1}.md` } as any]])), lines: new Map(tasks.map(t => [t.id, 2])) };
+    modal = new RetireModal(app, { which: 'closed', olderThanDays: 7, lines: 'link', keep: 'all', notes: 'rename', yaml: 'keep' }, async () => found as any, async () => undefined); modal.open(); await Promise.resolve(); await Promise.resolve(); return;
+  }
   if (name.startsWith('onboarding-')) { modal = new OnboardingModal(app, () => undefined); modal.open(); (modal as any).index = Number(name.slice('onboarding-'.length)) - 1; (modal as any).draw(); return; } owner.selectedTaskId = null; view.selectedDate = day(4); view.module = ''; view.editingTitle = false; view.editingModule = '';
   const [tab, mode] = ({ month: ['Calendar', 'Month'], week: ['Calendar', 'Week'], day: ['Calendar', 'Day'], task: ['Task', 'Month'], projects: ['Projects', 'Month'], favorites: ['Favorites', 'Month'] } as Record<string, [string, string]>)[name] ?? (() => { throw new Error(`unknown scene ${name}`); })();
   view.tab = tab as typeof view.tab; view.calendarMode = mode as typeof view.calendarMode;

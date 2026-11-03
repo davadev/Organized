@@ -6,12 +6,13 @@ import { DEFAULT_SETTINGS, elapsed, localDate, object, Settings, Task } from "./
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
 import { Context, report, TaskService } from "./service";
-import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, TaskPicker } from "./modals";
+import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RetireModal, TaskPicker } from "./modals";
 import { OrganizedInspectorView, VIEW_TYPE } from "./view";
 import { OrganizedSettingsTab } from "./settings";
 import { editorExtension, reading, refreshEditor } from "./render";
 import { crashStatePath, decideOnLoad, DEFAULT_CRASH_STATE, readCrashState, writeCrashState } from "./crashGuard";
 import { DataSafety } from "./safety";
+import { isDestructive, normalizeRetire } from "./retire";
 
 /** The plugin counts as started with the app when it loads within this many milliseconds of the page starting. */
 const ONBOARDING_START_WINDOW_MS = 45_000;
@@ -54,7 +55,7 @@ export default class Organized extends Plugin {
       this.addCommand({ id: "duplicate-task", name: "Duplicate as new task", editorCallback: (editor, view) => { if (view.file) void this.pickTask(editor, view.file, true).catch(report); } });
       this.addCommand({ id: "convert-todos", name: "Convert unchecked todos to tasks", editorCallback: (_editor, view) => { if (view.file) void this.convertTodos(view.file).catch(report); } });
       this.addCommand({ id: "unlink-note-tasks", name: "Convert tasks in this note back to todos", editorCallback: (_editor, view) => { if (view.file) void this.run(() => this.service.unlinkTasks([view.file!], "this note")).catch(report); } });
-      this.addCommand({ id: "unlink-vault-tasks", name: "Convert all tasks in the vault back to todos", callback: () => { void this.run(() => this.service.unlinkTasks(this.app.vault.getMarkdownFiles(), "the vault")).catch(report); } });
+      this.addCommand({ id: "retire-tasks", name: "Retire tasks…", callback: () => { this.retireTasks(); } });
       this.addCommand({ id: "show-onboarding", name: "Show onboarding card", callback: () => { this.showOnboarding(false); } });
       this.addCommand({ id: "undo", name: "Undo last recurrence/auto-forward batch", callback: () => { void this.service.undo().catch(report); } });
       this.addCommand({ id: "restore-settings", name: "Restore compatible settings backup (restart required)", callback: () => { void this.confirm("Queue the newest compatible settings backup for restoration on next restart? Task Markdown will not change.").then(yes => yes ? this.safety.queueCompatibleRestore() : undefined).catch(report); } });
@@ -147,6 +148,17 @@ export default class Organized extends Plugin {
     if (this.settings.projectStartsSet || !this.safety.writable) return;
     const updated = await this.service.markProjects(); this.settings.projectNotesMarked = true; this.settings.projectStartsSet = true; this.saveSettings(false);
     if (updated) new Notice(`${updated} project note${updated === 1 ? "" : "s"} updated: marked as projects and given a start date (today).`, 12000);
+  }
+  /** Opens the Retire window. Choices that remove something (properties, the task note itself) ask once more before anything is written. */
+  retireTasks(): void {
+    const s = this.settings;
+    const defaults = normalizeRetire({ which: s.taskRetentionDays > 0 ? "closed" : "all", olderThanDays: s.taskRetentionDays || 7, lines: "plain", keep: s.retentionDetail, notes: "keep", yaml: "keep" });
+    new RetireModal(this.app, defaults, () => this.service.scanRetire(), async options => {
+      if (isDestructive(options) && !(await this.confirm(options.notes === "trash"
+        ? "The selected task notes move to Obsidian's trash. You can restore them from there, but Undo will not be offered. Continue?"
+        : "Organized's properties (status, dates, tracked time…) are removed from the selected task notes; Organized will no longer recognise them. Anything you want to keep must be chosen under \"Kept under the todo\". Continue?", "Retire tasks", "Retire"))) return;
+      await this.run(() => this.service.retireTasks(options, (files, extra) => this.safety.writeBackup("retire", files, extra)));
+    }).open();
   }
   /** One-time: rewrite task notes from the old layout in the new one, after saving their old text. Retries on the next start when anything failed. */
   async migrateTaskNotes(): Promise<void> {
