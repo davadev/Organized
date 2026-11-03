@@ -277,7 +277,8 @@ export default class Organized extends Plugin {
     const captured = editor.getValue(); const selection = editor.listSelections();
     this.pickerOpen = true;
     // A failed read must not leave editor handling disabled for good.
-    const tasks = duplicate ? [] : await this.repo.list().catch((error: unknown) => { this.pickerOpen = false; throw error; });
+    // Finished tasks are history: offering them would bury a chore you repeat under every time you did it. Creating a new task stays one choice away.
+    const tasks = duplicate ? [] : (await this.repo.list().catch((error: unknown) => { this.pickerOpen = false; throw error; })).filter(task => task.status === "open" || task.status === "in_progress");
     const picker = new TaskPicker(this.app, tasks, async choice => {
       if (isKeepAsTodo(choice)) return;
       await this.run(async () => {
@@ -347,7 +348,9 @@ export default class Organized extends Plugin {
     // Some mobile toolbar actions dispatch a single blank checkbox without a CM userEvent annotation.
     // Accept only that exact one-line insertion; pasted blocks, undo/redo and bulk edits stay ignored.
     if (!user && !(changes === 1 && exactBlankCheckboxInsertion && !context.line.id && context.line.marker === " " && !context.line.title)) return;
-    if (!context.line.id && context.line.marker === " " && (!old || !/^\s*(?:[-+*]|\d+[.)]) \[ \]/.test(old.raw))) {
+    // Enter on a todo leaves a blank `- [ ] ` below it; the first character typed there asks as well, as if the checkbox had just been typed.
+    const firstCharacter = !!old && !old.id && old.marker === " " && !old.title && !!context.line.title;
+    if (!context.line.id && context.line.marker === " " && (!old || !/^\s*(?:[-+*]|\d+[.)]) \[ \]/.test(old.raw) || firstCharacter)) {
       queueMicrotask(() => { if (!this.pickerOpen) void this.pickTask(active.editor, active.file, false, true).catch(report); }); return;
     }
     if (!context.line.id && context.line.title && ACTION_MARKERS.includes(context.line.marker) && context.line.marker !== old?.marker) {

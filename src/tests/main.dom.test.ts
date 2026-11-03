@@ -175,6 +175,20 @@ describe('plugin lifecycle and user-only editor actions', () => {
     await flush(); expect(pick).not.toHaveBeenCalled(); expect(trigger).not.toHaveBeenCalled();
     h.setActive(file, '- [ ] '); plugin.onEditorUpdate(update('- [', '- [ ] ')); await flush(); expect(pick).toHaveBeenCalledOnce();
   });
+  it('offers only unfinished tasks to link, so a repeated chore does not list every time it was done', async () => {
+    const { h, plugin } = await loaded(); const file: any = await h.add('Pick.md', '- [ ] Clean'); const editor = h.setActive(file); editor.setCursor({ line: 0, ch: 5 });
+    for (const status of ['completed', 'canceled', 'open', 'in_progress'] as const) { const task = await plugin.repo.create(`Clean kitchen ${status}`); await plugin.repo.update(task.id, t => ({ ...t, status })); }
+    await plugin.pickTask(editor as any, file); const picker = Modal.instances.at(-1) as TaskPicker;
+    expect(picker.tasks.map(t => t.status).sort()).toEqual(['in_progress', 'open']); expect(picker.getSuggestions('clean kitchen').filter(c => typeof c === 'string')).toEqual(['clean kitchen']); picker.close();
+  });
+  it('asks when the first character is typed into the blank checkbox that Enter leaves behind, and only then', async () => {
+    const { h, plugin } = await loaded(); const file: any = await h.add('Enter.md'); const pick = vi.spyOn(plugin, 'pickTask').mockResolvedValue();
+    const typed = (before: string, after: string, event: string | null = 'input.type') => { const editor = h.setActive(file, after); const rows = after.split('\n'); editor.setCursor({ line: rows.length - 1, ch: rows.at(-1)!.length }); plugin.onEditorUpdate(update(before, after, event)); };
+    typed('- [ ] Clean kitchen <!--organized:abcdefgh12-->\n', '- [ ] Clean kitchen <!--organized:abcdefgh12-->\n- [ ] ', null); await flush(); expect(pick).not.toHaveBeenCalled();
+    typed('- [ ] Clean kitchen <!--organized:abcdefgh12-->\n- [ ] ', '- [ ] Clean kitchen <!--organized:abcdefgh12-->\n- [ ] c'); await flush(); expect(pick).toHaveBeenCalledOnce();
+    (plugin as any).pickerOpen = false; pick.mockClear();
+    typed('- [ ] c', '- [ ] cl'); await flush(); expect(pick).not.toHaveBeenCalled();
+  });
   it('opens the task picker for the mobile checkbox toolbar insertion without a CM user event', async () => {
     const { h, plugin } = await loaded(); const file: any = await h.add('Toolbar.md');
     const editor = h.setActive(file, '- [ ] '); const pick = vi.spyOn(plugin, 'pickTask').mockResolvedValue();
