@@ -7,6 +7,7 @@ import { noteSection, parseTasks } from "./codec";
 import { DisplayProperty, elapsed, localDate, STATUS_ICONS, Task } from "./model";
 import { projectName, splitNote } from "./repository";
 import { rgbOf } from "./colors";
+import { formatMinutes } from "./sessions";
 import { report } from "./service";
 
 export const GLYPHS: Record<string, string> = {
@@ -28,7 +29,7 @@ export function symbol(host: HTMLElement, compact: Symbol): void {
 const STATUS_LABELS: Record<Task["status"], string> = { open: "open", in_progress: "in progress", completed: "completed", canceled: "canceled" };
 /** The compact symbol for a displayed property, or null when there is nothing to show (no moves yet). */
 export function symbolOf(property: Exclude<DisplayProperty, "scheduled" | "projects" | "description" | "sources">, task: Task): Symbol | null {
-  const minutes = `${Math.floor(elapsed(task) / 60)} min`;
+  const minutes = formatMinutes(Math.floor(elapsed(task) / 60));
   switch (property) {
     case "status": return { icon: STATUS_ICONS[task.status], cls: `organized-status-${task.status}`, label: `Status: ${STATUS_LABELS[task.status]}` };
     case "priority": return { icon: "flag", cls: `organized-priority-${task.priority}`, label: `Priority: ${task.priority}` };

@@ -1,12 +1,13 @@
 import { noteSection } from "./codec";
 import { makeId, newTask, RetentionDetail, Task, WorkSession } from "./model";
+import { formatMinutes } from "./sessions";
 
 const pad = (n: number): string => String(n).padStart(2, "0");
 const day = (d: Date): string => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const clock = (d: Date): string => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const minute = (iso: string): Date => { const d = new Date(iso); d.setSeconds(0, 0); return d; };
-const hours = (minutes: number): string => minutes >= 60 ? `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ""}` : `${minutes} min`;
-const WORKED = /^\s*[-*+] Worked (\d{4}-\d{2}-\d{2}): (.+?)(?: \(\d+ (?:h|min)(?: \d+ min)?\))?\s*$/;
+// Lines written by earlier versions say `1 h 20 min`; both spellings are read.
+const WORKED = /^\s*[-*+] Worked (\d{4}-\d{2}-\d{2}): (.+?)(?: \(\d+ ?(?:h|min)(?: \d+ ?min)?\))?\s*$/;
 const RANGE = /^(\d{2}):(\d{2})–(?:(\d{4}-\d{2}-\d{2}) )?(\d{2}):(\d{2})$/;
 
 /** One plain list line per day: `- Worked 2026-03-02: 09:00–09:30, 10:00–10:20 (50 min)`. Readable in the note and parsed back by `parseWorked`. */
@@ -17,7 +18,7 @@ function workedLines(sessions: WorkSession[]): string[] {
     const range = `${clock(start)}–${day(end) === key ? "" : `${day(end)} `}${clock(end)}`;
     byDay.set(key, [...(byDay.get(key) ?? []), range]); total.set(key, (total.get(key) ?? 0) + Math.round((end.getTime() - start.getTime()) / 60000));
   }
-  return [...byDay].sort(([a], [b]) => a.localeCompare(b)).map(([key, ranges]) => `- Worked ${key}: ${ranges.join(", ")} (${hours(total.get(key)!)})`);
+  return [...byDay].sort(([a], [b]) => a.localeCompare(b)).map(([key, ranges]) => `- Worked ${key}: ${ranges.join(", ")} (${formatMinutes(total.get(key)!)})`);
 }
 const quote = (text: string): string[] => text.replace(/<!--organized:[^>]*-->/g, "").replace(/\r/g, "").trim().split("\n").map(line => line.trim() ? `> ${line}` : ">");
 /** The indented lines a retired task leaves under its checkbox: readable notes, never a reference back to the deleted task note. */
@@ -28,7 +29,7 @@ export function retiredLines(task: Task, source: string, detail: RetentionDetail
   if (detail === "all") {
     const sources = noteSection(body, "Sources"); if (sources) lines.push(...quote(`**Sources**\n${sources}`));
     lines.push(...workedLines(task.work_sessions));
-    if (task.time_tracked_seconds >= 60) lines.push(`- Tracked ${hours(Math.round(task.time_tracked_seconds / 60))}`);
+    if (task.time_tracked_seconds >= 60) lines.push(`- Tracked ${formatMinutes(Math.round(task.time_tracked_seconds / 60))}`);
   }
   return lines.map(line => `${indent}${line}`);
 }

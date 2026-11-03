@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS, elapsed, localDate, object, Settings, Task } from "./
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
 import { Context, report, TaskService } from "./service";
+import { formatMinutes } from "./sessions";
 import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RetireModal, TaskPicker } from "./modals";
 import { OrganizedInspectorView, VIEW_TYPE } from "./view";
 import { OrganizedSettingsTab } from "./settings";
@@ -305,7 +306,7 @@ export default class Organized extends Plugin {
         // The task may have been stopped, finished or deleted since the line was removed; then there is nothing to stop.
         const running = await this.repo.read(id).catch(() => null); if (!running?.time_tracking_started_at) return;
         await this.service.status(id, "open"); const task = await this.repo.read(id);
-        new Notice(`Timer stopped for "${task.title}" because its todo was removed. ${Math.floor(task.time_tracked_seconds / 60)} min tracked so far.`);
+        new Notice(`Timer stopped for "${task.title}" because its todo was removed. ${formatMinutes(Math.floor(task.time_tracked_seconds / 60))} tracked so far.`);
       }).catch(report);
     }
     // Ticking a checkbox in Live Preview replaces one marker character, often with no user event and without moving the cursor onto the line.
@@ -374,7 +375,7 @@ export default class Organized extends Plugin {
   convertToNote(task: Task, context?: Context): void {
     new NoteConversionModal(this.app, {
       title: task.title, folders: this.noteFolders(), folder: this.settings.noteFolder, templates: this.templateFiles(), exists: notePath => this.repo.file(notePath) !== null,
-      tracked: task.work_sessions.length || task.time_tracking_started_at ? `${Math.max(1, Math.floor(elapsed(task) / 60))} min` : undefined,
+      tracked: task.work_sessions.length || task.time_tracking_started_at ? formatMinutes(Math.max(1, Math.floor(elapsed(task) / 60))) : undefined,
       convert: options => this.run(async () => {
         await this.service.convertToNote(task.id, options, context);
         this.settings.noteFolder = options.folder; this.saveSettings(false);

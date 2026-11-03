@@ -54,7 +54,7 @@ describe("retired tasks keep what the setting says", () => {
   });
   it("everything adds notes, days worked and the tracked total", async () => {
     const { h, last } = await retire("all"); const text = h.texts.get(last.path)!;
-    expect(text).toContain("    > Ship it.\n    > **Sources**\n    > Dry run\n    - Worked 2026-01-05: 09:00–10:00 (1 h)\n    - Tracked 1 h 30 min\n  - [ ] Next");
+    expect(text).toContain("    > Ship it.\n    > **Sources**\n    > Dry run\n    - Worked 2026-01-05: 09:00–10:00 (1h)\n    - Tracked 1h 30min\n  - [ ] Next");
   });
   it("picks the latest daily note whatever order the vault lists notes in", async () => {
     const h = harness(); h.setSettings({ taskRetentionDays: 30, autoForward: false, retentionDetail: "description" }); const task = await h.repo.create("Order");
@@ -78,7 +78,7 @@ describe("retired tasks keep what the setting says", () => {
 
 describe("calendar reads retired time back from daily notes", () => {
   it("returns stand-in tasks inside the window, reads a note once and again after it changes", async () => {
-    const h = harness(); const note: any = await h.add("Daily/2026-03-05.md", "- [x] Kept\n  - Worked 2026-03-02: 09:00–10:00 (1 h)\n"); await h.add("Daily/2026-03-01.md", "- [x] Before\n  - Worked 2026-03-01: 09:00–10:00\n"); await h.add("Daily/2026-05-01.md", "- [x] Late\n  - Worked 2026-03-02: 09:00–10:00\n"); await h.add("Elsewhere.md", "- [x] X\n  - Worked 2026-03-02: 09:00–10:00\n");
+    const h = harness(); const note: any = await h.add("Daily/2026-03-05.md", "- [x] Kept\n  - Worked 2026-03-02: 09:00–10:00 (1h)\n"); await h.add("Daily/2026-03-01.md", "- [x] Before\n  - Worked 2026-03-01: 09:00–10:00\n"); await h.add("Daily/2026-05-01.md", "- [x] Late\n  - Worked 2026-03-02: 09:00–10:00\n"); await h.add("Elsewhere.md", "- [x] X\n  - Worked 2026-03-02: 09:00–10:00\n");
     const first = await h.service.retiredWork("2026-03-02", "2026-03-03"); expect(first.map(r => [r.task.title, r.path])).toEqual([["Kept", note.path]]);
     const reads = h.raw.vault.read.mock.calls.length; const again = await h.service.retiredWork("2026-03-02", "2026-03-03"); expect(again[0].task.id).toBe(first[0].task.id); expect(h.raw.vault.read.mock.calls.length).toBe(reads);
     h.texts.set(note.path, "- [x] Changed\n  - Worked 2026-03-02: 11:00–12:00\n"); note.stat = { mtime: 5, ctime: 0, size: 40 }; expect((await h.service.retiredWork("2026-03-02", "2026-03-03")).map(r => r.task.title)).toEqual(["Changed"]);
