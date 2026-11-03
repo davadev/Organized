@@ -547,7 +547,7 @@ export class OrganizedInspectorView extends ItemView {
   }
   /** The subtasks of a task with how many are done, each with a toggle and a way in, and a button to add one under the todo in the open note. */
   private async subtaskCard(details: HTMLElement, task: Task): Promise<void> {
-    const children = await this.owner.repo.subtasksOf(task); if (!children.length && this.module !== "Subtasks") return;
+    const children = await this.owner.repo.subtasksOf(task); const parentTask = await this.owner.repo.parentOf(task.id); if (!children.length && !parentTask && this.module !== "Subtasks") return;
     const card = this.card(details, "Subtasks", "list-checks"); const counted = children.filter(child => child.status !== "canceled"); const done = counted.filter(child => child.status === "completed").length;
     if (counted.length) {
       card.createDiv({ cls: "organized-muted", text: `${done} of ${counted.length} done` });
@@ -563,6 +563,14 @@ export class OrganizedInspectorView extends ItemView {
     }
     // Every subtask is done but the parent is not: say so, and offer the step that is left.
     if (counted.length && done === counted.length && task.status !== "completed" && !task.recurring) this.button(card, "Complete parent", () => this.owner.run(() => this.owner.service.status(task.id, "completed", this.owner.context?.line.id === task.id ? this.owner.context : undefined))).addClass("organized-complete-parent");
+    // Tasks that can take part in a relation with this one: open, not recurring, not this task, and not one of its subtasks or ancestors.
+    const candidates = async (own: Task[]) => (await this.owner.repo.list()).filter(t => t.id !== task.id && !t.recurring && t.status !== "completed" && t.status !== "canceled" && !own.some(o => o.id === t.id));
+    const pick = (title: string, tasks: Task[], choose: (picked: Task) => Promise<void>) => {
+      const picker = new TaskPicker(this.app, tasks, async choice => { if (typeof choice === "object" && "id" in choice) await choose(choice); }, "", false, false); picker.setPlaceholder(title); picker.open();
+    };
+    this.button(card, "Link existing task…", async () => pick("Choose a task to make a subtask of this one", await candidates(children), picked => this.owner.run(() => this.owner.service.makeSubtask(task.id, picked.id))));
+    if (parentTask) this.button(card, "Remove from parent", () => this.owner.run(() => this.owner.service.detachSubtask(task.id)));
+    else this.button(card, "Make subtask of…", async () => pick("Choose the task this one belongs under", await candidates(children), picked => this.owner.run(() => this.owner.service.makeSubtask(picked.id, task.id))));
     this.button(card, "Add subtask", async () => {
       const source = this.owner.taskSourceEditor(); const lines = source ? parseTasks(source.editor.getValue()).filter(t => t.id === task.id) : [];
       if (!source || lines.length !== 1) throw new Error("Open the note that holds this todo once, then add the subtask.");
