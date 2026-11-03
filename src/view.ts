@@ -568,14 +568,16 @@ export class OrganizedInspectorView extends ItemView {
     const pick = (title: string, tasks: Task[], choose: (picked: Task) => Promise<void>) => {
       const picker = new TaskPicker(this.app, tasks, async choice => { if (typeof choice === "object" && "id" in choice) await choose(choice); }, "", false, false); picker.setPlaceholder(title); picker.open();
     };
-    this.button(card, "Link existing task…", async () => pick("Choose a task to make a subtask of this one", await candidates(children), picked => this.owner.run(() => this.owner.service.makeSubtask(task.id, picked.id))));
-    if (parentTask) this.button(card, "Remove from parent", () => this.owner.run(() => this.owner.service.detachSubtask(task.id)));
-    else this.button(card, "Make subtask of…", async () => pick("Choose the task this one belongs under", await candidates(children), picked => this.owner.run(() => this.owner.service.makeSubtask(picked.id, task.id))));
-    this.button(card, "Add subtask", async () => {
+    // Compact icon buttons in one row: add a new subtask, link an existing task, and either make this a subtask of something or take it out of its parent.
+    const actions = card.createDiv({ cls: "organized-subtask-actions" });
+    this.iconButton(actions, "Add subtask", "list-plus", async () => {
       const source = this.owner.taskSourceEditor(); const lines = source ? parseTasks(source.editor.getValue()).filter(t => t.id === task.id) : [];
       if (!source || lines.length !== 1) throw new Error("Open the note that holds this todo once, then add the subtask.");
       source.editor.setCursor({ line: lines[0].line, ch: 0 }); await this.owner.addSubtask(source.editor, source.file);
     });
+    this.iconButton(actions, "Link existing task…", "link", async () => pick("Choose a task to make a subtask of this one", await candidates(children), picked => this.owner.run(() => this.owner.service.makeSubtask(task.id, picked.id))));
+    if (parentTask) this.iconButton(actions, "Remove from parent", "unlink", () => this.owner.run(() => this.owner.service.detachSubtask(task.id)));
+    else this.iconButton(actions, "Make subtask of…", "corner-down-right", async () => pick("Choose the task this one belongs under", await candidates(children), picked => this.owner.run(() => this.owner.service.makeSubtask(picked.id, task.id))));
   }
   private chooseTask(task: Task, origin: "Projects" | "Favorites"): Promise<void> {
     this.owner.selectedTaskId = task.id; this.origin = origin; this.tab = "Task"; this.module = ""; this.editingModule = ""; this.editingTitle = false; return this.render();

@@ -603,6 +603,7 @@ SOFTWARE.
 .organized-progress { inline-size: 100%; block-size: 6px; border-radius: 3px; background: var(--background-modifier-border); overflow: hidden; margin-block: var(--size-4-1) var(--size-4-2); }
 .organized-progress-bar { block-size: 100%; inline-size: var(--organized-progress, 0%); background: var(--interactive-accent); }
 .organized-progress-bar.organized-progress-complete { background: var(--color-green, #2f9e44); }
+.organized-subtask-actions { display: flex; flex-wrap: wrap; gap: var(--size-4-1); margin-block-start: var(--size-4-2); }
 .organized-subtask { display: flex; align-items: center; gap: var(--size-4-2); min-inline-size: 0; }
 /* Same specificity as the panel's own buttons, so a mobile theme's pill styling for every button does not turn a row into two blobs. */
 .organized-view .organized-panel button.organized-subtask-toggle, .organized-view .organized-panel button.organized-subtask-title { appearance: none; display: inline-flex; align-items: center; block-size: auto; min-block-size: 28px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: inherit; font-size: inherit; font-weight: normal; cursor: pointer; }

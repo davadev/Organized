@@ -46,20 +46,20 @@ describe("subtasks in the Task tab", () => {
     const f = await fixture(); const loner = await f.owner.repo.create("Loner"); const finished = await f.owner.repo.create("Finished"); await f.owner.repo.update(finished.id, t => ({ ...t, status: "completed" }));
     const choose = async (title: string) => { const picker = Modal.instances.at(-1) as TaskPicker; expect((picker as any).placeholder).toBe(title); picker.onChooseSuggestion(picker.tasks.find(t => t.title === "Loner")!); picker.onChooseSuggestion("typed" as any); picker.close(); await flush(); return picker; };
     await f.show(f.parent.id); const tasks = () => (Modal.instances.at(-1) as TaskPicker).tasks.map(t => t.title).sort();
-    const link = Array.from(f.view.contentEl.querySelectorAll<HTMLButtonElement>("button")).find(b => b.textContent === "Link existing task…")!; link.click(); await flush();
+    const link = Array.from(f.view.contentEl.querySelectorAll<HTMLButtonElement>("button")).find(b => b.getAttribute("aria-label") === "Link existing task…")!; link.click(); await flush();
     expect(tasks()).not.toContain("Finished"); expect(tasks()).not.toContain("Parent"); expect(tasks()).not.toContain("Sub B"); expect(tasks()).toContain("Loner"); await choose("Choose a task to make a subtask of this one");
     expect((await f.owner.repo.read(f.parent.id)).subtasks).toContain("[[Loner]]");
-    await f.show(loner.id); expect(Array.from(f.view.contentEl.querySelectorAll("button")).some(b => b.textContent === "Make subtask of…")).toBe(false);
-    const remove = Array.from(f.view.contentEl.querySelectorAll<HTMLButtonElement>("button")).find(b => b.textContent === "Remove from parent")!; remove.click(); await flush(); expect((await f.owner.repo.read(f.parent.id)).subtasks).not.toContain("[[Loner]]");
+    await f.show(loner.id); expect(Array.from(f.view.contentEl.querySelectorAll("button")).some(b => b.getAttribute("aria-label") === "Make subtask of…")).toBe(false);
+    const remove = Array.from(f.view.contentEl.querySelectorAll<HTMLButtonElement>("button")).find(b => b.getAttribute("aria-label") === "Remove from parent")!; remove.click(); await flush(); expect((await f.owner.repo.read(f.parent.id)).subtasks).not.toContain("[[Loner]]");
     await f.show(loner.id); f.view.module = "Subtasks"; await f.view.render(); await flush();
-    const make = Array.from(f.view.contentEl.querySelectorAll<HTMLButtonElement>("button")).find(b => b.textContent === "Make subtask of…")!; make.click(); await flush(); expect(tasks()).not.toContain("Loner");
+    const make = Array.from(f.view.contentEl.querySelectorAll<HTMLButtonElement>("button")).find(b => b.getAttribute("aria-label") === "Make subtask of…")!; make.click(); await flush(); expect(tasks()).not.toContain("Loner");
     const picker = Modal.instances.at(-1) as TaskPicker; picker.onChooseSuggestion(picker.tasks.find(t => t.title === "Parent")!); picker.close(); await flush(); expect((await f.owner.repo.read(f.parent.id)).subtasks).toContain("[[Loner]]");
-    expect(Array.from(f.view.contentEl.querySelectorAll("button")).some(b => b.textContent === "Remove from parent")).toBe(true);
+    expect(Array.from(f.view.contentEl.querySelectorAll("button")).some(b => b.getAttribute("aria-label") === "Remove from parent")).toBe(true);
   });
   it("shows an empty Subtasks card on request, and adds a subtask under the todo in the open note", async () => {
-    const f = await fixture(); const loner = await f.owner.repo.create("Loner"); await f.show(loner.id); expect(f.view.contentEl.textContent).not.toContain("Add subtask");
-    f.view.module = "Subtasks"; await f.view.render(); await flush(); expect(f.view.contentEl.textContent).not.toContain("done"); const add = () => f.view.contentEl.querySelector<HTMLButtonElement>(".organized-selected-module button:last-of-type")!;
-    expect(add().textContent).toBe("Add subtask");
+    const f = await fixture(); const loner = await f.owner.repo.create("Loner"); await f.show(loner.id); expect(f.view.contentEl.querySelector('[aria-label="Add subtask"]')).toBeNull();
+    f.view.module = "Subtasks"; await f.view.render(); await flush(); expect(f.view.contentEl.textContent).not.toContain("done"); const add = () => f.view.contentEl.querySelector<HTMLButtonElement>(".organized-subtask-actions [aria-label=\"Add subtask\"]")!;
+    expect(add().title).toBe("Add subtask");
     Notice.instances.length = 0; add().click(); await flush(); expect(String(Notice.instances.at(-1)!.message)).toContain("Open the note that holds this todo once");
     const text = `- [ ] Loner <!--organized:${loner.id}-->`; const note: any = await f.add("Daily.md", text); const editor = f.setActive(note, text); const addSubtask = vi.spyOn(f.owner, "addSubtask").mockResolvedValue();
     add().click(); await flush(); expect(addSubtask).toHaveBeenCalledWith(editor, note); expect(editor.getCursor()).toEqual({ line: 0, ch: 0 });
