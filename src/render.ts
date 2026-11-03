@@ -48,9 +48,13 @@ function projectLinks(owner: Organized, host: HTMLElement, task: Task): void {
     link.addEventListener("click", event => { event.preventDefault(); const file = owner.repo.file(project); if (file) void owner.app.workspace.getLeaf(false).openFile(file); else new Notice(`The project note ${project} no longer exists.`); });
   }
 }
+/** Properties whose width or presence differs between todos. */
+const VARYING: DisplayProperty[] = ["projects", "movement_history", "time_tracked_seconds"];
 /** `live` turns false once a newer draw or a teardown owns `host`, so an older projection stops appending after its awaits. */
 export async function projection(owner: Organized, host: HTMLElement, task: Task, component: Component, live: () => boolean = () => true): Promise<void> {
-  host.addClass("organized-projection"); host.classList.toggle("organized-align-right", owner.settings.propertiesAlign === "right"); const selected = owner.settings.displayProperties;
+  host.addClass("organized-projection"); const right = owner.settings.propertiesAlign === "right"; host.classList.toggle("organized-align-right", right);
+  // Right-aligned, what varies from todo to todo (project names, the moves count, the time) goes to the left, so the symbols that every todo has line up in one column at the edge.
+  const selected = right ? [...owner.settings.displayProperties.filter(p => VARYING.includes(p)), ...owner.settings.displayProperties.filter(p => !VARYING.includes(p))] : owner.settings.displayProperties;
   if (task.scheduled && owner.settings.showScheduledDate) {
     const scheduled = task.scheduled;
     const link = host.createEl("a", { text: scheduled, cls: "organized-date", href: "#", attr: { "aria-label": `Open daily note for ${scheduled}` } });
