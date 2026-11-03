@@ -1,6 +1,6 @@
 import { inBatches } from "./batches";
 import { Notice, TFile } from "obsidian";
-import { insertTask, migrateNote, moveTask, noteSection, parentIds, parseTasks, projectSection, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
+import { descendants, insertTask, insertUnder, migrateNote, moveTask, noteSection, parentIds, parseTasks, projectSection, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, Status, Task, taskFrom, WorkSession } from "./model";
 import { seconds } from "./sessions";
@@ -74,16 +74,22 @@ export class TaskService {
   async clean(context: Context, marker = " "): Promise<void> {
     const { text, line } = await this.resolve(context); await this.edit(context.file, text, replaceTask(text, line, { marker }));
   }
-  async insert(file: TFile, task: Task, marker: string, repeat: boolean, changes?: Change[]): Promise<void> {
+  /** Writes a todo for `task` into `file` (nothing when it is already there). With `under`, it goes in as the last subtask of that todo when the note has it, and at the end of the section otherwise. */
+  async insert(file: TFile, task: Task, marker: string, repeat: boolean, changes?: Change[], under: string | null = null): Promise<void> {
     const text = await this.repo.readText(file);
     if (parseTasks(text).some(t => t.id === task.id)) return;
     const line = `- [${marker}] ${task.title} <!--organized:${task.id}-->${repeat ? " <!--organized:repeat-->" : ""}`;
-    const result = insertTask(text, line, task.daily_note_section_path);
+    const nested = under ? insertUnder(text, under, line) : null;
+    const result = nested === null ? insertTask(text, line, task.daily_note_section_path) : { text: nested, missing: false };
     if (result.missing && this.repo.settings().missingSection === "ask" && !(await this.confirm(`The heading path is missing in ${file.path}. Recreate it?`))) throw new Error("Insertion canceled; no task occurrence was written.");
     await this.edit(file, text, result.text, changes);
   }
-  async schedule(context: Context, date: string, kind: Movement["kind"] = "schedule", source: Movement["source"] = "manual", changes: Change[] = []): Promise<void> {
-    const { line } = await this.resolve(context); if (!line.id) throw new Error("Attach the task first.");
+  /**
+   * Forwards or schedules the todo of `context`. Its subtasks that are still open or in progress travel with it, indented under it in the target note; done and canceled
+   * ones stay behind as the record. A subtask moved on its own goes under its parent when the target note has the parent, and at the end of the section otherwise.
+   */
+  async schedule(context: Context, date: string, kind: Movement["kind"] = "schedule", source: Movement["source"] = "manual", changes: Change[] = [], options: { cascade?: boolean; under?: string | null } = {}): Promise<void> {
+    const { text: originText, line } = await this.resolve(context); if (!line.id) throw new Error("Attach the task first.");
     const task = await this.repo.read(line.id); const oldDate = task.scheduled;
     const target = await this.daily.ensure(date);
     const from = this.daily.date(context.file.path) ?? context.file.path;
@@ -92,7 +98,8 @@ export class TaskService {
     const next = await this.repo.update(task.id, current => ({ ...current, scheduled: date, daily_note_section_path: line.section,
       movement_history: current.scheduled === date ? current.movement_history : [...current.movement_history, event] }));
     changes.push({ file: taskFile, before: beforeTask, after: await this.repo.readText(taskFile) });
-    await this.insert(target, next, task.time_tracking_started_at && kind === "forward" ? "/" : " ", false, changes);
+    const under = options.under !== undefined ? options.under : (await this.repo.parentOf(task.id))?.id ?? null;
+    await this.insert(target, next, task.time_tracking_started_at && kind === "forward" ? "/" : " ", false, changes, under);
     if (target.path !== context.file.path) {
       const current = await this.resolve(context);
       await this.edit(context.file, current.text, replaceTask(current.text, current.line, { marker: kind === "forward" ? (this.daily.date(context.file.path) ? ">" : " ") : "<" }), changes);
@@ -101,18 +108,44 @@ export class TaskService {
     if (oldDate && oldDate !== date && kind !== "forward") {
       await this.cleanupSchedule(task.id, oldDate, context.file.path, changes);
     }
+    if (options.cascade !== false) await this.carrySubtasks(context.file, originText, line, date, kind, source, changes);
     this.changed();
   }
-  async scheduleTask(id: string, date: string, context?: Context): Promise<void> {
+  /** Moves the subtasks nested under `parent` in `originText` that are still open or in progress (and not already forwarded or scheduled), each under its nearest moved ancestor. */
+  private async carrySubtasks(file: TFile, originText: string, parent: TaskLine, date: string, kind: Movement["kind"], source: Movement["source"], changes: Change[]): Promise<void> {
+    const tasks = parseTasks(originText); const moved = new Set([parent.id!]); const failed: string[] = []; let count = 0;
+    for (const child of descendants(tasks, parent.line)) {
+      if (!child.id || ![" ", "/"].includes(child.marker) || tasks.filter(t => t.id === child.id).length !== 1) continue;
+      try {
+        const task = await this.repo.read(child.id); if (task.recurring || !["open", "in_progress"].includes(task.status)) continue;
+        // Every subtask in the family leads up to the parent, which has moved: the nearest ancestor that moved is where this one goes.
+        let up = tasks.find(t => t.line === child.parent)!; while (!moved.has(up.id!)) up = tasks.find(t => t.line === up.parent)!;
+        await this.schedule({ file, line: child }, date, kind, source, changes, { cascade: false, under: up.id });
+        moved.add(child.id); count++;
+      } catch { failed.push(child.title); }
+    }
+    if (failed.length) new Notice(`Could not move ${plural(failed.length, "subtask")} with “${parent.title}”: ${failed.join(", ")}. Their lines were preserved.`);
+    if (count && source === "manual") this.summarize(changes, `${kind === "forward" ? "Forwarded" : "Scheduled"} with subtasks`, `“${parent.title}” and ${plural(count, "open subtask")} moved to ${date}.`);
+  }
+  async scheduleTask(id: string, date: string, context?: Context, nested?: { under: string | null }): Promise<void> {
     if (context?.line.id === id) { await this.schedule(context, date); return; }
     const task = await this.repo.read(id); const target = await this.daily.ensure(date);
     const event: Movement = { id: makeId(), kind: task.scheduled && task.scheduled !== date ? "reschedule" : "schedule", source: "manual", from: this.repo.taskPath(id), to: date, at: new Date().toISOString() };
     const next = await this.repo.update(id, t => ({ ...t, scheduled: date, movement_history: t.scheduled === date ? t.movement_history : [...t.movement_history, event] }));
-    await this.insert(target, next, " ", false);
+    await this.insert(target, next, " ", false, undefined, nested ? nested.under : (await this.repo.parentOf(id))?.id ?? null);
     if (task.scheduled && task.scheduled !== date) {
       await this.cleanupSchedule(id, task.scheduled);
     }
+    if (!nested) await this.scheduleOpenSubtasks(task, date);
     this.changed();
+  }
+  /** Schedules the open and in-progress subtasks of a task that is scheduled from the panel (there is no todo line to read their nesting from), each under its own parent. */
+  private async scheduleOpenSubtasks(parent: Task, date: string, seen = new Set([parent.id])): Promise<void> {
+    for (const child of await this.repo.subtasksOf(parent)) {
+      if (seen.has(child.id)) continue; seen.add(child.id);
+      if (child.status === "open" || child.status === "in_progress") await this.scheduleTask(child.id, date, undefined, { under: parent.id });
+      if (child.status !== "canceled") await this.scheduleOpenSubtasks(child, date, seen);
+    }
   }
   private async cleanupSchedule(id: string, oldDate: string, originPath?: string, changes?: Change[]): Promise<void> {
     if (this.daily.path(oldDate) === originPath) return;
@@ -306,6 +339,8 @@ export class TaskService {
         const task = await this.repo.read(id);
         if (task.recurring || ["completed", "canceled"].includes(task.status) || (task.scheduled && task.scheduled > today)) continue;
         await this.schedule({ file: occurrence.file, line: occurrence.line }, today, "forward", "automatic", changes);
+        // Subtasks that travelled with their parent are in today's note now.
+        for (const line of parseTasks(await this.repo.readText(file))) present.add(line.id);
       } catch { skipped++; }
     }
     this.reconciled = today;

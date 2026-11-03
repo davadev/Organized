@@ -99,5 +99,15 @@ describe("a user's whole journey, from install to retiring", () => {
     const linked = h.texts.get(daily.path)!; await plugin.service.undo();
     expect(ids(h.texts.get(daily.path)!)).toHaveLength(2); expect(h.texts.get(daily.path)).not.toBe(linked); expect(h.app.vault.getAbstractFileByPath("Tasks/Call _ back.md")).not.toBeNull(); // already named after its title, so Retire has nothing to rename or undo
     expect((await plugin.repo.read(underscore)).title).toBe("Call _ back");
+
+    // 7. Subtasks: an indented todo becomes a subtask, the parent lists it, completing the parent completes what is open, and forwarding takes unfinished ones along.
+    const parent = await plugin.repo.create("Plan the trip"); const flights = await plugin.repo.create("Book flights"); const hotel = await plugin.repo.create("Book hotel");
+    const trip = (m: string, n: string) => `# Trip\n- [ ] Plan the trip <!--organized:${parent.id}-->\n  - [${m}] Book flights <!--organized:${flights.id}-->\n  - [${n}] Book hotel <!--organized:${hotel.id}-->`;
+    const tripNote: any = await h.add("Daily/2026-03-04 trip.md", trip(" ", " ")); await plugin.run(() => plugin.service.repairSubtasks(tripNote));
+    expect((await plugin.repo.read(parent.id)).subtasks).toEqual(["[[Book flights]]", "[[Book hotel]]"]); expect(await plugin.repo.progress(await plugin.repo.read(parent.id))).toEqual({ done: 0, total: 2 });
+    await plugin.run(() => plugin.service.status(flights.id, "completed")); expect(await plugin.repo.progress(await plugin.repo.read(parent.id))).toEqual({ done: 1, total: 2 });
+    await plugin.run(() => plugin.service.schedule({ file: tripNote, line: parseTasks(h.texts.get(tripNote.path)!).find(t => t.id === parent.id)! }, "2026-03-09", "forward"));
+    const nextDay = parseTasks(h.texts.get("Daily/2026-03-09.md")!); expect(nextDay.map(t => [t.title, t.parent === null ? null : nextDay.find(p => p.line === t.parent)!.title])).toEqual([["Plan the trip", null], ["Book hotel", "Plan the trip"]]);
+    await plugin.run(() => plugin.service.status(parent.id, "completed")); expect((await plugin.repo.read(hotel.id)).status).toBe("completed"); expect((await plugin.repo.read(flights.id)).status).toBe("completed");
   });
 });

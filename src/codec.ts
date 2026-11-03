@@ -194,11 +194,18 @@ export function removeUnique(text: string, id: string, repeatOnly = false): stri
   if (matches.length !== 1) throw new Error("Occurrence is missing or ambiguous; preserved for repair.");
   const lines = text.split("\n"); lines.splice(matches[0].line, 1); return lines.join("\n");
 }
+const indentation = (raw: string): number => /^\s*/.exec(raw)![0].replace(/\t/g, "    ").length;
+/** Inserts `line` as the last subtask of the todo `parentId`, after everything already nested under it; null when that todo is not in the text exactly once. */
+export function insertUnder(text: string, parentId: string, line: string): string | null {
+  const parents = parseTasks(text).filter(t => t.id === parentId); if (parents.length !== 1) return null;
+  const newline = text.includes("\r\n") ? "\r\n" : "\n"; const lines = text.split(/\r?\n/); const own = lines[parents[0].line];
+  let end = parents[0].line + 1; while (end < lines.length && lines[end].trim() && indentation(lines[end]) > indentation(own)) end++;
+  lines.splice(end, 0, `${/^\s*/.exec(own)![0]}  ${line}`); return lines.join(newline);
+}
 export function sortTasks(text: string, line: number, scope: Settings["sortScope"], priorities: Map<string, Priority>): string {
   if (scope === "none") return text;
   const tasks = parseTasks(text); const target = tasks.find(t => t.line === line); if (!target) return text;
   const lines = text.split("\n");
-  const indentation = (raw: string) => /^\s*/.exec(raw)![0].replace(/\t/g, "    ").length;
   const indent = indentation(target.raw);
   let group = tasks.filter(t => JSON.stringify(t.section) === JSON.stringify(target.section) && indentation(t.raw) === indent && t.parent === target.parent);
   const endOfBlock = (task: TaskLine) => {
