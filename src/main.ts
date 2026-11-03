@@ -59,6 +59,7 @@ export default class Organized extends Plugin {
       this.addCommand({ id: "unlink-note-tasks", name: "Convert tasks in this note back to todos", editorCallback: (_editor, view) => { if (view.file) void this.run(() => this.service.unlinkTasks([view.file!], "this note")).catch(report); } });
       this.addCommand({ id: "add-subtask", name: "Add subtask", editorCallback: (editor, view) => { if (view.file) void this.addSubtask(editor, view.file).catch(report); } });
       this.addCommand({ id: "repair-subtasks", name: "Repair subtask links in this note", editorCallback: (_editor, view) => { const file = view.file; if (file) void this.run(() => this.service.repairSubtasks(file)).catch(report); } });
+      this.addCommand({ id: "nest-subtasks", name: "Indent subtasks under their parents", callback: () => { void this.run(() => this.nestSubtasks(true)).catch(report); } });
       this.addCommand({ id: "retire-tasks", name: "Retire tasks…", callback: () => { this.retireTasks(); } });
       this.addCommand({ id: "rename-task-notes", name: "Rename task notes to their titles", callback: () => { void this.run(() => this.migrateTaskNoteNames(true)).catch(report); } });
       this.addCommand({ id: "show-onboarding", name: "Show onboarding card", callback: () => { this.showOnboarding(false); } });
@@ -84,7 +85,7 @@ export default class Organized extends Plugin {
         this.registerEvent(this.app.metadataCache.on("changed", file => { if (this.repo.isProjectNote(file)) this.refresh(); }));
         this.registerEvent(this.app.vault.on("delete", file => { this.repo.forgetPath(file.path); this.service.forget(file.path); this.refresh(); }));
         this.maybeShowOnboarding();
-        void this.run(async () => { await this.repo.reindex(); await this.migrateProjects(); await this.markProjectNotes(); await this.migrateTaskNotes(); await this.migrateTaskNoteNames(); });
+        void this.run(async () => { await this.repo.reindex(); await this.migrateProjects(); await this.markProjectNotes(); await this.migrateTaskNotes(); await this.migrateTaskNoteNames(); await this.nestSubtasks(); });
         this.registerEvent(this.app.workspace.on("file-open", file => { this.followCursor(); if (file) void this.run(() => this.service.reconcile(file)); }));
       });
       this.loaded = true;
@@ -186,6 +187,17 @@ export default class Organized extends Plugin {
     if (!result.renames.length && !result.failed.length) { if (again) new Notice("Every task note already carries its title."); return; }
     const count = result.renames.length;
     this.service.summarize([], "Task notes renamed", `${count} task note${count === 1 ? "" : "s"} now carry the title of their todo. The planned names are saved in the plugin folder (note-backups). Update Organized on your other devices too: an older version looks for task notes by their id.${result.failed.length ? ` ${result.failed.length} could not be renamed and keep their id (${result.failed.join(", ")}); the command Rename task notes to their titles tries again.` : ""}`, result.renames);
+  }
+  /** One-time (and on demand): indent todos under their parents where a parent's subtask list says so but the lines are not nested yet, after saving the old text of every note it changes. */
+  async nestSubtasks(again = false): Promise<void> {
+    if ((this.settings.subtaskNestingMigrated && !again) || !this.safety.writable) return;
+    let result: Awaited<ReturnType<TaskService["nestSubtaskLines"]>>;
+    try { result = await this.service.nestSubtaskLines(files => this.safety.writeBackup("subtask-indent", files)); }
+    catch (error) { new Notice(`Subtasks were not indented (nothing was changed): ${error instanceof Error ? error.message : String(error)}`, 12000); return; }
+    if (!result.failed.length) { this.settings.subtaskNestingMigrated = true; this.saveSettings(false); }
+    if (!result.changes.length && !result.failed.length) { if (again) new Notice("Every subtask is already indented under its parent."); return; }
+    const notes = new Set(result.changes.map(c => c.file.path)).size;
+    this.service.summarize(result.changes, "Subtasks indented", `${notes} note${notes === 1 ? "" : "s"} updated: subtasks now sit under their parents. The old text is saved in the plugin folder (note-backups).${result.failed.length ? ` ${result.failed.length} could not be updated and will be retried next start.` : ""}`);
   }
   private remapKnownProjects(moved: { from: string; to: string }[]): void {
     const target = new Map(moved.map(m => [m.from, m.to]));

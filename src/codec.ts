@@ -202,6 +202,27 @@ export function insertUnder(text: string, parentId: string, line: string): strin
   let end = parents[0].line + 1; while (end < lines.length && lines[end].trim() && indentation(lines[end]) > indentation(own)) end++;
   lines.splice(end, 0, `${/^\s*/.exec(own)![0]}  ${line}`); return lines.join(newline);
 }
+/** Where a todo's block (the todo and everything nested under it) ends, as a line index. */
+function blockEnd(lines: string[], line: number): number {
+  let end = line + 1; while (end < lines.length && lines[end].trim() && indentation(lines[end]) > indentation(lines[line])) end++;
+  return end;
+}
+/**
+ * Moves the todo `childId` (with everything nested under it) to be the last subtask of the todo `parentId`, indented one level in. Null when nothing should move: either
+ * todo is missing or occurs twice, the child is already under the parent, the parent is under the child, or (unless `force`) the child is already nested under another todo.
+ */
+export function nestUnder(text: string, childId: string, parentId: string, force = false): string | null {
+  const tasks = parseTasks(text); const children = tasks.filter(t => t.id === childId); const parents = tasks.filter(t => t.id === parentId);
+  if (children.length !== 1 || parents.length !== 1) return null;
+  const [child] = children; const [parent] = parents;
+  if (descendants(tasks, child.line).includes(parent) || descendants(tasks, parent.line).includes(child) || (!force && child.parent !== null)) return null;
+  const newline = text.includes("\r\n") ? "\r\n" : "\n"; const lines = text.split(/\r?\n/);
+  const block = lines.splice(child.line, blockEnd(lines, child.line) - child.line);
+  const moved = parseTasks(lines.join("\n")).find(t => t.id === parentId)!;
+  const delta = indentation(lines[moved.line]) + 2 - indentation(block[0]);
+  const shifted = block.map(row => delta >= 0 ? " ".repeat(delta) + row : row.replace(new RegExp(`^ {1,${-delta}}`), ""));
+  lines.splice(blockEnd(lines, moved.line), 0, ...shifted); return lines.join(newline);
+}
 export function sortTasks(text: string, line: number, scope: Settings["sortScope"], priorities: Map<string, Priority>): string {
   if (scope === "none") return text;
   const tasks = parseTasks(text); const target = tasks.find(t => t.line === line); if (!target) return text;
