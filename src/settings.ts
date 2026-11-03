@@ -87,11 +87,13 @@ export class OrganizedSettingsTab extends PluginSettingTab {
           setting.addDropdown(d => d.addOption("list", "Current task list").addOption("section", "Whole heading section").addOption("first", "First task position").addOption("none", "No automatic sorting").setValue(this.owner.settings.sortScope).onChange(value => { this.owner.settings = settingsFrom({ ...this.owner.settings, sortScope: value }); this.owner.saveSettings(); }));
         }),
       ] },
-      { type: "group", heading: "Rendered task properties", items: DISPLAY_PROPERTIES.filter(property => property !== "scheduled").map(property => row(PROPERTY_LABELS[property], undefined, setting => {
+      { type: "group", heading: "Rendered task properties", items: [row("Alignment", "Where the symbols sit on a todo line: right after its text, or at the right edge of the line.", setting => {
+        setting.addDropdown(d => d.addOption("text", "After the text").addOption("right", "Right edge").setValue(this.owner.settings.propertiesAlign).onChange(value => { this.owner.settings.propertiesAlign = value === "right" ? "right" : "text"; this.owner.saveSettings(); }));
+      }), ...DISPLAY_PROPERTIES.filter(property => property !== "scheduled").map(property => row(PROPERTY_LABELS[property], undefined, setting => {
         setting.addToggle(t => t.setValue(this.owner.settings.displayProperties.includes(property)).onChange(value => {
           this.owner.settings.displayProperties = value ? [...this.owner.settings.displayProperties, property] : this.owner.settings.displayProperties.filter(p => p !== property); this.owner.saveSettings();
         }));
-      })) },
+      }))] },
       { type: "group", heading: "Help", items: [
         row("Retire tasks", "Turn tasks back into ordinary Markdown, or clean up finished ones: links, readable file names, keep or remove properties. Nothing changes until you confirm.", setting => { setting.addButton(b => b.setButtonText("Open").onClick(() => this.owner.retireTasks())); }),
         row("Onboarding card", "A short tour of the idea behind Organized. It also appears once after you first start the plugin.", setting => { setting.addButton(b => b.setButtonText("Show").onClick(() => this.owner.showOnboarding(false))); }),

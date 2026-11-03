@@ -36,6 +36,8 @@ export interface Settings {
   missingSection: "recreate" | "ask";
   sortScope: "list" | "section" | "first" | "none";
   displayProperties: DisplayProperty[];
+  /** Where the rendered properties sit on a todo line: right after its text, or at the right edge of the line. */
+  propertiesAlign: "text" | "right";
   showScheduledDate: boolean;
   taskRetentionDays: number;
   dailyTemplate: string;
@@ -58,7 +60,7 @@ export interface Settings {
 }
 export const DEFAULT_SETTINGS: Settings = {
   taskFolder: "Tasks", dailyFolder: "Daily", dailyFormat: "YYYY-MM-DD", autoForward: true,
-  missingSection: "recreate", sortScope: "list", displayProperties: [], showScheduledDate: true, taskRetentionDays: 0,
+  missingSection: "recreate", sortScope: "list", displayProperties: [], propertiesAlign: "text", showScheduledDate: true, taskRetentionDays: 0,
   dailyTemplate: "", knownProjects: [], collapsedHeadings: {}, projectsMigrated: false, projectNotesMarked: false, projectStartsSet: false, retentionDetail: "title", dayTasksCollapsed: false, hideDoneTasks: false, hideClosedProjects: true, noteFolder: "", onboardingSeen: false, taskNotesMigrated: false, taskNoteNamesMigrated: false,
 };
 export function object(value: unknown): Record<string, unknown> {
@@ -98,6 +100,7 @@ export function settingsFrom(value: unknown): Settings {
   s.sortScope = member(v.sortScope, ["list", "section", "first", "none"], "list");
   // The old "notes" property showed the whole note; it became "description", so a saved choice carries over.
   s.displayProperties = [...new Set(strings(v.displayProperties).map(p => p === "notes" ? "description" : p).filter((p): p is DisplayProperty => DISPLAY_PROPERTIES.includes(p as DisplayProperty)))];
+  s.propertiesAlign = member(v.propertiesAlign, ["text", "right"], "text");
   s.showScheduledDate = typeof v.showScheduledDate === "boolean" ? v.showScheduledDate : true;
   s.taskRetentionDays = Number.isInteger(v.taskRetentionDays) && Number(v.taskRetentionDays) >= 0 && Number(v.taskRetentionDays) <= 36500 ? Number(v.taskRetentionDays) : 0;
   try { if (typeof v.noteFolder === "string") s.noteFolder = path(v.noteFolder, true); } catch { /* An invalid remembered folder falls back to the vault root. */ }

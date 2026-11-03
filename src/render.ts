@@ -50,7 +50,7 @@ function projectLinks(owner: Organized, host: HTMLElement, task: Task): void {
 }
 /** `live` turns false once a newer draw or a teardown owns `host`, so an older projection stops appending after its awaits. */
 export async function projection(owner: Organized, host: HTMLElement, task: Task, component: Component, live: () => boolean = () => true): Promise<void> {
-  host.addClass("organized-projection"); const selected = owner.settings.displayProperties;
+  host.addClass("organized-projection"); host.classList.toggle("organized-align-right", owner.settings.propertiesAlign === "right"); const selected = owner.settings.displayProperties;
   if (task.scheduled && owner.settings.showScheduledDate) {
     const scheduled = task.scheduled;
     const link = host.createEl("a", { text: scheduled, cls: "organized-date", href: "#", attr: { "aria-label": `Open daily note for ${scheduled}` } });
