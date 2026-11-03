@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
 import { harness } from "./harness";
 import { stringifyYaml } from "./__mocks__/obsidian";
@@ -67,5 +67,16 @@ describe("task notes are named after the todo title", () => {
     const h = harness(); const task = await h.repo.create("Converted"); await h.repo.update(task.id, t => ({ ...t, converted_to: "Notes/N.md" })); expect(h.repo.convertedTo("Notes/N.md")).toEqual([task.id]); expect(h.repo.convertedTo("Other.md")).toEqual([]);
     expect(h.repo.sourcePath(task.id)).toBe("Tasks/Converted.md"); expect(h.repo.sourcePath("nothing1234")).toBe("Tasks/nothing1234.md");
     const taken = h.repo.nameTaken(); expect(taken("Tasks/Converted.md")).toBe(true); expect(taken("Tasks/Free.md")).toBe(false); expect(h.repo.nameTaken(h.repo.taskFile(task.id)!)("Tasks/converted.md")).toBe(false);
+  });
+  it("keeps answering while the lookup is rebuilt, rebuilds once at a time, and lets what happened meanwhile win", async () => {
+    const h = harness(); const stay = await h.repo.create("Stays"); const gone = await h.repo.create("Goes away"); const real = h.repo.readText.bind(h.repo);
+    let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; }); let held = false;
+    vi.spyOn(h.repo, "readText").mockImplementation(async file => { if (!held) { held = true; await gate; } return real(file); });
+    const first = h.repo.reindex(); expect(h.repo.reindex()).toBe(first); await Promise.resolve();
+    expect(h.repo.taskFile(stay.id)!.path).toBe("Tasks/Stays.md"); // the old lookup serves until the new one is ready
+    const fresh = await h.repo.create("Born meanwhile"); await h.repo.renameNote(h.repo.taskFile(stay.id)!, "Tasks/Moved meanwhile.md"); await h.repo.trashNote(h.repo.taskFile(gone.id)!);
+    release(); await first;
+    expect(h.repo.taskFile(fresh.id)!.path).toBe("Tasks/Born meanwhile.md"); expect(h.repo.taskFile(stay.id)!.path).toBe("Tasks/Moved meanwhile.md"); expect(h.repo.taskFile(gone.id)).toBeNull();
+    await h.repo.reindex(); expect(h.repo.taskFile(fresh.id)!.path).toBe("Tasks/Born meanwhile.md"); // and a later rebuild is not blocked by the earlier one
   });
 });

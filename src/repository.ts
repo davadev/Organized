@@ -42,19 +42,32 @@ export class Repository {
   private byId = new Map<string, Set<string>>();
   private idOfPath = new Map<string, string>();
   private indexedAt = 0;
-  private link(notePath: string, id: string): void {
-    this.unlink(notePath); this.idOfPath.set(notePath, id); const paths = this.byId.get(id) ?? new Set<string>(); paths.add(notePath); this.byId.set(id, paths);
+  private reindexing: Promise<void> | null = null;
+  /** Paths linked or unlinked while a rebuild was reading the notes; what happened meanwhile wins over what the rebuild read. */
+  private touched: Set<string> | null = null;
+  private static add(byId: Map<string, Set<string>>, idOfPath: Map<string, string>, notePath: string, id: string): void {
+    Repository.remove(byId, idOfPath, notePath); idOfPath.set(notePath, id); const paths = byId.get(id) ?? new Set<string>(); paths.add(notePath); byId.set(id, paths);
   }
-  private unlink(notePath: string): void {
-    const id = this.idOfPath.get(notePath); if (id === undefined) return;
-    this.idOfPath.delete(notePath); const paths = this.byId.get(id); paths?.delete(notePath); if (paths?.size === 0) this.byId.delete(id);
+  private static remove(byId: Map<string, Set<string>>, idOfPath: Map<string, string>, notePath: string): void {
+    const id = idOfPath.get(notePath); if (id === undefined) return;
+    idOfPath.delete(notePath); const paths = byId.get(id); paths?.delete(notePath); if (paths?.size === 0) byId.delete(id);
   }
+  private link(notePath: string, id: string): void { this.touched?.add(notePath); Repository.add(this.byId, this.idOfPath, notePath, id); }
+  private unlink(notePath: string): void { this.touched?.add(notePath); Repository.remove(this.byId, this.idOfPath, notePath); }
   /** The id a note claims: its frontmatter `id` when that is a valid id, otherwise its file name (an invalid note then fails `taskFrom`, as before). */
   idOf(file: TFile, frontmatter: Record<string, unknown>): string { return validId(frontmatter.id) ? frontmatter.id : file.basename; }
-  /** Rebuilds the id -> file lookup from the notes' own text. */
-  async reindex(): Promise<void> {
-    this.byId.clear(); this.idOfPath.clear(); this.indexedAt = Date.now();
-    for (const file of this.app.vault.getMarkdownFiles()) if (this.isTaskRecord(file.path)) { try { this.link(file.path, this.idOf(file, splitNote(await this.readText(file)).frontmatter)); } catch { /* An unreadable note claims nothing. */ } }
+  /** Rebuilds the id -> file lookup from the notes' own text. The old lookup stays usable until the new one is ready, so nothing is "missing" meanwhile. */
+  reindex(): Promise<void> {
+    this.reindexing ??= this.rebuild().finally(() => { this.reindexing = null; });
+    return this.reindexing;
+  }
+  private async rebuild(): Promise<void> {
+    const byId = new Map<string, Set<string>>(); const idOfPath = new Map<string, string>(); const touched = new Set<string>(); this.touched = touched; this.indexedAt = Date.now();
+    try {
+      for (const file of this.app.vault.getMarkdownFiles()) if (this.isTaskRecord(file.path)) { try { Repository.add(byId, idOfPath, file.path, this.idOf(file, splitNote(await this.readText(file)).frontmatter)); } catch { /* An unreadable note claims nothing. */ } }
+      for (const notePath of touched) { Repository.remove(byId, idOfPath, notePath); const id = this.idOfPath.get(notePath); if (id !== undefined) Repository.add(byId, idOfPath, notePath, id); }
+      this.byId = byId; this.idOfPath = idOfPath;
+    } finally { this.touched = null; }
   }
   /** Learns what one task note claims (after it was created, changed or synced in). */
   async track(file: TFile): Promise<void> {

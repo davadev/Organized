@@ -151,5 +151,7 @@ On a **copy** of a vault with task notes from an older beta: install the beta, r
 
 ## Retire window (manual)
 
+On a **copy** of a vault with task notes named after ids (made by an older beta): install the beta, restart Obsidian, and confirm the notice "Task notes renamed" appears once, that `Tasks/` now reads like a list of todo titles (counters for duplicates, no clash with any other note in the vault), that todos, the Day/Week views, the side panel and `[[links]]` still work, that a backup `note-backups/task-names-*.json` exists, that **Undo** restores the id names, and that a second restart changes nothing. Then rename one task note by hand and confirm its todo and panel still open it; copy a task note and confirm the message names both notes. With two synced devices, update both before the first restart: an older version looks for `Tasks/<id>.md`.
+
 On a **copy** of a vault: open **Retire tasks…** and try each combination (links + rename, plain + keep, strip properties with a user-added `tags` property, trash). Check: the status line matches what happens; file names read as the todo titles (duplicates numbered); links in daily and project notes open the renamed notes in your link style (wikilink and Markdown); a stripped note keeps only your own properties and the text; a running timer was logged; `note-backups/retire-*.json` holds the old text; **Undo** restores text and names; a trash run offers no Undo and the notes are in Obsidian's trash; the vault opened with the plugin disabled reads naturally. Try a phone width and a large system font.
 

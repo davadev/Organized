@@ -34,7 +34,7 @@ describe("a user's whole journey, from install to retiring", () => {
     const daily = await h.add(`Daily/${today}.md`, "# Plan\n- [ ] Write report\n- [ ] Call _ back\n- [ ] Review snake_case names\n\n# Later\n- [x] Already done\n") as TFile;
     await h.add("Ideas.md", "Some idea\n");
     const old = await h.repo.create("Legacy task");
-    const oldPath = h.repo.taskFile(old.id)!.path;
+    await h.repo.renameNote(h.repo.taskFile(old.id)!, h.repo.taskPath(old.id)); const oldPath = h.repo.taskPath(old.id); // written by an older Organized: named after its id, body in the old layout
     h.texts.set(oldPath, `${h.texts.get(oldPath)!.replace(/\s*$/, "\n")}\n## Description\nOld description\n\n## Notes\nSee [[Ideas]]\n`);
     const before = new Map(h.texts);
 
@@ -42,7 +42,8 @@ describe("a user's whole journey, from install to retiring", () => {
     Modal.instances.length = 0; let plugin = await install(h);
     const card = Modal.instances.filter(m => m instanceof OnboardingModal); expect(card).toHaveLength(1); expect(plugin.settings.onboardingSeen).toBe(false); card[0].close(); await flush(); expect(plugin.settings.onboardingSeen).toBe(true);
     expect(h.texts.get(daily.path)).toBe(before.get(daily.path)); expect(h.texts.get("Ideas.md")).toBe(before.get("Ideas.md"));
-    expect(readNote(splitNote(h.texts.get(oldPath)!).body)).toMatchObject({ description: "Old description\n\nSee [[Ideas]]" }); expect(h.texts.get(oldPath)).not.toMatch(/^## (Description|Notes)/m);
+    const migratedPath = plugin.repo.taskFile(old.id)!.path; expect(migratedPath).toBe("Tasks/Legacy task.md"); expect(h.texts.has(oldPath)).toBe(false); // renamed after its title, one-time
+    expect(readNote(splitNote(h.texts.get(migratedPath)!).body)).toMatchObject({ description: "Old description\n\nSee [[Ideas]]" }); expect(h.texts.get(migratedPath)).not.toMatch(/^## (Description|Notes)/m);
     expect([...h.texts.keys()].some(k => k.includes("note-backups/task-notes"))).toBe(true); expect(plugin.settings.taskNotesMigrated).toBe(true);
 
     // 2. Convert the todos of the open daily note with the command; the checkbox text and state survive, each todo gets a task note.
@@ -52,7 +53,7 @@ describe("a user's whole journey, from install to retiring", () => {
     expect(ids(converted)).toHaveLength(3); expect(converted).toContain("- [x] Already done\n");
     const [report, underscore, snake] = parseTasks(converted).map(line => line.id!);
     expect((await plugin.repo.read(underscore)).title).toBe("Call _ back"); expect((await plugin.repo.read(snake)).title).toBe("Review snake_case names");
-    expect(plugin.repo.taskFile(underscore)!.path).toBe("Tasks/Call _ back.md"); expect(plugin.repo.taskFile(snake)!.path).toBe("Tasks/Review snake_case names.md"); expect(plugin.repo.taskFile(report)!.path).toBe("Tasks/Write report.md"); expect(plugin.repo.taskFile(old.id)!.path).toBe(oldPath); // new notes carry the title; the old id-named one still works
+    expect(plugin.repo.taskFile(underscore)!.path).toBe("Tasks/Call _ back.md"); expect(plugin.repo.taskFile(snake)!.path).toBe("Tasks/Review snake_case names.md"); expect(plugin.repo.taskFile(report)!.path).toBe("Tasks/Write report.md"); expect(plugin.repo.taskFile(old.id)!.path).toBe("Tasks/Legacy task.md"); // new notes carry the title, and the migrated one too
 
     // 3. Everyday use: description in the note body, priority, schedule, status, tracked time, projects.
     await plugin.saveModule(report, "Description", "Cover Q1.\nLink: [[Ideas]]"); await plugin.saveModule(report, "Sources", "https://example.com");
