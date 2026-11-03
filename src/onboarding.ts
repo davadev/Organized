@@ -48,7 +48,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "Show details right in the note",
-    text: "Under Settings → Organized → Rendered task properties you choose which details (priority, tracked time, projects, description…) appear on the todo line itself, in Reading view and Live Preview. It is off by default, and your Markdown does not change.",
+    text: "Under Settings → Organized → Rendered task properties you choose which details (priority, star, recurring, tracked time, projects, description…) appear on the todo line itself, in Reading view and Live Preview, as small symbols: a yellow star, a green repeat sign, a flag, a timer with the time. It is off by default, and your Markdown does not change.",
     figure: "props",
   },
   {

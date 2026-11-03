@@ -124,13 +124,15 @@ In **Settings → Task storage**, **Keep completed tasks (days)** optionally set
 
 **What retired tasks keep** chooses what the checkbox leaves behind: *the title only* (default), *add description* (the description as a quote under the checkbox) or *add everything* (also sources, plus one line per day of time worked, such as `- Worked 2026-03-02: 09:00–09:30, 10:00–10:20 (50 min)`). It is written under the latest daily note only and reads as ordinary nested list items. The Day and Week views read those `Worked` lines back, so time blocks of retired tasks stay on the calendar; only the daily notes of the viewed days and the following month are read, and each is read once until it changes.
 
+**Rendered properties are compact symbols** (Settings → Organized → Rendered task properties), each with a screen-reader label: a yellow star when starred (gray when not), a green repeat sign when recurring (gray when not), a flag coloured by priority, a status icon, a timer with the time (`45 min`, `1h 13min`; green while running), the created date and the number of moves. Project links show the project name only, in the project's colour, and open the project note. With sorting on, open todos come first (in-progress on top, then by priority, none included), followed by done, canceled, forwarded and scheduled ones; a plain bullet between todos (such as the link a todo leaves after becoming a note) does not split the list.
+
 Identity and recurrence comments stay hidden in Live Preview, including the line being edited. Switch to source mode to inspect the original Markdown.
 
 | Marker | Action |
 |---|---|
 | `[<]` | Choose schedule date; keep origin marker, link daily destination |
 | `[>]` | Forward to tomorrow; daily origin stays gray, undated origin stays active |
-| `[/]` | Start durable wall-clock timer; complete or clear to stop/log |
+| `[/]` | Start durable wall-clock timer; complete or clear to stop/log. Changing the `/` to anything else, or deleting the line, stops the timer too and a notice says so |
 | `[!]` | High/medium/low/none priority, constrained sort, then clear |
 | `[a]` | Open the Description section for inline editing (autosaves), then clear |
 | `[x]`, `[ ]` | Complete/reopen; stop active timer idempotently |

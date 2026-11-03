@@ -112,7 +112,8 @@ function propsFigure(fig: HTMLElement): void {
   const props = row.createSpan({ cls: "organized-welcome-fig-props" });
   symbol(props, { icon: "flag", cls: "organized-priority-high", label: "Priority: high" });
   symbol(props, { icon: "star", cls: "organized-symbol-starred", label: "Starred" });
-  symbol(props, { icon: "timer", cls: "organized-symbol-muted", label: "Time tracked: 2 h", text: "2 h" });
+  symbol(props, { icon: "repeat", cls: "organized-symbol-recurring", label: "Recurring: on" });
+  symbol(props, { icon: "timer", cls: "organized-symbol-muted", label: "Time tracked: 1h 13min", text: "1h 13min" });
 }
 
 const COMMANDS = ["Convert unchecked todos to tasks", "Convert tasks in this note back to todos", "Retire tasks…"];
