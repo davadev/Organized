@@ -1,5 +1,5 @@
 import { inBatches } from "./batches";
-import { App, Editor, TFile, parseYaml, stringifyYaml } from "obsidian";
+import { App, Editor, normalizePath, TFile, parseYaml, stringifyYaml } from "obsidian";
 import { validColor } from "./colors";
 import { localDate, makeId, newTask, object, path, Task, taskFrom, Settings, validDate, validId } from "./model";
 import { freePath, readableName } from "./names";
@@ -87,7 +87,7 @@ export class Repository {
   /** What one level of list indentation is in this vault: a tab or the configured number of spaces, as Obsidian's own Tab key writes it (a tab when the setting is absent, which is its default). */
   async indentUnit(): Promise<string> {
     try {
-      const settings = object(JSON.parse(await this.app.vault.adapter.read(`${this.app.vault.configDir}/app.json`)));
+      const settings = object(JSON.parse(await this.app.vault.adapter.read(normalizePath(`${this.app.vault.configDir}/app.json`))));
       return settings.useTab === false ? " ".repeat(Number.isInteger(settings.tabSize) && Number(settings.tabSize) > 0 ? Number(settings.tabSize) : 4) : "\t";
     } catch { return "\t"; }
   }
