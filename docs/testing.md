@@ -167,3 +167,5 @@ On a **copy** of a vault: open **Retire tasks…** and try each combination (lin
 8. Edit a note with Organized disabled (indent a linked todo), re-enable, run **Repair subtask links in this note**.
 9. Complete a parent that has an open, a running (timer) and a done subtask: the open and running ones complete, the timer stops, the done one is untouched; the notice names them; **Undo** reopens them and restarts nothing else. Cancel a parent: open subtasks cancel, done ones stay done.
 10. Complete the last open subtask by hand: the parent stays open, `n/n` turns green, and the Task tab shows **Complete parent**.
+11. Forward a parent that has an open, a running and a done subtask (put your cursor on it and type `[>]`, or open today's note after a day): tomorrow's note shows the parent with the open and running subtasks indented under it, the done one stays in the old note, the old lines show the forwarded marker, and the notice has **Undo**.
+12. Forward one subtask on its own: it lands under its parent if tomorrow's note has the parent, otherwise at the end of the section, and its place in the parent's `subtasks` list does not change.
