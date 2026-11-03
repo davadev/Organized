@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed todos showing "Missing task; repair via attach/create" right after starting Obsidian (beta 63 and later). A task looked up while the note index was still being built was reported missing; the lookup now waits for the build to finish.
 - Fixed a timer that kept running after you changed or deleted the `/` of its `[/]` checkbox. It only stopped when the cursor was on that line and nothing else was running; now the timer stops (and a notice says so) whenever you turn `[/]` into `[ ]`, `[x]`, `[-]` or remove the slash, wherever the cursor is, and even while another action is in progress.
 - **Existing task notes are renamed after their todo.** Once after updating, every task note still named after an id (`Tasks/9f3a…d1.md`) is renamed after its todo's title, oldest first, with a counter for duplicates and no clash with any other note in your vault. The planned renames are saved first in the plugin folder (`note-backups/task-names-…json`), the notice has **Undo**, time records of notes you converted stay as they are, and a note that cannot be renamed keeps its id and is named in the notice. The command **Rename task notes to their titles** tries again. Update Organized on all your devices together: an older version looks for task notes by their id.
 - Fixed a gap in the id lookup of the previous beta: while the lookup was being rebuilt at startup, a task could briefly be reported as missing. The old lookup now keeps answering until the new one is ready.

@@ -79,4 +79,11 @@ describe("task notes are named after the todo title", () => {
     expect(h.repo.taskFile(fresh.id)!.path).toBe("Tasks/Born meanwhile.md"); expect(h.repo.taskFile(stay.id)!.path).toBe("Tasks/Moved meanwhile.md"); expect(h.repo.taskFile(gone.id)).toBeNull();
     await h.repo.reindex(); expect(h.repo.taskFile(fresh.id)!.path).toBe("Tasks/Born meanwhile.md"); // and a later rebuild is not blocked by the earlier one
   });
+  it("waits for a rebuild that is already running instead of reporting a task missing", async () => {
+    const h = harness(); const id = "9".repeat(32); await h.add("Tasks/Known only by its text.md", note(id, "Late"));
+    const real = h.repo.readText.bind(h.repo); let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
+    vi.spyOn(h.repo, "readText").mockImplementation(async file => { await gate; return real(file); });
+    const rebuild = h.repo.reindex(); const reading = h.repo.read(id); const resolving = h.repo.resolve(id); await Promise.resolve();
+    release(); await rebuild; expect((await reading).title).toBe("Late"); expect((await resolving).path).toBe("Tasks/Known only by its text.md");
+  });
 });

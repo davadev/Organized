@@ -94,8 +94,10 @@ export class Repository {
   sourcePath(id: string): string { return this.taskFile(id)?.path ?? this.taskPath(id); }
   /** Every note claiming the id; looks once more at the notes' text when none is known yet (a note synced in, or a lookup before the first index). */
   private async lookup(id: string): Promise<TFile[]> {
-    const found = this.claimants(id); if (found.length || Date.now() - this.indexedAt <= 2000) return found;
-    await this.reindex(); return this.claimants(id);
+    const found = this.claimants(id); if (found.length) return found;
+    // A rebuild that is already running knows about notes this lookup cannot see yet: wait for it instead of reporting the task missing.
+    if (this.reindexing) await this.reindexing; else if (Date.now() - this.indexedAt > 2000) await this.reindex();
+    return this.claimants(id);
   }
   private ambiguous(id: string, found: TFile[]): Error { return new Error(`Two notes claim task ${id}: ${found.map(f => f.path).join(", ")}. Delete or change the id of one; neither was touched.`); }
   /** The task note of an id; says why when it cannot answer (missing, or claimed by two notes). */
