@@ -300,7 +300,10 @@ export default class Organized extends Plugin {
     const remaining = new Set(parseTasks(update.state.doc.toString()).map(t => t.id));
     for (const removed of parseTasks(update.startState.doc.toString()).filter(t => t.id && t.marker === "/" && !remaining.has(t.id))) {
       const id = removed.id!;
-      void this.confirm("An in-progress occurrence was removed. Stop and accumulate its timer? Cancel keeps it running.").then(yes => yes ? this.run(() => this.service.status(id, "open")) : undefined).catch(report);
+      void this.run(async () => {
+        await this.service.status(id, "open"); const task = await this.repo.read(id);
+        new Notice(`Timer stopped for "${task.title}" because its todo was removed. ${Math.floor(task.time_tracked_seconds / 60)} min tracked so far.`);
+      }).catch(report);
     }
     // Ticking a checkbox in Live Preview replaces one marker character, often with no user event and without moving the cursor onto the line.
     if (this.tickedLinkedTask(update, active, user)) return;
@@ -378,7 +381,7 @@ export default class Organized extends Plugin {
     }).open();
   }
   pickProjects(task: Task, context?: Context): void {
-    new ProjectPicker(this.app, this.repo.projectNotes(), task.projects, notes => this.run(async () => { await this.service.projects(task.id, notes); this.rememberProjects(notes); if (context) await this.service.clean(context); }), this.repo.projectFolder()).open();
+    new ProjectPicker(this.app, this.repo.projectNotes(), task.projects, notes => this.run(async () => { await this.service.projects(task.id, notes); this.rememberProjects(notes); if (context) await this.service.clean(context); }), this.repo.projectFolder(), note => this.repo.projectColor(note)).open();
   }
   async saveModule(id: string, section: NoteSection, text: string): Promise<void> {
     const file = this.repo.file(this.repo.taskPath(id)); if (!file) throw new Error("Task note is missing.");

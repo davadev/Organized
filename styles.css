@@ -126,7 +126,8 @@
 .organized-card-icon { display: inline-flex; color: var(--interactive-accent); }
 .organized-card .organized-card-title { margin: 0; color: var(--text-normal); font-size: 13px; line-height: 1.4; font-weight: 600; }
 .organized-selected-module { border-color: var(--background-modifier-border-hover); }
-.organized-timer-value { color: var(--text-normal); font-size: 20px; font-variant-numeric: tabular-nums; }
+.organized-timer-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; inline-size: 100%; }
+.organized-timer-value { flex: 1 1 auto; color: var(--text-normal); font-size: 16px; font-variant-numeric: tabular-nums; }
 .organized-card .organized-task-notes { inline-size: 100%; font-size: 13px; line-height: 1.6; }
 .organized-task-notes > :first-child { margin-block-start: 0; }
 /* Rendered Markdown stays in proportion to the card: headings only a little larger than the text, and wide content scrolls inside the card instead of widening it. */
@@ -199,6 +200,11 @@
 .organized-view .organized-panel button.organized-color-clear { flex: 0 0 auto; block-size: auto; min-block-size: 0; margin: 0; padding: 2px 10px; font-size: var(--font-ui-smaller, 12px); box-shadow: none; }
 .organized-color-name { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .organized-view .organized-panel .organized-list-card[data-status="in_progress"] .organized-list-open { border-inline-start-color: var(--organized-edge-done); }
+.organized-project-dot { flex: 0 0 8px; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--background-modifier-border-hover); }
+.organized-project-dot[data-project] { background: rgb(var(--organized-chip-bg)); }
+.organized-project-link { text-decoration: none; cursor: pointer; }
+.theme-light .organized-project-link[data-project] { color: color-mix(in srgb, rgb(var(--organized-chip-bg)) 65%, black); }
+.theme-dark .organized-project-link[data-project] { color: color-mix(in srgb, rgb(var(--organized-chip-bg)) 70%, white); }
 .organized-chip[data-project]::before { content: ""; flex: 0 0 8px; inline-size: 8px; block-size: 8px; border-radius: 50%; background: rgb(var(--organized-chip-bg)); }
 .organized-task-hero[data-status="completed"] { border-inline-start-color: var(--organized-edge-done); }
 .organized-task-hero[data-status="canceled"] { border-inline-start-color: var(--background-modifier-border-hover); }

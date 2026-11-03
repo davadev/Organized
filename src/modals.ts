@@ -3,6 +3,8 @@ import { path, PRIORITIES, Priority, Task, validDate, WorkSession } from "./mode
 import { isoFromInput, lengthOf, localInput, sessionProblem } from "./sessions";
 import { cleanTags, freePath, noteName } from "./notes";
 import { report } from "./service";
+import { rgbOf } from "./colors";
+import { projectName } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 import { ONBOARDING_STEPS, OnboardingStep } from "./onboarding";
 import { renderFigure } from "./onboardingFigures";
@@ -80,7 +82,7 @@ export class ConfirmModal extends Modal {
 }
 export class ProjectPicker extends Modal {
   readonly selected: Set<string>;
-  constructor(app: App, readonly notes: string[], selected: string[], readonly save: (notes: string[]) => Promise<void>, readonly folder = "") { super(app); decorate(this); this.selected = new Set(selected); }
+  constructor(app: App, readonly notes: string[], selected: string[], readonly save: (notes: string[]) => Promise<void>, readonly folder = "", readonly colorOf: (note: string) => string | null = () => null) { super(app); decorate(this); this.selected = new Set(selected); }
   onOpen(): void {
     this.titleEl.setText("Link projects or topics"); this.contentEl.addClass("organized-modal");
     this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Find or create a root note" });
@@ -93,7 +95,9 @@ export class ProjectPicker extends Modal {
       for (const note of notes) {
         const label = results.createEl("label", { cls: "organized-project-choice" });
         const input = label.createEl("input", { type: "checkbox" }); input.checked = this.selected.has(note);
-        label.createSpan({ text: `${note}${this.notes.includes(note) ? "" : " (create)"}` });
+        const color = this.colorOf(note); const dot = label.createSpan({ cls: "organized-project-dot", attr: { "aria-hidden": "true" } });
+        if (color) { dot.setAttribute("data-project", ""); dot.setCssProps({ "--organized-chip-bg": rgbOf(color) }); }
+        label.createSpan({ text: `${projectName(note, [...this.notes, ...this.selected])}${this.notes.includes(note) ? "" : " (create)"}` });
         input.addEventListener("change", () => { if (input.checked) this.selected.add(note); else this.selected.delete(note); });
       }
     };

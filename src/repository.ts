@@ -11,6 +11,11 @@ export function splitNote(text: string): { frontmatter: Record<string, unknown>;
 export const PROJECT_KEY = "organized_type";
 /** Optional `#rrggbb` colour of a project note, shown on its tasks in the side panel and the calendar. */
 export const COLOR_KEY = "organized_color";
+/** A project note's name for display: the file name without folders or `.md`; the path (without `.md`) only when another listed project shares that name. */
+export function projectName(notePath: string, among: readonly string[] = []): string {
+  const name = (value: string) => value.replace(/^.*\//, "").replace(/\.md$/i, "");
+  return among.filter(other => other !== notePath && name(other).toLowerCase() === name(notePath).toLowerCase()).length ? notePath.replace(/\.md$/i, "") : name(notePath);
+}
 /** The day a project started, `YYYY-MM-DD`. Set automatically; an `organized_end` date is reserved for later and not used yet. */
 export const START_KEY = "organized_start";
 /** A start date as stored: `YYYY-MM-DD` text, or a Date when a YAML reader turned the bare date into one. */
@@ -112,7 +117,15 @@ export class Repository {
       while (end > start && afterEnd > start && before[end - 1] === after[afterEnd - 1]) { end--; afterEnd--; }
       const selection = active.editor.listSelections();
       active.editor.transaction({ changes: [{ from: active.editor.offsetToPos(start), to: active.editor.offsetToPos(end), text: after.slice(start, afterEnd) }] }, "input.organized");
-      active.editor.setSelections(selection.map(s => ({ anchor: active.editor.offsetToPos(Math.min(after.length, active.editor.posToOffset(s.anchor))), head: active.editor.offsetToPos(Math.min(after.length, active.editor.posToOffset(s.head))) })));
+      // A todo that was re-sorted keeps the cursor: it follows the line by its hidden id instead of staying at the same offset.
+      const beforeLines = before.split("\n"); const afterLines = after.split("\n");
+      const follow = (pos: { line: number; ch: number }) => {
+        const id = /organized:([a-z0-9]+)/.exec(beforeLines[pos.line])?.[1]; if (!id) return null;
+        const mark = `organized:${id}`; const there = afterLines.flatMap((l, i) => l.includes(mark) ? [i] : []);
+        return there.length === 1 && beforeLines.filter(l => l.includes(mark)).length === 1 ? { line: there[0], ch: Math.min(pos.ch, afterLines[there[0]].length) } : null;
+      };
+      const keep = (pos: { line: number; ch: number }) => follow(pos) ?? active.editor.offsetToPos(Math.min(after.length, active.editor.posToOffset(pos)));
+      active.editor.setSelections(selection.map(s => ({ anchor: keep(s.anchor), head: keep(s.head) })));
     } else {
       await this.app.vault.process(file, current => { if (current !== before) throw new Error(`${file.path} changed concurrently; preserved. Retry the action.`); return after; });
     }

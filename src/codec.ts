@@ -190,12 +190,14 @@ export function sortTasks(text: string, line: number, scope: Settings["sortScope
   };
   if (scope === "list") {
     let start = group.indexOf(target); let end = start;
-    while (start > 0 && endOfBlock(group[start - 1]) === group[start].line) start--;
-    while (end < group.length - 1 && endOfBlock(group[end]) === group[end + 1].line) end++;
+    // Plain bullets between two todos (such as the link a converted todo leaves behind) do not end the list; they keep their place.
+    const bulletsOnly = (from: number, to: number) => lines.slice(from, to).every(l => l.trim() && indentation(l) === indent && /^\s*(?:[-+*]|\d+[.)])\s/.test(l));
+    while (start > 0 && bulletsOnly(endOfBlock(group[start - 1]), group[start].line)) start--;
+    while (end < group.length - 1 && bulletsOnly(endOfBlock(group[end]), group[end + 1].line)) end++;
     group = group.slice(start, end + 1);
   }
-  // What is being worked on comes first; forwarded and scheduled lines are no longer today's work, so they rank as no priority whatever they were given.
-  const rank = (task: TaskLine) => task.marker === "/" ? -1 : task.marker === ">" || task.marker === "<" ? PRIORITIES.indexOf("none") : PRIORITIES.indexOf(priorities.get(task.id ?? "") ?? "none");
+  // What is being worked on comes first; forwarded, scheduled and finished lines are no longer open work, so they rank as no priority whatever they were given.
+  const rank = (task: TaskLine) => task.marker === "/" ? -1 : ["<", ">", "x", "X", "-"].includes(task.marker) ? PRIORITIES.indexOf("none") : PRIORITIES.indexOf(priorities.get(task.id ?? "") ?? "none");
   const sorted = [...group].sort((a, b) => rank(a) - rank(b));
   if (scope === "first") {
     const selected = group.find(t => t.line === line)!;

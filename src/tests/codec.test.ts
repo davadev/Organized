@@ -66,6 +66,14 @@ describe("Markdown task codec", () => {
     expect(migrateNote('## Notes\nOnly notes\n')).toBe('Only notes\n'); expect(migrateNote('## Description\n')).toBe('');
     expect(migrateNote('Same\n## Description\nSame\n')).toBe('Same\n\nSame\n');
   });
+  it("lets plain bullets sit inside a sorted list and ranks finished todos as no priority", () => {
+    const priorities = new Map([['task_aaa', 'low' as const], ['task_bbb', 'high' as const], ['task_ccc', 'medium' as const]]);
+    const linked = '- [ ] low <!--organized:task_aaa-->\n- [[Notes/Converted]]\n- [/] high <!--organized:task_bbb-->';
+    expect(sortTasks(linked, 2, 'list', priorities)).toBe('- [/] high <!--organized:task_bbb-->\n- [[Notes/Converted]]\n- [ ] low <!--organized:task_aaa-->');
+    expect(sortTasks('- [ ] low <!--organized:task_aaa-->\n  - [[Nested]]\n- [/] high <!--organized:task_bbb-->', 2, 'list', priorities)).toBe('- [/] high <!--organized:task_bbb-->\n- [ ] low <!--organized:task_aaa-->\n  - [[Nested]]');
+    expect(sortTasks('- [ ] low <!--organized:task_aaa-->\nProse\n- [/] high <!--organized:task_bbb-->', 2, 'list', priorities)).toBe('- [ ] low <!--organized:task_aaa-->\nProse\n- [/] high <!--organized:task_bbb-->');
+    for (const marker of ['x', 'X', '-']) expect(sortTasks(`- [${marker}] high <!--organized:task_bbb-->\n- [ ] medium <!--organized:task_ccc-->\n- [ ] low <!--organized:task_aaa-->`, 0, 'list', priorities)).toBe(`- [ ] medium <!--organized:task_ccc-->\n- [ ] low <!--organized:task_aaa-->\n- [${marker}] high <!--organized:task_bbb-->`);
+  });
   it("sorts only safe sibling positions, never prose, headings or subtask blocks", () => {
     const text = '# A\n- [ ] low <!--organized:task_low-->\n- [ ] high <!--organized:taskhigh-->\n\nProse\n- [ ] medium <!--organized:task_med-->\n# B\n- [ ] other';
     const priorities = new Map([['task_low', 'low' as const], ['taskhigh', 'high' as const], ['task_med', 'medium' as const]]);

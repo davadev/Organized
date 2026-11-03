@@ -1,11 +1,12 @@
-import { Component, MarkdownPostProcessorContext, MarkdownRenderer, MarkdownRenderChild } from "obsidian";
+import { Component, MarkdownPostProcessorContext, MarkdownRenderer, MarkdownRenderChild, Notice } from "obsidian";
 import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetType, keymap } from "@codemirror/view";
 import { StateEffect, StateField, RangeSetBuilder, EditorState, Extension, Prec } from "@codemirror/state";
 import { editorLivePreviewField } from "obsidian";
 import type Organized from "./main";
 import { noteSection, parseTasks } from "./codec";
 import { elapsed, Task } from "./model";
-import { splitNote } from "./repository";
+import { projectName, splitNote } from "./repository";
+import { rgbOf } from "./colors";
 import { report } from "./service";
 
 export const GLYPHS: Record<string, string> = {
@@ -17,6 +18,14 @@ export function icon(host: HTMLElement, marker: string): void {
 }
 /** Notes and sources render as Markdown blocks and need their own row; every other property is a short label that sits beside the title. */
 export function hasRichProperties(owner: Organized): boolean { return owner.settings.displayProperties.some(p => p === "description" || p === "sources"); }
+/** The task's projects as links showing only the project name, in the project's colour (darker on a light theme, brighter on a dark one) when it has one. */
+function projectLinks(owner: Organized, host: HTMLElement, task: Task): void {
+  for (const project of task.projects) {
+    const link = host.createEl("a", { text: projectName(project), cls: "organized-property organized-project-link", href: "#", attr: { "aria-label": `Open project ${projectName(project)}` } });
+    const color = owner.repo.projectColor(project); if (color) { link.setAttribute("data-project", ""); link.setCssProps({ "--organized-chip-bg": rgbOf(color) }); }
+    link.addEventListener("click", event => { event.preventDefault(); const file = owner.repo.file(project); if (file) void owner.app.workspace.getLeaf(false).openFile(file); else new Notice(`The project note ${project} no longer exists.`); });
+  }
+}
 /** `live` turns false once a newer draw or a teardown owns `host`, so an older projection stops appending after its awaits. */
 export async function projection(owner: Organized, host: HTMLElement, task: Task, component: Component, live: () => boolean = () => true): Promise<void> {
   host.addClass("organized-projection"); const selected = owner.settings.displayProperties;
@@ -28,6 +37,7 @@ export async function projection(owner: Organized, host: HTMLElement, task: Task
   for (const property of selected) {
     if (!live()) return;
     if (property === "scheduled") continue;
+    if (property === "projects") { projectLinks(owner, host, task); continue; }
     if (property === "description" || property === "sources") {
       const file = owner.repo.file(owner.repo.taskPath(task.id)); if (!file) continue;
       const body = splitNote(await owner.repo.readText(file)).body; if (!live()) return;

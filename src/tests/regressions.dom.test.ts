@@ -81,4 +81,15 @@ describe('conflict and structural regression cases', () => {
     h.setSettings({ dailyFormat: 'YYYY-MMMM-DD' }); expect(h.service.daily.date('Daily/2026-january-02.md')).toBeNull();
     const records = new DataSafety(h.app.vault.adapter, 'none', '0.1.0', vi.fn()); await records.snapshot('upgrade'); expect(h.raw.vault.adapter.write).not.toHaveBeenCalled();
   });
+  it('keeps the cursor on a todo that moved when the note is re-sorted', async () => {
+    const h = harness(); const a = 'aaaa1111'; const b = 'bbbb2222';
+    const before = `- [ ] First <!--organized:${a}-->\n- [ ] Second <!--organized:${b}-->\n- plain`; const after = `- [/] Second <!--organized:${b}-->\n- [ ] First <!--organized:${a}-->\n- plain`;
+    const file: any = await h.add('Daily/2026-01-01.md', before); const editor = h.setActive(file, before);
+    editor.setCursor({ line: 1, ch: 6 }); await h.repo.write(file, before, after); expect(editor.listSelections()[0]).toEqual({ anchor: { line: 0, ch: 6 }, head: { line: 0, ch: 6 } });
+    // A line without an id, or one that appears twice, falls back to the same offset.
+    const plain = '- [ ] a\n- [ ] b'; const moved = '- [ ] b\n- [ ] a'; const note: any = await h.add('Plain2.md', plain); const second = h.setActive(note, plain); second.setCursor({ line: 1, ch: 3 });
+    await h.repo.write(note, plain, moved); expect(second.listSelections()[0].anchor).toEqual({ line: 1, ch: 3 });
+    const twice = `- [ ] x <!--organized:${a}-->\n- [ ] x <!--organized:${a}-->`; const swapped = `- [/] x <!--organized:${a}-->\n- [ ] x <!--organized:${a}-->`; const dup: any = await h.add('Dup.md', twice); const third = h.setActive(dup, twice); third.setCursor({ line: 1, ch: 2 });
+    await h.repo.write(dup, twice, swapped); expect(third.listSelections()[0].anchor).toEqual({ line: 1, ch: 2 });
+  });
 });
