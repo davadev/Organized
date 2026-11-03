@@ -80,7 +80,7 @@ flowchart TB
 
 ## First run
 
-The first time Organized starts it shows a short **onboarding card**: six steps with small illustrations about the idea behind the plugin. Skip it whenever you like; it appears once. Reopen it with the command **Organized: Show onboarding card** or the **Onboarding card** button in **Settings → Organized → Help**.
+The first time Organized starts it shows a short **onboarding card**: eight steps with small illustrations: the idea behind the plugin, how to open the side panel and what its tabs do, and the basics. Skip it whenever you like; it appears once. Reopen it with the command **Organized: Show onboarding card** or the **Onboarding card** button in **Settings → Organized → Help**.
 
 ## Try the beta
 

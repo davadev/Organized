@@ -312,6 +312,16 @@ body.is-mobile .modal-container.organized-modal-host { overflow-y: auto; }
 .organized-welcome-fig-box { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; inline-size: 16px; block-size: 16px; border: 1.5px solid var(--text-faint); border-radius: 4px; color: var(--text-muted); font-size: 10px; font-weight: 600; line-height: 1; }
 .organized-welcome-fig-box[data-marker="x"] { border-color: var(--color-green, #2f9e44); background: var(--color-green, #2f9e44); color: var(--text-on-accent, #fff); }
 .organized-welcome-fig-box svg { inline-size: 11px; block-size: 11px; }
+.organized-welcome-fig-line.is-current { padding-inline: 4px; margin-inline: -4px; border-radius: var(--radius-s, 5px); background: var(--background-modifier-hover); }
+.organized-welcome-fig-caret { flex: 0 0 auto; inline-size: 2px; block-size: 1.1em; margin-inline-start: -4px; background: var(--interactive-accent); }
+.organized-welcome-fig-tabs { display: flex; flex-direction: column; gap: 8px; }
+.organized-welcome-fig-tab { display: flex; align-items: center; gap: 10px; min-inline-size: 0; }
+.organized-welcome-fig-tab-icon { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; inline-size: 28px; block-size: 28px; border-radius: var(--radius-s, 5px); background: var(--background-secondary); color: var(--text-muted); }
+.organized-welcome-fig-tab:first-child .organized-welcome-fig-tab-icon { background: var(--interactive-accent); color: var(--text-on-accent, #fff); }
+.organized-welcome-fig-tab-icon svg { inline-size: 16px; block-size: 16px; }
+.organized-welcome-fig-tab-words { display: flex; flex-direction: column; min-inline-size: 0; font-size: var(--font-ui-small, 13px); overflow-wrap: anywhere; }
+.organized-welcome-fig-tab-name { color: var(--text-normal); font-weight: 600; }
+.organized-welcome-fig-tab-role { color: var(--text-muted); }
 .organized-welcome-fig-days { display: flex; align-items: center; gap: 10px; }
 .organized-welcome-fig-arrow { display: inline-flex; flex: 0 0 auto; color: var(--text-muted); }
 .organized-welcome-fig-arrow svg { inline-size: 18px; block-size: 18px; }

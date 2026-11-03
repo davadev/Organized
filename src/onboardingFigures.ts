@@ -6,9 +6,9 @@ import { STATUS_ICONS } from "./model";
  * screenshots: they follow the user's theme and font, add almost nothing to the plugin's size and cannot go stale the way
  * a picture does. They are decoration (aria-hidden, not interactive); the step's text carries the meaning.
  */
-export type FigureId = "note" | "forward" | "card" | "keys" | "day";
+export type FigureId = "note" | "tabs" | "follow" | "forward" | "card" | "keys" | "day";
 /** Every figure id; the tests walk it so a new figure cannot ship undrawn. */
-export const FIGURE_IDS: FigureId[] = ["note", "forward", "card", "keys", "day"];
+export const FIGURE_IDS: FigureId[] = ["note", "tabs", "follow", "forward", "card", "keys", "day"];
 
 const box = (host: HTMLElement, marker: string): void => {
   const b = host.createSpan({ cls: "organized-welcome-fig-box", text: marker === "x" ? "" : marker.trim(), attr: { "data-marker": marker } });
@@ -26,6 +26,34 @@ function noteFigure(fig: HTMLElement): void {
   line(note, "x", "Reply to Anna");
   line(note, " ", "Draft the Q1 review");
   line(note, " ", "Book the dentist");
+}
+
+/** The panel's four tabs, in order, with the icon each one has in the panel (the tabs there are icon-only). */
+const TABS: [string, string, string][] = [["calendar", "Calendar", "Month, week and day, with the time you worked"], ["list-checks", "Task", "The todo you are on, in detail"], ["folder", "Projects", "Todos grouped by project"], ["star", "Favorites", "Everything you starred"]];
+function tabsFigure(fig: HTMLElement): void {
+  const list = fig.createDiv({ cls: "organized-welcome-fig-tabs" });
+  for (const [icon, name, role] of TABS) {
+    const item = list.createDiv({ cls: "organized-welcome-fig-tab" });
+    setIcon(item.createSpan({ cls: "organized-welcome-fig-tab-icon" }), icon);
+    const words = item.createDiv({ cls: "organized-welcome-fig-tab-words" });
+    words.createSpan({ cls: "organized-welcome-fig-tab-name", text: name });
+    words.createSpan({ cls: "organized-welcome-fig-tab-role", text: role });
+  }
+}
+
+function followFigure(fig: HTMLElement): void {
+  const row = fig.createDiv({ cls: "organized-welcome-fig-days" });
+  const note = row.createDiv({ cls: "organized-welcome-fig-note" });
+  note.createDiv({ cls: "organized-welcome-fig-caption", text: "Your note" });
+  line(note, " ", "Reply to Anna");
+  line(note, " ", "Draft the Q1 review", "is-current").createSpan({ cls: "organized-welcome-fig-caret" });
+  setIcon(row.createSpan({ cls: "organized-welcome-fig-arrow" }), "arrow-right");
+  const panel = row.createDiv({ cls: "organized-welcome-fig-note" });
+  panel.createDiv({ cls: "organized-welcome-fig-caption", text: "Task tab" });
+  const card = panel.createDiv({ cls: "organized-list-card", attr: { "data-status": "open" } });
+  const open = card.createDiv({ cls: "organized-list-open" });
+  open.createDiv({ cls: "organized-list-title", text: "Draft the Q1 review" });
+  open.createDiv({ cls: "organized-list-meta" }).createSpan({ cls: "organized-list-priority priority-high", text: "high" });
 }
 
 function forwardFigure(fig: HTMLElement): void {
@@ -85,7 +113,7 @@ function dayFigure(fig: HTMLElement): void {
   }
 }
 
-const BUILDERS: Record<FigureId, (fig: HTMLElement) => void> = { note: noteFigure, forward: forwardFigure, card: cardFigure, keys: keysFigure, day: dayFigure };
+const BUILDERS: Record<FigureId, (fig: HTMLElement) => void> = { note: noteFigure, tabs: tabsFigure, follow: followFigure, forward: forwardFigure, card: cardFigure, keys: keysFigure, day: dayFigure };
 
 /** Draw the illustration `id` into `parent`. */
 export function renderFigure(parent: HTMLElement, id: FigureId): HTMLElement {

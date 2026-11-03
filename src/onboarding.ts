@@ -17,8 +17,18 @@ export interface OnboardingStep {
 export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     title: "Your daily note stays your daily note",
-    text: "Write todos in it as you always did, with plain `- [ ]` checkboxes. Organized adds memory to them; it does not ask you to adopt a new system. Use as little or as much of it as you like.",
+    text: "Write todos in it as you always did, with plain `- [ ]` checkboxes. When you type a new one, Organized asks once: link it to a task, create a task, or keep it a plain todo. Use as little or as much of it as you like.",
     figure: "note",
+  },
+  {
+    title: "Open the side panel",
+    text: "Everything else happens in the side panel. Click the calendar icon in the ribbon, or run Open inspector from the command palette. It has four tabs, shown as icons at its top right:",
+    figure: "tabs",
+  },
+  {
+    title: "The panel follows your cursor",
+    text: "Put the cursor on a linked todo and the Task tab shows its details, where you change priority, date, notes or the timer. On any other line it lists the note's todos; tap one to jump to it.",
+    figure: "follow",
   },
   {
     title: "Unfinished work follows you",
