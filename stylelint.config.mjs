@@ -6,6 +6,7 @@
 //   - declaration-no-important
 //   - declaration-block-no-duplicate-properties (review warning "Unexpected duplicate"; put an engine fallback in an @supports block after the base rule)
 //   - stylelint-no-unsupported-browser-features, "only partially supported" findings
+//   - selector-pseudo-class-disallowed-list: `:has` (review warning "Avoid :has": broad selector invalidation; use `:focus-within`, a class set in code, or a line decoration)
 //
 // The browser target is a calibrated guess at the engine of the Obsidian build the review runs against, not a
 // published fact: `chrome 138` reproduced the review's findings at the same lines and none after the fix. Both rules are
@@ -16,6 +17,7 @@ export default {
   rules: {
     "declaration-no-important": true,
     "declaration-block-no-duplicate-properties": true,
+    "selector-pseudo-class-disallowed-list": ["has"],
     "plugin/no-unsupported-browser-features": [true, { browsers: ["chrome 138"], severity: "error" }],
   },
 };

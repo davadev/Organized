@@ -30,7 +30,7 @@ import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MIN_AGE_DAYS, MIN_NPM_WITH_RELEASE_AGE, checkAllowScripts, checkDependabotCooldown, checkNpmrc, npmSupportsMinReleaseAge } from "./lib/supplyChainChecks.mjs";
 import { attestStepProblem, lintScriptIsStrict, manifestFindings, nodeOnlyImports, usesCssPrefix, versionFindings } from "./lib/releaseChecks.mjs";
-import { baseVersion, brokenScreenshotRefs, droppedWhatsNewEntries, hasWhatsNewEntry, isMinorRelease, unindexedDocs } from "./lib/docsChecks.mjs";
+import { baseVersion, brokenScreenshotRefs, readmePlaceholders, droppedWhatsNewEntries, hasWhatsNewEntry, isMinorRelease, unindexedDocs } from "./lib/docsChecks.mjs";
 
 // ---------- Configuration (the only part to edit) ----------
 const CSS_PREFIX = "organized"; // every class your code adds starts with `organized-`; styles.css is required iff it is used
@@ -131,7 +131,7 @@ for (const p of ["manifest.json", "main.js", "versions.json", "README.md", "LICE
   if (size > 0) {
     const cfg = await readText("stylelint.config.mjs");
     if (cfg == null) fail("stylelint config present", "stylelint.config.mjs is missing");
-    else if (!/declaration-no-important/.test(cfg) || !/no-unsupported-browser-features/.test(cfg)) fail("stylelint config present", "must enable declaration-no-important and no-unsupported-browser-features");
+    else if (!/declaration-no-important/.test(cfg) || !/no-unsupported-browser-features/.test(cfg) || !/selector-pseudo-class-disallowed-list/.test(cfg)) fail("stylelint config present", "must enable declaration-no-important, no-unsupported-browser-features and selector-pseudo-class-disallowed-list (:has)");
     else pass("stylelint config present");
     if (!runLint) skip("styles.css passes stylelint", "pass --with-lint or --with-build to execute");
     else {
@@ -139,6 +139,18 @@ for (const p of ["manifest.json", "main.js", "versions.json", "README.md", "LICE
       if (r.status === 0) pass("styles.css passes stylelint");
       else fail("styles.css passes stylelint", tail(r) || `exit ${r.status}`);
     }
+  }
+}
+
+// package.json is linted for dependencies the review wants replaced (es-tooling module-replacements).
+{
+  if (!(await readText("eslint.deps.config.mjs"))?.includes("depend/ban-dependencies")) fail("dependency lint config present", "eslint.deps.config.mjs must enable depend/ban-dependencies");
+  else pass("dependency lint config present");
+  if (!runLint) skip("package.json passes the dependency lint", "pass --with-lint or --with-build to execute");
+  else {
+    const r = npm(["run", "lint:deps", "--silent"], { env: { ...process.env, FORCE_COLOR: "0", NO_COLOR: "1" } });
+    if (r.status === 0) pass("package.json passes the dependency lint");
+    else fail("package.json passes the dependency lint", tail(r) || `exit ${r.status}`);
   }
 }
 
@@ -214,6 +226,9 @@ if (!tag) skip("manifest.version matches release tag", "no --tag and the environ
   }
   const sources = { "README.md": (await readText("README.md")) ?? "" };
   for (const n of docNames) sources[`docs/${n}`] = (await readText(`docs/${n}`)) ?? "";
+  const slots = readmePlaceholders(sources["README.md"]);
+  if (!slots.length) pass("README has no template placeholders");
+  else fail("README has no template placeholders", slots.join("; "));
   const shots = await readdir(join(ROOT, "resources/screenshots")).catch(() => []);
   const broken = brokenScreenshotRefs(sources, shots);
   if (!broken.length) pass("README/docs only reference screenshots that exist");

@@ -6,7 +6,8 @@ Project attribution: **davadev only**. Git authors may be **davadev** or **Dany*
 ## Commands
 - `npm run build`: typecheck and production bundle.
 - `npm run lint`: review-parity lint, zero warnings.
-- `npm run lint:css`: stylesheet lint.
+- `npm run lint:css`: stylesheet lint (no `:has`).
+- `npm run lint:deps`: package.json lint for dependencies the review wants replaced.
 - `npm run test:cov`: all source measured; 100% coverage requirement.
 - `npm run check:dead-code`: production reachability and dependencies.
 - `npm run check:layout` / `npm run check:webkit`: real-browser layout.

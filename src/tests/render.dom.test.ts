@@ -49,6 +49,9 @@ describe('read-only projections and bundled visual markers', () => {
     const { owner, task, repo } = await fixture(); const extension = editorExtension(owner) as any[]; const field = extension[0] as StateField<DecorationSet>; const doc = `intro\n- [ ] Rendered <!--organized:${task.id}-->\n- [ ] ordinary`;
     let state = EditorState.create({ doc, extensions: [editorLivePreviewField, field] }); const widget = widgets(state, field)[0]; expect(widget).toBeTruthy(); const host = widget.toDOM(); await flush(); expect(host.classList.contains('organized-projection')).toBe(true);
     expect(widget.eq(widget)).toBe(true); expect(widget.eq({ id: 'another1', revision: 0 })).toBe(false); expect(widget.ignoreEvent()).toBe(false);
+    const lineClasses = (value: EditorState) => { const found: string[] = []; value.field(field).between(0, doc.length, (_from: number, _to: number, d: any) => { if (d.spec.class) found.push(d.spec.class); }); return found; };
+    expect(lineClasses(state)).not.toContain('organized-align-right-line'); owner.settings.propertiesAlign = 'right';
+    expect(lineClasses(EditorState.create({ doc, extensions: [editorLivePreviewField, field] }))).toEqual(['organized-align-right-line']); owner.settings.propertiesAlign = 'text';
     const unchanged = state.update({}).state; expect(unchanged.field(field)).toBe(state.field(field));
     const before = state.field(field); state = state.update({ selection: { anchor: 10 } }).state; expect(widgets(state, field)).toHaveLength(1); expect(state.field(field)).toBe(before);
     state = state.update({ selection: { anchor: 0 } }).state; expect(widgets(state, field)).toHaveLength(1);

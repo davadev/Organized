@@ -10,7 +10,12 @@ description: Starter design and code rules for an Obsidian plugin that each prev
 - No `!important`; no `text-decoration-line/-style/-color/-thickness/-skip-ink` longhands (use the shorthand with `var()` parts). The review lints both.
 - Use Obsidian theme variables (`--text-normal`, `--background-secondary`...) so themes and dark mode work. Dynamic colours go through a CSS custom property that code writes, never inline `background`.
 - Check at phone width and desktop width; wide fixed-size elements are how WKWebView kills the app.
+- No `:has()` (the review warns about broad selector invalidation; stylelint now fails it). Use `:focus-within`, a class set in code, or a CodeMirror line decoration.
 - Check: `npm run lint:css`.
+
+## Dependencies and README (review findings)
+- `package.json` must not list a package the es-tooling replacements list wants swapped (`js-yaml` -> `yaml`); `npm run lint:deps` fails it. Prefer a native or already-bundled alternative before adding any package.
+- The README must have no template leftovers: no HTML comments, `TODO`, `[description]` or `<angle-bracket>` slots, not even inside backticks. Write "the plugin folder of your vault" instead of `<your vault>`. `check-release` fails it (`readmePlaceholders`).
 
 ## Settings tab
 - Group new settings under a heading; never flat-append. Declarative `getSettingDefinitions()` (Obsidian 1.13+) makes them findable in settings search.

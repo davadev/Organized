@@ -103,7 +103,7 @@
 .organized-title-input:focus { border-color: var(--interactive-accent); outline: 2px solid var(--interactive-accent); outline-offset: 1px; }
 .organized-title-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .organized-view .organized-panel textarea.organized-inline-editor { inline-size: 100%; min-block-size: 6rem; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none; color: var(--text-normal); font: inherit; font-size: 13px; line-height: 1.6; resize: none; field-sizing: content; }
-.organized-card:has(.organized-inline-editor:focus) { border-color: var(--background-modifier-border-hover); }
+.organized-card:focus-within { border-color: var(--background-modifier-border-hover); }
 @media (pointer: coarse) { .organized-view .organized-panel textarea.organized-inline-editor { font-size: 16px; } }
 .organized-view .organized-panel button.organized-save { border-color: var(--interactive-accent); background: var(--interactive-accent); color: var(--text-on-accent); }
 .organized-view .organized-panel button.organized-save:hover { background: var(--interactive-accent-hover, var(--interactive-accent)); }
@@ -311,7 +311,7 @@ body.is-mobile .modal-container.organized-modal-host { overflow-y: auto; }
 /* Aligned to the right edge: beside the text the symbols float to the end of the line (they drop to their own right-aligned row when the text leaves no room); in a block row of their own they are end-aligned, while descriptions and sources keep reading from the start. */
 span.organized-projection.organized-align-right { float: inline-end; max-width: 100%; }
 /* A float does not add to the height of the line it sits in: when the text leaves no room and the symbols drop to a row of their own, they would hang into the next line (a note under the todo) and look like part of it. The line contains them instead, and a nested list in Reading view starts below them. */
-.cm-line:has(.organized-projection.organized-align-right) { display: flow-root; }
+.cm-line.organized-align-right-line { display: flow-root; }
 .organized-task-line > span.organized-projection.organized-align-right ~ :is(ul, ol) { clear: both; }
 div.organized-projection.organized-align-right { text-align: end; }
 div.organized-projection.organized-align-right .organized-rich-property { text-align: start; }

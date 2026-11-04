@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Review fixes: the test tooling no longer uses `js-yaml` (replaced by `yaml`), two `:has()` selectors are gone (a focused description or source now highlights its card with `:focus-within`, and right-aligned symbols keep their line through a line class), and the README no longer contains template-looking text. New checks keep these from coming back: stylelint rejects `:has`, `npm run lint:deps` rejects replaceable packages, and `check-release` rejects README placeholders.
 ## 0.1.0
 
 - **A clearer README.** It now says why Organized exists next to calendar and task plugins (and when it is not the right tool), and tours the side panel with numbered screenshots, including a task with nothing added to show how little a todo costs. The numbered pictures are rendered from the plugin's own code like the others.
