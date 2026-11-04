@@ -12,6 +12,7 @@
     "lint": "eslint 'src/**/*.ts' --max-warnings=0",
     "lint:fix": "eslint 'src/**/*.ts' --fix",
     "lint:css": "stylelint styles.css",
+    "lint:deps": "eslint -c eslint.deps.config.mjs package.json --max-warnings=0",
     "lint:cloud-parity": "node scripts/lint-cloud-parity.mjs",
     "check:dead-code": "knip --production && knip --no-config-hints --include dependencies,unlisted,binaries,unresolved",
     "test": "vitest run",
@@ -30,9 +31,10 @@
     "@vitest/coverage-v8": "5.0.5",
     "esbuild": "0.28.2",
     "eslint": "^10.11.0",
+    "eslint-plugin-depend": "1.5.0",
     "eslint-plugin-obsidianmd": "^0.4.2",
     "happy-dom": "20.14.6",
-    "js-yaml": "5.5.0",
+    "jsonc-eslint-parser": "3.3.0",
     "knip": "6.42.0",
     "moment": "2.31.0",
     "obsidian": "1.14.4",
@@ -42,7 +44,8 @@
     "tslib": "^2.6.2",
     "typescript": "^5.4.5",
     "typescript-eslint": "^8.71.0",
-    "vitest": "5.0.5"
+    "vitest": "5.0.5",
+    "yaml": "2.9.1"
   },
   "name": "organized",
   "overrides": {

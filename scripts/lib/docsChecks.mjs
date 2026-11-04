@@ -61,3 +61,18 @@ export function droppedWhatsNewEntries(previousSource, currentSource, currentBas
   const now = new Set(releaseNoteVersions(currentSource));
   return releaseNoteVersions(previousSource).filter((v) => v.split(".").slice(0, 2).join(".") === line && !now.has(v));
 }
+
+/**
+ * Template leftovers the review flags in a README ("unfilled placeholder text"): HTML comments, TODO/FIXME, bracketed
+ * `[description]`-style slots and angle-bracket slots such as `<your vault>`. Real HTML tags (br, img, a...) are fine. Fenced
+ * code is skipped; write a slot in prose ("the plugin folder of your vault") instead of `<slot>`.
+ */
+export function readmePlaceholders(text) {
+  const prose = text.replace(/```[\s\S]*?```/g, "");
+  const found = [];
+  for (const m of prose.matchAll(/<!--[\s\S]*?-->|<!--/g)) found.push(`HTML comment: ${m[0].slice(0, 30)}`);
+  for (const m of prose.matchAll(/\b(?:TODO|FIXME|TBD|lorem ipsum)\b/g)) found.push(`placeholder word: ${m[0]}`);
+  for (const m of prose.matchAll(/\[(?:description|your [a-z ]+|insert [a-z ]+|plugin name|name)\]/gi)) found.push(`bracket slot: ${m[0]}`);
+  for (const m of prose.matchAll(/<(?!\/?(?:br|img|a|td|tr|th|table|tbody|thead|picture|source|sub|sup|p|em|strong|code|kbd|details|summary|div|span|h[1-6]|ul|ol|li)\b)[a-z][a-z ]*>/gi)) found.push(`angle-bracket slot: ${m[0]}`);
+  return found;
+}

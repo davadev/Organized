@@ -89,6 +89,8 @@ jobs:
         run: npm run lint
       - name: Lint styles.css (stylelint, as Obsidian's review does)
         run: npm run lint:css
+      - name: Lint package.json for dependencies the review wants replaced
+        run: npm run lint:deps
 
       # knip --production walks from src/main.ts and does not count tests as users, so legacy code and half-finished
       # features that only a test still reaches fail here. Delete them; do not add ignores to make this pass.

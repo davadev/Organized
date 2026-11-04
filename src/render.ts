@@ -192,6 +192,8 @@ function build(state: EditorState, owner: Organized): DecorationSet {
     // Short properties sit to the right of the title; rich ones (notes, sources) get a block row below.
     const inline = !hasRichProperties(owner);
     ranges.push(Decoration.widget({ widget: new PropertyWidget(owner, task.id, owner.revision, inline), block: !inline && line.to < state.doc.length, side: 1 }).range(line.to));
+    // The floated symbols would hang into the next line; the line contains them (see `.organized-align-right-line`).
+    if (inline && owner.settings.propertiesAlign === "right") ranges.push(Decoration.line({ class: "organized-align-right-line" }).range(line.from));
   }
   return Decoration.set(ranges, true);
 }

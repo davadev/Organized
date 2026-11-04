@@ -12,11 +12,11 @@
  * `import` so module evaluation doesn't fail.
  */
 import momentFactory from "moment";
-import { load, dump } from "js-yaml";
+import { parse, stringify } from "yaml";
 import { StateField } from "@codemirror/state";
 export const moment = momentFactory;
-export const parseYaml = load;
-export const stringifyYaml = (value: unknown) => dump(value, { noRefs: true });
+export const parseYaml = parse;
+export const stringifyYaml = (value: unknown) => stringify(value, { singleQuote: true });
 export const editorLivePreviewField = StateField.define<boolean>({ create: () => true, update: value => value });
 export class Component {
   cleanups: (() => void)[] = [];
