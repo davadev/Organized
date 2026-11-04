@@ -5,6 +5,7 @@ import { rgbOf, softTint } from "./colors";
 import type Organized from "./main";
 import { elapsed, localDate, PRIORITIES, Section, STATUS_ICONS, STATUSES, Task, WorkSession } from "./model";
 import { byPriority, report } from "./service";
+import { cells, HeatScale, MAX_CELLS, scaleFor, slider } from "./movement";
 import { DatePicker, SessionModal, TaskPicker } from "./modals";
 import { formatMinutes, lengthOf, lengthOfSeconds, seconds } from "./sessions";
 import { descendants, NoteSection, NOTE_SECTIONS, noteSection, parseTasks, TaskLine } from "./codec";
@@ -518,15 +519,13 @@ export class OrganizedInspectorView extends ItemView {
     }
     const sources = noteSection(body, "Sources");
     if (sources || this.module === "Sources") await this.moduleCard(details, file.path, id, "Sources", sources);
+    const scale = task.movement_history.length ? scaleFor(task, await this.owner.repo.list()) : null;
     if (generation !== this.renderId) return;
     const moduleKey = `${id}:${this.module}`;
     if (this.module && this.scrolledModule !== moduleKey) {
       this.scrolledModule = moduleKey; host.querySelector<HTMLElement>(".organized-selected-module")?.scrollIntoView({ block: "nearest" });
     }
-    if (task.movement_history.length) {
-      const history = host.createEl("details", { cls: "organized-disclosure" }); history.createEl("summary", { text: "Movement history" });
-      for (const event of task.movement_history) history.createDiv({ cls: "organized-muted", text: `${event.kind} · ${event.source} · ${event.from} → ${event.to} · ${event.at}` });
-    }
+    if (scale) this.movementStrip(host, task, scale);
     const references = host.createEl("details", { cls: "organized-disclosure" }); references.createEl("summary", { text: "References" }); references.open = this.referencesOpen;
     const refs = references.createDiv(); const load = async () => {
       refs.setText("Loading references…"); const paths = await this.owner.service.refs(id); if (generation !== this.renderId || !references.open) return;
@@ -539,6 +538,21 @@ export class OrganizedInspectorView extends ItemView {
     this.button(actions, "Open task note", () => this.app.workspace.getLeaf(false).openFile(file)).addClass("organized-note-link");
     this.button(actions, "Make standalone note", () => this.owner.convertToNote(task, this.owner.context?.line.id === id ? this.owner.context : undefined)).addClass("organized-note-link");
     this.button(actions, "Delete task", () => this.owner.deleteTask(id)).addClass("organized-danger");
+  }
+  /** Movement history as tiny squares (green to red against the user's usual forward count, accent for dates picked on purpose); a slider once there are too many. */
+  private movementStrip(host: HTMLElement, task: Task, scale: HeatScale): void {
+    const count = task.movement_history.length; const section = host.createDiv({ cls: "organized-moves" });
+    const summary = `Moved ${count} time${count === 1 ? "" : "s"}`; section.createDiv({ cls: "organized-moves-summary", text: summary });
+    if (count > MAX_CELLS) {
+      const state = slider(task, scale); const track = section.createDiv({ cls: "organized-moves-slider", attr: { role: "img", "aria-label": `${summary}, ${Math.round(state.position)}% of the way to red` } });
+      track.setCssProps({ "--organized-stop-1": `${state.stops[0]}%`, "--organized-stop-2": `${state.stops[1]}%`, "--organized-at": `${state.position}%` });
+      track.createDiv({ cls: `organized-moves-marker${state.deliberate ? " is-deliberate" : ""}`, attr: { "data-heat": String(state.level) } });
+    } else {
+      const grid = section.createDiv({ cls: "organized-moves-grid", attr: { role: "img", "aria-label": summary } });
+      for (const cell of cells(task, scale)) grid.createDiv({ cls: `organized-move${cell.deliberate ? " is-deliberate" : ""}`, attr: { "data-heat": String(cell.level), title: cell.label } });
+    }
+    const history = section.createEl("details", { cls: "organized-disclosure" }); history.createEl("summary", { text: "Details" });
+    for (const event of task.movement_history) history.createDiv({ cls: "organized-muted", text: `${event.kind} · ${event.source} · ${event.from} → ${event.to} · ${event.at}` });
   }
   /** Opens a task from the Projects or Favorites tab; the origin decides which tab Back returns to. */
   /** Opens another task in the Task tab, keeping where the panel was opened from so Back still leads there. */

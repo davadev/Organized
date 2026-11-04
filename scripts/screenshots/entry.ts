@@ -2,7 +2,7 @@
 // Nothing here is user data. Scenes are listed in scripts/render-screenshots.mjs.
 import { installObsidianDom } from '../../src/tests/__mocks__/obsidianDom';
 import { OrganizedInspectorView } from '../../src/view';
-import { DEFAULT_SETTINGS, newTask, type Task } from '../../src/model';
+import { DEFAULT_SETTINGS, newTask, type Movement, type Task } from '../../src/model';
 import { parseTasks } from '../../src/codec';
 import { missingIcons } from './obsidianShim';
 import { OnboardingModal, RetireModal } from '../../src/modals';
@@ -12,9 +12,10 @@ const at = (day: number, hour: number, minute = 0) => new Date(2026, 2, day, hou
 const day = (n: number) => `2026-03-${String(n).padStart(2, '0')}`;
 const make = (id: string, title: string, rest: Partial<Task>): Task => ({ ...newTask(title, id), created: at(2, 8), ...rest });
 
+const move = (id: number, kind: Movement['kind'], from: number, to: number): Movement => ({ id: `m${id}`, kind, source: 'manual', from: day(from), to: day(to), at: at(from, 20) });
 const review = 'Projects/Q1 review.md', lisbon = 'Projects/Lisbon trip.md', workshop = 'Projects/Workshop.md';
 const tasks: Task[] = [
-  make('q1review01', 'Draft the Q1 review', { status: 'in_progress', priority: 'high', starred: true, projects: [review], scheduled: day(4), time_tracking_started_at: at(4, 14, 30), time_tracked_seconds: 5400, work_sessions: [{ start: at(4, 9, 20), end: at(4, 10, 15) }, { start: at(4, 13), end: at(4, 14) }, { start: at(3, 14), end: at(3, 16, 30) }, { start: at(2, 10), end: at(2, 11, 30) }] }),
+  make('q1review01', 'Draft the Q1 review', { movement_history: [move(1, 'schedule', 1, 1), move(2, 'forward', 1, 2), move(3, 'forward', 2, 3), move(4, 'forward', 3, 4)], status: 'in_progress', priority: 'high', starred: true, projects: [review], scheduled: day(4), time_tracking_started_at: at(4, 14, 30), time_tracked_seconds: 5400, work_sessions: [{ start: at(4, 9, 20), end: at(4, 10, 15) }, { start: at(4, 13), end: at(4, 14) }, { start: at(3, 14), end: at(3, 16, 30) }, { start: at(2, 10), end: at(2, 11, 30) }] }),
   make('anna000001', 'Reply to Anna about the offsite', { status: 'completed', closed_at: at(4, 9), work_sessions: [{ start: at(4, 8, 30), end: at(4, 9, 15) }] }),
   make('lisbon0001', 'Plan the Lisbon trip', { priority: 'medium', starred: true, projects: [lisbon], scheduled: day(4), work_sessions: [{ start: at(4, 10, 30), end: at(4, 11, 45) }, { start: at(3, 9), end: at(3, 10) }] }),
   make('dentist001', 'Book the dentist', { scheduled: day(4) }),
@@ -57,15 +58,17 @@ const page = (window as any);
 page.missingIcons = () => [...missingIcons];
 /** scene name -> what to show */
 let modal: OnboardingModal | RetireModal | null = null;
+const draft = tasks.find(t => t.id === 'q1review01')!, draftMoves = draft.movement_history;
 page.scene = async (name: string) => {
+  draft.movement_history = name === 'slipping' ? Array.from({ length: 40 }, (_, i) => move(i, 'forward', 1, 2)) : draftMoves;
   modal?.close(); modal = null; root.replaceChildren();
   if (name === 'retire') {
     const found = { tasks, files: new Map(tasks.map(t => [t.id, [{ path: `Daily/2026-03-0${tasks.indexOf(t) % 4 + 1}.md` } as any]])), lines: new Map(tasks.map(t => [t.id, 2])) };
     modal = new RetireModal(app, { which: 'closed', olderThanDays: 7, lines: 'link', keep: 'all', notes: 'rename', yaml: 'keep' }, async () => found as any, async () => undefined); modal.open(); await Promise.resolve(); await Promise.resolve(); return;
   }
   if (name.startsWith('onboarding-')) { modal = new OnboardingModal(app, () => undefined); modal.open(); (modal as any).index = Number(name.slice('onboarding-'.length)) - 1; (modal as any).draw(); return; } owner.selectedTaskId = null; view.selectedDate = day(4); view.module = ''; view.editingTitle = false; view.editingModule = '';
-  const [tab, mode] = ({ month: ['Calendar', 'Month'], week: ['Calendar', 'Week'], day: ['Calendar', 'Day'], task: ['Task', 'Month'], projects: ['Projects', 'Month'], favorites: ['Favorites', 'Month'] } as Record<string, [string, string]>)[name] ?? (() => { throw new Error(`unknown scene ${name}`); })();
+  const [tab, mode] = ({ month: ['Calendar', 'Month'], week: ['Calendar', 'Week'], day: ['Calendar', 'Day'], task: ['Task', 'Month'], slipping: ['Task', 'Month'], projects: ['Projects', 'Month'], favorites: ['Favorites', 'Month'] } as Record<string, [string, string]>)[name] ?? (() => { throw new Error(`unknown scene ${name}`); })();
   view.tab = tab as typeof view.tab; view.calendarMode = mode as typeof view.calendarMode;
-  if (name === 'task') owner.selectedTaskId = 'q1review01';
+  if (name === 'task' || name === 'slipping') owner.selectedTaskId = 'q1review01';
   root.appendChild(view.contentEl); await view.render(); await Promise.resolve();
 };
