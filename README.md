@@ -185,9 +185,14 @@ Combinations that cannot work are switched for you (removing properties needs th
 
 What the window never touches: project notes (their `organized_type`, `organized_start` and `organized_color` properties and the Open / In progress / Ongoing / Done headings) and lines such as `Worked 2026-03-02: 09:00–09:30` under a checkbox, and `[>]` or `[<]` markers. They are ordinary Markdown you can keep or delete.
 
-## Try the beta
+## Install
 
-Use a **test vault**. In BRAT, add **`davadev/Organized`** and select the beta release. Alternatively download `main.js`, `manifest.json`, `styles.css` from the same GitHub release into `<test vault>/.obsidian/plugins/organized/`, then restart and enable Organized.
+**Organized is in the process of being registered as an official Obsidian community plugin.** Until that is approved it does not appear under *Settings → Community plugins → Browse*, so install it by hand:
+
+- **With BRAT** (recommended; it also keeps the plugin up to date): in the BRAT plugin choose *Add Beta Plugin*, enter **`davadev/Organized`** and pick the latest release.
+- **Manually:** download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/davadev/Organized/releases/latest) into `<your vault>/.obsidian/plugins/organized/`, restart Obsidian and enable *Organized* under *Settings → Community plugins*.
+
+Try it in a **test vault** first if you like; your notes stay plain Markdown either way.
 
 Open **Settings → Organized** and match **Daily-note folder** and **Filename format** to your daily-note setup. Core configuration is not read through undocumented APIs. Set **Daily-note template** to a note such as `Templates/Daily.md` so daily notes Organized creates (for example when scheduling to a new date) start from it; `{{date}}`, `{{date:FORMAT}}` and `{{title}}` are filled in. Task files default to `Tasks/` (visible Markdown, not a hidden `.tasks` directory).
 
