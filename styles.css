@@ -145,6 +145,21 @@
 .organized-task-notes > :last-child { margin-block-end: 0; }
 .organized-disclosure { padding-block: 8px; border-block-start: 1px solid var(--background-modifier-border); color: var(--text-muted); font-size: 12px; }
 .organized-disclosure summary { cursor: pointer; padding-block: 4px; }
+.organized-moves { display: flex; flex-direction: column; gap: 6px; padding-block: 8px; border-block-start: 1px solid var(--background-modifier-border); --organized-heat-0: var(--color-green); --organized-heat-1: var(--color-yellow); --organized-heat-2: var(--color-orange); --organized-heat-3: var(--color-red); }
+.organized-moves-summary { color: var(--text-muted); font-size: 12px; }
+.organized-moves-grid { display: grid; grid-template-columns: repeat(10, 12px); gap: 3px; }
+.organized-move { inline-size: 12px; block-size: 12px; border-radius: 3px; background: var(--organized-heat-0); }
+.organized-move[data-heat="1"] { background: var(--organized-heat-1); }
+.organized-move[data-heat="2"] { background: var(--organized-heat-2); }
+.organized-move[data-heat="3"] { background: var(--organized-heat-3); }
+.organized-move.is-deliberate { background: var(--interactive-accent); }
+.organized-moves-slider { position: relative; block-size: 6px; margin-block: 5px; margin-inline: 7px; border-radius: 3px; background: linear-gradient(to right, var(--organized-heat-0) 0 var(--organized-stop-1), var(--organized-heat-1) var(--organized-stop-1) var(--organized-stop-2), var(--organized-heat-2) var(--organized-stop-2) 100%); }
+.organized-moves-marker { position: absolute; inset-inline-start: var(--organized-at); inset-block-start: 50%; inline-size: 14px; block-size: 14px; margin-inline-start: -7px; margin-block-start: -7px; border-radius: 50%; border: 2px solid var(--background-primary); background: var(--organized-heat-0); }
+.organized-moves-marker[data-heat="1"] { background: var(--organized-heat-1); }
+.organized-moves-marker[data-heat="2"] { background: var(--organized-heat-2); }
+.organized-moves-marker[data-heat="3"] { background: var(--organized-heat-3); }
+.organized-moves-marker.is-deliberate { background: var(--interactive-accent); }
+.organized-moves .organized-disclosure { border-block-start: 0; padding-block: 0; }
 .organized-view .organized-panel button.organized-note-link { align-self: flex-start; border-color: transparent; color: var(--text-muted); font-size: 12px; }
 .organized-view .organized-panel button.organized-note-link:hover { color: var(--interactive-accent); }
 .organized-view .organized-panel button.organized-danger { border-color: transparent; color: var(--text-muted); font-size: 12px; }
