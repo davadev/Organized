@@ -68,6 +68,16 @@ describe("repository and explicit task actions", () => {
     await h.service.schedule(context, '2026-01-04'); expect(h.texts.get('Daily/2026-01-03.md')).toContain('Duplicate'); expect(Notice.instances.at(-1)?.message).toContain('ambiguous');
     const plain: any = await h.add('Plain.md', '- [<] unlinked'); await expect(h.service.schedule({ file: plain, line: parseTasks('- [<] unlinked')[0] }, '2026-01-02')).rejects.toThrow('Attach');
   });
+  it("unschedules: the date goes, the scheduled-away todo reopens and the copy on the scheduled day is removed", async () => {
+    const h = harness(); const task = await h.repo.create('Unplan'); const file: any = await h.add('Daily/2026-01-01.md', `- [<] Unplan <!--organized:${task.id}-->`);
+    await h.service.unschedule(task.id); expect(h.texts.get(file.path)).toContain('[<]'); expect((await h.repo.read(task.id)).scheduled).toBeNull();
+    await h.service.schedule({ file, line: parseTasks(await h.repo.readText(file))[0] }, '2026-01-02'); expect((await h.repo.read(task.id)).scheduled).toBe('2026-01-02');
+    await h.service.unschedule(task.id);
+    expect((await h.repo.read(task.id)).scheduled).toBeNull(); expect(h.texts.get(file.path)).toContain('[ ] Unplan'); expect(h.texts.get('Daily/2026-01-02.md')).not.toContain(task.id);
+    expect((await h.repo.read(task.id)).movement_history).toHaveLength(1);
+    const kept = await h.repo.create('Edited'); await h.repo.update(kept.id, t => ({ ...t, scheduled: '2026-02-01' })); await h.add('Daily/2026-02-01.md', `- [ ] Edited <!--organized:${kept.id}-->\n- [ ] Edited again <!--organized:${kept.id}-->`);
+    await h.service.unschedule(kept.id); expect(h.texts.get('Daily/2026-02-01.md')).toContain('Edited again'); expect(Notice.instances.at(-1)?.message).toContain('ambiguous');
+  });
   it("forwards from daily and undated notes; active timers keep their original timestamp", async () => {
     const h = harness(); const task = await h.repo.create('Timer'); await h.repo.update(task.id, t => ({ ...t, status: 'in_progress', time_tracking_started_at: '2026-01-01T00:00:00Z' }));
     const file: any = await h.add('Daily/2026-01-01.md', `- [>] Timer <!--organized:${task.id}-->`);

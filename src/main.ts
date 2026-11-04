@@ -1,13 +1,13 @@
 import { Editor, MarkdownView, Notice, Plugin, TFile, TFolder, WorkspaceLeaf } from "obsidian";
 import { Transaction } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
-import { ACTION_MARKERS, parentIds, parseTasks, sameNesting, NOTE_MARKER, NoteSection, PROJECT_MARKER, SECTION_MARKERS, TaskLine, writeNoteSection } from "./codec";
+import { ACTION_MARKERS, parentIds, parseTasks, sameNesting, NOTE_MARKER, NoteSection, PROJECT_MARKER, SECTION_MARKERS, TaskLine, TIME_MARKER, writeNoteSection } from "./codec";
 import { DEFAULT_SETTINGS, elapsed, localDate, object, Settings, Status, Task } from "./model";
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
 import { Context, report, TaskService } from "./service";
 import { formatMinutes } from "./sessions";
-import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RetireModal, TaskPicker } from "./modals";
+import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RetireModal, SessionModal, TaskPicker } from "./modals";
 import { OrganizedInspectorView, VIEW_TYPE } from "./view";
 import { OrganizedSettingsTab } from "./settings";
 import { editorExtension, reading, refreshEditor } from "./render";
@@ -425,12 +425,19 @@ export default class Organized extends Plugin {
   async trigger(context: Context): Promise<void> {
     const marker = context.line.marker; const id = context.line.id; if (!id) return;
     this.assertWritable(); this.context = context; this.selectedTaskId = id;
-    if (marker === "<") { const task = await this.repo.read(id); new DatePicker(this.app, task.scheduled ?? localDate(), date => this.run(() => this.service.schedule(context, date))).open(); }
+    if (marker === "<") { const task = await this.repo.read(id); new DatePicker(this.app, task.scheduled ?? localDate(), date => this.run(() => this.service.schedule(context, date)), task.scheduled ? () => this.run(() => this.service.unschedule(id)) : undefined).open(); }
     else if (marker === "!") new PriorityPicker(this.app, priority => this.run(() => this.service.priority(context, priority))).open();
     else if (marker in SECTION_MARKERS) { await this.openInspector("Task", SECTION_MARKERS[marker]); await this.run(() => this.service.clean(context)); }
     else if (marker === PROJECT_MARKER) this.pickProjects(await this.repo.read(id), context);
     else if (marker === NOTE_MARKER) this.convertToNote(await this.repo.read(id), context);
+    else if (marker === TIME_MARKER) this.addTime(await this.repo.read(id), context);
     else await this.run(() => this.service.marker(context, marker));
+  }
+  /** Asks for a block of time worked on the todo (on the day of its daily note, or today), then puts the todo's own marker back. Cancelling leaves the `[t]` in place. */
+  private addTime(task: Task, context: Context): void {
+    const at = (time: string) => new Date(`${this.service.daily.date(context.file.path) ?? localDate()}T${time}:00`).toISOString();
+    const marker = task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.time_tracking_started_at ? "/" : " ";
+    new SessionModal(this.app, { heading: "Add time worked", taskTitle: task.title, start: at("09:00"), end: at("10:00"), save: async next => { await this.run(() => this.service.addSession(task.id, next)); await this.run(() => this.service.clean(context, marker)); } }).open();
   }
   /** Folders offered for a standalone note. */
   noteFolders(): string[] { return this.app.vault.getAllLoadedFiles().filter(f => f instanceof TFolder && f.path !== "/").map(f => f.path).sort(); }

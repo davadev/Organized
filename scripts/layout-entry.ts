@@ -53,7 +53,7 @@ let modal: DatePicker | SessionModal | NoteConversionModal | OnboardingModal | R
     const doc = tab === 'Eof' ? 'intro\n- [ ] Test task <!--organized:task1234-->' : tab === 'AlignRight' ? '- [ ] Short <!--organized:task1234-->\n- [ ] A much longer task title that wraps onto a second line on a phone screen <!--organized:task1234-->\n- [ ] Romeo Schmerzmittel <!--organized:task1234-->\n    - Proverbs 4_18' : '- [ ] Test task <!--organized:task1234--> <!--organized:repeat-->';
     editor = new EditorView({ state: EditorState.create({ doc, selection: { anchor: 0 }, extensions: [EditorView.lineWrapping, ...(tab === 'Source' ? [] : [editorLivePreviewField]), editorExtension(owner)] }), parent: root });
   } else if (tab === 'ScheduleModal') {
-    modal = new DatePicker(app, '2026-01-01', async () => undefined);
+    modal = new DatePicker(app, '2026-01-01', async () => undefined, async () => undefined);
     modal.open();
   } else if (tab === 'SessionModal') {
     modal = new SessionModal(app, { heading: 'Edit time worked', taskTitle: 'A task title that stays readable at phone widths', start: new Date(2026, 2, 4, 9, 0).toISOString(), end: new Date(2026, 2, 4, 10, 30).toISOString(), save: async () => undefined, remove: async () => undefined, openTask: async () => undefined });

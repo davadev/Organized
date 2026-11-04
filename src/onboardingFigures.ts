@@ -80,7 +80,7 @@ function cardFigure(fig: HTMLElement): void {
   for (const [icon, label] of SUBTASK_ACTIONS) { const item = actions.createDiv({ cls: "organized-welcome-fig-action" }); setIcon(item.createSpan({ cls: "organized-welcome-fig-action-icon" }), icon); item.createSpan({ text: label }); }
 }
 
-const KEYS: [string, string][] = [["!", "Priority"], ["<", "Schedule"], ["/", "Start a timer"], ["*", "Favorite"], ["j", "Link projects"], ["n", "Make a note"]];
+const KEYS: [string, string][] = [["!", "Priority"], ["<", "Schedule"], ["/", "Start a timer"], ["t", "Log time worked"], ["*", "Favorite"], ["j", "Link projects"], ["n", "Make a note"], ["r", "Repeat"]];
 function keysFigure(fig: HTMLElement): void {
   const grid = fig.createDiv({ cls: "organized-welcome-fig-keys" });
   for (const [key, label] of KEYS) {

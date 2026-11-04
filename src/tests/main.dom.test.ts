@@ -3,9 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { EditorState, Transaction } from "@codemirror/state";
 import Organized from "../main";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
-import { harness } from "./harness";
+import { harness, sessionFields } from "./harness";
 import { MarkdownView, Modal, Notice, TFolder } from "./__mocks__/obsidian";
-import { ConfirmModal, DatePicker, KEEP_AS_TODO, NoteConversionModal, OnboardingModal, RetireModal, PriorityPicker, ProjectPicker, TaskPicker } from "../modals";
+import { ConfirmModal, DatePicker, KEEP_AS_TODO, SessionModal, NoteConversionModal, OnboardingModal, RetireModal, PriorityPicker, ProjectPicker, TaskPicker } from "../modals";
 import { parseTasks } from "../codec";
 import { OrganizedInspectorView, VIEW_TYPE } from "../view";
 import { localDate } from '../model';
@@ -157,10 +157,21 @@ describe('plugin lifecycle and user-only editor actions', () => {
     picker.onChooseSuggestion(KEEP_AS_TODO); picker.close(); await flush();
     expect(editor.getValue()).toBe('- [ ] Keep ordinary'); expect(await plugin.repo.list()).toHaveLength(0);
   });
+  it('opens the time-worked dialog for [t], logs the time and restores the todo marker; cancelling keeps the marker', async () => {
+    const { h, plugin } = await loaded(); const task = await plugin.repo.create('Hours'); const file: any = await h.add('Daily/2026-01-01.md', '');
+    const context = (marker: string) => { const text = `- [${marker}] Hours <!--organized:${task.id}-->`; h.texts.set(file.path, text); return { file, line: parseTasks(text)[0] }; };
+    await plugin.trigger(context('t')); let modal = Modal.instances.at(-1) as unknown as SessionModal; expect(modal.titleEl.textContent).toBe('Add time worked'); expect(sessionFields(modal.contentEl)[0].value).toBe(`2026-01-01T09:00`); modal.close(); expect(h.texts.get(file.path)).toContain('[t]');
+    await plugin.trigger(context('t')); modal = Modal.instances.at(-1) as unknown as SessionModal; await modal.edit.save({ start: '2026-01-01T09:00:00.000Z', end: '2026-01-01T09:30:00.000Z' });
+    expect((await plugin.repo.read(task.id)).work_sessions).toHaveLength(1); expect(h.texts.get(file.path)).toContain('[ ] Hours'); modal.close();
+    for (const [status, marker] of [['completed', 'x'], ['canceled', '-']] as const) { await plugin.repo.update(task.id, t => ({ ...t, status })); await plugin.trigger(context('t')); modal = Modal.instances.at(-1) as unknown as SessionModal; await modal.edit.save({ start: '2026-01-01T10:00:00.000Z', end: '2026-01-01T10:30:00.000Z' }); expect(h.texts.get(file.path)).toContain(`[${marker}] Hours`); modal.close(); }
+    await plugin.repo.update(task.id, t => ({ ...t, status: 'in_progress', time_tracking_started_at: '2026-01-01T00:00:00Z' })); await plugin.trigger(context('t')); modal = Modal.instances.at(-1) as unknown as SessionModal; await modal.edit.save({ start: '2026-01-01T11:00:00.000Z', end: '2026-01-01T11:30:00.000Z' }); expect(h.texts.get(file.path)).toContain('[/] Hours'); modal.close();
+    const plain: any = await h.add('Plain.md', ''); const text = `- [t] Hours <!--organized:${task.id}-->`; h.texts.set(plain.path, text); await plugin.trigger({ file: plain, line: parseTasks(text)[0] }); modal = Modal.instances.at(-1) as unknown as SessionModal; expect(sessionFields(modal.contentEl)[0].value).toBe(`${localDate()}T09:00`); modal.close();
+  });
   it('routes date, priority, description, source and project markers with cancellation preserving markers', async () => {
     const { h, plugin } = await loaded(); const task = await plugin.repo.create('Task'); const file: any = await h.add('Note.md', '');
     const context = (marker: string) => { const text = `- [${marker}] Task <!--organized:${task.id}-->`; h.texts.set(file.path, text); return { file, line: parseTasks(text)[0] }; };
-    const schedule = vi.spyOn(plugin.service, 'schedule').mockResolvedValue(); await plugin.trigger(context('<')); let modal = Modal.instances.at(-1) as DatePicker; expect(modal).toBeInstanceOf(DatePicker); await modal.choose('2026-01-01'); expect(schedule).toHaveBeenCalled(); modal.close();
+    const schedule = vi.spyOn(plugin.service, 'schedule').mockResolvedValue(); await plugin.trigger(context('<')); let modal = Modal.instances.at(-1) as DatePicker; expect(modal).toBeInstanceOf(DatePicker); await modal.choose('2026-01-01'); expect(schedule).toHaveBeenCalled(); modal.close(); expect(modal.clear).toBeUndefined();
+    const unschedule = vi.spyOn(plugin.service, 'unschedule').mockResolvedValue(); await plugin.repo.update(context('<').line.id!, t => ({ ...t, scheduled: '2026-01-05' })); await plugin.trigger(context('<')); modal = Modal.instances.at(-1) as DatePicker; await modal.clear!(); expect(unschedule).toHaveBeenCalledWith(context('<').line.id); modal.close();
     const priority = vi.spyOn(plugin.service, 'priority').mockResolvedValue(); await plugin.trigger(context('!')); const picker = Modal.instances.at(-1) as PriorityPicker; await picker.choose('high'); expect(priority).toHaveBeenCalled(); picker.close();
     const open = vi.spyOn(plugin, 'openInspector').mockResolvedValue(); const clean = vi.spyOn(plugin.service, 'clean').mockResolvedValue(); for (const marker of ['a', 's']) await plugin.trigger(context(marker)); expect(open.mock.calls.map(c => c[1])).toEqual(['Description', 'Sources']); expect(clean).toHaveBeenCalledTimes(2);
     await plugin.trigger(context('s')); expect(open).toHaveBeenLastCalledWith('Task', 'Sources'); expect(clean).toHaveBeenCalledTimes(3);

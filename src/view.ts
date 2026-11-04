@@ -500,7 +500,7 @@ export class OrganizedInspectorView extends ItemView {
     await this.moduleCard(details, file.path, id, "Description", noteSection(body, "Description"));
     await this.subtaskCard(details, task);
     if (task.priority !== "none" || this.module === "Priority") this.select(this.card(details, "Priority", "flag"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.service.setPriority(id, value as Task["priority"], this.owner.context?.line.id === id ? this.owner.context : undefined); this.owner.refresh(); }); });
-    if (task.scheduled || this.module === "Schedule") this.button(this.card(details, "Schedule", "calendar"), task.scheduled ?? "Choose date", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined))).open(); });
+    if (task.scheduled || this.module === "Schedule") this.button(this.card(details, "Schedule", "calendar"), task.scheduled ?? "Choose date", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined)), task.scheduled ? () => this.owner.run(() => this.owner.service.unschedule(id)) : undefined).open(); });
     if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || this.module === "Timer") {
       const timer = this.card(details, "Timer", "timer"); const row = timer.createDiv({ cls: "organized-timer-row" });
       row.createDiv({ cls: "organized-timer-value", text: `${formatMinutes(Math.floor(elapsed(task) / 60))}${task.time_tracking_started_at ? " · running" : ""}` });

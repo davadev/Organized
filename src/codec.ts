@@ -15,7 +15,9 @@ export const PROJECT_MARKER = "j";
 export const RECURRING_MARKER = "r";
 /** Turns a todo into a standalone note and leaves a link to it. */
 export const NOTE_MARKER = "n";
-export const ACTION_MARKERS = `<>/!xX-*${Object.keys(SECTION_MARKERS).join("")}${PROJECT_MARKER}${RECURRING_MARKER}${NOTE_MARKER}`;
+/** Opens the dialog that adds a block of time worked to the todo. */
+export const TIME_MARKER = "t";
+export const ACTION_MARKERS = `<>/!xX-*${Object.keys(SECTION_MARKERS).join("")}${PROJECT_MARKER}${RECURRING_MARKER}${NOTE_MARKER}${TIME_MARKER}`;
 /**
  * Task note body: the description is the text itself and `## Sources` is the only heading Organized writes, so the note reads
  * naturally without the plugin. Older notes used `## Description`, `## Notes` (and `## Idea`/`## Question`) headings; they are

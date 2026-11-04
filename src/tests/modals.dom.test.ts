@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
 import { TaskPicker, PriorityPicker, DatePicker, ConfirmModal, ProjectPicker, SessionModal, NoteConversionModal, OnboardingModal, RetireModal, KEEP_AS_TODO } from "../modals";
 import { newTask } from "../model";
-import { harness } from "./harness";
+import { harness, sessionFields } from "./harness";
 import { Notice, Setting } from "./__mocks__/obsidian";
 
 installObsidianDom();
@@ -48,6 +48,12 @@ describe("native task, date, source and project modals", () => {
     external.click(); expect(windowOpen).toHaveBeenCalledWith('https://example.com', '_blank', 'noopener'); windowOpen.mockRestore();
     const missingHref = vi.spyOn(anchor, 'getAttribute').mockReturnValue(null); anchor.click(); expect(open).toHaveBeenCalledOnce(); missingHref.mockRestore();
   });
+  it("offers Clear date only when a clear action is given", async () => {
+    const h = harness(); const clear = vi.fn(async () => undefined);
+    const plain = new DatePicker(h.app, '2026-01-01', async () => undefined); plain.open(); expect(Array.from(plain.contentEl.querySelectorAll('button')).map(b => b.textContent)).toEqual(['Schedule']); plain.close();
+    const modal = new DatePicker(h.app, '2026-01-01', async () => undefined, clear); modal.open(); Array.from(modal.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Clear date')!.click(); await flush(); expect(clear).toHaveBeenCalledOnce(); expect(modal.contentEl.childElementCount).toBe(0);
+    const failed = new DatePicker(h.app, '2026-01-01', async () => undefined, async () => { throw Error('clear failure'); }); failed.open(); Array.from(failed.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Clear date')!.click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain('clear failure');
+  });
   it("date confirmation validates, cancellation creates nothing, errors are visible", async () => {
     const h = harness(); const choose = vi.fn(async () => undefined); const modal = new DatePicker(h.app, '2026-01-01', choose); modal.open(); decorated(modal);
     const input = modal.contentEl.querySelector('input') as HTMLInputElement; input.value = ''; modal.contentEl.querySelector('button')!.click(); expect(choose).not.toHaveBeenCalled();
@@ -82,7 +88,7 @@ describe("native task, date, source and project modals", () => {
     const h = harness(); const at = (hour: number, min = 0) => new Date(2026, 2, 4, hour, min).toISOString(); const now = new Date(2026, 2, 4, 18, 0).getTime();
     const save = vi.fn(async () => undefined); const remove = vi.fn(async () => undefined); const open = vi.fn(async () => undefined);
     const modal = new SessionModal(h.app, { heading: "Edit time worked", taskTitle: "Plan", start: at(9), end: at(10, 30), save, remove, openTask: open }, () => now); modal.open(); decorated(modal);
-    const [start, end] = Array.from(modal.contentEl.querySelectorAll<HTMLInputElement>('input[type=datetime-local]')); const note = () => modal.contentEl.querySelector('.organized-session-note')!;
+    const [start, end] = sessionFields(modal.contentEl); const note = () => modal.contentEl.querySelector('.organized-session-note')!;
     expect(modal.contentEl.querySelector('.organized-session-task')!.textContent).toBe("Plan"); expect(start.value).toBe("2026-03-04T09:00"); expect(note().textContent).toBe("Length: 1h 30min"); expect(modal.contentEl.querySelectorAll("button")).toHaveLength(3);
     end.value = "2026-03-04T08:00"; end.dispatchEvent(new Event("input")); expect(note().textContent).toContain("after the start"); expect(note().classList.contains("organized-session-problem")).toBe(true);
     const buttons = () => Array.from(modal.contentEl.querySelectorAll("button")); buttons().find(b => b.textContent === "Save")!.click(); await flush(); expect(save).not.toHaveBeenCalled();
