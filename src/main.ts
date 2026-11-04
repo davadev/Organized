@@ -289,7 +289,7 @@ export default class Organized extends Plugin {
   async pickTask(editor: Editor, file: TFile, duplicate = false, allowTodo = false): Promise<void> {
     this.assertWritable(); const context = this.current(editor, file); if (!context) throw new Error("Place the cursor on a Markdown task-list item.");
     if (context.line.id && !duplicate && await this.repo.exists(context.line.id)) throw new Error("Task already linked. Use duplicate as new task for a fresh identity.");
-    const captured = editor.getValue(); const selection = editor.listSelections();
+    const captured = editor.getValue(); const selection = editor.listSelections(); this.lastNoteEditor = { editor, file };
     this.pickerOpen = true;
     // A failed read must not leave editor handling disabled for good.
     // Finished tasks are history: offering them would bury a chore you repeat under every time you did it. Creating a new task stays one choice away.
@@ -297,8 +297,11 @@ export default class Organized extends Plugin {
     const picker = new TaskPicker(this.app, tasks, async choice => {
       if (isKeepAsTodo(choice)) return;
       await this.run(async () => {
-        if (this.activeEditor()?.editor !== editor || editor.getValue() !== captured || JSON.stringify(editor.listSelections()) !== JSON.stringify(selection)) throw new Error("Editor changed while the picker was open. Line preserved; invoke attach/create to retry.");
-        const task = typeof choice === "string" ? await this.repo.create(choice) : choice;
+        if (this.taskSourceEditor()?.editor !== editor || editor.getValue() !== captured || JSON.stringify(editor.listSelections()) !== JSON.stringify(selection)) throw new Error("Editor changed while the picker was open. Line preserved; invoke attach/create to retry.");
+        let task = typeof choice === "string" ? await this.repo.create(choice) : choice;
+        // A task created for a todo nested under a linked todo belongs to the same projects as its parent.
+        const parent = typeof choice === "string" ? parseTasks(captured).find(t => t.line === context.line.parent)?.id : undefined;
+        if (parent) { const { projects } = await this.repo.read(parent); if (projects.length) task = await this.repo.update(task.id, t => ({ ...t, projects })); }
         await this.service.attach(context, task, duplicate || !!context.line.id);
       });
     }, context.line.title, allowTodo);

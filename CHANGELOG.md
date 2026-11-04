@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed **Add subtask** in the Task tab failing with *Editor changed while the picker was open*: the side panel had taken focus from the note, which was mistaken for a change of note. A task created for a nested todo now also gets the projects of its parent (linking an existing task leaves its projects alone).
 - **Movement history at a glance.** The collapsed *Movement history* list in the Task tab is now always visible as a strip of tiny squares, one per move, oldest first, with *Moved N times* above it. Squares turn from green through yellow and orange to red by how often the task was forwarded compared with what is usual for you, so a task you forward after two weeks stays green much longer than one you usually forward after three days. When enough tasks of the task's project were forwarded (five), the project's own habits set the scale. A date you picked yourself (*Schedule* or *Reschedule*) is drawn in your theme's accent colour. After three rows of ten, the squares become a slider showing how far the task is towards red. Hover a square or open *Details* for the exact moves; the strip is labelled for screen readers.
 - The onboarding card now names the three icon buttons under a task's subtasks (new subtask, link a task, make it a subtask) in the illustration of the step about a todo growing, and its text says what they do.
 - Release housekeeping: the Obsidian indent setting is now read through `normalizePath`, which the release check requires. Beta 77 was not published because of it; this beta carries its changes.

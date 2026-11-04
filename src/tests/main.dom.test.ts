@@ -140,6 +140,15 @@ describe('plugin lifecycle and user-only editor actions', () => {
     editor.setValue('prose'); await expect(plugin.pickTask(editor as any, file)).rejects.toThrow('Markdown task');
     const task = (await plugin.repo.list())[0]; editor.setValue('- [ ] existing'); await plugin.pickTask(editor as any, file); picker = Modal.instances.at(-1) as TaskPicker; picker.onChooseSuggestion(task); picker.close(); await flush(); expect(parseTasks(editor.getValue())[0].id).toBe(task.id);
   });
+  it('keeps the picker usable when the side panel took focus, and gives a new subtask its parent\'s projects', async () => {
+    const { h, plugin } = await loaded(); const parent = await plugin.repo.create('Parent'); await plugin.repo.update(parent.id, t => ({ ...t, projects: ['Family.md'] }));
+    const file: any = await h.add('Sub.md', `- [ ] Parent <!--organized:${parent.id}-->\n    - [ ] Child`); const editor = h.setActive(file); editor.setCursor({ line: 1, ch: 0 });
+    await plugin.pickTask(editor as any, file, false, true); const picker = Modal.instances.at(-1) as TaskPicker; h.clearActive(); picker.onChooseSuggestion('Child'); picker.close(); await flush();
+    const child = (await plugin.repo.list()).find(t => t.title === 'Child')!; expect(child.projects).toEqual(['Family.md']); expect(parseTasks(await plugin.repo.readText(file))[1].id).toBe(child.id);
+    const bare = await plugin.repo.create('Bare'); const other = h.setActive(file, `- [ ] Bare <!--organized:${bare.id}-->\n    - [ ] Nested`); other.setCursor({ line: 1, ch: 0 });
+    await plugin.pickTask(other as any, file, false, true); (Modal.instances.at(-1) as TaskPicker).onChooseSuggestion('Nested'); await flush(); expect((await plugin.repo.list()).find(t => t.title === 'Nested')!.projects).toEqual([]);
+    other.setValue('- [ ] Plain\n    - [ ] Third'); other.setCursor({ line: 1, ch: 0 }); await plugin.pickTask(other as any, file, false, true); const lone = (await plugin.repo.create('NoProjects')); (Modal.instances.at(-1) as TaskPicker).onChooseSuggestion(lone); await flush(); expect((await plugin.repo.read(lone.id)).projects).toEqual([]);
+  });
   it('closes the automatic picker while preserving a plain checkbox todo', async () => {
     const { h, plugin } = await loaded(); const file: any = await h.add('Todo.md', '- [ ] Keep ordinary'); const editor = h.setActive(file);
     await plugin.pickTask(editor as any, file, false, true);
