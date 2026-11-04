@@ -55,6 +55,8 @@ describe("subtasks in the Task tab", () => {
     const make = Array.from(f.view.contentEl.querySelectorAll<HTMLButtonElement>("button")).find(b => b.getAttribute("aria-label") === "Make subtask of…")!; make.click(); await flush(); expect(tasks()).not.toContain("Loner");
     const picker = Modal.instances.at(-1) as TaskPicker; picker.onChooseSuggestion(picker.tasks.find(t => t.title === "Parent")!); picker.close(); await flush(); expect((await f.owner.repo.read(f.parent.id)).subtasks).toContain("[[Loner]]");
     expect(Array.from(f.view.contentEl.querySelectorAll("button")).some(b => b.getAttribute("aria-label") === "Remove from parent")).toBe(true);
+    await f.show(f.parent.id); const unlink = f.view.contentEl.querySelector<HTMLButtonElement>('button.organized-subtask-unlink[aria-label="Remove Loner from this task"]')!; unlink.click(); await flush();
+    expect((await f.owner.repo.read(f.parent.id)).subtasks).not.toContain("[[Loner]]");
   });
   it("shows an empty Subtasks card on request, and adds a subtask under the todo in the open note", async () => {
     const f = await fixture(); const loner = await f.owner.repo.create("Loner"); await f.show(loner.id); expect(f.view.contentEl.querySelector('[aria-label="Add subtask"]')).toBeNull();

@@ -574,6 +574,7 @@ export class OrganizedInspectorView extends ItemView {
       toggle.addEventListener("click", () => { void this.owner.run(() => this.owner.service.status(child.id, child.status === "completed" ? "open" : "completed")).catch(report); });
       const open = row.createEl("button", { cls: "organized-subtask-title", text: child.title, attr: { "aria-label": `Open subtask ${child.title}` } });
       open.addEventListener("click", () => { void this.openTask(child).catch(report); });
+      this.iconButton(row, `Remove ${child.title} from this task`, "unlink", () => this.owner.run(() => this.owner.service.detachSubtask(child.id))).addClass("organized-subtask-unlink");
     }
     // Every subtask is done but the parent is not: say so, and offer the step that is left.
     if (counted.length && done === counted.length && task.status !== "completed" && !task.recurring) this.button(card, "Complete parent", () => this.owner.run(() => this.owner.service.status(task.id, "completed", this.owner.context?.line.id === task.id ? this.owner.context : undefined))).addClass("organized-complete-parent");
