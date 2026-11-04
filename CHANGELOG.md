@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **A clearer README.** It now says why Organized exists next to calendar and task plugins (and when it is not the right tool), and tours the side panel with numbered screenshots, including a task with nothing added to show how little a todo costs. The numbered pictures are rendered from the plugin's own code like the others.
 - **Clear a date.** The schedule dialog (the `[<]` marker and the Schedule card) now has **Clear date** on a scheduled task: the date goes, a todo that was scheduled away reopens where it stood and the copy on the scheduled day is removed. The movement history keeps the record.
 - **`[t]` logs time worked from the todo.** Type `[t]` in the checkbox and a dialog asks for a start and an end (on the day of the daily note), logs the block on the task and the calendar, and puts the todo's own marker back. Cancelling leaves the `[t]`.
 - **A calmer time dialog.** The start and end of a block of time are now a date and a time side by side instead of one wide field that ran off the edge of a phone dialog, and no field takes focus on opening, so the system picker no longer pops up over the form.
