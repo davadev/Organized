@@ -132,7 +132,7 @@ Identity and recurrence comments stay hidden in Live Preview, including the line
 
 | Marker | Action |
 |---|---|
-| `[<]` | Choose schedule date; keep origin marker, link daily destination. Open subtasks travel with it |
+| `[<]` | Choose schedule date; keep origin marker, link daily destination. Open subtasks travel with it. On a scheduled task the dialog also has **Clear date**: the date goes, the todo reopens where it was and the copy on the scheduled day is removed |
 | `[>]` | Forward to tomorrow; daily origin stays gray, undated origin stays active. Open subtasks travel with it |
 | `[/]` | Start durable wall-clock timer; complete or clear to stop/log. Changing the `/` to anything else, or deleting the line, stops the timer too and a notice says so |
 | `[!]` | High/medium/low/none priority, constrained sort, then clear |
@@ -143,6 +143,7 @@ Identity and recurrence comments stay hidden in Live Preview, including the line
 | `[s]` | Open the Sources section for inline Markdown references (URLs/Obsidian links, optional labels/citations) |
 | `[j]` | Multi-select project notes; missing selected notes are created in `<task folder>/Projects/` with `organized_type: project` and an `organized_start` date in their frontmatter and **Open / In progress / Ongoing / Done** headings that linked tasks move between as their status changes, and only such notes are listed. A project can have a colour (`organized_color: "#rrggbb"`, set from the Projects tab) shown as a dot beside its name on task cards and as the fill of its blocks in the calendar |
 | `[n]` | Make a standalone note: asks for a folder, optional tags and an optional template, creates a note titled after the todo holding its description (then sources), and replaces the todo with a link to it. If a note of that name exists you can number the new one or link the existing one. The task's other copies are removed and its task note moves to Obsidian's trash. Also on the Task tab as **Make standalone note** Tracked time is kept: a running timer is logged, and a task with tracked sessions keeps a hidden task note so the calendar still shows (and links to) its time. |
+| `[t]` | Add time worked: asks for a start and an end (on the day of the daily note, 9:00–10:00 to begin with), logs the block on the task and the calendar, then restores the todo's own marker. Cancel leaves the `[t]` |
 | `[r]` | Toggle recurrence in existing/current/future and subsequently created daily notes; clear after success |
 
 Only the markers above act. Every other character, including the old action letters `[i]`, `[I]`, `[?]`, `["]`, `[b]` and `[f]` and the theme glyphs `[d]`, `[p]`, `[k]`, `[l]`, `[S]`, `[c]`, `[w]`, `[u]`, `[D]`, `[P]`, `[M]`, is **formatting only**: it shows its icon and never changes metadata or storage. Use them freely to style a todo without side effects. Things-style glyphs are bundled, so the Things theme is not required.

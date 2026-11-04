@@ -150,13 +150,13 @@ try {
         if (box.y > 96) throw Error(`Schedule modal is not top-aligned: ${box.y}`);
         if (box.width > width - 8) throw Error(`Schedule modal overflows its ${width}px host: ${box.width}`);
         const title = await page.locator('.organized-modal-window .modal-title').innerText(); if (title !== 'Schedule task') throw Error(`Schedule modal title regressed: ${title}`);
-        const button = page.locator('.organized-modal-window .modal-content button'); if (!(await button.isVisible())) throw Error('Schedule modal action is hidden');
+        const buttons = page.locator('.organized-modal-window .modal-content button'); if ((await buttons.allTextContents()).join(',') !== 'Schedule,Clear date' || !(await buttons.first().isVisible()) || !(await buttons.last().isVisible())) throw Error('Schedule modal actions are missing or hidden');
       }
       if (tab === 'SessionModal') {
         const window = page.locator('.organized-modal-window'); const box = await window.boundingBox(); if (!box) throw Error('Session modal is not visible');
         if (box.y > 96 || box.width > width - 8) throw Error(`Session modal is misplaced: ${JSON.stringify(box)} at ${width}`);
-        const fields = await page.evaluate(() => Array.from(document.querySelectorAll('.organized-modal-window input[type=datetime-local]')).map(input => { const b = input.getBoundingClientRect(); const w = document.querySelector('.organized-modal-window').getBoundingClientRect(); return b.left >= w.left - 1 && b.right <= w.right + 1; }));
-        if (fields.length !== 2 || fields.some(inside => !inside)) throw Error(`Session fields leave the modal: ${fields}`);
+        const fields = await page.evaluate(() => Array.from(document.querySelectorAll('.organized-modal-window input[type=date], .organized-modal-window input[type=time]')).map(input => { const b = input.getBoundingClientRect(); const w = document.querySelector('.organized-modal-window').getBoundingClientRect(); return b.left >= w.left - 1 && b.right <= w.right + 1; }));
+        if (fields.length !== 4 || fields.some(inside => !inside)) throw Error(`Session fields leave the modal: ${fields}`);
         const buttons = await page.locator('.organized-modal-window .modal-content button').allTextContents(); if (buttons.join(',') !== 'Save,Open task,Delete') throw Error(`Session modal actions regressed: ${buttons}`);
         const clipped = await page.evaluate(() => { const w = document.querySelector('.organized-modal-window').getBoundingClientRect(); return Array.from(document.querySelectorAll('.organized-modal-window .modal-content button')).filter(b => { const r = b.getBoundingClientRect(); return r.right > w.right + 1 || r.left < w.left - 1 || r.bottom > w.bottom + 1; }).map(b => b.textContent); });
         if (clipped.length) throw Error(`Session modal actions are clipped at ${width}px: ${clipped}`);

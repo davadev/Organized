@@ -82,3 +82,10 @@ export function fakeEditor(initial: string) {
     replaceRange: (text: string, from: typeof cursor, to = from) => { value = value.slice(0, offset(from)) + text + value.slice(offset(to)); },
   };
 }
+
+/** The start and end fields of a time-worked dialog, each reading and writing the `YYYY-MM-DDTHH:mm` value its date and time inputs make together. */
+export function sessionFields(root: HTMLElement): { value: string; dispatchEvent: (event: Event) => boolean; label: string }[] {
+  const pair = (name: string) => { const date = root.querySelector<HTMLInputElement>(`input[aria-label="${name} date"]`)!, time = root.querySelector<HTMLInputElement>(`input[aria-label="${name} time"]`)!;
+    return { get value() { return `${date.value}T${time.value}`; }, set value(v: string) { [date.value, time.value] = v.split("T"); }, dispatchEvent: (event: Event) => date.dispatchEvent(event) && time.dispatchEvent(new Event(event.type)), label: name }; };
+  return [pair("Start"), pair("End")];
+}

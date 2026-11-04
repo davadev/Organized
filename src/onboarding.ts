@@ -53,7 +53,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "Type a letter in the checkbox",
-    text: "No menus needed: put a letter between the brackets. `[n]` gives a todo its own note, for things that deserve more than a line. The first six are below; the README lists them all.",
+    text: "No menus needed: a letter between the brackets does what the panel does. Set priority, schedule or clear a date, start a timer, log time worked, link projects, repeat, favorite. `[n]` gives a todo its own note, for things that deserve more than a line. Eight are below; the README lists them all.",
     figure: "keys",
   },
   {

@@ -61,16 +61,18 @@ export class PriorityPicker extends SuggestModal<Priority> {
   onChooseSuggestion(value: Priority): void { void this.choose(value).catch(report); }
 }
 export class DatePicker extends Modal {
-  constructor(app: App, readonly initial: string, readonly choose: (date: string) => Promise<void>) { super(app); decorate(this); }
+  /** `clear`, when given, adds a button that removes the date again. */
+  constructor(app: App, readonly initial: string, readonly choose: (date: string) => Promise<void>, readonly clear?: () => Promise<void>) { super(app); decorate(this); }
   onOpen(): void {
     this.titleEl.setText("Schedule task"); this.contentEl.addClass("organized-modal");
     this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Scheduled date" });
     const input = this.contentEl.createEl("input", { type: "date", attr: { "aria-label": "Scheduled date" } }); input.value = this.initial;
-    new Setting(this.contentEl).addButton(b => b.setButtonText("Schedule").setCta().onClick(() => {
+    const actions = new Setting(this.contentEl);
+    actions.addButton(b => b.setButtonText("Schedule").setCta().onClick(() => {
       if (!validDate(input.value)) { input.setCustomValidity("Choose a valid date."); input.reportValidity(); return; }
       this.close(); void this.choose(input.value).catch(report);
     }));
-    input.focus();
+    if (this.clear) { const clear = this.clear; actions.addButton(b => b.setButtonText("Clear date").onClick(() => { this.close(); void clear().catch(report); })); }
   }
   onClose(): void { this.contentEl.empty(); }
 }
@@ -123,18 +125,23 @@ export class SessionModal extends Modal {
   onOpen(): void {
     this.titleEl.setText(this.edit.heading); this.contentEl.addClass("organized-modal");
     this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-task", text: this.edit.taskTitle });
+    // A date and a time side by side: one datetime-local field is wider than a phone's dialog and opens its picker over the form the moment it is focused.
     const field = (label: string, iso: string) => {
       this.contentEl.createEl("label", { cls: "organized-modal-label", text: label });
-      const input = this.contentEl.createEl("input", { type: "datetime-local", attr: { "aria-label": label } }); input.value = localInput(iso); return input;
+      const row = this.contentEl.createDiv({ cls: "organized-datetime" }); const [day, time] = localInput(iso).split("T");
+      const date = row.createEl("input", { type: "date", attr: { "aria-label": `${label} date` } }); date.value = day;
+      const clock = row.createEl("input", { type: "time", attr: { "aria-label": `${label} time` } }); clock.value = time;
+      return { inputs: [date, clock], value: () => `${date.value}T${clock.value}` };
     };
     const start = field("Start", this.edit.start); const end = field("End", this.edit.end);
     const note = this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-note", attr: { role: "status" } });
-    const read = () => ({ start: isoFromInput(start.value), end: isoFromInput(end.value) });
+    const read = () => ({ start: isoFromInput(start.value()), end: isoFromInput(end.value()) });
     const paint = () => {
       const { start: from, end: to } = read(); const problem = sessionProblem(from, to, this.now());
       note.setText(problem ?? `Length: ${lengthOf({ start: from!, end: to! })}`); note.toggleClass("organized-session-problem", problem !== null);
     };
-    start.addEventListener("input", paint); end.addEventListener("input", paint); paint();
+    for (const input of [...start.inputs, ...end.inputs]) input.addEventListener("input", paint);
+    paint();
     const actions = new Setting(this.contentEl);
     actions.addButton(b => b.setButtonText("Save").setCta().onClick(() => {
       const { start: from, end: to } = read(); const problem = sessionProblem(from, to, this.now()); if (problem) { paint(); return; }
@@ -142,7 +149,6 @@ export class SessionModal extends Modal {
     }));
     if (this.edit.openTask) { const open = this.edit.openTask; actions.addButton(b => b.setButtonText("Open task").onClick(() => { this.close(); void open().catch(report); })); }
     if (this.edit.remove) { const remove = this.edit.remove; actions.addButton(b => { b.setButtonText("Delete").onClick(() => { this.close(); void remove().catch(report); }); b.buttonEl.addClass("mod-warning"); }); }
-    start.focus();
   }
   onClose(): void { this.contentEl.empty(); }
 }

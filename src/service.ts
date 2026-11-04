@@ -139,6 +139,18 @@ export class TaskService {
     if (!nested) await this.scheduleOpenSubtasks(task, date);
     this.changed();
   }
+  /** Takes the date off a task: a todo that was scheduled away (`[<]`) is open again where it stands and the copy on the scheduled day is removed. The movement history keeps the record. */
+  async unschedule(id: string): Promise<void> {
+    const task = await this.repo.read(id); const date = task.scheduled; if (!date) return;
+    await this.repo.update(id, t => ({ ...t, scheduled: null }));
+    const changes: Change[] = [];
+    for (const occurrence of await this.repo.occurrences(id)) {
+      const line = occurrence.tasks.find(t => t.marker === "<"); if (!line) continue;
+      await this.edit(occurrence.file, occurrence.text, replaceTask(occurrence.text, line, { marker: " " }), changes);
+    }
+    await this.cleanupSchedule(id, date, undefined, changes);
+    this.changed();
+  }
   /** Schedules the open and in-progress subtasks of a task that is scheduled from the panel (there is no todo line to read their nesting from), each under its own parent. */
   private async scheduleOpenSubtasks(parent: Task, date: string, seen = new Set([parent.id])): Promise<void> {
     for (const child of await this.repo.subtasksOf(parent)) {
