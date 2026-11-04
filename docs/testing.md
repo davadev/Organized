@@ -135,6 +135,7 @@ The images in `resources/screenshots/` are rendered, not captured: `scripts/rend
 - `npm run check:screenshots` renders into a temp folder and fails on a script error, horizontal overflow, an empty scene or an icon without a glyph. CI runs it in the Chromium job.
 - A new icon in the UI makes the check fail with its name; add its Lucide paths to `icons.json`.
 - A new scene is one entry in `SCENES` (script) and one branch in `entry.ts`; add it to the README with alt text.
+- The `*-annotated` scenes redraw a base scene on the light theme with numbered, dashed boxes (`task-annotated`, `month-annotated`...). Each callout is a CSS selector, measured with `getBoundingClientRect()`; a selector that stops matching throws, and `scripts/lib/calloutChecks.mjs` (tested in `src/tests/calloutChecks.test.ts`) fails the run when numbers skip, a box or circle leaves the image, or circles overlap. They are written as `<scene>.png`. The README legends are bullet lists with the number typed out (GitHub renumbers `1.` lists), in the same order; change both together.
 
 ## Onboarding card
 

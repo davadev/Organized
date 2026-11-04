@@ -10,7 +10,18 @@ The side panel, rendered from the plugin's own code and styles with sample data 
 
 <table><tr><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/day-dark.png"><img src="resources/screenshots/day-light.png" alt="Day view: the day's tasks above a time grid with blocks for when each task was in progress, overlapping blocks side by side, and a now-line." width="300"></picture><br><sub>Day</sub></td><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/week-dark.png"><img src="resources/screenshots/week-light.png" alt="Week view: seven day rows, each with its done and total counts and a thin timeline of when work happened." width="300"></picture><br><sub>Week</sub></td><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/month-dark.png"><img src="resources/screenshots/month-light.png" alt="Month calendar with a dot on days that have a daily note, and active, done-today and timer counts." width="300"></picture><br><sub>Month</sub></td></tr></table>
 
-<table><tr><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/task-dark.png"><img src="resources/screenshots/task-light.png" alt="Task tab: a task with its status, description, priority, schedule, running timer, projects and sources." width="300"></picture><br><sub>Task</sub></td><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/projects-dark.png"><img src="resources/screenshots/projects-light.png" alt="Projects tab: tasks grouped by project with a filter, colour dots and counts." width="300"></picture><br><sub>Projects</sub></td></tr></table>
+<table><tr><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/task-minimal-dark.png"><img src="resources/screenshots/task-minimal-light.png" alt="Task tab for a task with nothing added: just a title, a status and an Add details menu." width="300"></picture><br><sub>Task, nothing added</sub></td><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/task-dark.png"><img src="resources/screenshots/task-light.png" alt="Task tab: a task with its status, description, priority, schedule, running timer, projects and sources." width="300"></picture><br><sub>Task, everything added</sub></td><td align="center" valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/screenshots/projects-dark.png"><img src="resources/screenshots/projects-light.png" alt="Projects tab: tasks grouped by project with a filter, colour dots and counts." width="300"></picture><br><sub>Projects</sub></td></tr></table>
+
+## Why another plugin?
+
+There are excellent calendar plugins and excellent task plugins. Organized is neither a calendar you plan in nor a database you query. It is built around one habit: **you run your day from a daily note**, and the todos in it should not be forgotten, lost or turned into something else.
+
+- **Most task plugins make your todo an item in their system.** Special syntax, query blocks, dashboards. Organized leaves your `- [ ]` line exactly as it is and adds a *memory* behind it: when it was scheduled, how many days it was carried over, how long you worked on it, which project it belongs to.
+- **Most calendar plugins show your notes by date.** Organized shows what you did: a week of bars and a day of time blocks drawn from the timers you actually ran, coloured by project.
+- **Procrastination becomes visible.** A todo you keep carrying over shows it, in a strip of small squares that turn from green to red against *your own* habits, not a fixed rule.
+- **Nothing to adopt.** Open today's daily note and yesterday's open todos are already there. Everything else is opt-in, one todo at a time.
+
+Organized is **not** a query language, a kanban board or a dashboard builder. If you live in those, a dedicated task plugin is the better home for your todos, and Organized can sit next to it. If you only wish your daily note remembered what you did not finish, this is for you.
 
 ## Why use it
 
@@ -41,9 +52,85 @@ flowchart LR
     F -. "grows into" .-> H["Standalone note"]
 ```
 
-## Simple on purpose
+## A tour of the side panel
 
-The Task view does not show every field a todo can hold. A task shows its title and status first. Everything else sits behind one **Add details** menu, and optional sections such as sources stay hidden until they hold something. The idea is that a todo should cost nothing until you decide it deserves more, so you only ever see what you chose to use. An empty form with twenty fields is how a todo list turns into chores.
+The side panel is where a todo's memory is shown. The green numbers on each picture match the lists below them; the pictures are rendered from the plugin's own code and styles with sample data, so they are regenerated rather than re-captured when the interface changes.
+
+### Start in the daily note
+
+You do not need the panel to use Organized. Put a letter between the brackets of a todo and it does that thing, then the checkbox goes back to normal:
+
+| Type | What happens |
+|---|---|
+| `[!]` | Choose a priority |
+| `[<]` | Schedule it for a date (or clear the date) |
+| `[/]` | Start a timer; its time is recorded |
+| `[t]` | Log time you already worked |
+| `[*]` | Favourite it |
+| `[j]` | Link it to projects |
+| `[n]` | Turn it into a standalone note |
+
+Almost everything the panel does to a todo has a letter (the [full list](#marker-reference) is further down). The panel is there for the whole picture, never as a place you are forced to work in.
+
+### Simple on purpose: a task with nothing added
+
+<img src="resources/screenshots/task-minimal-annotated.png" alt="The Task tab for a task with nothing added: a title, a status, an Add details menu and an empty description." width="360">
+
+- **1** · **Status**: open, in progress, completed or canceled. In progress records the time.
+- **2** · **Add details…**: priority, schedule, timer, recurrence, projects, subtasks, description, sources. Each appears as its own card only when you ask for it.
+- **3** · **Favourite**: the star, in case this is one to keep close.
+
+That is all a todo costs until it needs more: a title and a status. No empty form with twenty fields; the panel shows only what you chose to use. If this is all you ever want, [stay here](#use-as-little-or-as-much-as-you-like).
+
+### The same task when you used everything
+
+<img src="resources/screenshots/task-annotated.png" alt="The Task tab for a task that uses every card: status, description, subtasks, priority, schedule, a running timer, projects, sources and a strip of squares showing how often it moved." width="360">
+
+- **1** · **Status**, and **2** · **Add details…**: the same two controls as above.
+- **3** · **Description** is the text of the task note itself. Write `[[Note]]` in it to link any note.
+- **4** · **Subtasks** with their progress. Indent a todo under another in your note (Tab) and it becomes a subtask; completing, canceling or forwarding the parent takes the open ones along.
+- **5** · Three buttons to **add a subtask**, **link an existing task** or **make this a subtask of another**. Each row has a small unlink button.
+- **6** · **Priority**.
+- **7** · **Schedule**: pick a date, or clear it again. Scheduled tasks arrive in that day's note.
+- **8** · **Timer**: the time worked, **Stop timer**, **Add time** by hand, and a list of sessions you can correct.
+- **9** · **Projects** the task belongs to.
+- **10** · **Sources**: links and notes it came from.
+- **11** · **Moves**: one small square per time the task was scheduled or carried over. Squares turn from green to red against how often *you* usually carry things over (per project, once a project has enough tasks), and take your accent colour when you picked the date yourself. Hover a square, or open *Details*, to see each move.
+- **12** · **Open task note**, **Make standalone note**, **Delete task**.
+
+### Calendar: month, week and day
+
+<img src="resources/screenshots/month-annotated.png" alt="The Calendar tab in month view: the four tabs, the Month, Week and Day switch, month navigation, a selected day and three counters." width="360">
+
+- **1** · The four tabs: **Calendar**, **Task**, **Projects**, **Favorites** (a star).
+- **2** · Switch between **Month**, **Week** and **Day**.
+- **3** · Move by month, or jump to **Today**.
+- **4** · A dot marks a day that has a daily note. Selecting a day opens (or creates) its note; merely browsing months creates nothing.
+- **5** · What is **Active**, what you finished **today** and how many **Timers** are running.
+
+<img src="resources/screenshots/week-annotated.png" alt="The Calendar tab in week view: seven rows, one per day, each with bars where tasks were in progress and a done count." width="360">
+
+- **1** · Done out of total tasks for the day.
+- **2** · A row per day; tap it to open that day.
+- **3** · The bars are the time tasks were in progress, in the colour of their project.
+
+<img src="resources/screenshots/day-annotated.png" alt="The Calendar tab in day view: the day's tasks above a time grid with a block for each stretch of work and a line for the current time." width="360">
+
+- **1** · A task of the day with its status, priority, date, star and project.
+- **2** · Finished tasks stay in the list, marked done.
+- **3** · A plain, unlinked todo from the daily note is listed too; it is labelled *Regular todo*.
+- **4** · **Add time worked** by hand, or tap any block to correct it.
+- **5** · The time grid: a block for each stretch of work, overlapping blocks side by side.
+- **6** · The line for **now**.
+
+### Projects
+
+<img src="resources/screenshots/projects-annotated.png" alt="The Projects tab: a project filter, project colours and task cards with their project chips." width="360">
+
+- **1** · Filter the tasks by project.
+- **2** · Give each project a colour; it follows the task everywhere (the week bars, the day blocks, the chips).
+- **3** · A task card with status, priority, date and star.
+- **4** · The project chip, in the project's colour; it opens the project note.
 
 ## How it fits Obsidian
 
@@ -129,6 +216,8 @@ In **Settings → Task storage**, **Keep completed tasks (days)** optionally set
 **Rendered properties are compact symbols** (Settings → Organized → Rendered task properties, where *Alignment* puts them right after the text or at the right edge of the line), each with a screen-reader label: a yellow star when starred (gray when not), a green repeat sign when recurring (gray when not), a flag coloured by priority, a status icon, a timer with the time (`45 min`, `1h 13min`; green while running), the created date and the number of moves. Project links show the project name only, in the project's colour, and open the project note. With sorting on, open todos come first (in-progress on top, then by priority, none included), followed by done, canceled, forwarded and scheduled ones; a plain bullet between todos (such as the link a todo leaves after becoming a note) does not split the list.
 
 Identity and recurrence comments stay hidden in Live Preview, including the line being edited. Switch to source mode to inspect the original Markdown.
+
+<a id="marker-reference"></a>
 
 | Marker | Action |
 |---|---|

@@ -24,7 +24,9 @@ const tasks: Task[] = [
   make('canceled01', 'Renew the old domain', { status: 'canceled' }),
 ];
 const subtasks = [make('churn000001', 'Get the churn numbers from Sam', { status: 'completed', closed_at: at(3, 17) }), make('summary0001', 'Write the summary', { status: 'in_progress' }), make('review00001', 'Ask Anna to review', {})];
-const byId = new Map(tasks.map(t => [t.id, t]));
+// Shown only by the `task-minimal` scene: a task nothing was added to. It is not in `tasks`, so no other scene counts it.
+const bare = make('bare0000001', 'Call the plumber', {});
+const byId = new Map([...tasks, bare].map(t => [t.id, t]));
 const marker = (t: Task) => ({ completed: 'x', in_progress: '/', canceled: '-' } as Record<string, string>)[t.status] ?? ' ';
 const line = (t: Task) => `- [${marker(t)}] ${t.title} <!--organized:${t.id}-->`;
 const dailies: Record<string, string> = {
@@ -67,8 +69,9 @@ page.scene = async (name: string) => {
     modal = new RetireModal(app, { which: 'closed', olderThanDays: 7, lines: 'link', keep: 'all', notes: 'rename', yaml: 'keep' }, async () => found as any, async () => undefined); modal.open(); await Promise.resolve(); await Promise.resolve(); return;
   }
   if (name.startsWith('onboarding-')) { modal = new OnboardingModal(app, () => undefined); modal.open(); (modal as any).index = Number(name.slice('onboarding-'.length)) - 1; (modal as any).draw(); return; } owner.selectedTaskId = null; view.selectedDate = day(4); view.module = ''; view.editingTitle = false; view.editingModule = '';
-  const [tab, mode] = ({ month: ['Calendar', 'Month'], week: ['Calendar', 'Week'], day: ['Calendar', 'Day'], task: ['Task', 'Month'], slipping: ['Task', 'Month'], projects: ['Projects', 'Month'], favorites: ['Favorites', 'Month'] } as Record<string, [string, string]>)[name] ?? (() => { throw new Error(`unknown scene ${name}`); })();
+  const [tab, mode] = ({ month: ['Calendar', 'Month'], week: ['Calendar', 'Week'], day: ['Calendar', 'Day'], task: ['Task', 'Month'], 'task-minimal': ['Task', 'Month'], slipping: ['Task', 'Month'], projects: ['Projects', 'Month'], favorites: ['Favorites', 'Month'] } as Record<string, [string, string]>)[name] ?? (() => { throw new Error(`unknown scene ${name}`); })();
   view.tab = tab as typeof view.tab; view.calendarMode = mode as typeof view.calendarMode;
   if (name === 'task' || name === 'slipping') owner.selectedTaskId = 'q1review01';
+  if (name === 'task-minimal') owner.selectedTaskId = bare.id;
   root.appendChild(view.contentEl); await view.render(); await Promise.resolve();
 };
