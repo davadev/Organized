@@ -79,18 +79,20 @@ export function longPressMenu(owner: Organized): Extension {
     private open(box: Element, at: Point): boolean {
       const { view } = this;
       const line = view.state.doc.lineAt(view.posAtDOM(box));
-      const task = parseTasks(line.text)[0]; if (!task || !owner.settings.longPressMenu) return false;
+      const task = this.taskAt(line.number); if (!task || !owner.settings.longPressMenu) return false;
       const active = owner.activeEditor();
       if (!active || active.editor.getValue() !== view.state.doc.toString() || owner.service.daily.date(active.file.path) === null) return false;
       showMarkerMenu(at, task.marker, ALL_MARKERS, marker => this.apply(line.from, line.text, marker));
       return true;
     }
+    /** The todo on a line. The whole note is parsed: on its own, an indented subtask reads as a code block. */
+    private taskAt(number: number): TaskLine | undefined { return parseTasks(this.view.state.doc.toString()).find(t => t.line === number - 1); }
     /** The line may have changed while the menu was open; then nothing is written. */
     private apply(from: number, text: string, marker: string): void {
       const { view } = this;
       if (from > view.state.doc.length) return;
       const line = view.state.doc.lineAt(from); if (line.from !== from || line.text !== text) return;
-      const task = parseTasks(text)[0];
+      const task = this.taskAt(line.number)!;
       const at = line.from + task.prefix.length;
       const plain = !task.id && PLAIN_MARKERS.includes(marker);
       view.dispatch({ changes: { from: at, to: at + 1, insert: marker }, selection: { anchor: line.to }, ...(plain ? {} : { userEvent: "input.type" }) });
