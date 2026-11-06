@@ -261,6 +261,18 @@ export class TFolder { constructor(public path = "") {} }
 export class MarkdownView {}
 /** Registers an icon with the app: nothing to draw in a test. */
 export function addIcon(_id: string, _svg: string): void {}
+/** Records what a menu was given so a test can read the items and click one. */
+export class MenuItem {
+  title = ""; click: () => void = () => {};
+  setTitle(title: string): this { this.title = title; return this; }
+  onClick(click: () => void): this { this.click = click; return this; }
+}
+export class Menu {
+  static last: Menu | null = null;
+  items: MenuItem[] = []; at: { x: number; y: number } | null = null;
+  addItem(build: (item: MenuItem) => void): this { const item = new MenuItem(); build(item); this.items.push(item); return this; }
+  showAtPosition(at: { x: number; y: number }): this { this.at = at; Menu.last = this; return this; }
+}
 export const Platform = { isMobile: false, isIosApp: false, isAndroidApp: false };
 /** Like the app's: forward slashes, no doubled, leading or trailing slash. */
 export function normalizePath(p: string): string {
