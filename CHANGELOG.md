@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed *Edit checkbox marker* saying "Put the cursor on a todo line" on a subtask: it now works on subtasks at any depth, indented with spaces or tabs.
 ## 0.1.2
 
 - The last card of the welcome tour no longer talks about "this beta".

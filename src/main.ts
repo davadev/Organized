@@ -366,7 +366,8 @@ export default class Organized extends Plugin {
   /** Adds an empty todo one level in under the todo at the cursor (after everything already nested under it) and asks which task it is. */
   /** Puts the caret on the marker of the todo line it is on (`[ ]` -> the space selected), so the next letter typed replaces it exactly as if the person had clicked into the checkbox. Bind a key to it in Obsidian's Hotkeys settings. */
   editMarker(editor: Editor): void {
-    const line = editor.getCursor().line; const task = parseTasks(editor.getLine(line))[0];
+    // The whole note is parsed: on its own, an indented subtask line reads as a code block.
+    const line = editor.getCursor().line; const task = parseTasks(editor.getValue()).find(t => t.line === line);
     if (!task) { new Notice("Put the cursor on a todo line (- [ ] ...) first."); return; }
     editor.setSelection({ line, ch: task.prefix.length }, { line, ch: task.prefix.length + 1 });
   }

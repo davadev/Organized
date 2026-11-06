@@ -222,6 +222,9 @@ describe('plugin lifecycle and user-only editor actions', () => {
     expect(marker.listSelections()).toEqual([{ anchor: { line: 1, ch: 5 }, head: { line: 1, ch: 6 } }]);
     marker.setCursor({ line: 2, ch: 0 }); plugin.editMarker(marker as any); expect(marker.listSelections()[0].anchor).toEqual({ line: 2, ch: 3 });
     Notice.instances.length = 0; marker.setCursor({ line: 0, ch: 0 }); plugin.editMarker(marker as any); expect(Notice.instances.at(-1)!.message).toContain('todo line'); expect(marker.listSelections()[0].anchor).toEqual({ line: 0, ch: 0 });
+    // Subtasks at any depth, indented with spaces or tabs: the line is read inside its note, not on its own (alone it looks like a code block).
+    const nested = h.setActive(file, '- [ ] Parent\n    - [/] Child\n        - [ ] Grandchild\n\t- [x] Tab child\n\t\t- [ ] Tab grandchild\n- [ ] Sibling');
+    for (const [row, prefix] of [[1, 7], [2, 11], [3, 4], [4, 5]] as const) { nested.setCursor({ line: row, ch: 0 }); plugin.editMarker(nested as any); expect(nested.listSelections()[0], String(row)).toEqual({ anchor: { line: row, ch: prefix }, head: { line: row, ch: prefix + 1 } }); }
     const stub: any = plugin; const add = vi.spyOn(plugin, 'addSubtask').mockResolvedValue(); const repair = vi.spyOn(plugin.service, 'repairSubtasks').mockResolvedValue(); const edit = vi.spyOn(plugin, 'editMarker').mockReturnValue(); stub.commands.find((c: any) => c.id === 'edit-marker').editorCallback({}, {}); expect(edit).toHaveBeenCalledOnce();
     for (const id of ['add-subtask', 'repair-subtasks']) { const command = stub.commands.find((c: any) => c.id === id); command.editorCallback(editor, { file }); command.editorCallback(editor, {}); }
     await vi.advanceTimersByTimeAsync(10); expect(add).toHaveBeenCalledOnce(); expect(repair).toHaveBeenCalledOnce();
