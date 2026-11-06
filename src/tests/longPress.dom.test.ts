@@ -45,7 +45,7 @@ const hold = () => vi.advanceTimersByTime(500);
 
 describe('long-press marker menu', () => {
   it('only offers markers that act, never formatting-only letters', () => {
-    expect(LONG_PRESS_MARKERS.map(([m]) => m).join('')).toBe(' x/-><!*asjrnt');
+    expect(LONG_PRESS_MARKERS.map(([m]) => m).join('')).toBe(' x/-><!*asjrnt+');
   });
   it('is registered by the editor extension on mobile only', () => {
     const owner: any = { onEditorUpdate: () => undefined };
@@ -173,7 +173,7 @@ describe('long-press marker menu in Reading view', () => {
   const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
   it('writes the marker with the service and runs it for a linked todo, and swallows the click that follows', async () => {
     const { owner, file, task, box } = reading('- [ ] T');
-    touch('touchstart', box, 7, 9); hold(); expect(Menu.last!.at).toEqual({ x: 7, y: 9 }); expect(Menu.last!.items).toHaveLength(LONG_PRESS_MARKERS.length);
+    touch('touchstart', box, 7, 9); hold(); expect(Menu.last!.at).toEqual({ x: 7, y: 9 }); expect(Menu.last!.items).toHaveLength(LONG_PRESS_MARKERS.length - 1); expect(items().some(t => t.startsWith('[+]'))).toBe(false);
     const click = new Event('click', { bubbles: true, cancelable: true }); box.dispatchEvent(click); expect(click.defaultPrevented).toBe(true);
     Menu.last!.items.find(i => i.title === '[<] Schedule')!.click(); vi.runOnlyPendingTimers(); await flush();
     expect(owner.service.clean).toHaveBeenCalledWith({ file, line: task }, '<'); expect(owner.trigger).toHaveBeenCalledWith({ file, line: { ...task, marker: '<' } });

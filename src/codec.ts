@@ -17,7 +17,9 @@ export const RECURRING_MARKER = "r";
 export const NOTE_MARKER = "n";
 /** Opens the dialog that adds a block of time worked to the todo. */
 export const TIME_MARKER = "t";
-export const ACTION_MARKERS = `<>/!xX-*${Object.keys(SECTION_MARKERS).join("")}${PROJECT_MARKER}${RECURRING_MARKER}${NOTE_MARKER}${TIME_MARKER}`;
+/** Adds an empty subtask under the todo. */
+export const SUBTASK_MARKER = "+";
+export const ACTION_MARKERS = `<>/!xX-*${Object.keys(SECTION_MARKERS).join("")}${PROJECT_MARKER}${RECURRING_MARKER}${NOTE_MARKER}${TIME_MARKER}${SUBTASK_MARKER}`;
 /**
  * Task note body: the description is the text itself and `## Sources` is the only heading Organized writes, so the note reads
  * naturally without the plugin. Older notes used `## Description`, `## Notes` (and `## Idea`/`## Question`) headings; they are

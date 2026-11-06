@@ -1,7 +1,7 @@
 import { Editor, MarkdownView, Notice, Plugin, TFile, TFolder, WorkspaceLeaf } from "obsidian";
 import { Transaction } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
-import { ACTION_MARKERS, parentIds, parseTasks, sameNesting, NOTE_MARKER, NoteSection, PROJECT_MARKER, SECTION_MARKERS, TaskLine, TIME_MARKER, writeNoteSection } from "./codec";
+import { ACTION_MARKERS, parentIds, parseTasks, sameNesting, NOTE_MARKER, NoteSection, PROJECT_MARKER, SECTION_MARKERS, SUBTASK_MARKER, TaskLine, TIME_MARKER, writeNoteSection } from "./codec";
 import { DEFAULT_SETTINGS, elapsed, localDate, object, Settings, Status, Task } from "./model";
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
@@ -438,12 +438,22 @@ export default class Organized extends Plugin {
     else if (marker === PROJECT_MARKER) this.pickProjects(await this.repo.read(id), context);
     else if (marker === NOTE_MARKER) this.convertToNote(await this.repo.read(id), context);
     else if (marker === TIME_MARKER) this.addTime(await this.repo.read(id), context);
+    else if (marker === SUBTASK_MARKER) await this.addSubtaskFromMarker(await this.repo.read(id), context);
     else await this.run(() => this.service.marker(context, marker));
+  }
+  /** The marker a task's own status shows (a running timer is `[/]`). */
+  private ownMarker(task: Task): string { return task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.time_tracking_started_at ? "/" : " "; }
+  /** `[+]`: puts the todo's own marker back, then adds an empty subtask under it as the command does. */
+  private async addSubtaskFromMarker(task: Task, context: Context): Promise<void> {
+    await this.run(() => this.service.clean(context, this.ownMarker(task)));
+    const active = this.activeEditor();
+    if (!active || active.file.path !== context.file.path) { new Notice("Open the note to add a subtask."); return; }
+    await this.addSubtask(active.editor, active.file);
   }
   /** Asks for a block of time worked on the todo (on the day of its daily note, or today), then puts the todo's own marker back. Cancelling leaves the `[t]` in place. */
   private addTime(task: Task, context: Context): void {
     const at = (time: string) => new Date(`${this.service.daily.date(context.file.path) ?? localDate()}T${time}:00`).toISOString();
-    const marker = task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.time_tracking_started_at ? "/" : " ";
+    const marker = this.ownMarker(task);
     new SessionModal(this.app, { heading: "Add time worked", taskTitle: task.title, start: at("09:00"), end: at("10:00"), save: async next => { await this.run(() => this.service.addSession(task.id, next)); await this.run(() => this.service.clean(context, marker)); } }).open();
   }
   /** Folders offered for a standalone note. */

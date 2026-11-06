@@ -81,6 +81,7 @@ Automated tests cover the logic with synthetic touch events; only a device shows
 - On a plain (unlinked) todo, **Done** and **Cancel** only change the character; **Schedule** creates and links a task, as typing does.
 - The rows have icons and the current marker is ticked; choosing it does nothing. Android vibrates briefly when the menu opens.
 - Repeat in Reading view: **Done** on a linked todo completes the task, **Schedule** opens the date dialog; a plain todo only offers Open, Done and Cancel.
+- Choose **Add subtask** on a linked todo in Live Preview: an empty indented todo appears under it (below its existing subtasks), the task picker opens for it, and the parent keeps its status. On a plain todo it links the task first. Reading view does not list it. Typing `+` in a checkbox on desktop does the same.
 - Settings → Organized → Task behavior → *Long-press marker menu* off: no menu in either view.
 - A note outside the daily-note folder, and desktop, show no menu.
 

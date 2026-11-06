@@ -17,6 +17,8 @@ function bind(editor: any, view: EditorView) {
     getValue: () => view.state.doc.toString(), getLine: (n: number) => view.state.doc.toString().split('\n')[n],
     setValue: (text: string) => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } }),
     getCursor: () => { const line = view.state.doc.lineAt(view.state.selection.main.head); return { line: line.number - 1, ch: view.state.selection.main.head - line.from }; },
+    replaceRange: (text: string, from: Pos, to: Pos = from) => { const at = (p: Pos) => view.state.doc.line(p.line + 1).from + p.ch; view.dispatch({ changes: { from: at(from), to: at(to), insert: text }, userEvent: 'input.organized' }); },
+    setCursor: (p: Pos) => view.dispatch({ selection: { anchor: view.state.doc.line(p.line + 1).from + p.ch } }),
     // The plugin's own writes go through here and carry the `input.organized` user event.
     transaction: (spec: { changes: { from: Pos; to: Pos; text: string }[] }) => {
       const at = (p: Pos) => view.state.doc.line(p.line + 1).from + p.ch;
