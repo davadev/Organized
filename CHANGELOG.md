@@ -6,6 +6,7 @@
 
 - **Projects explained.** The README has a short *Using projects* section (the `[j]` marker, why `[[Note]]` in a todo is only a link, and the one property, `organized_type: project`, that makes an existing note a project). The project picker now says why only some notes are listed and where a typed name creates a new note.
 - Fixed the long-press menu opening for the wrong todo when you pressed a checkbox inside a rendered description: it is now ignored there.
+- Fixed the long-press menu doing nothing on a nested (indented) subtask: it now works at any depth.
 
 - **Long-press menu, rounded out.** Rows now have icons and the marker the todo has is ticked; on Android a short vibration confirms the press. It also works on Reading view checkboxes in daily notes (linked todos run the marker like a typed one; a plain todo can only be ticked, reopened or canceled). A new setting, *Long-press marker menu* under Task behavior, turns it off.
 
