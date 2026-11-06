@@ -26,7 +26,7 @@ try {
   for (const width of [240, 320, 360, 390, 412, 768].filter(width => scale === 1 || width <= 412)) for (const dark of [false, true]) for (const rtl of [false, true]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(({ dark, rtl }) => { document.body.className = `${dark ? 'theme-dark' : 'theme-light'} is-mobile`; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, { dark, rtl });
-    for (const tab of ['Calendar', 'Week', 'Day', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Favorites', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'SessionModal', 'NoteModal', 'RetireModal', 'Onboarding1', 'Onboarding2', 'Onboarding3', 'Onboarding4', 'Onboarding5', 'Onboarding6', 'Onboarding7', 'Onboarding8', 'Onboarding9', 'Onboarding10', 'Eof', 'AlignRight']) {
+    for (const tab of ['Calendar', 'Week', 'Day', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Favorites', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'SessionModal', 'NoteModal', 'RetireModal', 'Onboarding1', 'Onboarding2', 'Onboarding3', 'Onboarding4', 'Onboarding5', 'Onboarding6', 'Onboarding7', 'Onboarding8', 'Onboarding9', 'Onboarding10', 'Onboarding11', 'Onboarding12', 'WhatsNew', 'Eof', 'AlignRight']) {
       await page.evaluate(tab => window.scene(tab), tab);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       if (overflow) throw Error(`${engine}: horizontal overflow at ${width}${scale === 1 ? '' : ` with ${scale}x text`}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
@@ -89,7 +89,7 @@ try {
         await page.setViewportSize({ width, height: 900 });
         if (!retire || retire.controls < 5 || retire.outside || retire.width > retire.screen + 1 || retire.bottom > retire.viewport + 1 || !retire.buttons.includes('Retire') || !retire.buttons.includes('Cancel')) throw Error(`${engine}: Retire window does not fit at ${width}${scale === 1 ? '' : ` with ${scale}x text`}: ${JSON.stringify(retire)}`);
       }
-      if (tab.startsWith('Onboarding')) {
+      if (tab.startsWith('Onboarding') || tab === 'WhatsNew') {
         // A short phone screen: the card stays inside it, the steps scroll in their own area and the buttons remain visible in one row.
         await page.setViewportSize({ width, height: 600 });
         const fit = await page.evaluate(() => { const win = document.querySelector('.organized-modal-window'); const b = win.getBoundingClientRect(); const buttons = [...win.querySelectorAll('.organized-onboarding > .setting-item button')].map(btn => { const r = btn.getBoundingClientRect(); return [Math.round(r.top), r.bottom <= innerHeight + 1 && r.top >= b.top, r.height]; }); return { bottom: b.bottom, viewport: innerHeight, buttons, scrollable: document.querySelector('.organized-welcome-body').scrollHeight >= document.querySelector('.organized-welcome-body').clientHeight }; });
@@ -97,8 +97,8 @@ try {
         if (fit.bottom > fit.viewport + 1 || !fit.buttons.length || fit.buttons.some(([, visible]) => !visible)) throw Error(`${engine}: ${tab} card does not fit a short screen or hides its buttons at ${width}${scale === 1 ? '' : ` with ${scale}x text`}: ${JSON.stringify(fit)}`);
         if (width >= 320 && new Set(fit.buttons.map(([top]) => top)).size !== 1) throw Error(`${engine}: ${tab} buttons are stacked instead of one row at ${width}: ${JSON.stringify(fit.buttons)}`);
         const card = await page.evaluate(() => { const win = document.querySelector('.organized-modal-window'); if (!win) return null; const w = win.getBoundingClientRect(); const inside = el => { const b = el.getBoundingClientRect(); return b.left >= w.left - 1 && b.right <= w.right + 1; }; const figure = document.querySelector('.organized-welcome-figure'); return { window: w.width, viewport: innerWidth, title: !!win.querySelector('.organized-welcome-title'), dots: win.querySelectorAll('.organized-welcome-dot').length, figureInside: figure ? [...figure.querySelectorAll('*')].every(inside) : null, hasFigure: !!figure, buttons: [...win.querySelectorAll('button')].map(b => [b.textContent.trim(), b.scrollWidth <= b.clientWidth + 1, inside(b)]) }; });
-        if (!card || !card.title || card.dots !== 10 || card.window > card.viewport + 1) throw Error(`${engine}: onboarding card is missing, wider than the screen or has no progress dots at ${width}: ${JSON.stringify(card)}`);
-        if (tab !== 'Onboarding10' && !card.hasFigure) throw Error(`${engine}: ${tab} lost its figure`);
+        if (!card || !card.title || (tab !== 'WhatsNew' && card.dots !== 12) || card.window > card.viewport + 1) throw Error(`${engine}: onboarding card is missing, wider than the screen or has no progress dots at ${width}: ${JSON.stringify(card)}`);
+        if (tab !== 'Onboarding12' && tab !== 'WhatsNew' && !card.hasFigure) throw Error(`${engine}: ${tab} lost its figure`);
         if (card.figureInside === false) throw Error(`${engine}: ${tab} figure content leaves the card at ${width}${scale === 1 ? '' : ` with ${scale}x text`}`);
         if (card.buttons.some(([, fits, inside]) => !fits || !inside)) throw Error(`${engine}: onboarding buttons are clipped at ${width}${scale === 1 ? '' : ` with ${scale}x text`}: ${JSON.stringify(card.buttons)}`);
       }

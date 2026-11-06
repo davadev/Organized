@@ -9,7 +9,7 @@ installObsidianDom();
 const css = readFileSync("styles.css", "utf8");
 describe("onboarding content and figures", () => {
   it("has short, complete steps and only known figures", () => {
-    expect(ONBOARDING_STEPS).toHaveLength(10);
+    expect(ONBOARDING_STEPS).toHaveLength(12); expect(ONBOARDING_STEPS.length).toBeLessThanOrEqual(15); // the card stays a short tour
     for (const step of ONBOARDING_STEPS) {
       expect(step.title.trim()).not.toBe(""); expect(step.text.trim()).not.toBe("");
       expect(step.text.length).toBeLessThan(400);

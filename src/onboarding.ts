@@ -53,8 +53,18 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "Type a letter in the checkbox",
-    text: "No menus needed: a letter between the brackets does what the panel does. Set priority, schedule or clear a date, start a timer, log time worked, link projects, repeat, favorite. `[n]` gives a todo its own note, for things that deserve more than a line. Eight are below; the README lists them all.",
+    text: "No menus needed: a letter between the brackets does what the panel does. Set priority, schedule or clear a date, start a timer, log time worked, link projects, repeat, favorite. `[n]` gives a todo its own note, `[+]` adds a subtask. Eight are below; the README lists them all.",
     figure: "keys",
+  },
+  {
+    title: "On your phone: press and hold",
+    text: "No keyboard needed. In a daily note, press and hold a todo's checkbox and a menu lists the markers that act, with the current one ticked. Choosing one is the same as typing its letter. You can turn this off under Settings → Task behavior.",
+    figure: "press",
+  },
+  {
+    title: "On a computer: jump into the checkbox",
+    text: "Run the command Edit checkbox marker on a todo line and its marker is selected, so the next key you type replaces it. It has no default key: give it one under Settings → Hotkeys (for example `Alt+X`).",
+    figure: "hotkey",
   },
   {
     title: "Starting, and leaving",
@@ -63,6 +73,6 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "It is still your Markdown",
-    text: "Every task is a plain note named after your todo, in the Tasks folder. No account, no server, no tracking. You can reopen this card any time with the command Show onboarding card, or from Settings. Found a problem in this beta? Open an issue on GitHub (davadev/Organized).",
+    text: "Every task is a plain note named after your todo, in the Tasks folder. No account, no server, no tracking. This tour appears on a fresh install only; after an update you get a short What's new instead. Reopen either with the commands Show onboarding card and Show what's new, or from Settings. Found a problem in this beta? Open an issue on GitHub (davadev/Organized).",
   },
 ];

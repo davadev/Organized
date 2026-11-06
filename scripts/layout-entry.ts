@@ -5,7 +5,8 @@ import { DEFAULT_SETTINGS, newTask } from '../src/model';
 import { editorExtension } from '../src/render';
 import { Setting, editorLivePreviewField } from '../src/tests/__mocks__/obsidian';
 import { OrganizedSettingsTab } from '../src/settings';
-import { DatePicker, NoteConversionModal, OnboardingModal, RetireModal, SessionModal } from '../src/modals';
+import { DatePicker, NoteConversionModal, OnboardingModal, RetireModal, SessionModal, WhatsNewModal } from '../src/modals';
+import { RELEASE_NOTES } from '../src/whatsNew/releaseNotes';
 import { parseTasks } from '../src/codec';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
@@ -34,7 +35,7 @@ const owner: any = {
 const view = new OrganizedInspectorView({ app } as any, owner);
 const root = document.querySelector('#app')!; root.appendChild(view.contentEl);
 let editor: EditorView | null = null;
-let modal: DatePicker | SessionModal | NoteConversionModal | OnboardingModal | RetireModal | null = null;
+let modal: DatePicker | SessionModal | NoteConversionModal | OnboardingModal | RetireModal | WhatsNewModal | null = null;
 (window as any).scene = async (tab: string) => {
   editor?.destroy(); editor = null; modal?.close(); modal = null; root.replaceChildren();
   if (tab === 'Settings' || tab === 'LegacySettings') {
@@ -66,6 +67,9 @@ let modal: DatePicker | SessionModal | NoteConversionModal | OnboardingModal | R
     const found = { tasks: [browseTask, doneTask, activeTask, canceledTask], files: new Map(), lines: new Map() };
     modal = new RetireModal(app, { which: 'closed', olderThanDays: 7, lines: 'link', keep: 'all', notes: 'rename', yaml: 'keep' }, async () => found, async () => undefined);
     modal.open();
+  } else if (tab === 'WhatsNew') {
+    // The real release notes, plus a second release, as the stacked popup shows them.
+    modal = new WhatsNewModal(app, [{ ...RELEASE_NOTES[0], version: '0.1.1' }, RELEASE_NOTES[0]], () => undefined); modal.open();
   } else if (tab.startsWith('Onboarding')) {
     // OnboardingN shows step N (1-based): the longest step text and every figure are checked, not just the first page.
     const card = new OnboardingModal(app, () => undefined); modal = card; card.open();

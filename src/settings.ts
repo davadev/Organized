@@ -99,7 +99,11 @@ export class OrganizedSettingsTab extends PluginSettingTab {
       }))] },
       { type: "group", heading: "Help", items: [
         row("Retire tasks", "Turn tasks back into ordinary Markdown, or clean up finished ones: links, readable file names, keep or remove properties. Nothing changes until you confirm.", setting => { setting.addButton(b => b.setButtonText("Open").onClick(() => this.owner.retireTasks())); }),
-        row("Onboarding card", "A short tour of the idea behind Organized. It also appears once after you first start the plugin.", setting => { setting.addButton(b => b.setButtonText("Show").onClick(() => this.owner.showOnboarding(false))); }),
+        row("Onboarding card", "A short tour of the idea behind Organized. It appears once on a fresh install.", setting => { setting.addButton(b => b.setButtonText("Show").onClick(() => this.owner.showOnboarding(false))); }),
+        row("Show what's new after updates", "After Organized updates, a short note says what changed, once. Turn it back on to see the notes again at the next start.", setting => {
+          setting.addToggle(t => t.setValue(this.owner.settings.showWhatsNew).onChange(value => { this.owner.settings.showWhatsNew = value; if (value) this.owner.settings.lastSeenVersion = ""; this.owner.saveSettings(false); }));
+        }),
+        row("What's new", "Read the notes for this version again.", setting => { setting.addButton(b => b.setButtonText("Show").onClick(() => this.owner.showWhatsNew())); }),
       ] },
     ];
   }

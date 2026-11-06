@@ -184,7 +184,9 @@ flowchart TB
 
 ## First run
 
-The first time Organized starts it shows a short **onboarding card**: ten steps with small illustrations: the two settings to make first, the idea behind the plugin, the side panel and calendar, showing task properties in the note, the checkbox letters, and how to start and leave. Skip it whenever you like; it appears once. Reopen it with the command **Organized: Show onboarding card** or the **Onboarding card** button in **Settings → Organized → Help**.
+The first time Organized starts on a fresh install it shows a short **onboarding card**: twelve steps with small illustrations: the two settings to make first, the idea behind the plugin, the side panel and calendar, showing task properties in the note, the checkbox letters, pressing and holding on a phone, jumping into a checkbox from the keyboard, and how to start and leave. Skip it whenever you like; it appears once. Reopen it with the command **Organized: Show onboarding card** or the **Onboarding card** button in **Settings → Organized → Help**.
+
+After an update, Organized shows a short **What's new** note once, instead of the tour (a fresh install never sees it). Reopen the notes for your version with **Organized: Show what's new**, or switch them off with **Show what's new after updates** under **Settings → Organized → Help**.
 
 ## Leaving Organized
 

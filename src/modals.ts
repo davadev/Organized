@@ -8,6 +8,7 @@ import { rgbOf } from "./colors";
 import { projectName } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 import { ONBOARDING_STEPS, OnboardingStep } from "./onboarding";
+import type { ReleaseNote } from "./whatsNew/releaseNotes";
 import { renderFigure } from "./onboardingFigures";
 import { describePreview, losesNote, normalizeRetire, retirePreview, type RetireOptions, type RetireScan } from "./retire";
 
@@ -200,6 +201,11 @@ export class NoteConversionModal extends Modal {
   onClose(): void { this.contentEl.empty(); }
 }
 
+/** Writes `text` into `parent`; `like this` is shown as code. */
+function codeText(parent: HTMLElement, text: string): void {
+  text.split("`").forEach((part, i) => { if (i % 2) parent.createEl("code", { text: part }); else parent.appendText(part); });
+}
+
 /** The one-time onboarding card: a short stepper explaining the idea behind the plugin. `done` fires once, however it closes. */
 export class OnboardingModal extends Modal {
   private index = 0;
@@ -220,9 +226,7 @@ export class OnboardingModal extends Modal {
     const progress = body.createDiv({ cls: "organized-welcome-progress", attr: { role: "img", "aria-label": `Step ${this.index + 1} of ${this.steps.length}` } });
     this.steps.forEach((_, i) => progress.createSpan({ cls: "organized-welcome-dot", attr: i === this.index ? { "aria-current": "step" } : {} }));
     body.createEl("h3", { cls: "organized-welcome-title", text: step.title });
-    // `like this` in a step text is shown as code.
-    const copy = body.createEl("p", { cls: "organized-modal-copy organized-welcome-text" });
-    step.text.split("`").forEach((part, i) => { if (i % 2) copy.createEl("code", { text: part }); else copy.appendText(part); });
+    codeText(body.createEl("p", { cls: "organized-modal-copy organized-welcome-text" }), step.text);
     if (step.figure) renderFigure(body, step.figure);
     const footer = new Setting(el);
     if (!last) footer.addButton(b => b.setButtonText("Skip").onClick(() => this.close()));
@@ -232,6 +236,30 @@ export class OnboardingModal extends Modal {
     primary[0].focus();
   }
   onClose(): void { this.contentEl.empty(); if (!this.settled) { this.settled = true; this.done(); } }
+}
+
+/** What changed in an update: one section per release (oldest first when several were skipped). `stop` fires for "Don't show again". */
+export class WhatsNewModal extends Modal {
+  constructor(app: App, readonly notes: ReleaseNote[], readonly stop: () => void) { super(app); decorate(this); }
+  onOpen(): void {
+    const el = this.contentEl; el.addClass("organized-modal"); el.addClass("organized-onboarding"); this.titleEl.setText("What's new in Organized");
+    // Scrolls inside its own area, so the buttons stay in view on a short phone screen.
+    const body = el.createDiv({ cls: "organized-welcome-body" });
+    if (this.notes.length > 1) body.createEl("p", { cls: "organized-modal-copy", text: `You are catching up on ${this.notes.length} updates: ${this.notes.map(n => n.version).join(", then ")}.` });
+    for (const note of this.notes) {
+      body.createEl("h3", { cls: "organized-welcome-title", text: note.title });
+      if (note.intro) body.createEl("p", { cls: "organized-modal-copy", text: note.intro });
+      for (const item of note.items) {
+        body.createEl("h4", { cls: "organized-whatsnew-item", text: item.title });
+        codeText(body.createEl("p", { cls: "organized-modal-copy organized-welcome-text" }), item.text);
+        if (item.figure) renderFigure(body, item.figure);
+      }
+    }
+    const footer = new Setting(el);
+    footer.addButton(b => b.setButtonText("Don't show again").onClick(() => { this.stop(); this.close(); }));
+    footer.addButton(b => { b.setButtonText("Got it"); b.setCta(); b.onClick(() => this.close()); b.buttonEl.focus(); });
+  }
+  onClose(): void { this.contentEl.empty(); }
 }
 
 const CHOICES: Record<string, [string, string][]> = {
