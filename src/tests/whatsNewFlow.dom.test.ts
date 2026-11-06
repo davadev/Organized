@@ -65,6 +65,17 @@ describe('an update', () => {
     expect(news()[0].notes.map(n => n.version)).toEqual(['0.1.2']); expect((await s.saved()).lastSeenVersion).toBe('0.1.2-beta.7');
     news()[0].close(); const again = await start({ data: { schemaVersion: 1, settings: await s.saved() } }); expect(news()).toHaveLength(0);
   });
+  it('tells someone who goes from 0.1.1 straight to 0.1.3 about both releases, oldest first, in one popup', async () => {
+    const s = await start({ data: stored({ onboardingSeen: true, lastSeenVersion: '0.1.1' }), version: '0.1.3' });
+    expect(news()).toHaveLength(1); expect(news()[0].notes.map(n => n.version)).toEqual(['0.1.2', '0.1.3']);
+    expect(news()[0].contentEl.textContent).toContain('You are catching up on 2 updates: 0.1.2, then 0.1.3.');
+    expect([...news()[0].contentEl.querySelectorAll('h3')].map(n => n.textContent)).toEqual(["What's new in Organized 0.1.2", "What's new in Organized 0.1.3"]);
+    expect((await s.saved()).lastSeenVersion).toBe('0.1.3');
+  });
+  it('tells someone who already saw 0.1.2 only about 0.1.3, and a pre-feature install about both', async () => {
+    await start({ data: stored({ onboardingSeen: true, lastSeenVersion: '0.1.2' }), version: '0.1.3' }); expect(news()[0].notes.map(n => n.version)).toEqual(['0.1.3']);
+    await start({ data: stored({ taskFolder: 'Tasks' }), version: '0.1.3' }); expect(news()[0].notes.map(n => n.version)).toEqual(['0.1.2', '0.1.3']);
+  });
   it('treats every beta of a version as that version, so later betas and the stable release stay quiet', async () => {
     for (const version of ['0.1.2-beta.8', '0.1.2-beta.99', '0.1.2']) { await start({ data: seen('0.1.2-beta.7'), version }); expect(news(), version).toHaveLength(0); }
   });
@@ -100,9 +111,9 @@ describe('the popup and its commands', () => {
   const click = (label: string) => { const modal = news().at(-1)!; [...modal.contentEl.querySelectorAll<HTMLElement>('button')].find(b => b.textContent === label)!.click(); };
   const seen = stored({ onboardingSeen: true, lastSeenVersion: '0.1.1' });
   it('lists every item of the release with its figure, and "Got it" just closes', async () => {
-    const s = await start({ data: seen }); const modal = news()[0];
-    expect(modal.contentEl.querySelectorAll('.organized-whatsnew-item')).toHaveLength(RELEASE_NOTES[0].items.length);
-    expect(modal.contentEl.querySelectorAll('.organized-welcome-figure').length).toBe(RELEASE_NOTES[0].items.filter(i => i.figure).length);
+    const s = await start({ data: seen }); const modal = news()[0]; const shown = RELEASE_NOTES.find(n => n.version === '0.1.2')!;
+    expect(modal.contentEl.querySelectorAll('.organized-whatsnew-item')).toHaveLength(shown.items.length);
+    expect(modal.contentEl.querySelectorAll('.organized-welcome-figure').length).toBe(shown.items.filter(i => i.figure).length);
     expect(modal.contentEl.querySelector('code')).not.toBeNull(); expect(modal.contentEl.textContent).not.toContain('catching up');
     click('Got it'); await flush(); expect(s.plugin.settings.showWhatsNew).toBe(true); expect(modal.contentEl.children).toHaveLength(0);
   });
