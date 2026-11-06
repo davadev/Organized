@@ -73,6 +73,6 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "It is still your Markdown",
-    text: "Every task is a plain note named after your todo, in the Tasks folder. No account, no server, no tracking. This tour appears on a fresh install only; after an update you get a short What's new instead. Reopen either with the commands Show onboarding card and Show what's new, or from Settings. Found a problem in this beta? Open an issue on GitHub (davadev/Organized).",
+    text: "Every task is a plain note named after your todo, in the Tasks folder. No account, no server, no tracking. This tour appears on a fresh install only; after an update you get a short What's new instead. Reopen either with the commands Show onboarding card and Show what's new, or from Settings. Found a problem? Open an issue on GitHub (davadev/Organized).",
   },
 ];
