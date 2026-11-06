@@ -23,7 +23,7 @@ const SCENES = { month: ['Month calendar', true, PANEL], week: ['Week view', tru
   'week-annotated': annotated('week', 'Week view, numbered', [{ sel: '.organized-week-row:nth-of-type(3) .organized-week-count', side: 'right' }, { sel: '.organized-week-row', nth: 3 }, { sel: '.organized-week-row:nth-of-type(4) .organized-week-track', side: 'right', line: false }]),
   'day-annotated': annotated('day', 'Day view, numbered', [{ sel: '.organized-day-task', nth: 0 }, { sel: '.organized-day-task', nth: 1, side: 'right' }, { sel: '.organized-day-task', nth: 4 }, { sel: '.organized-head-action', side: 'right', line: false }, { sel: '.organized-day-grid', line: false }, { sel: '.organized-now-line', side: 'right' }]),
   'projects-annotated': annotated('projects', 'Projects, numbered', [{ sel: '.organized-field' }, { sel: '.organized-colors', side: 'right' }, { sel: '.organized-list-card', nth: 0 }, { sel: '.organized-chip', nth: 0, side: 'right' }]),
-  ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => [`onboarding-${n}`, [`Onboarding card, step ${n}`, false, '.organized-modal-window']])) };
+  ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => [`onboarding-${n}`, [`Onboarding card, step ${n}`, false, '.organized-modal-window']])) };
 const WIDTH = 400; // CSS px, a typical side-panel width; images are 2x
 const args = process.argv.slice(2);
 const check = args.includes('--check');

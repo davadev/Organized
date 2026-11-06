@@ -13,8 +13,8 @@ import { localDate } from '../model';
 installObsidianDom();
 export const flush = async () => { for (let i = 0; i < 80; i++) await Promise.resolve(); };
 afterEach(() => { vi.useRealTimers(); });
-async function loaded() {
-  vi.useFakeTimers(); const h = harness();
+async function loaded(running = false) {
+  vi.useFakeTimers(); const h = harness(); (h.app.workspace as any).layoutReady = running;
   const plugin = new Organized(h.app, { id: 'organized', name: 'Organized', author: 'davadev', version: '0.0.0', minAppVersion: '1.7.2', description: '', isDesktopOnly: false });
   await plugin.onload();
   return { h, plugin, stub: plugin as any };
@@ -63,7 +63,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
   });
   it('registers capabilities only, defers vault-create handling and cleans durable crash state', async () => {
     const { h, plugin, stub } = await loaded();
-    expect(stub.commands).toHaveLength(14); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
+    expect(stub.commands).toHaveLength(15); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
     const factory = stub.views.get(VIEW_TYPE); expect(factory({ app: h.app })).toBeInstanceOf(OrganizedInspectorView);
     h.layout[0](); expect(h.events.create).toHaveLength(1);
     const created = vi.spyOn(plugin.service, 'onDailyCreated').mockResolvedValue(); const index = vi.spyOn(plugin.service, 'index').mockResolvedValue(); const reconcile = vi.spyOn(plugin.service, 'reconcile').mockResolvedValue(); const refresh = vi.spyOn(plugin, 'refresh').mockImplementation(() => undefined);
@@ -441,11 +441,9 @@ describe('onboarding card at startup', () => {
   });
   it('stays quiet when the plugin loaded late, writes are paused or the card was already seen', async () => {
     Modal.instances.length = 0;
-    const late = await loaded(); late.stub.startedRecently = () => false; late.h.layout[0](); expect(cards()).toHaveLength(0);
+    const late = await loaded(true); late.h.layout[0](); expect(cards()).toHaveLength(0);
     const paused = await loaded(); paused.stub.safety = { writable: false }; paused.h.layout[0](); expect(cards()).toHaveLength(0);
     const seen = await loaded(); seen.plugin.settings.onboardingSeen = true; seen.h.layout[0](); expect(cards()).toHaveLength(0);
-    const real = await loaded(); expect(real.plugin.startedRecently()).toBe(true);
-    vi.spyOn(performance, 'now').mockReturnValue(60_000); expect(real.plugin.startedRecently()).toBe(false); vi.restoreAllMocks();
   });
   it('the command and the Settings button reopen it without changing the flag', async () => {
     Modal.instances.length = 0; const { plugin, stub } = await loaded(); plugin.settings.onboardingSeen = true;

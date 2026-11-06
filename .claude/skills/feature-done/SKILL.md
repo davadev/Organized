@@ -12,7 +12,7 @@ Run through every line before the PR is marked ready. Skip a line only when it t
 3. **Checks**, all with zero warnings: `npm run build` (includes tsc), `npm run lint`, `npm run check:dead-code` (new code is reachable from `src/main.ts`; nothing left half-finished), `npm run lint:css` if `styles.css` changed, `npm run lint:deps` if `package.json` changed.
 4. **Settings**: a new setting goes under a section heading (never appended flat) and is covered in `src/tests/settingsCoverage.dom.test.ts`. Remind the user a full Obsidian restart is needed to see a new group.
 5. **Docs**: update the matching `docs/<page>.md` and `docs/index.md` if a page was added; `README.md` if user-visible.
-6. **What's new**: add a benefit-led entry to `CHANGELOG.md`; do not remove earlier entries.
+6. **What's new**: add a benefit-led entry to `CHANGELOG.md`; do not remove earlier entries. If a person can see or must relearn it, also add an item to the entry for the next base version in `src/whatsNew/releaseNotes.ts` (the in-app popup; see `docs/onboarding-and-whats-new.md`), and update `src/onboarding.ts` if the tour describes it.
 7. **UI**: run Chromium and WebKit layout gates; inspect local `test-results/` images. The harness uses actual plugin code with approximated host chrome, not a certified live-device pass.
 8. **Issue**: exists, labelled, tracked (see `triage-issue`). The PR body says `Closes #N`.
 9. Next step is `release-beta` once merged. Every fix ships as a beta with BRAT assets; do not leave a fix un-released.

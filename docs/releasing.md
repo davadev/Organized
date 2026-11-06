@@ -14,7 +14,7 @@ This repository has no stable release. Main's `0.0.0` is an unpublished bootstra
 
 1. Use Node 24, npm >=11.10; run `npm ci` and `npm ls --all`.
 2. Run `npm run lint`, `npm run lint:css`, `npm run build`, `npm run test:cov`, `npm run check:dead-code`, `npm run lint:cloud-parity`, `npm run check:layout`, `npm run check:webkit`.
-3. Run `npm run check-release -- --with-build --strict`. Inspect actual UI screenshots and document any device checks honestly.
+3. Make sure `src/whatsNew/releaseNotes.ts` has an entry for the base version being released (see [Onboarding and What's new](./onboarding-and-whats-new.md)). Run `npm run check-release -- --with-build --strict`. Inspect actual UI screenshots and document any device checks honestly.
 4. Push the feature branch, open a PR, and wait for every required check before merging. If main advanced, update the feature branch and re-run CI first; never bypass required checks. No version metadata bump for a beta.
 5. Tag reviewed main: `git tag 0.1.0-beta.1`, then `git push origin 0.1.0-beta.1`. No `v` prefix; use the next unused beta number on subsequent releases.
 6. CI stamps the exact prerelease into its working tree, repeats deterministic checks, validates nonempty `main.js`, `manifest.json`, `styles.css`, attests those bytes and publishes a prerelease. Browsers are in CI, never in the tag workflow.

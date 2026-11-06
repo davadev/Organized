@@ -57,6 +57,12 @@ export interface Settings {
   noteFolder: string;
   /** The one-time onboarding card has been shown (or skipped). */
   onboardingSeen: boolean;
+  /** The newest release whose What's new this device has been told about (empty until the plugin first runs). Per device. */
+  lastSeenVersion: string;
+  /** Show a short What's new once after an update. */
+  showWhatsNew: boolean;
+  /** The release an "updated, restart to finish" notice was last shown for, so it appears once. Per device. */
+  whatsNewHintedFor: string;
   /** Task notes written in the old layout (headings for Description and Notes) have been rewritten in the new one. */
   taskNotesMigrated: boolean;
   /** Task notes still named after their id were renamed after their todo's title (tried once; the command can run it again). */
@@ -67,7 +73,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   taskFolder: "Tasks", dailyFolder: "Daily", dailyFormat: "YYYY-MM-DD", autoForward: true,
   missingSection: "recreate", sortScope: "list", displayProperties: [], propertiesAlign: "text", showScheduledDate: true, longPressMenu: true, taskRetentionDays: 0,
-  dailyTemplate: "", knownProjects: [], collapsedHeadings: {}, projectsMigrated: false, projectNotesMarked: false, projectStartsSet: false, retentionDetail: "title", dayTasksCollapsed: false, hideDoneTasks: false, hideClosedProjects: true, noteFolder: "", onboardingSeen: false, taskNotesMigrated: false, taskNoteNamesMigrated: false, subtaskNestingMigrated: false, subtaskIndentMigrated: false,
+  lastSeenVersion: "", showWhatsNew: true, whatsNewHintedFor: "", dailyTemplate: "", knownProjects: [], collapsedHeadings: {}, projectsMigrated: false, projectNotesMarked: false, projectStartsSet: false, retentionDetail: "title", dayTasksCollapsed: false, hideDoneTasks: false, hideClosedProjects: true, noteFolder: "", onboardingSeen: false, taskNotesMigrated: false, taskNoteNamesMigrated: false, subtaskNestingMigrated: false, subtaskIndentMigrated: false,
 };
 export function object(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -108,6 +114,8 @@ export function settingsFrom(value: unknown): Settings {
   s.displayProperties = [...new Set(strings(v.displayProperties).map(p => p === "notes" ? "description" : p).filter((p): p is DisplayProperty => DISPLAY_PROPERTIES.includes(p as DisplayProperty)))];
   s.propertiesAlign = member(v.propertiesAlign, ["text", "right"], "text");
   s.showScheduledDate = typeof v.showScheduledDate === "boolean" ? v.showScheduledDate : true;
+  s.showWhatsNew = typeof v.showWhatsNew === "boolean" ? v.showWhatsNew : true;
+  s.lastSeenVersion = typeof v.lastSeenVersion === "string" ? v.lastSeenVersion : ""; s.whatsNewHintedFor = typeof v.whatsNewHintedFor === "string" ? v.whatsNewHintedFor : "";
   s.longPressMenu = typeof v.longPressMenu === "boolean" ? v.longPressMenu : true;
   s.taskRetentionDays = Number.isInteger(v.taskRetentionDays) && Number(v.taskRetentionDays) >= 0 && Number(v.taskRetentionDays) <= 36500 ? Number(v.taskRetentionDays) : 0;
   try { if (typeof v.noteFolder === "string") s.noteFolder = path(v.noteFolder, true); } catch { /* An invalid remembered folder falls back to the vault root. */ }

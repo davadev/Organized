@@ -345,6 +345,7 @@ div.organized-projection.organized-align-right .organized-rich-property { text-a
   .organized-welcome-figure { padding: 8px; }
 }
 /* Onboarding card: figures are drawn from the panel's own elements; decoration only. */
+.organized-modal-window .organized-onboarding h4.organized-whatsnew-item { margin: 12px 0 2px; font-size: var(--font-ui-medium, 14px); font-weight: 600; line-height: 1.35; }
 .organized-welcome-progress { display: flex; gap: 6px; margin-block-end: 10px; }
 .organized-welcome-dot { inline-size: 8px; block-size: 8px; border-radius: 999px; background: var(--background-modifier-border); }
 .organized-welcome-dot[aria-current="step"] { background: var(--interactive-accent); }

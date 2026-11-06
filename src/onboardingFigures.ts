@@ -1,15 +1,16 @@
 import { setIcon } from "obsidian";
 import { STATUS_ICONS } from "./model";
 import { symbol } from "./render";
+import { LONG_PRESS_MARKERS } from "./longPress";
 
 /**
  * Small illustrations for the onboarding card, drawn from the plugin's own interface elements instead of shipped as
  * screenshots: they follow the user's theme and font, add almost nothing to the plugin's size and cannot go stale the way
  * a picture does. They are decoration (aria-hidden, not interactive); the step's text carries the meaning.
  */
-export type FigureId = "settings" | "tabs" | "calendar" | "follow" | "forward" | "card" | "props" | "keys" | "commands";
+export type FigureId = "settings" | "tabs" | "calendar" | "follow" | "forward" | "card" | "props" | "keys" | "commands" | "press" | "hotkey";
 /** Every figure id; the tests walk it so a new figure cannot ship undrawn. */
-export const FIGURE_IDS: FigureId[] = ["settings", "tabs", "calendar", "follow", "forward", "card", "props", "keys", "commands"];
+export const FIGURE_IDS: FigureId[] = ["settings", "tabs", "calendar", "follow", "forward", "card", "props", "keys", "commands", "press", "hotkey"];
 
 const box = (host: HTMLElement, marker: string): void => {
   const b = host.createSpan({ cls: "organized-welcome-fig-box", text: marker === "x" ? "" : marker.trim(), attr: { "data-marker": marker } });
@@ -131,7 +132,27 @@ function commandsFigure(fig: HTMLElement): void {
   }
 }
 
-const BUILDERS: Record<FigureId, (fig: HTMLElement) => void> = { settings: settingsFigure, tabs: tabsFigure, calendar: calendarFigure, follow: followFigure, forward: forwardFigure, card: cardFigure, props: propsFigure, keys: keysFigure, commands: commandsFigure };
+/** The phone menu: the first rows of the real marker list, with the icons the menu has and the marker the todo has ticked. */
+function pressFigure(fig: HTMLElement): void {
+  const list = fig.createDiv({ cls: "organized-welcome-fig-tabs" });
+  for (const [marker, label, icon] of LONG_PRESS_MARKERS.slice(0, 6)) {
+    const item = list.createDiv({ cls: "organized-welcome-fig-tab" });
+    setIcon(item.createSpan({ cls: "organized-welcome-fig-tab-icon" }), icon);
+    const words = item.createDiv({ cls: "organized-welcome-fig-tab-words" });
+    words.createSpan({ cls: "organized-welcome-fig-tab-name", text: `[${marker === " " ? "\u00a0" : marker}] ${label}` });
+    if (marker === " ") words.createSpan({ cls: "organized-welcome-fig-tab-role", text: "the marker it has now" });
+  }
+}
+
+/** The command in the palette, and the key you give it in Settings → Hotkeys. */
+function hotkeyFigure(fig: HTMLElement): void {
+  const row = fig.createDiv({ cls: "organized-welcome-fig-rows" }).createDiv({ cls: "organized-welcome-fig-row" });
+  row.createSpan({ cls: "organized-welcome-fig-cap", text: "Organized" });
+  row.createSpan({ cls: "organized-welcome-fig-row-role", text: "Edit checkbox marker" });
+  row.createSpan({ cls: "organized-welcome-fig-pill", text: "Alt + X" });
+}
+
+const BUILDERS: Record<FigureId, (fig: HTMLElement) => void> = { settings: settingsFigure, tabs: tabsFigure, calendar: calendarFigure, follow: followFigure, forward: forwardFigure, card: cardFigure, props: propsFigure, keys: keysFigure, commands: commandsFigure, press: pressFigure, hotkey: hotkeyFigure };
 
 /** Draw the illustration `id` into `parent`. */
 export function renderFigure(parent: HTMLElement, id: FigureId): HTMLElement {

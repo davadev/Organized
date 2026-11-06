@@ -7,7 +7,8 @@ import { settingsFrom } from "./model";
 import { Repository } from "./repository";
 import { Context, report, TaskService } from "./service";
 import { formatMinutes } from "./sessions";
-import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RetireModal, SessionModal, TaskPicker } from "./modals";
+import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RetireModal, SessionModal, TaskPicker, WhatsNewModal } from "./modals";
+import { notesOfLine, notesToShow, ReleaseNote } from "./whatsNew/releaseNotes";
 import { OrganizedInspectorView, VIEW_TYPE } from "./view";
 import { OrganizedSettingsTab } from "./settings";
 import { editorExtension, reading, refreshEditor } from "./render";
@@ -15,8 +16,6 @@ import { crashStatePath, decideOnLoad, DEFAULT_CRASH_STATE, readCrashState, writ
 import { DataSafety } from "./safety";
 import { isDestructive, normalizeRetire } from "./retire";
 
-/** The plugin counts as started with the app when it loads within this many milliseconds of the page starting. */
-const ONBOARDING_START_WINDOW_MS = 45_000;
 export default class Organized extends Plugin {
   settings: Settings = { ...DEFAULT_SETTINGS };
   repo!: Repository;
@@ -36,7 +35,10 @@ export default class Organized extends Plugin {
   private saveTail: Promise<unknown> = Promise.resolve();
   private loaded = false;
   private unloaded = false;
+  /** Whether Organized loaded as part of the app starting. A plugin switched on or updated while Obsidian runs finds the layout already ready; that is not a start, so nothing pops up and a notice asks for a restart instead. Unset (as in tests) counts as a start. */
+  private atStartup = true;
   async onload(): Promise<void> {
+    this.atStartup = !this.app.workspace.layoutReady;
     try {
       const adapter = this.app.vault.adapter; const crashPath = crashStatePath(this.manifest, this.app.vault.configDir);
       const decision = decideOnLoad(await readCrashState(adapter, crashPath), 5);
@@ -44,7 +46,8 @@ export default class Organized extends Plugin {
       if (decision.action === "trip-threshold") { new Notice("Organized detected repeated unsuccessful starts. Features are paused this launch. Disable/re-enable Organized after updating, or report the problem.", 0); return; }
       this.safety = new DataSafety(adapter, this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`, this.manifest.version, message => { new Notice(message, 12000); });
       await this.safety.prepare();
-      this.settingsRaw = object(await this.loadData()); this.settings = settingsFrom(this.settingsRaw.settings ?? this.settingsRaw);
+      this.settingsRaw = object(await this.loadData()); const saved = object(this.settingsRaw.settings ?? this.settingsRaw); this.settings = settingsFrom(saved);
+      this.reconcileInstall(Object.keys(this.settingsRaw).length === 0, saved);
       // Disabled while the awaits above were pending: onunload already ran, so registering now would leak handlers and timers into a dead plugin.
       if (this.unloaded) return;
       this.repo = new Repository(this.app, () => this.settings, () => this.activeEditor());
@@ -63,6 +66,7 @@ export default class Organized extends Plugin {
       this.addCommand({ id: "retire-tasks", name: "Retire tasks…", callback: () => { this.retireTasks(); } });
       this.addCommand({ id: "rename-task-notes", name: "Rename task notes to their titles", callback: () => { void this.run(() => this.migrateTaskNoteNames(true)).catch(report); } });
       this.addCommand({ id: "show-onboarding", name: "Show onboarding card", callback: () => { this.showOnboarding(false); } });
+      this.addCommand({ id: "show-whats-new", name: "Show what's new", callback: () => { this.showWhatsNew(); } });
       this.addCommand({ id: "undo", name: "Undo last recurrence/auto-forward batch", callback: () => { void this.service.undo().catch(report); } });
       this.addCommand({ id: "restore-settings", name: "Restore compatible settings backup (restart required)", callback: () => { void this.confirm("Queue the newest compatible settings backup for restoration on next restart? Task Markdown will not change.").then(yes => yes ? this.safety.queueCompatibleRestore() : undefined).catch(report); } });
       this.addCommand({ id: "edit-marker", name: "Edit checkbox marker", editorCallback: editor => { this.editMarker(editor); } });
@@ -85,7 +89,7 @@ export default class Organized extends Plugin {
         // The colour is read from the metadata cache, which updates a moment after the note is written.
         this.registerEvent(this.app.metadataCache.on("changed", file => { if (this.repo.isProjectNote(file)) this.refresh(); }));
         this.registerEvent(this.app.vault.on("delete", file => { this.repo.forgetPath(file.path); this.service.forget(file.path); this.refresh(); }));
-        this.maybeShowOnboarding();
+        void this.maybeShowStartupCard().catch(report);
         void this.run(async () => { await this.repo.reindex(); await this.migrateProjects(); await this.markProjectNotes(); await this.migrateTaskNotes(); await this.migrateTaskNoteNames(); await this.nestSubtasks(); });
         this.registerEvent(this.app.workspace.on("file-open", file => { this.followCursor(); if (file) void this.run(() => this.service.reconcile(file)); }));
       });
@@ -111,15 +115,44 @@ export default class Organized extends Plugin {
     }).catch(report);
   }
   /** Whether the Day view's task list is folded away; kept so a long list stays out of the way. */
-  /** Plugins load within seconds of the page starting; a later load is an update applied while the person works, which must not be interrupted. */
-  startedRecently = (): boolean => performance.now() < ONBOARDING_START_WINDOW_MS;
-  /** Open the onboarding card once, after a real start, when writes are allowed. Nothing is written until it closes. */
-  maybeShowOnboarding(): void {
-    if (!this.loaded || this.settings.onboardingSeen || !this.safety.writable || !this.startedRecently()) return;
-    this.showOnboarding(true);
+  /**
+   * Decides, once per load, who is new: no saved data at all is a fresh install (told nothing old; the onboarding card is owed), data written before What's new existed means someone
+   * who updated (never pushed the tour; they get the catch-up note). Only the saved settings are looked at, nothing in the vault.
+   */
+  private reconcileInstall(fresh: boolean, saved: Record<string, unknown>): void {
+    if (fresh) this.settings.lastSeenVersion = this.manifest.version;
+    else if (!("lastSeenVersion" in saved)) this.settings.onboardingSeen = true;
+  }
+  /** The one card at a real start: the onboarding tour while it is owed (fresh installs), otherwise What's new for a release this device has not been told about. Never both, and nothing while writes are paused. */
+  async maybeShowStartupCard(): Promise<void> {
+    if (!this.loaded || !this.safety.writable) return;
+    if (!this.settings.onboardingSeen) { if (this.atStartup) this.showOnboarding(true); return; }
+    if (!this.settings.showWhatsNew) return;
+    const current = this.manifest.version; const notes = notesToShow(this.settings.lastSeenVersion, current); if (!notes.length) return;
+    if (!this.atStartup) {
+      // Updated while running: open views and settings are the old ones, so describing the new ones would be untrue. Say so once per release.
+      const newest = notes[notes.length - 1].version;
+      if (this.settings.whatsNewHintedFor !== newest) { this.settings.whatsNewHintedFor = newest; this.saveSettings(false); new Notice(`Organized updated to ${current}. Restart Obsidian to finish updating; a short What's new appears then.`, 12000); }
+      return;
+    }
+    // Recorded before it opens, so it cannot come back even if the app closes while it is open.
+    this.settings.lastSeenVersion = current; this.saveSettings(false); await this.saveTail;
+    this.openWhatsNew(notes);
   }
   showOnboarding(remember: boolean): void {
-    new OnboardingModal(this.app, () => { if (remember && !this.settings.onboardingSeen) { this.settings.onboardingSeen = true; this.saveSettings(false); } }).open();
+    new OnboardingModal(this.app, () => { if (remember && !this.settings.onboardingSeen) { this.settings.onboardingSeen = true; this.settings.lastSeenVersion = this.manifest.version; this.saveSettings(false); } }).open();
+  }
+  /** Opens this version's notes again (the whole minor line, oldest first), whatever has been shown before. */
+  showWhatsNew(): void {
+    const notes = notesOfLine(this.manifest.version);
+    if (!notes.length) { new Notice(`There are no release notes for ${this.manifest.version}.`); return; }
+    this.openWhatsNew(notes);
+  }
+  private openWhatsNew(notes: ReleaseNote[]): void {
+    new WhatsNewModal(this.app, notes, () => {
+      this.settings.showWhatsNew = false; this.saveSettings(false);
+      new Notice("Release notes are off. You can turn them on again in the settings of Organized.", 8000);
+    }).open();
   }
   setDayTasksCollapsed(collapsed: boolean): void { this.settings.dayTasksCollapsed = collapsed; this.saveSettings(false); }
   /** Whether the Task tab's note list leaves out done tasks. */
