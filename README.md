@@ -132,6 +132,23 @@ That is all a todo costs until it needs more: a title and a status. No empty for
 - **3** · A task card with status, priority, date and star.
 - **4** · The project chip, in the project's colour; it opens the project note.
 
+#### Using projects
+
+A project is an ordinary note that Organized has been told is a project. To attach one to a todo:
+
+1. Change the checkbox to `[j]` (`- [j] Plan the launch`). A picker opens with your projects.
+2. Tick one or more and press **Save links**. The checkbox goes back to its normal state, and the project shows on the todo and in the **Projects** tab.
+
+Writing `[[Launch]]` in the todo's text does not do this: that is an ordinary link and nothing more. To use a note you already have as a project, add one property to it (in Obsidian's Properties view, or at the top of the file):
+
+```yaml
+---
+organized_type: project
+---
+```
+
+The value must be exactly `project`. The picker lists only notes that have it, so a note without the property is not shown. If you type the name of such a note into the picker's search box, you are offered *(create)* and a new note is made in the `Projects/` folder inside your task folder, so add the property to your own note first and it appears in the list. Notes made from the picker already have the property, plus **Open / In progress / Ongoing / Done** headings that linked tasks move between as their status changes.
+
 ## How it fits Obsidian
 
 Obsidian's strength is that your notes are plain files you own. Organized is built to leave that intact.

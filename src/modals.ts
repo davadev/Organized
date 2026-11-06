@@ -94,6 +94,8 @@ export class ProjectPicker extends Modal {
     this.titleEl.setText("Link projects or topics"); this.contentEl.addClass("organized-modal");
     this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Find or create a root note" });
     const search = this.contentEl.createEl("input", { type: "search", attr: { "aria-label": "Find or create project note", placeholder: "Find or create a root note" } });
+    // The list is not every note: a person who linked a note with [[...]] or expected their own note here needs to know why it is missing.
+    this.contentEl.createEl("p", { cls: "organized-muted organized-project-hint", text: `Only notes with the property organized_type: project are listed. To use an existing note, add that property to it; typing its name here creates a new note${this.folder ? ` in ${this.folder}` : ""}.` });
     const results = this.contentEl.createDiv({ cls: "organized-project-results" });
     const paint = () => {
       results.empty(); const query = search.value.trim();
