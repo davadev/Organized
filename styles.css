@@ -651,7 +651,8 @@ SOFTWARE.
 
 /* Long-pressing a todo's checkbox on a phone opens the marker menu; keep the system's own callout and text selection out of its way. */
 body.is-mobile .cm-content .task-list-item-checkbox,
-body.is-mobile .cm-content .organized-glyph {
+body.is-mobile .cm-content .organized-glyph,
+body.is-mobile .markdown-preview-view .task-list-item-checkbox {
   -webkit-touch-callout: none;
   user-select: none;
 }

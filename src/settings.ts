@@ -80,6 +80,9 @@ export class OrganizedSettingsTab extends PluginSettingTab {
         row("Show scheduled date link", "Show the date link above task properties and beside scheduled tasks, including forwarded ones.", setting => {
           setting.addToggle(t => t.setValue(this.owner.settings.showScheduledDate).onChange(value => { this.owner.settings.showScheduledDate = value; this.owner.saveSettings(); }));
         }),
+        row("Long-press marker menu", "On a phone or tablet, press and hold a todo's checkbox in a daily note to pick its marker from a menu instead of typing it.", setting => {
+          setting.addToggle(t => t.setValue(this.owner.settings.longPressMenu).onChange(value => { this.owner.settings.longPressMenu = value; this.owner.saveSettings(); }));
+        }),
         row("Missing sections", "Choose what happens when a destination heading is missing.", setting => {
           setting.addDropdown(d => d.addOption("recreate", "Recreate heading path").addOption("ask", "Ask before inserting").setValue(this.owner.settings.missingSection).onChange(value => { this.owner.settings.missingSection = value === "ask" ? "ask" : "recreate"; this.owner.saveSettings(); }));
         }),

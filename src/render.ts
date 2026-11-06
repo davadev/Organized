@@ -9,7 +9,7 @@ import { projectName, splitNote } from "./repository";
 import { rgbOf } from "./colors";
 import { formatMinutes } from "./sessions";
 import { report } from "./service";
-import { longPressMenu } from "./longPress";
+import { longPressMenu, readingLongPress } from "./longPress";
 
 export const GLYPHS: Record<string, string> = {
   "<": "Scheduled", ">": "Forwarded", "/": "In progress", "!": "Priority", i: "Description", I: "Idea", "?": "Question", "-": "Canceled", "*": "Star", '"': "Source", l: "Location", b: "Project", S: "Savings", p: "Pros", c: "Cons", f: "Recurring", a: "Description", j: "Project", e: "Idea", q: "Question", s: "Source", r: "Recurring", k: "Key", w: "Win", u: "Up", d: "Down", D: "Draft pull request", P: "Open pull request", M: "Merged pull request",
@@ -85,6 +85,7 @@ export async function reading(owner: Organized, el: HTMLElement, ctx: MarkdownPo
     if (task.marker === ">") item.addClass("organized-forwarded");
     const checkbox = item.querySelector<HTMLInputElement>("input[type=checkbox]");
     if (checkbox && GLYPHS[task.marker]) { checkbox.addClass("organized-checkbox"); checkbox.dataset.organizedMarker = task.marker; }
+    const note = owner.repo.file(ctx.sourcePath); if (checkbox && note && Platform.isMobile) readingLongPress(owner, checkbox, note, task);
     if (!task.id) continue;
     if (checkbox) checkbox.addEventListener("click", event => {
       event.preventDefault(); event.stopPropagation();

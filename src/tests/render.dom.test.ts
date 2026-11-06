@@ -4,7 +4,7 @@ import { EditorState, StateField } from '@codemirror/state';
 import { DecorationSet, EditorView } from '@codemirror/view';
 import Organized from '../main';
 import { editorExtension, hasRichProperties, stepPastComments, GLYPHS, icon, projection, reading, refreshEditor } from '../render';
-import { Component, editorLivePreviewField, MarkdownRenderChild } from './__mocks__/obsidian';
+import { Component, editorLivePreviewField, MarkdownRenderChild, Menu, Platform } from './__mocks__/obsidian';
 import { installObsidianDom } from './__mocks__/obsidianDom';
 import { harness } from './harness';
 import { Notice } from './__mocks__/obsidian';
@@ -44,6 +44,20 @@ describe('read-only projections and bundled visual markers', () => {
     let resolve!: (t: any) => void; vi.spyOn(repo, 'read').mockImplementationOnce(() => new Promise(r => { resolve = r; })); const stale = children[0].draw(); children[0].unload(); resolve(task); await stale; expect(owner.projectionListeners.size).toBe(1); children[1].unload(); expect(owner.projectionListeners.size).toBe(0);
     await reading(owner, host, { ...context, getSectionInfo: () => null }); expect(status).toHaveBeenCalledTimes(2);
     const noCheckbox = createDiv(); noCheckbox.createEl('li', { cls: 'task-list-item' }); await reading(owner, noCheckbox, { ...context, getSectionInfo: () => ({ text, lineStart: 0, lineEnd: 0 }) }); expect(noCheckbox.querySelector('.organized-properties')).toBeTruthy();
+  });
+  it('offers the long-press marker menu on Reading view checkboxes on mobile only, for linked and plain todos', async () => {
+    const { owner, task, add, files } = await fixture(); const text = `- [ ] Linked <!--organized:${task.id}-->\n- [ ] Plain`;
+    const file: any = await add('Daily/2026-01-01.md', text); const make = () => { const host = createDiv(); document.body.appendChild(host); for (let i = 0; i < 2; i++) { const li = host.createEl('li', { cls: 'task-list-item' }); li.createEl('input', { type: 'checkbox', cls: 'task-list-item-checkbox' }); } return host; };
+    const context: any = { sourcePath: file.path, getSectionInfo: () => ({ text, lineStart: 0, lineEnd: 1 }), addChild: (c: any) => c.load() };
+    const press = (box: Element) => { const event = new Event('touchstart', { bubbles: true }) as any; event.touches = [{ clientX: 1, clientY: 2 }]; box.dispatchEvent(event); vi.advanceTimersByTime(500); };
+    const desktop = make(); await reading(owner, desktop, context); press(desktop.querySelector('input')!); expect(Menu.last).toBeNull();
+    Platform.isMobile = true;
+    try {
+      vi.spyOn(owner.service.daily, 'date').mockReturnValue('2026-01-01');
+      const host = make(); await reading(owner, host, context); const boxes = host.querySelectorAll('input');
+      press(boxes[0]); expect(Menu.last!.items).toHaveLength(14); press(boxes[1]); expect(Menu.last!.items).toHaveLength(3);
+      Menu.last = null; files.delete(file.path); const orphan = make(); await reading(owner, orphan, context); press(orphan.querySelector('input')!); expect(Menu.last).toBeNull();
+    } finally { Platform.isMobile = false; Menu.last = null; }
   });
   it('state-field widgets never alter source, suppress in source/cursor context and clean up async components', async () => {
     const { owner, task, repo } = await fixture(); const extension = editorExtension(owner) as any[]; const field = extension[0] as StateField<DecorationSet>; const doc = `intro\n- [ ] Rendered <!--organized:${task.id}-->\n- [ ] ordinary`;
