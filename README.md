@@ -240,6 +240,8 @@ Identity and recurrence comments stay hidden in Live Preview, including the line
 | `[t]` | Add time worked: asks for a start and an end (on the day of the daily note, 9:00–10:00 to begin with), logs the block on the task and the calendar, then restores the todo's own marker. Cancel leaves the `[t]` |
 | `[r]` | Toggle recurrence in existing/current/future and subsequently created daily notes; clear after success |
 
+**On a phone or tablet**, you do not need the keyboard for these: in a daily note, press and hold a todo's checkbox and a menu lists the markers above that act (not the formatting-only letters). Choosing one is the same as typing it in the checkbox; ticking or canceling a plain todo this way keeps it a plain todo.
+
 Only the markers above act. Every other character, including the old action letters `[i]`, `[I]`, `[?]`, `["]`, `[b]` and `[f]` and the theme glyphs `[d]`, `[p]`, `[k]`, `[l]`, `[S]`, `[c]`, `[w]`, `[u]`, `[D]`, `[P]`, `[M]`, is **formatting only**: it shows its icon and never changes metadata or storage. Use them freely to style a todo without side effects. Things-style glyphs are bundled, so the Things theme is not required.
 
 Historical daily checkboxes remain historical. Non-recurring status changes propagate to today/future daily notes and undated/project references, not prior days. Recurring dates are independent; disabling recurrence removes only uniquely identified generated future copies. Multiple tasks may have running timers; no background writes or ticking process is required.

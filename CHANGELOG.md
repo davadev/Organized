@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Long-press a todo on your phone to change its marker.** In a daily note on iOS and Android, press and hold a todo's checkbox and a menu offers the markers that act: open, done, in progress, cancel, forward, schedule, priority, star, description, sources, projects, recurring, convert to note and add time. Choosing one is the same as typing that letter in the checkbox, so pickers and status changes behave as usual; a plain todo that you tick or cancel this way stays a plain todo. Formatting-only letters are not listed. Desktop and Reading view are unchanged. This is new on touch screens, so feedback from real devices is welcome.
+
 ## 0.1.1
 
 - Review fixes: the test tooling no longer uses `js-yaml` (replaced by `yaml`), two `:has()` selectors are gone (a focused description or source now highlights its card with `:focus-within`, and right-aligned symbols keep their line through a line class), and the README no longer contains template-looking text. New checks keep these from coming back: stylelint rejects `:has`, `npm run lint:deps` rejects replaceable packages, and `check-release` rejects README placeholders.

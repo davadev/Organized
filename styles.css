@@ -648,3 +648,10 @@ SOFTWARE.
 .organized-symbol.organized-priority-high { color: var(--color-red, #d64545); }
 .organized-symbol.organized-priority-medium { color: var(--color-orange, #e08a1e); }
 .organized-symbol.organized-priority-low { color: var(--color-yellow, #d9a60f); }
+
+/* Long-pressing a todo's checkbox on a phone opens the marker menu; keep the system's own callout and text selection out of its way. */
+body.is-mobile .cm-content .task-list-item-checkbox,
+body.is-mobile .cm-content .organized-glyph {
+  -webkit-touch-callout: none;
+  user-select: none;
+}

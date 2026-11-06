@@ -1,7 +1,7 @@
 import { Component, MarkdownPostProcessorContext, MarkdownRenderer, MarkdownRenderChild, Notice, setIcon } from "obsidian";
 import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetType, keymap } from "@codemirror/view";
 import { StateEffect, StateField, RangeSetBuilder, EditorState, Extension, Prec } from "@codemirror/state";
-import { editorLivePreviewField } from "obsidian";
+import { editorLivePreviewField, Platform } from "obsidian";
 import type Organized from "./main";
 import { noteSection, parseTasks } from "./codec";
 import { DisplayProperty, elapsed, localDate, STATUS_ICONS, Task } from "./model";
@@ -9,6 +9,7 @@ import { projectName, splitNote } from "./repository";
 import { rgbOf } from "./colors";
 import { formatMinutes } from "./sessions";
 import { report } from "./service";
+import { longPressMenu } from "./longPress";
 
 export const GLYPHS: Record<string, string> = {
   "<": "Scheduled", ">": "Forwarded", "/": "In progress", "!": "Priority", i: "Description", I: "Idea", "?": "Question", "-": "Canceled", "*": "Star", '"': "Source", l: "Location", b: "Project", S: "Savings", p: "Pros", c: "Cons", f: "Recurring", a: "Description", j: "Project", e: "Idea", q: "Question", s: "Source", r: "Recurring", k: "Key", w: "Win", u: "Up", d: "Down", D: "Draft pull request", P: "Open pull request", M: "Merged pull request",
@@ -170,7 +171,7 @@ export function editorExtension(owner: Organized): Extension {
     }
     update(update: ViewUpdate): void { if (update.docChanged || update.viewportChanged || update.selectionSet || update.transactions.some(t => t.effects.some(e => e.is(refreshEffect)))) this.decorations = this.build(update.view); }
   }, { decorations: value => value.decorations, provide: plugin => EditorView.atomicRanges.of(view => view.plugin(plugin)?.decorations ?? Decoration.none) });
-  return [field, icons, Prec.highest(keymap.of([{ key: "Enter", run: stepPastComments }])), EditorView.updateListener.of(update => owner.onEditorUpdate(update))];
+  return [field, icons, Prec.highest(keymap.of([{ key: "Enter", run: stepPastComments }])), EditorView.updateListener.of(update => owner.onEditorUpdate(update)), ...(Platform.isMobile ? [longPressMenu(owner)] : [])];
 }
 const TRAILING_COMMENTS = /^(?:\s*<!--organized:(?:[a-zA-Z0-9_-]{8,80}|repeat)-->)+\s*$/;
 /** The hidden ID comments sit after the visible text, so Enter at the visible end would split them onto the new line and orphan the task above. Step the caret past them first, then let the normal Enter (list continuation) run. */

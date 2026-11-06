@@ -68,6 +68,15 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Verify the task inspector uses a single grouped details surface and that mobile Settings controls stay close to their labels at 240–390 px.
 - Confirm an unfinished `[r]` recurring occurrence is not copied by automatic daily-note reconciliation.
 
+## Long-press marker menu (mobile, manual)
+
+Automated tests cover the logic with synthetic touch events; only a device shows the real behaviour. On iOS and Android (BRAT beta), in a daily note in Live Preview:
+- Press and hold a linked todo's checkbox for half a second: the menu opens, the current marker is missing, and no text selection or system callout appears. Release without moving: the checkbox does not also tick.
+- Choose **Done**, **Schedule**, **Priority** and **Add time**: each behaves as typing that letter does, and the keyboard does not pop up uninvited.
+- A quick tap still ticks the checkbox, and scrolling the note by dragging over a checkbox never opens the menu.
+- On a plain (unlinked) todo, **Done** and **Cancel** only change the character; **Schedule** creates and links a task, as typing does.
+- A note outside the daily-note folder, and desktop, show no menu.
+
 ## Mobile toolbar picker regression
 
 - With a mobile-toolbar-like CM transaction that inserts exactly `- [ ] ` without `Transaction.userEvent`, verify the picker opens once.
