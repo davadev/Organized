@@ -75,6 +75,9 @@ Automated tests cover the logic with synthetic touch events; only a device shows
 - Choose **Done**, **Schedule**, **Priority** and **Add time**: each behaves as typing that letter does, and the keyboard does not pop up uninvited.
 - A quick tap still ticks the checkbox, and scrolling the note by dragging over a checkbox never opens the menu.
 - On a plain (unlinked) todo, **Done** and **Cancel** only change the character; **Schedule** creates and links a task, as typing does.
+- The rows have icons and the current marker is ticked; choosing it does nothing. Android vibrates briefly when the menu opens.
+- Repeat in Reading view: **Done** on a linked todo completes the task, **Schedule** opens the date dialog; a plain todo only offers Open, Done and Cancel.
+- Settings → Organized → Task behavior → *Long-press marker menu* off: no menu in either view.
 - A note outside the daily-note folder, and desktop, show no menu.
 
 ## Mobile toolbar picker regression

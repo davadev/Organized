@@ -263,8 +263,10 @@ export class MarkdownView {}
 export function addIcon(_id: string, _svg: string): void {}
 /** Records what a menu was given so a test can read the items and click one. */
 export class MenuItem {
-  title = ""; click: () => void = () => {};
+  title = ""; icon = ""; checked = false; click: () => void = () => {};
   setTitle(title: string): this { this.title = title; return this; }
+  setIcon(icon: string): this { this.icon = icon; return this; }
+  setChecked(checked: boolean): this { this.checked = checked; return this; }
   onClick(click: () => void): this { this.click = click; return this; }
 }
 export class Menu {

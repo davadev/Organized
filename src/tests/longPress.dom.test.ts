@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorState, Transaction } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { LONG_PRESS_MARKERS, longPressMenu } from '../longPress';
+import { LONG_PRESS_MARKERS, longPressMenu, readingLongPress } from '../longPress';
 import { editorExtension } from '../render';
 import { Menu, Platform } from './__mocks__/obsidian';
 import { installObsidianDom } from './__mocks__/obsidianDom';
@@ -16,6 +16,7 @@ function setup(doc = `plain text\n- [ ] Plain\n${LINKED}`, path = 'Daily/2026-01
   const events: (string | undefined)[] = [];
   const state: { view: EditorView } = {} as never;
   const owner: any = {
+    settings: { longPressMenu: true },
     activeEditor: () => ({ editor: { getValue: () => state.view.state.doc.toString() }, file: { path } }),
     service: { daily: { date: (p: string) => p.startsWith('Daily/') ? '2026-01-01' : null } },
   };
@@ -52,18 +53,20 @@ describe('long-press marker menu', () => {
     Platform.isMobile = true;
     expect((editorExtension(owner) as unknown[]).length).toBe(5);
   });
-  it('opens the menu at the finger after a long press and omits the current marker', () => {
+  it('opens the menu at the finger after a long press, with icons and the current marker ticked', () => {
     const { view, boxFor } = setup(); const box = boxFor(2);
     touch('touchstart', box, 40, 60); hold();
-    expect(items()).toEqual(LONG_PRESS_MARKERS.filter(([m]) => m !== ' ').map(([m, l]) => `[${m}] ${l}`));
+    expect(items()).toEqual(LONG_PRESS_MARKERS.map(([m, l]) => `[${m === ' ' ? '\u00a0' : m}] ${l}`));
+    expect(Menu.last!.items.map(i => i.icon).every(Boolean)).toBe(true);
+    expect(Menu.last!.items.filter(i => i.checked).map(i => i.title)).toEqual(['[\u00a0] Open']);
     expect(Menu.last!.at).toEqual({ x: 40, y: 60 });
     const end = touch('touchend', box); expect(end.defaultPrevented).toBe(true);
     view.destroy();
   });
-  it('shows a visible blank for the open marker and offers Open on a ticked todo', () => {
+  it('ticks the marker the todo has now', () => {
     const { view, boxFor } = setup('- [x] Done <!--organized:abcd1234-->'); const box = boxFor(0);
     touch('touchstart', box); hold();
-    expect(items()[0]).toBe('[ ] Open'); expect(items()).not.toContain('[x] Done');
+    expect(Menu.last!.items.filter(i => i.checked).map(i => i.title)).toEqual(['[x] Done']);
     view.destroy();
   });
   it('does nothing for a short tap, a drift, a second finger, a cancel or a target that is not a checkbox', () => {
@@ -133,9 +136,55 @@ describe('long-press marker menu', () => {
     const moved = setup(); touch('touchstart', moved.boxFor(2)); hold(); const pickMoved = Menu.last!.items.find(i => i.title === '[x] Done')!;
     moved.view.dispatch({ changes: { from: 11, insert: 'x' } }); pickMoved.click(); vi.runOnlyPendingTimers(); expect(moved.view.state.doc.toString()).not.toContain('[x]'); moved.view.destroy();
   });
+  it('does nothing when the setting is off, and choosing the marker the todo already has changes nothing', () => {
+    const off = setup(); off.owner.settings.longPressMenu = false; touch('touchstart', off.boxFor(2)); hold(); expect(Menu.last).toBeNull(); off.view.destroy();
+    const same = setup(); touch('touchstart', same.boxFor(2)); hold(); Menu.last!.items.find(i => i.checked)!.click(); vi.runOnlyPendingTimers();
+    expect(same.view.state.doc.line(3).text).toBe(LINKED); expect(same.events).toEqual([]); same.view.destroy();
+  });
+  it('gives a short tick where the device can vibrate', () => {
+    const vibrate = vi.fn(); (navigator as any).vibrate = vibrate;
+    try { const { view, boxFor } = setup(); touch('touchstart', boxFor(2)); hold(); expect(vibrate).toHaveBeenCalledWith(10); view.destroy(); } finally { delete (navigator as any).vibrate; }
+  });
   it('stops listening and clears a pending press when the editor is destroyed', () => {
     const { view, boxFor } = setup(); const box = boxFor(2);
     touch('touchstart', box); view.destroy(); hold(); expect(Menu.last).toBeNull();
     touch('touchstart', box); hold(); expect(Menu.last).toBeNull();
+  });
+});
+
+describe('long-press marker menu in Reading view', () => {
+  function reading(raw: string, over: { id?: string | null; daily?: boolean; on?: boolean } = {}) {
+    vi.useFakeTimers();
+    const file: any = { path: over.daily === false ? 'Notes/Plain.md' : 'Daily/2026-01-01.md' };
+    const owner: any = {
+      settings: { longPressMenu: over.on ?? true },
+      service: { daily: { date: (p: string) => p.startsWith('Daily/') ? '2026-01-01' : null }, clean: vi.fn().mockResolvedValue(undefined) },
+      run: (fn: () => Promise<unknown>) => fn(), trigger: vi.fn().mockResolvedValue(undefined),
+    };
+    const task: any = { raw, line: 4, prefix: '- [', marker: raw[3], title: 'T', id: over.id === undefined ? 'abcd1234' : over.id };
+    const box = document.createElement('input'); box.type = 'checkbox'; box.className = 'task-list-item-checkbox'; document.body.appendChild(box);
+    readingLongPress(owner, box, file, task);
+    return { owner, file, task, box };
+  }
+  const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
+  it('writes the marker with the service and runs it for a linked todo, and swallows the click that follows', async () => {
+    const { owner, file, task, box } = reading('- [ ] T');
+    touch('touchstart', box, 7, 9); hold(); expect(Menu.last!.at).toEqual({ x: 7, y: 9 }); expect(Menu.last!.items).toHaveLength(LONG_PRESS_MARKERS.length);
+    const click = new Event('click', { bubbles: true, cancelable: true }); box.dispatchEvent(click); expect(click.defaultPrevented).toBe(true);
+    Menu.last!.items.find(i => i.title === '[<] Schedule')!.click(); vi.runOnlyPendingTimers(); await flush();
+    expect(owner.service.clean).toHaveBeenCalledWith({ file, line: task }, '<'); expect(owner.trigger).toHaveBeenCalledWith({ file, line: { ...task, marker: '<' } });
+  });
+  it('only ticks, reopens or cancels a plain todo, with no task created', async () => {
+    const { owner, box } = reading('- [ ] T', { id: null });
+    touch('touchstart', box); hold(); expect(items()).toEqual(['[\u00a0] Open', '[x] Done', '[-] Cancel']);
+    Menu.last!.items.find(i => i.title === '[x] Done')!.click(); vi.runOnlyPendingTimers(); await flush();
+    expect(owner.service.clean).toHaveBeenCalledWith(expect.anything(), 'x'); expect(owner.trigger).not.toHaveBeenCalled();
+  });
+  it('stays quiet outside daily notes and when the setting is off, and survives a failed write', async () => {
+    const outside = reading('- [ ] T', { daily: false }); touch('touchstart', outside.box); hold(); expect(Menu.last).toBeNull();
+    const off = reading('- [ ] T', { on: false }); touch('touchstart', off.box); hold(); expect(Menu.last).toBeNull();
+    const failing = reading('- [ ] T'); failing.owner.service.clean.mockRejectedValue(new Error('Task context changed'));
+    touch('touchstart', failing.box); hold(); Menu.last!.items.find(i => i.title === '[x] Done')!.click(); vi.runOnlyPendingTimers(); await flush();
+    expect(failing.owner.trigger).not.toHaveBeenCalled();
   });
 });
