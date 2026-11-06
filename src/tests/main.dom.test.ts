@@ -430,20 +430,24 @@ describe('a running timer follows its [/] marker', () => {
   });
 });
 describe('onboarding card at startup', () => {
+  const ready = async (h: any) => { h.layout[0](); await vi.advanceTimersByTimeAsync(2000); };
   const cards = () => Modal.instances.filter(m => m instanceof OnboardingModal) as OnboardingModal[];
   it('opens once after layout-ready, writes nothing until it closes, then never again', async () => {
     Modal.instances.length = 0; const { h, plugin, stub } = await loaded(); const before = JSON.stringify(stub.settingsRaw);
-    expect(cards()).toHaveLength(0); h.layout[0](); expect(cards()).toHaveLength(1); await flush();
+    expect(cards()).toHaveLength(0); h.layout[0](); expect(cards()).toHaveLength(0); await vi.advanceTimersByTimeAsync(2000); expect(cards()).toHaveLength(1);
     expect(plugin.settings.onboardingSeen).toBe(false); expect(JSON.stringify(stub.settingsRaw)).toBe(before);
     cards()[0].close(); await flush(); expect(plugin.settings.onboardingSeen).toBe(true);
     const saved = (await plugin.loadData()).settings; expect(saved.onboardingSeen).toBe(true);
-    const second = await loaded(); (second.plugin as any).settings.onboardingSeen = true; second.h.layout[0](); expect(cards()).toHaveLength(1);
+    const second = await loaded(); (second.plugin as any).settings.onboardingSeen = true; await ready(second.h); expect(cards()).toHaveLength(1);
   });
-  it('stays quiet when the plugin loaded late, writes are paused or the card was already seen', async () => {
+  it('opens right away, without a restart, when the plugin is switched on in a running session', async () => {
+    Modal.instances.length = 0; const live = await loaded(true); await ready(live.h); expect(cards()).toHaveLength(1);
+  });
+  it('stays quiet when writes are paused, the card was already seen or the plugin was switched off before the card was due', async () => {
     Modal.instances.length = 0;
-    const late = await loaded(true); late.h.layout[0](); expect(cards()).toHaveLength(0);
-    const paused = await loaded(); paused.stub.safety = { writable: false }; paused.h.layout[0](); expect(cards()).toHaveLength(0);
-    const seen = await loaded(); seen.plugin.settings.onboardingSeen = true; seen.h.layout[0](); expect(cards()).toHaveLength(0);
+    const paused = await loaded(); paused.stub.safety = { writable: false }; await ready(paused.h); expect(cards()).toHaveLength(0);
+    const seen = await loaded(); seen.plugin.settings.onboardingSeen = true; await ready(seen.h); expect(cards()).toHaveLength(0);
+    const gone = await loaded(); gone.h.layout[0](); gone.plugin.onunload(); await vi.advanceTimersByTimeAsync(2000); expect(cards()).toHaveLength(0);
   });
   it('the command and the Settings button reopen it without changing the flag', async () => {
     Modal.instances.length = 0; const { plugin, stub } = await loaded(); plugin.settings.onboardingSeen = true;
