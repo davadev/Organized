@@ -69,7 +69,11 @@ export function longPressMenu(owner: Organized): Extension {
   return ViewPlugin.fromClass(class {
     private readonly stop: () => void;
     constructor(readonly view: EditorView) {
-      this.stop = watchLongPress(view.dom, event => event.target instanceof Element ? event.target.closest(TARGET) : null, (box, at) => this.open(box, at));
+      this.stop = watchLongPress(view.dom, event => {
+        const box = event.target instanceof Element ? event.target.closest(TARGET) : null;
+        // A task list inside a rendered description is not the todo line it hangs under.
+        return box?.closest(".organized-projection") ? null : box;
+      }, (box, at) => this.open(box, at));
     }
     destroy(): void { this.stop(); }
     private open(box: Element, at: Point): boolean {

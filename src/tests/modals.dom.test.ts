@@ -73,6 +73,12 @@ describe("native task, date, source and project modals", () => {
     expect(rows[0].querySelector('.organized-project-dot')!.hasAttribute('data-project')).toBe(true); expect(rows[0].querySelector<HTMLElement>('.organized-project-dot')!.style.getPropertyValue('--organized-chip-bg')).toBe('59 130 246');
     expect(rows[1].querySelector('.organized-project-dot')!.hasAttribute('data-project')).toBe(false);
   });
+  it("says why only some notes are listed, and where a typed name is created", () => {
+    const h = harness();
+    const withFolder = new ProjectPicker(h.app, [], [], async () => undefined, 'Tasks/Projects'); withFolder.open();
+    const hint = withFolder.contentEl.querySelector('.organized-project-hint')!.textContent!; expect(hint).toContain('organized_type: project'); expect(hint).toContain('creates a new note in Tasks/Projects.');
+    const without = new ProjectPicker(h.app, [], [], async () => undefined); without.open(); expect(without.contentEl.querySelector('.organized-project-hint')!.textContent).toContain('creates a new note.');
+  });
   it("multi-selects projects and creates only a chosen valid root note; search keeps input focus", async () => {
     const h = harness(); const save = vi.fn(async () => undefined); const modal = new ProjectPicker(h.app, ['Existing.md', 'Other.md'], ['Selected.md'], save); modal.open(); decorated(modal);
     const input = modal.contentEl.querySelector('input[type=search]') as HTMLInputElement; input.focus(); input.value = 'New'; input.dispatchEvent(new Event('input'));

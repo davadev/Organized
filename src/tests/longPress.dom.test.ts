@@ -145,6 +145,10 @@ describe('long-press marker menu', () => {
     const vibrate = vi.fn(); (navigator as any).vibrate = vibrate;
     try { const { view, boxFor } = setup(); touch('touchstart', boxFor(2)); hold(); expect(vibrate).toHaveBeenCalledWith(10); view.destroy(); } finally { delete (navigator as any).vibrate; }
   });
+  it('ignores a checkbox inside a rendered description, which is not the todo line it hangs under', () => {
+    const { view, boxFor } = setup(); const inner = boxFor(2); const projection = document.createElement('span'); projection.className = 'organized-projection'; view.dom.appendChild(projection); projection.appendChild(inner);
+    touch('touchstart', inner); hold(); expect(Menu.last).toBeNull(); view.destroy();
+  });
   it('stops listening and clears a pending press when the editor is destroyed', () => {
     const { view, boxFor } = setup(); const box = boxFor(2);
     touch('touchstart', box); view.destroy(); hold(); expect(Menu.last).toBeNull();
