@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **No restart needed for the welcome tour or What's new.** They now open a moment after Organized is switched on or updated, instead of waiting for the next time Obsidian starts.
 - **What's new after an update, the tour only for new installs.** After Organized updates you see a short note about that version, once (reopen it with *Show what's new*; switch it off under Settings → Help). The welcome tour now appears only on a fresh install, and has two new cards: press and hold on a phone, and jumping into a checkbox from the keyboard. If you updated from an older version you are no longer shown the tour; run *Show onboarding card* any time.
 - **`[+]` adds a subtask.** Type `+` in a todo's checkbox, or choose *Add subtask* in the phone long-press menu, and an empty indented todo appears under it with the task picker open; the todo keeps its own status. A plain todo becomes a task first, as with the other markers. Not offered in Reading view.
 - **Jump into a todo's checkbox from the keyboard.** The new command *Edit checkbox marker* puts the caret on the marker of the todo you are on, with the character selected, so the next key replaces it as if you had clicked into the checkbox. It has no default key; bind one in Settings → Hotkeys (for example `Alt+X`). Off a todo line it says so.

@@ -1,6 +1,6 @@
 # Onboarding and What's new
 
-Two cards, two audiences. A **fresh install** gets the onboarding tour. Someone who **updates** gets a short What's new note for the release, once. Nobody gets both, and a fresh install is never shown a changelog. The design follows the playbook ("Settings tabs and telling users what changed", section 5); this page is the repo's own spec and the source for a later playbook update.
+Two cards, two audiences, and neither waits for a restart. A **fresh install** gets the onboarding tour. Someone who **updates** gets a short What's new note for the release, once. Nobody gets both, and a fresh install is never shown a changelog. The design follows the playbook ("Settings tabs and telling users what changed", section 5); this page is the repo's own spec and the source for a later playbook update.
 
 ## State (all per device, in `data.json`)
 
@@ -9,7 +9,6 @@ Two cards, two audiences. A **fresh install** gets the onboarding tour. Someone 
 | `onboardingSeen` | The tour has been shown, or is not owed |
 | `lastSeenVersion` | Newest release this device has been told about (`""` until the plugin first runs) |
 | `showWhatsNew` | The person's switch (Settings → Help), default on |
-| `whatsNewHintedFor` | Release an "updated, restart to finish" notice was shown for, so it appears once |
 
 Obsidian Sync can carry `data.json` to other devices, so "per device" is a hope, not a guarantee. The worst case is a popup skipped on a second device. A `lastSeenVersion` newer than the running version is ignored (comparison only).
 
@@ -23,11 +22,12 @@ Obsidian Sync can carry `data.json` to other devices, so "per device" is a hope,
 
 ## When something is shown (`maybeShowStartupCard`)
 
-Only after the workspace is ready, only at a real start, never while writes are paused.
+About a second and a half after `onLayoutReady` (Obsidian runs that at once when the plugin is switched on in a running session), never while writes are paused:
 
 1. Tour owed (`onboardingSeen` false): show the tour; closing it sets `onboardingSeen` and `lastSeenVersion`. No What's new meanwhile.
 2. Otherwise, with `showWhatsNew` on and notes newer than `lastSeenVersion` and not newer than the running version: record `lastSeenVersion`, wait for the save, then open the popup.
-3. In a running session (the plugin was switched on or updated while Obsidian was open; `app.workspace.layoutReady` was already true when `onload` began) nothing opens and nothing is recorded: one Notice per release says to restart. The open views and settings are still the old ones.
+
+There is no "real start" test and no restart notice. If this code is running, this version is the one that is loaded, and its commands, settings group and views were registered by this same `onload`; a file swap that left old code running cannot run this code at all. The delay is only so the card does not open under the settings window that switched the plugin on. Unverified until a device confirms it: that a BRAT update reloads the plugin so this `onload` runs (otherwise nothing shows until the plugin is next toggled or Obsidian restarts).
 
 A beta counts as its stable version (`0.1.2-beta.9` is `0.1.2`): a tester sees the note once, on the first beta that has it. To see it again on a device: Settings → Help → turn **Show what's new after updates** off and on (this clears `lastSeenVersion`), then restart.
 
@@ -48,6 +48,6 @@ Manual ways in: commands **Show onboarding card** and **Show what's new** (the w
 
 ## Testing
 
-Automated: `src/tests/whatsNew.test.ts` (version logic), `src/tests/whatsNewFlow.dom.test.ts` (fresh, updated, skipped, in-session, switched off, paused, stacked, commands), layout scenes `Onboarding1`..`Onboarding12` and `WhatsNew`.
+Automated: `src/tests/whatsNew.test.ts` (version logic), `src/tests/whatsNewFlow.dom.test.ts` (fresh, updated, skipped, running session, switched off, paused, stacked, commands), layout scenes `Onboarding1`..`Onboarding12` and `WhatsNew`.
 
-Manual, on a device: install the beta over an older one and restart (popup once, not on the second restart); a BRAT update inside a running session shows only the notice; a fresh vault shows the tour and no note; remove the plugin folder's `data.json` to repeat. Unverified until a real device confirms it: that `layoutReady` is false when plugins load at startup (if it were true, the popup would never appear).
+Manual, on a device: install the beta over an older one and restart (popup once, not on the second restart); a BRAT update inside a running session shows the note after a moment, without a restart (if it does not, that is the unverified assumption above); a fresh vault, or enabling the plugin in a running Obsidian, shows the tour and no note; remove the plugin folder's `data.json` to repeat.

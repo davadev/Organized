@@ -17,7 +17,7 @@ afterEach(() => { vi.useRealTimers(); });
 const manifest = { id: "organized", name: "Organized", author: "davadev", version: "0.0.0", minAppVersion: "1.7.2", description: "", isDesktopOnly: false };
 
 async function install(h: ReturnType<typeof harness>, data?: unknown) {
-  const plugin = new Organized(h.app, manifest) as any; plugin.data = data; await plugin.onload(); h.layout.forEach(fn => fn()); await flush();
+  const plugin = new Organized(h.app, manifest) as any; plugin.data = data; await plugin.onload(); h.layout.forEach(fn => fn()); await vi.advanceTimersByTimeAsync(2000); await flush();
   return plugin;
 }
 const command = (plugin: any, id: string) => plugin.commands.find((c: any) => c.id === id);

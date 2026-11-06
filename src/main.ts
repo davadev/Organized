@@ -16,6 +16,8 @@ import { crashStatePath, decideOnLoad, DEFAULT_CRASH_STATE, readCrashState, writ
 import { DataSafety } from "./safety";
 import { isDestructive, normalizeRetire } from "./retire";
 
+/** How long after the layout is ready the first-run card waits, so it does not open under the settings window that switched the plugin on. */
+const FIRST_RUN_DELAY_MS = 1500;
 export default class Organized extends Plugin {
   settings: Settings = { ...DEFAULT_SETTINGS };
   repo!: Repository;
@@ -35,10 +37,7 @@ export default class Organized extends Plugin {
   private saveTail: Promise<unknown> = Promise.resolve();
   private loaded = false;
   private unloaded = false;
-  /** Whether Organized loaded as part of the app starting. A plugin switched on or updated while Obsidian runs finds the layout already ready; that is not a start, so nothing pops up and a notice asks for a restart instead. Unset (as in tests) counts as a start. */
-  private atStartup = true;
   async onload(): Promise<void> {
-    this.atStartup = !this.app.workspace.layoutReady;
     try {
       const adapter = this.app.vault.adapter; const crashPath = crashStatePath(this.manifest, this.app.vault.configDir);
       const decision = decideOnLoad(await readCrashState(adapter, crashPath), 5);
@@ -89,7 +88,8 @@ export default class Organized extends Plugin {
         // The colour is read from the metadata cache, which updates a moment after the note is written.
         this.registerEvent(this.app.metadataCache.on("changed", file => { if (this.repo.isProjectNote(file)) this.refresh(); }));
         this.registerEvent(this.app.vault.on("delete", file => { this.repo.forgetPath(file.path); this.service.forget(file.path); this.refresh(); }));
-        void this.maybeShowStartupCard().catch(report);
+        // A moment after the layout is ready (immediately so when the plugin is switched on in a running session): the settings window that switched it on may still be closing.
+        this.registerInterval(window.setTimeout(() => { void this.maybeShowStartupCard().catch(report); }, FIRST_RUN_DELAY_MS));
         void this.run(async () => { await this.repo.reindex(); await this.migrateProjects(); await this.markProjectNotes(); await this.migrateTaskNotes(); await this.migrateTaskNoteNames(); await this.nestSubtasks(); });
         this.registerEvent(this.app.workspace.on("file-open", file => { this.followCursor(); if (file) void this.run(() => this.service.reconcile(file)); }));
       });
@@ -123,18 +123,12 @@ export default class Organized extends Plugin {
     if (fresh) this.settings.lastSeenVersion = this.manifest.version;
     else if (!("lastSeenVersion" in saved)) this.settings.onboardingSeen = true;
   }
-  /** The one card at a real start: the onboarding tour while it is owed (fresh installs), otherwise What's new for a release this device has not been told about. Never both, and nothing while writes are paused. */
+  /** The one card to show now: the onboarding tour while it is owed (fresh installs), otherwise What's new for a release this device has not been told about. Never both, and nothing while writes are paused. Nothing waits for a restart: if this code is running, the new version is the one that is loaded. */
   async maybeShowStartupCard(): Promise<void> {
-    if (!this.loaded || !this.safety.writable) return;
-    if (!this.settings.onboardingSeen) { if (this.atStartup) this.showOnboarding(true); return; }
+    if (this.unloaded || !this.loaded || !this.safety.writable) return;
+    if (!this.settings.onboardingSeen) { this.showOnboarding(true); return; }
     if (!this.settings.showWhatsNew) return;
     const current = this.manifest.version; const notes = notesToShow(this.settings.lastSeenVersion, current); if (!notes.length) return;
-    if (!this.atStartup) {
-      // Updated while running: open views and settings are the old ones, so describing the new ones would be untrue. Say so once per release.
-      const newest = notes[notes.length - 1].version;
-      if (this.settings.whatsNewHintedFor !== newest) { this.settings.whatsNewHintedFor = newest; this.saveSettings(false); new Notice(`Organized updated to ${current}. Restart Obsidian to finish updating; a short What's new appears then.`, 12000); }
-      return;
-    }
     // Recorded before it opens, so it cannot come back even if the app closes while it is open.
     this.settings.lastSeenVersion = current; this.saveSettings(false); await this.saveTail;
     this.openWhatsNew(notes);

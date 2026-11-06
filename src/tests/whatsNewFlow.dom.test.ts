@@ -22,7 +22,7 @@ async function start({ data = null, version = '0.1.2-beta.7', running = false, w
   const h = harness(); (h.app.workspace as any).layoutReady = running;
   const plugin = new Organized(h.app, { id: 'organized', name: 'Organized', author: 'davadev', version, minAppVersion: '1.7.2', description: '', isDesktopOnly: false });
   (plugin as any).data = data; await plugin.onload(); if (!writable) (plugin as any).safety = { writable: false };
-  h.layout[0](); await flush();
+  h.layout[0](); await vi.advanceTimersByTimeAsync(2000); await flush();
   return { h, plugin, saved: async () => (await plugin.loadData())?.settings ?? {} };
 }
 const stored = (settings: Record<string, unknown>) => ({ schemaVersion: 1, settings });
@@ -34,9 +34,14 @@ describe('a fresh install', () => {
     expect(await s.saved()).toMatchObject({ onboardingSeen: true, lastSeenVersion: '0.1.2-beta.7' });
     const next = await start({ data: { schemaVersion: 1, settings: await s.saved() } }); expect(cards()).toHaveLength(0); expect(news()).toHaveLength(0);
   });
-  it('is not interrupted when the plugin is switched on in a running session, and gets the tour at its next real start', async () => {
-    const live = await start({ running: true }); expect(cards()).toHaveLength(0); expect(news()).toHaveLength(0); expect(notices()).toEqual([]);
-    const restart = await start(); expect(cards()).toHaveLength(1); expect(restart.plugin.settings.onboardingSeen).toBe(false);
+  it('gets the tour right away, without a restart, when the plugin is switched on in a running session', async () => {
+    const live = await start({ running: true }); expect(cards()).toHaveLength(1); expect(news()).toHaveLength(0); expect(notices()).toEqual([]);
+    cards()[0].close(); await flush(); expect(live.plugin.settings.onboardingSeen).toBe(true);
+  });
+  it('waits a moment after the layout is ready, so it does not open under the settings window that switched the plugin on', async () => {
+    vi.useFakeTimers(); Modal.instances.length = 0; const h = harness(); (h.app.workspace as any).layoutReady = true;
+    const plugin = new Organized(h.app, { id: 'organized', name: 'Organized', author: 'davadev', version: '0.1.2', minAppVersion: '1.7.2', description: '', isDesktopOnly: false });
+    await plugin.onload(); h.layout[0](); await flush(); expect(cards()).toHaveLength(0); await vi.advanceTimersByTimeAsync(2000); expect(cards()).toHaveLength(1);
   });
   it('is told nothing when writes are paused', async () => {
     await start({ writable: false }); expect(cards()).toHaveLength(0); expect(news()).toHaveLength(0);
@@ -70,15 +75,14 @@ describe('an update', () => {
   it('ignores a newer version that another device recorded', async () => {
     await start({ data: seen('9.0.0') }); expect(news()).toHaveLength(0);
   });
-  it('does not pop up when the update arrives in a running session; one notice per release asks for a restart and records nothing', async () => {
-    const s = await start({ data: seen('0.1.1'), running: true }); expect(news()).toHaveLength(0); expect(notices().filter(m => m.includes('Restart Obsidian'))).toHaveLength(1);
-    expect(notices()[0]).toContain('0.1.2-beta.7'); const kept = await s.saved(); expect(kept.lastSeenVersion).toBe('0.1.1'); expect(kept.whatsNewHintedFor).toBe('0.1.2');
-    await start({ data: { schemaVersion: 1, settings: kept }, running: true }); expect(notices()).toEqual([]); expect(news()).toHaveLength(0);
-    await start({ data: { schemaVersion: 1, settings: kept } }); expect(news()).toHaveLength(1);
+  it('shows What\'s new right away, without a restart, when the update arrives in a running session', async () => {
+    const s = await start({ data: seen('0.1.1'), running: true }); expect(news()).toHaveLength(1); expect(notices()).toEqual([]);
+    expect((await s.saved()).lastSeenVersion).toBe('0.1.2-beta.7');
+    news()[0].close(); await start({ data: { schemaVersion: 1, settings: await s.saved() }, running: true }); expect(news()).toHaveLength(0);
   });
-  it('stays quiet, with no restart notice either, when the person turned it off', async () => {
+  it('stays quiet when the person turned it off, at a start or in a running session', async () => {
     await start({ data: seen('0.1.1', { showWhatsNew: false }) }); expect(news()).toHaveLength(0); expect(notices()).toEqual([]);
-    await start({ data: seen('0.1.1', { showWhatsNew: false }), running: true }); expect(notices()).toEqual([]);
+    await start({ data: seen('0.1.1', { showWhatsNew: false }), running: true }); expect(news()).toHaveLength(0); expect(notices()).toEqual([]);
   });
   it('shows nothing when writes are paused', async () => {
     await start({ data: seen('0.1.1'), writable: false }); expect(news()).toHaveLength(0);
