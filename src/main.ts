@@ -65,6 +65,7 @@ export default class Organized extends Plugin {
       this.addCommand({ id: "show-onboarding", name: "Show onboarding card", callback: () => { this.showOnboarding(false); } });
       this.addCommand({ id: "undo", name: "Undo last recurrence/auto-forward batch", callback: () => { void this.service.undo().catch(report); } });
       this.addCommand({ id: "restore-settings", name: "Restore compatible settings backup (restart required)", callback: () => { void this.confirm("Queue the newest compatible settings backup for restoration on next restart? Task Markdown will not change.").then(yes => yes ? this.safety.queueCompatibleRestore() : undefined).catch(report); } });
+      this.addCommand({ id: "edit-marker", name: "Edit checkbox marker", editorCallback: editor => { this.editMarker(editor); } });
       this.registerEditorExtension(editorExtension(this));
       this.registerMarkdownPostProcessor((el, ctx) => reading(this, el, ctx));
       this.registerEvent(this.app.workspace.on("editor-change", () => this.followCursor()));
@@ -336,6 +337,12 @@ export default class Organized extends Plugin {
     this.structure.set(key, { before, timer });
   }
   /** Adds an empty todo one level in under the todo at the cursor (after everything already nested under it) and asks which task it is. */
+  /** Puts the caret on the marker of the todo line it is on (`[ ]` -> the space selected), so the next letter typed replaces it exactly as if the person had clicked into the checkbox. Bind a key to it in Obsidian's Hotkeys settings. */
+  editMarker(editor: Editor): void {
+    const line = editor.getCursor().line; const task = parseTasks(editor.getLine(line))[0];
+    if (!task) { new Notice("Put the cursor on a todo line (- [ ] ...) first."); return; }
+    editor.setSelection({ line, ch: task.prefix.length }, { line, ch: task.prefix.length + 1 });
+  }
   async addSubtask(editor: Editor, file: TFile): Promise<void> {
     const context = this.current(editor, file); if (!context?.line.id) throw new Error("Put the cursor on a linked todo to add a subtask under it.");
     const lines = editor.getValue().split("\n"); const indent = (line: string) => /^\s*/.exec(line)![0].replace(/\t/g, "    ").length; const own = indent(context.line.raw);

@@ -63,7 +63,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
   });
   it('registers capabilities only, defers vault-create handling and cleans durable crash state', async () => {
     const { h, plugin, stub } = await loaded();
-    expect(stub.commands).toHaveLength(13); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
+    expect(stub.commands).toHaveLength(14); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
     const factory = stub.views.get(VIEW_TYPE); expect(factory({ app: h.app })).toBeInstanceOf(OrganizedInspectorView);
     h.layout[0](); expect(h.events.create).toHaveLength(1);
     const created = vi.spyOn(plugin.service, 'onDailyCreated').mockResolvedValue(); const index = vi.spyOn(plugin.service, 'index').mockResolvedValue(); const reconcile = vi.spyOn(plugin.service, 'reconcile').mockResolvedValue(); const refresh = vi.spyOn(plugin, 'refresh').mockImplementation(() => undefined);
@@ -218,7 +218,11 @@ describe('plugin lifecycle and user-only editor actions', () => {
     await plugin.addSubtask(editor as any, file); expect(editor.getValue()).toBe(`- [ ] Parent <!--organized:${parent.id}-->\n  - note\n    - deeper\n\t- [ ] \n- [ ] Next`); expect(editor.getCursor()).toEqual({ line: 3, ch: 7 }); expect(pick).toHaveBeenCalledWith(editor, file, false, true);
     const last = `- [ ] Parent <!--organized:${parent.id}-->`; const solo = h.setActive(file, last); solo.setCursor({ line: 0, ch: 0 }); await plugin.addSubtask(solo as any, file); expect(solo.getValue()).toBe(`${last}\n\t- [ ] `);
     const plain = h.setActive(file, '- [ ] Plain'); plain.setCursor({ line: 0, ch: 0 }); await expect(plugin.addSubtask(plain as any, file)).rejects.toThrow('linked todo');
-    const stub: any = plugin; const add = vi.spyOn(plugin, 'addSubtask').mockResolvedValue(); const repair = vi.spyOn(plugin.service, 'repairSubtasks').mockResolvedValue();
+    const marker = h.setActive(file, 'intro\n  - [ ] Plain todo\n- [/] Linked'); marker.setCursor({ line: 1, ch: 3 }); plugin.editMarker(marker as any);
+    expect(marker.listSelections()).toEqual([{ anchor: { line: 1, ch: 5 }, head: { line: 1, ch: 6 } }]);
+    marker.setCursor({ line: 2, ch: 0 }); plugin.editMarker(marker as any); expect(marker.listSelections()[0].anchor).toEqual({ line: 2, ch: 3 });
+    Notice.instances.length = 0; marker.setCursor({ line: 0, ch: 0 }); plugin.editMarker(marker as any); expect(Notice.instances.at(-1)!.message).toContain('todo line'); expect(marker.listSelections()[0].anchor).toEqual({ line: 0, ch: 0 });
+    const stub: any = plugin; const add = vi.spyOn(plugin, 'addSubtask').mockResolvedValue(); const repair = vi.spyOn(plugin.service, 'repairSubtasks').mockResolvedValue(); const edit = vi.spyOn(plugin, 'editMarker').mockReturnValue(); stub.commands.find((c: any) => c.id === 'edit-marker').editorCallback({}, {}); expect(edit).toHaveBeenCalledOnce();
     for (const id of ['add-subtask', 'repair-subtasks']) { const command = stub.commands.find((c: any) => c.id === id); command.editorCallback(editor, { file }); command.editorCallback(editor, {}); }
     await vi.advanceTimersByTimeAsync(10); expect(add).toHaveBeenCalledOnce(); expect(repair).toHaveBeenCalledOnce();
   });

@@ -68,6 +68,10 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 - Verify the task inspector uses a single grouped details surface and that mobile Settings controls stay close to their labels at 240–390 px.
 - Confirm an unfinished `[r]` recurring occurrence is not copied by automatic daily-note reconciliation.
 
+## Edit checkbox marker command (manual)
+
+In Live Preview and source mode on desktop, bind a key to **Edit checkbox marker** (Settings → Hotkeys). On a todo line, press it: the caret lands on the marker with the character selected (in Live Preview check that the checkbox turns into its `[ ]` source so the selection is visible). Type `x`: the todo completes as if typed. On a plain line it only shows a notice. Check the key on Windows, Linux and macOS; Option+letter can type a special character on macOS layouts.
+
 ## Long-press marker menu (mobile, manual)
 
 Automated tests cover the logic with synthetic touch events; only a device shows the real behaviour. On iOS and Android (BRAT beta), in a daily note in Live Preview:

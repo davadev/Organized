@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Jump into a todo's checkbox from the keyboard.** The new command *Edit checkbox marker* puts the caret on the marker of the todo you are on, with the character selected, so the next key replaces it as if you had clicked into the checkbox. It has no default key; bind one in Settings → Hotkeys (for example `Alt+X`). Off a todo line it says so.
+
 - **Projects explained.** The README has a short *Using projects* section (the `[j]` marker, why `[[Note]]` in a todo is only a link, and the one property, `organized_type: project`, that makes an existing note a project). The project picker now says why only some notes are listed and where a typed name creates a new note.
 - Fixed the long-press menu opening for the wrong todo when you pressed a checkbox inside a rendered description: it is now ignored there.
 
