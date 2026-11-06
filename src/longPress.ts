@@ -8,7 +8,7 @@ import { report } from "./service";
 /** The markers offered on a long press: only the ones that act (see the marker reference in the README), never formatting-only letters. Each has the icon its row shows. */
 export const LONG_PRESS_MARKERS: readonly (readonly [marker: string, label: string, icon: string])[] = [
   [" ", "Open", "circle"], ["x", "Done", "check"], ["/", "In progress", "play"], ["-", "Cancel", "x"], [">", "Forward", "arrow-right"], ["<", "Schedule", "calendar"], ["!", "Priority", "flag"], ["*", "Star", "star"],
-  ["a", "Description", "text"], ["s", "Sources", "link"], ["j", "Projects", "folder"], ["r", "Recurring", "repeat"], ["n", "Convert to note", "file-plus"], ["t", "Add time", "timer"],
+  ["a", "Description", "text"], ["s", "Sources", "link"], ["j", "Projects", "folder"], ["r", "Recurring", "repeat"], ["n", "Convert to note", "file-plus"], ["t", "Add time", "timer"], ["+", "Add subtask", "list-plus"],
 ];
 /** Marker changes that mean "just tick it": on a plain todo they stay a plain edit, as with the native checkbox, instead of creating a task. */
 const PLAIN_MARKERS = [" ", "x", "-"];
@@ -63,6 +63,8 @@ function showMarkerMenu(at: Point, current: string, allowed: readonly string[], 
   menu.showAtPosition(at);
 }
 const ALL_MARKERS = LONG_PRESS_MARKERS.map(([marker]) => marker);
+/** Reading view has no editor to insert a subtask line into. */
+const READING_MARKERS = ALL_MARKERS.filter(marker => marker !== "+");
 
 /** Mobile only: long-pressing a todo's checkbox in a daily note offers the markers as a menu. Choosing one writes the same marker character a person would type, so everything downstream (pickers, status, linking) is the existing typed-marker path. */
 export function longPressMenu(owner: Organized): Extension {
@@ -104,7 +106,7 @@ export function longPressMenu(owner: Organized): Extension {
 export function readingLongPress(owner: Organized, box: HTMLElement, file: TFile, task: TaskLine): void {
   watchLongPress(box, () => box, (_box, at) => {
     if (!owner.settings.longPressMenu || owner.service.daily.date(file.path) === null) return false;
-    showMarkerMenu(at, task.marker, task.id ? ALL_MARKERS : PLAIN_MARKERS, marker => {
+    showMarkerMenu(at, task.marker, task.id ? READING_MARKERS : PLAIN_MARKERS, marker => {
       void (async () => {
         await owner.run(() => owner.service.clean({ file, line: task }, marker));
         if (task.id) await owner.trigger({ file, line: { ...task, marker } });

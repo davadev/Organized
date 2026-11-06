@@ -15,7 +15,7 @@ const title = (marker: string) => `[${marker === ' ' ? '\u00a0' : marker}] ${LON
 const line = (marker: string, id: string, name = 'Task 1') => `- [${marker}] ${name} <!--organized:${id}-->`;
 
 describe('every acting marker, picked from the menu', () => {
-  const ACTING = ['<', '!', '>', '*', 'a', 's', 'j', 'r', 'n', 't'];
+  const ACTING = ['<', '!', '>', '*', 'a', 's', 'j', 'r', 'n', 't', '+'];
   it('asks the same thing a typed marker asks, on a linked task', async () => {
     for (const marker of ACTING) {
       const s = await withTasks(1, ([id]) => line(' ', id)); const trigger = vi.spyOn(s.plugin, 'trigger').mockResolvedValue();
@@ -29,7 +29,7 @@ describe('every acting marker, picked from the menu', () => {
       const s = await session('- [ ] Plain todo'); const trigger = vi.spyOn(s.plugin, 'trigger').mockResolvedValue();
       await s.press(0, title(marker))!.pick();
       const tasks = await s.plugin.repo.list(); expect(tasks, marker).toHaveLength(1); expect(tasks[0].title).toBe('Plain todo');
-      expect(trigger, marker).toHaveBeenCalledOnce(); expect(s.text()).toMatch(new RegExp(`^- \\[${marker.replace(/[*]/g, '\\*')}\\] Plain todo <!--organized:${tasks[0].id}-->$`)); s.done();
+      expect(trigger, marker).toHaveBeenCalledOnce(); expect(s.text()).toMatch(new RegExp(`^- \\[${marker.replace(/[*+]/g, '\\$&')}\\] Plain todo <!--organized:${tasks[0].id}-->$`)); s.done();
     }
   });
   it('opens the inspector on Description and Sources, and clears the marker afterwards', async () => {
@@ -55,6 +55,37 @@ describe('every acting marker, picked from the menu', () => {
   it('forwards a task to tomorrow', async () => {
     const s = await withTasks(1, ([id]) => line(' ', id)); await s.press(0, title('>'))!.pick();
     const task = await s.read(0); expect(task.scheduled).toBeTruthy(); expect(task.scheduled! > new Date().toISOString().slice(0, 10)).toBe(true); s.done();
+  });
+});
+
+describe('[+] adds a subtask', () => {
+  const rows = (text: string) => text.split('\n');
+  it('inserts an empty indented todo under a linked task, restores its marker and opens the task picker for the new line', async () => {
+    const s = await withTasks(1, ([id]) => `${line(' ', id)}\nafter`); const pick = vi.spyOn(s.plugin, 'pickTask').mockResolvedValue();
+    await s.press(0, title('+'))!.pick();
+    expect(rows(s.text())).toEqual([line(' ', s.tasks[0].id), '\t- [ ] ', 'after']); expect(pick).toHaveBeenCalledWith(expect.anything(), expect.anything(), false, true); s.done();
+  });
+  it('gives the parent back its own marker whatever its status', async () => {
+    for (const [from, status] of [['x', 'completed'], ['-', 'canceled'], ['/', 'in_progress'], [' ', 'open']] as const) {
+      const s = await withTasks(1, ([id]) => line(from, id)); vi.spyOn(s.plugin, 'pickTask').mockResolvedValue();
+      await s.plugin.service.status(s.tasks[0].id, status); await s.press(0, title('+'))!.pick();
+      expect(rows(s.text())[0], from).toBe(line(from, s.tasks[0].id)); expect(rows(s.text())[1], from).toBe('\t- [ ] '); s.done();
+    }
+  });
+  it('puts the new line after the todo\'s existing subtasks, one level deeper for a nested parent', async () => {
+    const s = await withTasks(3, ([a, b, c]) => `${line(' ', a, 'Task 1')}\n    ${line(' ', b, 'Task 2')}\n    ${line(' ', c, 'Task 3')}\n- [ ] Sibling`); vi.spyOn(s.plugin, 'pickTask').mockResolvedValue();
+    await s.press(0, title('+'))!.pick(); expect(rows(s.text()).map(r => r.replace(/ <!--.*$/, ''))).toEqual(['- [ ] Task 1', '    - [ ] Task 2', '    - [ ] Task 3', '\t- [ ] ', '- [ ] Sibling']);
+    await s.press(1, title('+'))!.pick(); expect(rows(s.text())[2].startsWith('    \t- [ ] ')).toBe(true); s.done();
+  });
+  it('links a plain todo first, then adds the subtask', async () => {
+    const s = await session('- [ ] Plain todo'); vi.spyOn(s.plugin, 'pickTask').mockResolvedValue();
+    await s.press(0, title('+'))!.pick(); const tasks = await s.plugin.repo.list(); expect(tasks).toHaveLength(1); expect(rows(s.text())[0]).toBe(`- [ ] Plain todo <!--organized:${tasks[0].id}-->`); expect(rows(s.text())[1]).toBe('\t- [ ] '); s.done();
+  });
+  it('says so, and adds nothing, when the note it was typed in is no longer the open one', async () => {
+    const s = await withTasks(1, ([id]) => line(' ', id)); const pick = vi.spyOn(s.plugin, 'pickTask').mockResolvedValue(); Notice.instances.length = 0;
+    const other: any = await s.h.add('Daily/2026-01-02.md', line('+', s.tasks[0].id));
+    await s.plugin.trigger({ file: other, line: parseTasks(line('+', s.tasks[0].id))[0] });
+    expect(Notice.instances.at(-1)?.message).toContain('Open the note'); expect(pick).not.toHaveBeenCalled(); expect(rows(s.text())).toHaveLength(1); s.done();
   });
 });
 
