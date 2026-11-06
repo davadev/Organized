@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.3
+
 - What's new now has a note for this fix too, so someone updating from 0.1.1 straight to 0.1.3 sees both releases, oldest first.
 - Fixed *Edit checkbox marker* saying "Put the cursor on a todo line" on a subtask: it now works on subtasks at any depth, indented with spaces or tabs.
 ## 0.1.2
