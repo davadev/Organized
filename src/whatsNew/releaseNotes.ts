@@ -27,6 +27,14 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.1.3",
+    title: "What's new in Organized 0.1.3",
+    intro: "A fix for subtasks.",
+    items: [
+      { title: "Edit checkbox marker works on subtasks", text: "The command Edit checkbox marker now selects the marker of a subtask at any depth, indented with spaces or tabs. Before, it only worked on top-level todos and said to put the cursor on a todo line." },
+    ],
+  },
+  {
     version: "0.1.2",
     title: "What's new in Organized 0.1.2",
     intro: "Faster on your phone, and a quicker way into the checkbox from the keyboard.",
