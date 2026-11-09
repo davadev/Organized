@@ -31,7 +31,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     title: "What's new in Organized 0.1.4",
     intro: "Block time for the future, and see estimate next to actual.",
     items: [
-      { title: "Repeat rules", text: "Type [r] in a todo, or tap the Recurring pill, and pick how it repeats: every day, weekday, week, month or year, or type your own such as every 3 weeks on thu. The rule is saved in the task note, and the task shows up in the daily notes that match it." },
+      { title: "Repeat rules", text: "Type [r] in a todo, or tap the Recurring pill, to choose how it repeats: one tap for every day, weekday, week, month or year, or set your own, such as every 3 weeks on Monday and Thursday, with a form that says the result in words. The rule is saved in the task note, and the task shows up in the daily notes that match it." },
       { title: "Plan time ahead", text: "Tap an empty spot on the Day grid, or use Add time with a time still to come, to set aside time for a task today or on a day ahead. Planned blocks are dashed and never count as worked time; one that is over can be logged as worked." },
       { title: "Tracked and planned on the task", text: "The task's Timer card shows Tracked so far and Planned, so you can compare your estimate with what it took." },
       { title: "Fold the task panel", text: "Description, Subtasks and Timer fold away with a chevron and stay folded for every task. The Timer now has icon buttons (start or stop, add time, budget) on its header row." },
