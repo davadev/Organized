@@ -51,7 +51,7 @@ const owner: any = {
     parentOf: async () => null, subtasksOf: async (t: Task) => t.id === 'q1review01' ? subtasks : [], progress: async () => null,
     readText: async (f: { path: string }) => dailies[f.path.slice(6, 16)] ?? notes[f.path.slice(6, -3)] ?? '',
   },
-  service: { daily: { path: (d: string) => `Daily/${d}.md`, open: async () => null }, refs: async () => [], retiredWork: async () => [], reconcile: async () => undefined, resolve: async () => undefined },
+  service: { daily: { path: (d: string) => `Daily/${d}.md`, open: async () => null, followed: () => false, setup: () => ({ dailyFolder: "Daily", dailyFormat: "YYYY-MM-DD", dailyTemplate: "" }) }, refs: async () => [], retiredWork: async () => [], reconcile: async () => undefined, resolve: async () => undefined },
   taskSourceEditor: () => null, taskLines: async (f: { path: string }) => parseTasks(dailies[f.path.slice(6, 16)] ?? ''),
 };
 const view = new OrganizedInspectorView({ app } as any, owner);

@@ -18,7 +18,7 @@ export interface OnboardingStep {
 export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     title: "Two settings first",
-    text: "Please read this short card to the end; it makes everything easier. First open Settings → Organized and match Daily-note folder and Filename format to your daily notes (and set Daily-note template if you use one). Until then Organized looks in the wrong place and seems to do nothing. Everything else is optional.",
+    text: "Please read this short card to the end; it makes everything easier. Organized follows your Daily Notes plugin (Settings → Organized → Daily notes shows what it found). If you keep daily notes some other way, choose Custom settings there and match Daily-note folder and Filename format, or Organized looks in the wrong place and seems to do nothing. Everything else is optional.",
     figure: "settings",
   },
   {

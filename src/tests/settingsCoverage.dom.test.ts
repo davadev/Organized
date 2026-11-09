@@ -9,7 +9,7 @@ import { harness } from "./harness";
 installObsidianDom();
 describe('settings completeness and validation', () => {
   it('renders every setting in classic and modern hosts, validates changes before save', () => {
-    const h = harness(); const owner = { settings: { ...DEFAULT_SETTINGS, displayProperties: [] }, saveSettings: vi.fn() } as any;
+    const h = harness(); const owner = { settings: { ...DEFAULT_SETTINGS, displayProperties: [] }, service: h.service, saveSettings: vi.fn() } as any;
     const tab = new OrganizedSettingsTab(h.app, owner); Setting.instances.length = 0; tab.display();
     expect(Setting.instances.filter(s => s.controls.length)).toHaveLength(18 + DISPLAY_PROPERTIES.length - 1);
     const controls = (name: string) => Setting.instances.find(s => s.nameText === name)!.controls[0];

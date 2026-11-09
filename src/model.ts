@@ -63,6 +63,8 @@ export interface Settings {
   startAtPlannedTime: boolean;
   taskRetentionDays: number;
   dailyTemplate: string;
+  /** Where daily notes live: the folder, format and template of the Daily Notes (or Periodic Notes) plugin, or the three settings here. */
+  dailySource: "plugin" | "custom";
   knownProjects: string[];
   collapsedHeadings: Record<string, string[]>;
   projectsMigrated: boolean;
@@ -91,7 +93,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   taskFolder: "Tasks", dailyFolder: "Daily", dailyFormat: "YYYY-MM-DD", autoForward: true,
   missingSection: "recreate", sortScope: "list", displayProperties: [], propertiesAlign: "text", showScheduledDate: true, longPressMenu: true, startAtPlannedTime: false, taskRetentionDays: 0,
-  lastSeenVersion: "", showWhatsNew: true, dailyTemplate: "", knownProjects: [], collapsedHeadings: {}, collapsedTaskSections: [], projectsMigrated: false, projectNotesMarked: false, projectStartsSet: false, retentionDetail: "title", dayTasksCollapsed: false, hideDoneTasks: false, hideClosedProjects: true, noteFolder: "", onboardingSeen: false, taskNotesMigrated: false, taskNoteNamesMigrated: false, subtaskNestingMigrated: false, subtaskIndentMigrated: false,
+  lastSeenVersion: "", showWhatsNew: true, dailyTemplate: "", dailySource: "plugin", knownProjects: [], collapsedHeadings: {}, collapsedTaskSections: [], projectsMigrated: false, projectNotesMarked: false, projectStartsSet: false, retentionDetail: "title", dayTasksCollapsed: false, hideDoneTasks: false, hideClosedProjects: true, noteFolder: "", onboardingSeen: false, taskNotesMigrated: false, taskNoteNamesMigrated: false, subtaskNestingMigrated: false, subtaskIndentMigrated: false,
 };
 export function object(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -125,6 +127,8 @@ export function settingsFrom(value: unknown): Settings {
   try { if (typeof v.taskFolder === "string") s.taskFolder = visibleFolder(v.taskFolder); } catch { /* Invalid persisted paths use safe defaults. */ }
   try { if (typeof v.dailyFolder === "string") s.dailyFolder = path(v.dailyFolder, true); } catch { /* Invalid persisted paths use safe defaults. */ }
   if (typeof v.dailyFormat === "string" && v.dailyFormat.includes("YYYY") && v.dailyFormat.includes("MM") && v.dailyFormat.includes("DD") && !/[\\:*?"<>|]/.test(v.dailyFormat) && !v.dailyFormat.includes("..")) s.dailyFormat = v.dailyFormat;
+  // Saved settings from before this option keep the folder and format they have; only a fresh install follows the plugin.
+  s.dailySource = member(v.dailySource, ["plugin", "custom"] as const, typeof v.dailyFolder === "string" || typeof v.dailyFormat === "string" ? "custom" : "plugin");
   s.autoForward = typeof v.autoForward === "boolean" ? v.autoForward : true;
   s.missingSection = member(v.missingSection, ["recreate", "ask"], "recreate");
   s.sortScope = member(v.sortScope, ["list", "section", "first", "none"], "list");
