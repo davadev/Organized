@@ -52,7 +52,7 @@ export class OrganizedInspectorView extends ItemView {
   /** One bar per budget set on the task's projects, each counting the time of every task in that project over the day, week, month or the whole project. */
   private async projectBars(host: HTMLElement, task: Task): Promise<void> {
     const budgeted = task.projects.filter(project => this.budgeted(project)); if (!budgeted.length) return;
-    const tasks = await this.owner.repo.list(); const now = Date.now();
+    const tasks = await this.owner.repo.list(true); const now = Date.now();
     for (const project of budgeted) {
       const budgets = this.owner.repo.projectBudgets(project);
       for (const period of Object.keys(BUDGET_KEYS) as BudgetPeriod[]) { const budget = budgets[period]; if (budget !== null) this.budgetBar(host, projectUse(tasks, project, period, budget, now), `${this.projectLabel(project)} · ${PERIOD_LABELS[period]}`); }

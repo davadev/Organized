@@ -749,6 +749,12 @@ export class TaskService {
     if (!newPath.endsWith(".md")) return;
     for (const id of this.repo.convertedTo(oldPath)) await this.repo.update(id, task => ({ ...task, converted_to: newPath }));
   }
+  /** A project note was renamed or moved: the tasks linked to it follow it, so its colour and budgets keep applying to them. */
+  async followProjectRename(oldPath: string, newPath: string): Promise<void> {
+    if (!newPath.endsWith(".md")) return;
+    for (const task of await this.repo.list(true)) if (task.projects.includes(oldPath)) await this.repo.update(task.id, t => ({ ...t, projects: t.projects.map(p => p === oldPath ? newPath : p) }));
+    this.changed();
+  }
   async deleteTask(id: string, onConfirmed?: () => void): Promise<boolean> {
     // The inspector must clear its now-invalid selection before occurrence or
     // trash events can trigger a refresh, so the confirmed hook runs first.
