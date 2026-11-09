@@ -20,7 +20,7 @@ const MAX_EVERY = 999;
 
 const dayNumber = (date: string): number => { const [y, m, d] = date.split("-").map(Number); return Math.floor(Date.UTC(y, m - 1, d) / 86400000); };
 /** Monday = 0. 1970-01-01 was a Thursday. */
-const weekday = (date: string): number => (dayNumber(date) + 3) % 7;
+const weekday = (date: string): number => ((dayNumber(date) + 3) % 7 + 7) % 7;
 const daysIn = (year: number, month: number): number => new Date(Date.UTC(year, month, 0)).getUTCDate();
 const parts = (date: string): [number, number, number] => { const [y, m, d] = date.split("-").map(Number); return [y, m, d]; };
 
@@ -86,10 +86,14 @@ export function occursOn(rule: Rule, anchor: string, date: string): boolean {
   return mod(y - ay) === 0 && m === am && d === Math.min(ad, daysIn(y, m));
 }
 /** Whether a recurring task belongs on `date`. A task without a rule (the old on/off switch) repeats daily; a rule nobody can read does too, so a hand-edit never makes a task vanish. */
-export function repeatsOn(task: { recurring: boolean; recurrence: string | null; recurrence_periods: { start: string; stop: string | null }[]; created: string }, date: string): boolean {
-  if (!task.recurring) return false;
-  const open = [...task.recurrence_periods].reverse().find(p => p.stop === null);
-  return occursOn(taskRule(task), open?.start ?? task.created.slice(0, 10), date);
+type Repeating = { recurring: boolean; recurrence: string | null; recurrence_periods: { start: string; stop: string | null }[]; created: string };
+/** The day the current repeat started: its open period, or when the task was made. */
+export const anchorOf = (task: Repeating): string => [...task.recurrence_periods].reverse().find(p => p.stop === null)?.start ?? task.created.slice(0, 10);
+export function repeatsOn(task: Repeating, date: string): boolean { return task.recurring && occursOn(taskRule(task), anchorOf(task), date); }
+/** The rule with what it leaves out spelled out (the weekday or day of the month it started on), so a form can show what really happens. */
+export function explicitRule(rule: Rule, anchor: string): Rule {
+  const [, , d] = parts(anchor);
+  return { ...rule, days: rule.unit === "week" && !rule.days.length ? [weekday(anchor)] : [...rule.days], monthDay: rule.unit === "month" && rule.monthDay === null ? d : rule.monthDay };
 }
 export const taskRule = (task: { recurrence: string | null }): Rule => (task.recurrence ? parseRule(task.recurrence) : null) ?? DAILY;
 /** Same cadence means the same interval and unit, so a change of weekday or day of month keeps the phase of "every 2 weeks". */

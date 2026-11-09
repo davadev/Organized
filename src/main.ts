@@ -5,7 +5,7 @@ import { ACTION_MARKERS, parentIds, parseTasks, sameNesting, NOTE_MARKER, NoteSe
 import { DEFAULT_SETTINGS, elapsed, localDate, object, Settings, Status, Task } from "./model";
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
-import { taskRule } from "./recurrence";
+import { anchorOf, explicitRule, taskRule } from "./recurrence";
 import { Context, report, TaskService } from "./service";
 import { formatMinutes } from "./sessions";
 import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RecurrencePicker, RetireModal, SessionModal, TaskPicker, WhatsNewModal } from "./modals";
@@ -489,7 +489,7 @@ export default class Organized extends Plugin {
   }
   /** Asks how the task repeats. From a typed `[r]` (`typed`), cancelling puts the todo's own marker back; from the panel there is no marker to put back. */
   pickRecurrence(task: Task, context?: Context, typed = false): void {
-    new RecurrencePicker(this.app, localDate(), task.recurring ? taskRule(task) : null, rule => this.run(() => this.service.recurrence(task.id, rule, context)),
+    new RecurrencePicker(this.app, localDate(), task.recurring ? explicitRule(taskRule(task), anchorOf(task)) : null, rule => this.run(() => this.service.recurrence(task.id, rule, context)),
       typed && context ? () => { void this.run(() => this.service.clean(context, this.ownMarker(task))); } : undefined).open();
   }
   /** The marker a task's own status shows (a running timer is `[/]`). */
