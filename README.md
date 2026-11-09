@@ -143,7 +143,7 @@ organized_budget_weekly: 10
 organized_budget_monthly: 30
 ```
 
-Every task linked to the project then shows one slim bar per budget you set, in its Timer card (which appears by itself): the tracked time of **all** the project's tasks today, this week (by your Obsidian week start), this month or in total, with planned time lighter and any overrun in red. A project without budgets shows nothing. Time logged before sessions had dates counts only toward the whole-project budget.
+Every task linked to the project then shows one slim bar per budget you set, in its Timer card (which appears by itself): the tracked time of **all** the project's tasks today, this week (by your Obsidian week start), this month or in total, with planned time lighter and any overrun in red. A task in several projects counts in full toward each of them (nothing is split). A project without budgets shows nothing. Time logged before sessions had dates counts only toward the whole-project budget.
 
 #### Using projects
 

@@ -215,4 +215,28 @@ describe("Retire window", () => {
     inputs[0].value = '120'; inputs[3].value = ''; inputs[3].dispatchEvent(new Event('input')); expect(note.textContent).toBe(''); saveButton().click(); await flush(); expect(save).toHaveBeenCalledWith({ total: 432000, day: null, week: 36000, month: null });
     modal.close(); expect(modal.contentEl.childElementCount).toBe(0);
   });
+  it('takes the task budget at its limits and rejects what does not fit', async () => {
+    const h = harness(); const save = vi.fn().mockResolvedValue(undefined); const modal = new BudgetModal(h.app, 'T', 3660, save); modal.open();
+    const [hours, mins] = Array.from(modal.contentEl.querySelectorAll<HTMLInputElement>('input')); const note = modal.contentEl.querySelector('.organized-session-note')!; const go = () => Array.from(modal.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Save')!.click();
+    expect([hours.value, mins.value]).toEqual(['1', '1']);
+    const type = (a: string, b: string) => { hours.value = a; mins.value = b; hours.dispatchEvent(new Event('input')); };
+    for (const [a, b] of [['0', '0'], ['-1', '5'], ['1', '-5'], ['1', '60'], ['1.5', '0'], ['0', '1.5'], ['9999', '1'], ['10000', '0'], ['abc', '0'], ['1e9', '0']]) { type(a, b); expect(note.textContent, `${a}h ${b}m`).not.toBe(''); go(); }
+    await flush(); expect(save).not.toHaveBeenCalled();
+    for (const [a, b, seconds] of [['0', '1', 60], ['9999', '0', 9999 * 3600], ['', '59', 3540], ['24', '', 86400], ['00', '05', 300]] as const) {
+      const fresh = new BudgetModal(h.app, 'T', null, save); fresh.open(); const [fh, fm] = Array.from(fresh.contentEl.querySelectorAll<HTMLInputElement>('input')); fh.value = a; fm.value = b; fh.dispatchEvent(new Event('input'));
+      expect(fresh.contentEl.querySelector('.organized-session-note')!.textContent, `${a}h ${b}m`).toBe(''); Array.from(fresh.contentEl.querySelectorAll('button')).find(x => x.textContent === 'Save')!.click(); await flush(); expect(save).toHaveBeenLastCalledWith(seconds);
+    }
+  });
+  it('shows a stored project budget the way it will be read back, including a few seconds and whole numbers', async () => {
+    const h = harness(); const open = (current: any) => { const m = new ProjectBudgetModal(h.app, 'P', current, vi.fn().mockResolvedValue(undefined)); m.open(); return Array.from(m.contentEl.querySelectorAll<HTMLInputElement>('input')).map(i => i.value); };
+    expect(open({ total: 4, day: 5400, week: 36000, month: null })).toEqual(['0.0011', '1.5', '10', '']); expect(open({ total: null, day: null, week: null, month: null })).toEqual(['', '', '', '']);
+    expect(open({ total: 9999 * 3600, day: 1, week: 3601, month: 90 })).toEqual(['9999', '0.0003', '1.0003', '0.025']);
+  });
+  it('lets a project budget be cleared in every field, and rejects each bad field', async () => {
+    const h = harness(); const save = vi.fn().mockResolvedValue(undefined); const modal = new ProjectBudgetModal(h.app, 'P', { total: 3600, day: 3600, week: 3600, month: 3600 }, save); modal.open();
+    const inputs = Array.from(modal.contentEl.querySelectorAll<HTMLInputElement>('input')); const note = modal.contentEl.querySelector('.organized-session-note')!; const go = () => Array.from(modal.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Save')!.click();
+    for (const bad of ['0', '-1', '10000', '1e5']) for (const field of inputs) { const was = field.value; field.value = bad; field.dispatchEvent(new Event('input')); expect(note.textContent).not.toBe(''); go(); field.value = was; field.dispatchEvent(new Event('input')); expect(note.textContent).toBe(''); }
+    await flush(); expect(save).not.toHaveBeenCalled();
+    for (const field of inputs) field.value = '  '; go(); await flush(); expect(save).toHaveBeenCalledWith({ total: null, day: null, week: null, month: null });
+  });
 });

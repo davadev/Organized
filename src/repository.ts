@@ -27,6 +27,8 @@ export type ProjectBudgets = Record<BudgetPeriod, number | null>;
 export const MAX_BUDGET_HOURS = 9999;
 /** Hours as written in a note (a number above zero and within the limit) as whole seconds; anything else is no budget. */
 export const budgetSeconds = (value: unknown): number | null => typeof value === "number" && Number.isFinite(value) && value > 0 && value <= MAX_BUDGET_HOURS ? Math.max(1, Math.round(value * 3600)) : null;
+/** Seconds as the hours a note stores (up to 4 decimals, so even a budget of a few seconds survives the round trip). */
+export const budgetHours = (seconds: number): number => Math.round(seconds / 3600 * 10000) / 10000;
 /** The day a project started, `YYYY-MM-DD`. Set automatically; an `organized_end` date is reserved for later and not used yet. */
 export const START_KEY = "organized_start";
 /** A start date as stored: `YYYY-MM-DD` text, or a Date when a YAML reader turned the bare date into one. */
@@ -209,7 +211,7 @@ export class Repository {
   async setProjectBudgets(file: TFile, budgets: ProjectBudgets): Promise<void> {
     await this.app.fileManager.processFrontMatter(file, (raw: Record<string, unknown>) => {
       raw[PROJECT_KEY] = "project"; if (!hasStart(raw[START_KEY])) raw[START_KEY] = localDate();
-      for (const period of Object.keys(BUDGET_KEYS) as BudgetPeriod[]) { const seconds = budgets[period]; if (seconds === null) delete raw[BUDGET_KEYS[period]]; else raw[BUDGET_KEYS[period]] = Math.round(seconds / 36) / 100; }
+      for (const period of Object.keys(BUDGET_KEYS) as BudgetPeriod[]) { const seconds = budgets[period]; if (seconds === null) delete raw[BUDGET_KEYS[period]]; else raw[BUDGET_KEYS[period]] = budgetHours(seconds); }
     });
   }
   /** A task takes the colour of its first coloured project. */
