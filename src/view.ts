@@ -317,7 +317,7 @@ export class OrganizedInspectorView extends ItemView {
         chip.addClass("organized-prop", "organized-prop-project"); chip.setAttribute("aria-label", note ? `Open project ${name}` : `Project ${name}`); chip.title = name; chip.createSpan({ cls: "organized-prop-text", text: name });
         if (color) { chip.setAttribute("data-project", ""); chip.setCssProps({ "--organized-chip-bg": rgbOf(color) }); }
       }
-      const link = this.iconButton(strip, "Link projects or topics", "folder-plus", () => this.owner.pickProjects(task)); link.addClass("organized-prop");
+      const link = this.iconButton(strip, "Link projects or topics", "plus", () => this.owner.pickProjects(task)); link.addClass("organized-prop");
       if (this.module === "Projects") link.addClass("organized-selected-module");
     }
   }
