@@ -6,6 +6,7 @@ import { installObsidianDom } from './__mocks__/obsidianDom';
 import { Notice, Modal } from './__mocks__/obsidian';
 import { localDate, taskFrom } from '../model';
 import { SessionModal } from '../modals';
+import { kindOf } from '../sessions';
 import { splitNote } from '../repository';
 
 installObsidianDom();
@@ -78,14 +79,15 @@ describe('planned time', () => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: true }); visible(); expect(tick.mock.calls.length).toBe(before + 1);
     Object.defineProperty(document, 'hidden', { configurable: true, value: false }); visible(); expect(tick.mock.calls.length).toBe(before + 2);
   });
-  it('lets the dialog switch between worked and planned time and offers to log a finished plan', async () => {
+  it('decides from the times whether a new block is worked or planned, and offers to log a finished plan', async () => {
     const { app } = harness(); const now = new Date(2026, 2, 4, 12, 0).getTime(); const save = vi.fn(async () => undefined); const log = vi.fn(async () => undefined);
-    const modal = new SessionModal(app, { heading: 'Add time', taskTitle: 'Plan', start: iso(15), end: iso(16), kind: 'planned', switchable: true, save, logWorked: log }, () => now); modal.open();
-    const note = () => modal.contentEl.querySelector('.organized-session-note')!; expect(note().textContent).toBe('Length: 1h'); const type = modal.contentEl.querySelector('select')!;
-    type.value = 'worked'; type.dispatchEvent(new Event('change')); expect(note().textContent).toContain('future'); const buttons = () => Array.from(modal.contentEl.querySelectorAll('button'));
-    buttons().find(b => b.textContent === 'Save')!.click(); await flush(); expect(save).not.toHaveBeenCalled();
-    type.value = 'planned'; type.dispatchEvent(new Event('change')); expect(note().textContent).toBe('Length: 1h'); buttons().find(b => b.textContent === 'Save')!.click(); await flush(); expect(save).toHaveBeenCalledWith({ start: iso(15), end: iso(16) }, 'planned');
-    const again = new SessionModal(app, { heading: 'Edit', taskTitle: 'Plan', start: iso(9), end: iso(10), kind: 'planned', save, logWorked: log }, () => now); again.open(); expect(again.contentEl.querySelector('select')).toBeNull();
-    Array.from(again.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Log as worked')!.click(); await flush(); expect(log).toHaveBeenCalledOnce(); expect(Modal.instances.length).toBeGreaterThan(0); expect(sessionFields(again.contentEl)).toHaveLength(2);
+    const modal = new SessionModal(app, { heading: 'Add time', taskTitle: 'Plan', start: iso(15), end: iso(16), kind: null, save, logWorked: log }, () => now); modal.open();
+    const note = () => modal.contentEl.querySelector('.organized-session-note')!; const buttons = () => Array.from(modal.contentEl.querySelectorAll('button')); expect(modal.contentEl.querySelector('select')).toBeNull();
+    expect(note().textContent).toBe('Length: 1h · saved as planned time'); buttons().find(b => b.textContent === 'Save')!.click(); await flush(); expect(save).toHaveBeenCalledWith({ start: iso(15), end: iso(16) }, 'planned');
+    const edit = new SessionModal(app, { heading: 'Add time', taskTitle: 'Plan', start: iso(15), end: iso(16), kind: null, save }, () => now); edit.open();
+    const [from, end] = sessionFields(edit.contentEl); from.value = '2026-03-04T10:00'; end.value = '2026-03-04T11:00'; end.dispatchEvent(new Event('input')); expect(edit.contentEl.querySelector('.organized-session-note')!.textContent).toBe('Length: 1h · saved as time worked');
+    expect(kindOf(null)).toBe('planned'); expect(kindOf(iso(12, 1), now)).toBe('worked'); expect(kindOf(iso(12, 2), now)).toBe('planned');
+    const again = new SessionModal(app, { heading: 'Edit', taskTitle: 'Plan', start: iso(9), end: iso(10), kind: 'planned', save, logWorked: log }, () => now); again.open(); expect(again.contentEl.querySelector('.organized-session-note')!.textContent).toBe('Length: 1h');
+    Array.from(again.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Log as worked')!.click(); await flush(); expect(log).toHaveBeenCalledOnce(); expect(Modal.instances.length).toBeGreaterThan(0);
   });
 });

@@ -496,9 +496,8 @@ export default class Organized extends Plugin {
   private addTime(task: Task, context: Context): void {
     const at = (time: string) => new Date(`${this.service.daily.date(context.file.path) ?? localDate()}T${time}:00`).toISOString();
     const marker = this.ownMarker(task);
-    // One dialog for both: a start in the future begins as planned time, and the type can be switched either way.
-    const start = at("09:00");
-    new SessionModal(this.app, { heading: "Add time", taskTitle: task.title, start, end: at("10:00"), kind: Date.parse(start) > Date.now() ? "planned" : "worked", switchable: true, save: async (next, kind) => { await this.run(() => kind === "planned" ? this.service.addPlanned(task.id, next) : this.service.addSession(task.id, next)); await this.run(() => this.service.clean(context, marker)); } }).open();
+    // One dialog for both: a block that has ended is time worked, one still to come is planned.
+    new SessionModal(this.app, { heading: "Add time", taskTitle: task.title, start: at("09:00"), end: at("10:00"), kind: null, save: async (next, kind) => { await this.run(() => kind === "planned" ? this.service.addPlanned(task.id, next) : this.service.addSession(task.id, next)); await this.run(() => this.service.clean(context, marker)); } }).open();
   }
   /** Folders offered for a standalone note. */
   noteFolders(): string[] { return this.app.vault.getAllLoadedFiles().filter(f => f instanceof TFolder && f.path !== "/").map(f => f.path).sort(); }

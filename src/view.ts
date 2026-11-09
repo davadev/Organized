@@ -389,12 +389,12 @@ export class OrganizedInspectorView extends ItemView {
     }
   }
   /** Adds a block of time to a task, or edits/deletes a recorded or planned one. A new block on a later day starts as a plan. */
-  private editSession(task: Task, session: WorkSession | null, date: string, kind?: SessionKind, startAt?: string): void {
+  private editSession(task: Task, session: WorkSession | null, date: string, kind: SessionKind | null, startAt?: string): void {
     const at = (time: string) => new Date(`${date}T${time}:00`).toISOString();
     const start = session?.start ?? startAt ?? at("09:00"); const end = session?.end ?? (startAt ? new Date(Date.parse(startAt) + 3600000).toISOString() : at("10:00"));
-    const type: SessionKind = kind ?? (Date.parse(start) > Date.now() ? "planned" : "worked"); const service = this.owner.service;
+    const type = kind; const service = this.owner.service;
     new SessionModal(this.app, {
-      heading: session ? (type === "planned" ? "Edit planned time" : "Edit time worked") : "Add time", taskTitle: task.title, start, end, kind: type, switchable: !session,
+      heading: session ? (type === "planned" ? "Edit planned time" : "Edit time worked") : "Add time", taskTitle: task.title, start, end, kind: type,
       save: (next, saved) => this.owner.run(async () => {
         if (!session) await (saved === "planned" ? service.addPlanned(task.id, next) : service.addSession(task.id, next));
         else await (type === "planned" ? service.changePlanned(task.id, session, next) : service.changeSession(task.id, session, next));
@@ -407,12 +407,12 @@ export class OrganizedInspectorView extends ItemView {
   /** Picks a task, then asks to plan an hour from `start` (a spot tapped on the day grid). */
   private async planAt(start: string, date: string): Promise<void> {
     const tasks = (await this.owner.repo.list()).filter(t => t.status === "open" || t.status === "in_progress");
-    new TaskPicker(this.app, tasks, async choice => { if (typeof choice === "object" && "id" in choice) this.editSession(choice, null, date, "planned", start); }, "", false, false).open();
+    new TaskPicker(this.app, tasks, async choice => { if (typeof choice === "object" && "id" in choice) this.editSession(choice, null, date, null, start); }, "", false, false).open();
   }
   /** Picks an existing task, then asks for the time to log on it. */
   private async addTime(date: string): Promise<void> {
     const tasks = (await this.owner.repo.list()).filter(t => t.status !== "canceled");
-    new TaskPicker(this.app, tasks, async choice => { if (typeof choice === "object" && "id" in choice) this.editSession(choice, null, date); }, "", false, false).open();
+    new TaskPicker(this.app, tasks, async choice => { if (typeof choice === "object" && "id" in choice) this.editSession(choice, null, date, null); }, "", false, false).open();
   }
   private async openNote(notePath: string): Promise<void> {
     const note = this.owner.repo.file(notePath); if (!note) throw new Error("The note that kept this time was renamed or removed.");
@@ -525,11 +525,9 @@ export class OrganizedInspectorView extends ItemView {
       const timer = this.card(details, "Timer", "timer"); timer.createDiv({ cls: "organized-timer-label", text: "Tracked so far" }); const row = timer.createDiv({ cls: "organized-timer-row" });
       row.createDiv({ cls: "organized-timer-value", text: `${formatMinutes(Math.floor(elapsed(task) / 60))}${task.time_tracking_started_at ? " · running" : ""}` });
       this.button(row, task.time_tracking_started_at ? "Stop timer" : "Start timer", () => this.owner.run(() => this.owner.service.status(id, task.time_tracking_started_at ? "open" : "in_progress", this.owner.context ?? undefined)));
-      this.button(row, "Add time", () => this.editSession(task, null, localDate(), "worked"));
+      this.button(row, "Add time", () => this.editSession(task, null, localDate(), null));
       if (task.work_sessions.length) this.sessionList(timer, task);
-      timer.createDiv({ cls: "organized-timer-label", text: "Planned" }); const plan = timer.createDiv({ cls: "organized-timer-row" });
-      plan.createDiv({ cls: "organized-timer-value", text: formatMinutes(Math.floor(plannedSeconds(task) / 60)) });
-      this.button(plan, "Plan time", () => this.editSession(task, null, localDate(), "planned"));
+      timer.createDiv({ cls: "organized-timer-label", text: "Planned" }); timer.createDiv({ cls: "organized-timer-value", text: formatMinutes(Math.floor(plannedSeconds(task) / 60)) });
       if (task.planned_sessions.length) this.sessionList(timer, task, "planned");
     }
     if (task.recurring || task.recurrence_periods.length || this.module === "Recurring") {
