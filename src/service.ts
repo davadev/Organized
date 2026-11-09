@@ -383,8 +383,13 @@ export class TaskService {
   }
   async onDailyCreated(file: TFile): Promise<void> {
     const date = this.daily.date(file.path); if (!date || date < localDate()) return;
-    for (const task of (await this.repo.list()).filter(t => repeatsOn(t, date))) await this.insert(file, task, " ", true);
+    const due = (await this.repo.list()).filter(t => repeatsOn(t, date)); let failed: Task[] = []; let reason = "";
+    // One task that cannot be written (the new note is open and being typed in, or a sync is writing it) must not keep the others out; it gets one more try.
+    for (const task of due) { try { await this.insert(file, task, " ", true); } catch { failed.push(task); } }
+    const again = failed; failed = [];
+    for (const task of again) { try { await this.insert(file, task, " ", true); } catch (error) { failed.push(task); reason = error instanceof Error ? error.message : String(error); } }
     this.changed();
+    if (failed.length) throw new Error(`${plural(failed.length, "recurring task")} (${failed.map(t => t.title).join(", ")}) could not be added to ${file.path}: ${reason}`);
   }
   async reconcile(file: TFile): Promise<void> {
     const today = localDate(); const settings = this.repo.settings();

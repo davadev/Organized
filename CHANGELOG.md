@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed a new daily note missing some of its recurring tasks: if one task could not be written (the note was already open and being typed in, or a sync was writing it), the tasks after it were skipped and never retried. Each task is now added on its own, a failed one gets a second try, and any that still fail are named in one message. Added tests for sync and race cases: notes arriving from another device, overlapping rule changes, Windows line endings, front-matter-only notes, 60 recurring tasks at once, conflict copies of a task note and a task note edited by sync.
+
 - Tidied the Repeat dialog: shorter preset buttons (Daily, Weekdays, Weekly, Monthly, Yearly; hover shows the exact rule), "Every [number] [unit]" on one line, equal-width weekday buttons (M T W T F S S) and a divider above the plain-words result.
 
 - **Repeat rules.** Typing `[r]` in a todo (or tapping the Recurring pill) now opens a Repeat dialog instead of switching repeating on and off: one-tap buttons for every day, weekday, week (on today's weekday), month (on today's date) or year, and below them a small form (*Every [3] [weeks]*, weekday buttons, day of the month) with the result read back in words. The rule is kept in the task note as `recurrence`; the task is added to the daily notes the rule produces, and the pill shows it. Tasks that only had `recurring: true` keep repeating every day. Stopping or changing a rule removes only future copies nobody has touched.
