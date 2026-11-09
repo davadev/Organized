@@ -149,7 +149,10 @@ export function insertTask(text: string, line: string, section: Section[]): { te
   if (!section.length) {
     insert = headings[0]?.line ?? lines.length;
   } else {
-    const found = headings.find(h => JSON.stringify(h.section) === JSON.stringify(section));
+    // The exact path first. A path of one heading also matches that heading nested deeper (a template that puts it under another one), so each further task does not add one more copy of it; longer paths stay exact.
+    const wanted = section[section.length - 1];
+    const found = headings.find(h => JSON.stringify(h.section) === JSON.stringify(section))
+      ?? (section.length > 1 ? [] : headings).filter(h => h.section[h.section.length - 1].text === wanted.text && h.section[h.section.length - 1].level === wanted.level)[wanted.ordinal];
     if (found) {
       const end = headings.find(h => h.line > found.line && h.section[h.section.length - 1].level <= section[section.length - 1].level)?.line ?? lines.length;
       insert = afterContent(lines, end, found.line + 1);
