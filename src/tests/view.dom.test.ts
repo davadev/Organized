@@ -8,7 +8,7 @@ import { installObsidianDom } from './__mocks__/obsidianDom';
 import { Notice, Modal } from './__mocks__/obsidian';
 import { localDate } from '../model';
 import { moment } from '../moment';
-import { DatePicker, SessionModal, TaskPicker } from '../modals';
+import { BudgetModal, DatePicker, SessionModal, TaskPicker } from '../modals';
 import { parseTasks } from '../codec';
 
 installObsidianDom();
@@ -555,5 +555,20 @@ describe('compact calendar and contextual task inspector', () => {
     const finished = Modal.instances.at(-1) as unknown as SessionModal; Array.from(finished.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Log as worked')!.click(); for (let n = 0; n < 6; n++) await flush();
     saved = await repo.read(task.id); expect(saved.planned_sessions).toHaveLength(0); expect(saved.work_sessions).toEqual([past]); expect(saved.time_tracked_seconds).toBe(3600);
     await view.render(); const worked = view.contentEl.querySelector<HTMLElement>('.organized-block')!; worked.click(); await flush(); expect((Modal.instances.at(-1) as unknown as SessionModal).edit.kind).toBe('worked');
+  });
+  it('shows a time budget bar in the Timer card only once a budget is set, and marks an overrun', async () => {
+    const { owner, view, repo } = await fixture(); vi.setSystemTime(new Date(2026, 2, 4, 15, 0, 0)); const task = await repo.create('Budgeted');
+    owner.selectedTaskId = task.id; view.tab = 'Task'; view.module = 'Timer'; await view.render(); await flush();
+    expect(view.contentEl.querySelector('.organized-budget-bar')).toBeNull(); button(view.contentEl, 'Set budget').click(); await flush();
+    const modal = Modal.instances.at(-1) as unknown as BudgetModal; const [hours, mins] = Array.from(modal.contentEl.querySelectorAll<HTMLInputElement>('input')); hours.value = '1'; mins.value = '0';
+    Array.from(modal.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Save')!.click(); for (let n = 0; n < 6; n++) await flush(); expect((await repo.read(task.id)).time_budget_seconds).toBe(3600);
+    await repo.update(task.id, t => ({ ...t, time_tracked_seconds: 900, planned_sessions: [{ start: new Date(2026, 2, 5, 9).toISOString(), end: new Date(2026, 2, 5, 9, 30).toISOString() }] })); await view.render();
+    const bar = () => view.contentEl.querySelector<HTMLElement>('.organized-budget-bar')!; const text = () => view.contentEl.querySelector('.organized-budget-text')!;
+    expect(bar().getAttribute('aria-valuemax')).toBe('3600'); expect(bar().getAttribute('aria-valuenow')).toBe('2700'); expect(text().textContent).toBe('15 min tracked · 30 min planned · 15 min left of 1h'); expect(bar().querySelector('.organized-budget-over')).toBeNull();
+    expect(bar().querySelector<HTMLElement>('.organized-budget-tracked')!.style.getPropertyValue('--organized-share')).toBe('25%');
+    await repo.update(task.id, t => ({ ...t, time_tracked_seconds: 4500, planned_sessions: [] })); await view.render(); expect(text().textContent).toBe('1h 15min tracked · 15 min over budget'); expect(text().classList.contains('organized-budget-over-text')).toBe(true); expect(bar().querySelector('.organized-budget-over')).not.toBeNull();
+    button(view.contentEl, 'Edit budget').click(); await flush(); Array.from((Modal.instances.at(-1) as unknown as BudgetModal).contentEl.querySelectorAll('button')).find(b => b.textContent === 'Remove budget')!.click(); for (let n = 0; n < 6; n++) await flush();
+    expect((await repo.read(task.id)).time_budget_seconds).toBeNull(); expect(view.contentEl.querySelector('.organized-budget-bar')).toBeNull();
+    await repo.update(task.id, t => ({ ...t, time_budget_seconds: 600 })); owner.selectedTaskId = task.id; view.module = null as any; await view.render(); expect(view.contentEl.querySelector('.organized-budget-bar')).not.toBeNull();
   });
 });

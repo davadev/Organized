@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { newTask, setStatus, startPlanned, Task } from "../model";
-import { blockAt, dueEnds, dueStarts, plannable, plannedSeconds } from "../planning";
+import { blockAt, budgetUse, dueEnds, dueStarts, plannable, plannedSeconds } from "../planning";
 
 const at = (time: string) => new Date(`2026-03-09T${time}:00Z`).getTime();
 const block = (from: string, to: string) => ({ start: new Date(at(from)).toISOString(), end: new Date(at(to)).toISOString() });
@@ -37,5 +37,16 @@ describe("planning", () => {
     expect(dueEnds([claimed], at("11:00"))).toEqual([{ task: claimed, action: "reopen" }]);
     const done = { ...claimed, status: "completed" as const }; const timed = { ...claimed, time_tracking_started_at: "2026-03-09T09:40:00.000Z" };
     expect(dueEnds([done, timed], at("11:00"))).toEqual([{ task: done, action: "release" }, { task: timed, action: "release" }]);
+  });
+  it("measures tracked plus planned time against a budget and extends the bar when over", () => {
+    expect(budgetUse(task())).toBeNull();
+    const base = { time_budget_seconds: 3600, time_tracked_seconds: 900, planned_sessions: [block("09:00", "09:30")] };
+    expect(budgetUse(task(base))).toEqual({ budget: 3600, tracked: 900, planned: 1800, left: 900, trackedPct: 25, plannedPct: 50, overPct: 0 });
+    expect(budgetUse(task({ ...base, planned_sessions: [block("09:00", "09:45")] }))).toMatchObject({ left: 0, trackedPct: 25, plannedPct: 75, overPct: 0 });
+    expect(budgetUse(task({ ...base, planned_sessions: [block("09:00", "10:00")] }))).toMatchObject({ left: -900, trackedPct: 20, plannedPct: 60, overPct: 20 });
+    expect(budgetUse(task({ ...base, time_tracked_seconds: 5400, planned_sessions: [] }))).toMatchObject({ left: -1800, plannedPct: 0 })
+    expect(budgetUse(task({ ...base, time_tracked_seconds: 5400, planned_sessions: [] }))!.overPct).toBeCloseTo(100 / 3);
+    const running = task({ ...base, planned_sessions: [], time_tracking_started_at: new Date(at("09:00")).toISOString() });
+    expect(budgetUse(running, at("09:10"))?.tracked).toBe(1500);
   });
 });

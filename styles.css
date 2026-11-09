@@ -628,6 +628,13 @@ SOFTWARE.
 .organized-part-of { margin-block-start: var(--size-4-1); }
 .organized-progress { inline-size: 100%; block-size: 6px; border-radius: 3px; background: var(--background-modifier-border); overflow: hidden; margin-block: var(--size-4-1) var(--size-4-2); }
 .organized-progress-bar { block-size: 100%; inline-size: var(--organized-progress, 0%); background: var(--interactive-accent); }
+.organized-budget-bar { display: flex; inline-size: 100%; block-size: 6px; border-radius: 3px; background: var(--background-modifier-border); overflow: hidden; margin-block-start: 4px; }
+.organized-budget-bar > div { inline-size: var(--organized-share, 0%); block-size: 100%; }
+.organized-budget-tracked { background: var(--interactive-accent); }
+.organized-budget-planned { background: var(--interactive-accent); opacity: 0.45; }
+.organized-budget-over { background: var(--text-error, var(--color-red)); border-inline-start: 2px solid var(--background-primary); }
+.organized-budget-text { margin-block-start: 2px; color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); font-variant-numeric: tabular-nums; }
+.organized-budget-text.organized-budget-over-text { color: var(--text-error, var(--color-red)); }
 .organized-progress-bar.organized-progress-complete { background: var(--color-green, #2f9e44); }
 .organized-subtask-actions { display: flex; flex-wrap: wrap; gap: var(--size-4-1); margin-block-start: var(--size-4-2); }
 .organized-subtask { display: flex; align-items: center; inline-size: 100%; gap: var(--size-4-2); min-inline-size: 0; }

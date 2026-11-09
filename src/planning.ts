@@ -1,4 +1,4 @@
-import { Task, WorkSession } from "./model";
+import { elapsed, Task, WorkSession } from "./model";
 import { seconds } from "./sessions";
 
 /** Total length of the time set aside for a task. */
@@ -30,4 +30,20 @@ export function dueEnds(tasks: Task[], now: number): DueEnd[] {
     else ends.push(current ? { task, action: "move", block: current } : { task, action: "reopen" });
   }
   return ends;
+}
+
+export interface BudgetUse {
+  budget: number; tracked: number; planned: number;
+  /** Seconds still free; negative once tracked plus planned time passes the budget. */
+  left: number;
+  /** Share of the bar (0 to 100) taken by tracked time, planned time and the part beyond the budget; the three sum to 100 and, when over budget, the bar is the whole total rather than the budget. */
+  trackedPct: number; plannedPct: number; overPct: number;
+}
+/** Tracked plus planned time measured against a task's budget, or null when it has none. Tracked time that fits fills the bar first; planned time follows; whatever passes the budget is shown as the overrun. */
+export function budgetUse(task: Task, now = Date.now()): BudgetUse | null {
+  const budget = task.time_budget_seconds; if (budget === null) return null;
+  const tracked = elapsed(task, now), planned = plannedSeconds(task), total = tracked + planned, scale = Math.max(budget, total);
+  const over = Math.max(0, total - budget), within = total - over;
+  const trackedFit = Math.min(tracked, within);
+  return { budget, tracked, planned, left: budget - total, trackedPct: 100 * trackedFit / scale, plannedPct: 100 * (within - trackedFit) / scale, overPct: 100 * over / scale };
 }

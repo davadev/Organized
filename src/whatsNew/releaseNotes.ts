@@ -33,6 +33,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     items: [
       { title: "Plan time ahead", text: "Tap an empty spot on the Day grid, or use Add time with a time still to come, to set aside time for a task today or on a day ahead. Planned blocks are dashed and never count as worked time; one that is over can be logged as worked." },
       { title: "Tracked and planned on the task", text: "The task's Timer card shows Tracked so far and Planned, so you can compare your estimate with what it took." },
+      { title: "Time budget", text: "Set a budget on the Timer card and a slim bar shows tracked and planned time against it, with what is left in words. Go over and the bar grows with the overrun in red. No budget, no bar." },
       { title: "Tasks start at their planned time", text: "A new setting under Task behavior, off by default: while Obsidian is open, a task is set in progress when its planned block begins (no timer starts) and back to open, with a notice, when it ends." },
     ],
   },

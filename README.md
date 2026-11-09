@@ -92,7 +92,7 @@ That is all a todo costs until it needs more: a title and a status. No empty for
 - **5** · Three buttons to **add a subtask**, **link an existing task** or **make this a subtask of another**. Each row has a small unlink button.
 - **6** · **Priority**.
 - **7** · **Schedule**: pick a date, or clear it again. Scheduled tasks arrive in that day's note.
-- **8** · **Timer**: *Tracked so far* (the time worked, **Stop timer**, **Add time** by hand (past blocks are worked, future ones planned), a list of sessions you can correct) and *Planned* (the time you set aside, and a list of planned blocks), so you can compare an estimate with what it took.
+- **8** · **Timer**: *Tracked so far* (the time worked, **Stop timer**, **Add time** by hand (past blocks are worked, future ones planned), a list of sessions you can correct) and *Planned* (the time you set aside, and a list of planned blocks), so you can compare an estimate with what it took. **Set budget** adds an optional time budget: a slim bar in your accent colour fills with tracked time, planned time follows lighter, and a budget that is passed turns the overrun red and the bar grows to show it. Without a budget there is no bar.
 - **9** · **Projects** the task belongs to.
 - **10** · **Sources**: links and notes it came from.
 - **11** · **Moves**: one small square per time the task was scheduled or carried over. Squares turn from green to red against how often *you* usually carry things over (per project, once a project has enough tasks), and take your accent colour when you picked the date yourself. Hover a square, or open *Details*, to see each move.
