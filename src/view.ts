@@ -3,7 +3,7 @@ import type { Editor } from "obsidian";
 import { moment } from "./moment";
 import { rgbOf, softTint } from "./colors";
 import type Organized from "./main";
-import { elapsed, localDate, PRIORITIES, Section, STATUS_ICONS, STATUSES, Task, WorkSession } from "./model";
+import { elapsed, FOLDABLE_CARDS, localDate, PRIORITIES, Section, STATUS_ICONS, STATUSES, Task, WorkSession } from "./model";
 import { byPriority, report } from "./service";
 import { cells, HeatScale, MAX_CELLS, scaleFor, slider } from "./movement";
 import { BudgetModal, DatePicker, ProjectBudgetModal, SessionModal, TaskPicker } from "./modals";
@@ -39,12 +39,12 @@ export class OrganizedInspectorView extends ItemView {
   private sessionsOpen = false;
   private plannedOpen = false;
   /** A slim bar of tracked and planned time against the task's budget, with one line of words under it (the colour is never the only signal). Nothing is drawn without a budget. */
-  private budgetBar(host: HTMLElement, use: BudgetUse, label = "Time budget"): void {
+  private budgetBar(host: HTMLElement, use: BudgetUse, label = "Time budget", totals = true): void {
     if (label !== "Time budget") host.createDiv({ cls: "organized-budget-label", text: label });
     const minutes = (value: number) => formatMinutes(Math.floor(value / 60));
     const bar = host.createDiv({ cls: "organized-budget-bar", attr: { role: "progressbar", "aria-label": label, "aria-valuemin": "0", "aria-valuemax": String(use.budget), "aria-valuenow": String(use.tracked + use.planned) } });
     for (const [cls, pct] of [["tracked", use.trackedPct], ["planned", use.plannedPct], ["over", use.overPct]] as const) if (pct > 0) bar.createDiv({ cls: `organized-budget-${cls}` }).setCssProps({ "--organized-share": `${pct}%` });
-    const parts = [`${minutes(use.tracked)} tracked`, ...(use.planned ? [`${minutes(use.planned)} planned`] : []), use.left < 0 ? `${minutes(-use.left)} over budget` : `${minutes(use.left)} left of ${minutes(use.budget)}`];
+    const parts = [...(totals ? [`${minutes(use.tracked)} tracked`, ...(use.planned ? [`${minutes(use.planned)} planned`] : [])] : []), use.left < 0 ? `${minutes(-use.left)} over budget` : `${minutes(use.left)} left of ${minutes(use.budget)}`];
     host.createDiv({ cls: use.left < 0 ? "organized-budget-text organized-budget-over-text" : "organized-budget-text", text: parts.join(" · ") });
   }
   private budgeted(project: string): boolean { return Object.values(this.owner.repo.projectBudgets(project)).some(seconds => seconds !== null); }
@@ -113,10 +113,25 @@ export class OrganizedInspectorView extends ItemView {
     for (const option of options) select.createEl("option", { value: option, text: option.replace(/_/g, " ") }); select.value = value;
     select.addEventListener("change", () => { select.blur(); change(select.value); }); return select;
   }
-  card(host: HTMLElement, title: string, icon: string): HTMLElement {
+  /**
+   * A titled card. Description, Subtasks and Timer fold: their header is a button with a chevron, the content sits in a body that is hidden when folded (the choice is remembered for every task), and `summary` stays readable under the header (always, or only while folded). The content host is returned either way; `actions` adds controls to the header row, next to the fold button.
+   */
+  card(host: HTMLElement, title: string, icon: string, options: { summary?: string; always?: boolean; actions?: (head: HTMLElement) => void } = {}): HTMLElement {
     const card = host.createDiv({ cls: "organized-card" }); const head = card.createDiv({ cls: "organized-card-head" });
-    setIcon(head.createSpan({ cls: "organized-card-icon", attr: { "aria-hidden": "true" } }), icon); head.createEl("h4", { cls: "organized-card-title", text: title });
-    if (this.module === title) card.addClass("organized-selected-module"); return card;
+    if (this.module === title) card.addClass("organized-selected-module");
+    if (!FOLDABLE_CARDS.includes(title)) {
+      setIcon(head.createSpan({ cls: "organized-card-icon", attr: { "aria-hidden": "true" } }), icon); head.createEl("h4", { cls: "organized-card-title", text: title });
+      return card;
+    }
+    const folded = this.owner.settings.collapsedTaskSections.includes(title) && this.module !== title && this.editingModule !== title;
+    const fold = head.createEl("button", { cls: "organized-button organized-card-fold", attr: { type: "button", "aria-expanded": String(!folded), "aria-label": `${folded ? "Expand" : "Collapse"} ${title}` } });
+    setIcon(fold.createSpan({ cls: "organized-heading-chevron", attr: { "aria-hidden": "true" } }), folded ? "chevron-right" : "chevron-down");
+    setIcon(fold.createSpan({ cls: "organized-card-icon", attr: { "aria-hidden": "true" } }), icon); fold.createSpan({ cls: "organized-card-title", text: title });
+    fold.addEventListener("click", () => { if (this.editingModule === title) return; if (this.module === title) this.module = ""; this.owner.setTaskSectionCollapsed(title, !folded); void this.render().catch(report); });
+    options.actions?.(head);
+    if (options.summary && (options.always || folded)) card.createDiv({ cls: "organized-card-summary", text: options.summary });
+    if (folded) card.setAttribute("data-collapsed", "true");
+    return card.createDiv({ cls: "organized-card-body" });
   }
   section(host: HTMLElement, title: string, count: number, fold?: { collapsed: boolean; toggle: () => void }): HTMLElement {
     const section = host.createDiv({ cls: "organized-section" });
@@ -175,7 +190,7 @@ export class OrganizedInspectorView extends ItemView {
     return row;
   }
   private async moduleCard(host: HTMLElement, filePath: string, id: string, section: NoteSection, text: string): Promise<void> {
-    const box = this.card(host, section, "file-text");
+    const box = this.card(host, section, "file-text", { summary: text.split("\n").map(line => line.trim()).find(line => line) ?? "Empty" });
     if (this.editingModule === section) { this.inlineEditor(box, id, section, text); return; }
     if (text) await renderMarkdownLinks(this.app, text, box.createDiv({ cls: "organized-task-notes" }), filePath, this.markdown);
     // Only Description renders without text; other empty sections stay hidden.
@@ -576,7 +591,7 @@ export class OrganizedInspectorView extends ItemView {
     const shown = this.shownStatus(task); setIcon(status.createSpan({ cls: "organized-status-icon", attr: { "data-status": shown, "aria-hidden": "true" } }), task.recurring && shown === "completed" ? "calendar-check" : STATUS_ICONS[task.status]);
     const statusSelect = this.select(status, "Status", this.shownStatus(task), STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(async () => this.owner.service.status(id, value as Task["status"], this.owner.context?.line.id === id ? this.owner.context : task.recurring ? await this.todayContext(id) : undefined)); });
     if (task.recurring) statusSelect.options[STATUSES.indexOf("completed")].text = "done · today";
-    const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Subtasks", "Description", "Sources"], value => { this.module = value; this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
+    const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Subtasks", "Description", "Sources"], value => { this.module = value; if (FOLDABLE_CARDS.includes(value) && this.owner.settings.collapsedTaskSections.includes(value)) this.owner.setTaskSectionCollapsed(value, false); this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
     const file = await this.owner.repo.resolve(id, "showing the task"); const body = splitNote(await this.owner.repo.readText(file)).body;
     if (generation !== this.renderId) return;
     const details = host.createDiv({ cls: "organized-task-details" });
@@ -584,13 +599,15 @@ export class OrganizedInspectorView extends ItemView {
     await this.moduleCard(details, file.path, id, "Description", noteSection(body, "Description"));
     await this.subtaskCard(details, task);
     if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || task.planned_sessions.length || task.time_budget_seconds !== null || this.hasProjectBudget(task) || this.module === "Timer") {
-      const timer = this.card(details, "Timer", "timer"); const planned = plannedSeconds(task);
-      timer.createDiv({ cls: "organized-timer-value", text: `${formatMinutes(Math.floor(elapsed(task) / 60))} tracked${task.time_tracking_started_at ? " · running" : ""}${planned ? ` · ${formatMinutes(Math.floor(planned / 60))} planned` : ""}` });
-      const row = timer.createDiv({ cls: "organized-timer-row" });
-      this.button(row, task.time_tracking_started_at ? "Stop timer" : "Start timer", () => this.owner.run(() => this.owner.service.status(id, task.time_tracking_started_at ? "open" : "in_progress", this.owner.context ?? undefined)));
-      this.button(row, "Add time", () => this.editSession(task, null, localDate(), null));
-      const budget = this.button(row, "Budget", () => new BudgetModal(this.app, task.title, task.time_budget_seconds, seconds => this.owner.run(() => this.owner.service.setBudget(id, seconds))).open()); budget.setAttribute("aria-label", task.time_budget_seconds === null ? "Set budget" : "Edit budget");
-      const own = budgetUse(task); if (own) this.budgetBar(timer, own);
+      const planned = plannedSeconds(task); const running = task.time_tracking_started_at !== null;
+      const summary = `${formatMinutes(Math.floor(elapsed(task) / 60))} tracked${running ? " · running" : ""}${planned ? ` · ${formatMinutes(Math.floor(planned / 60))} planned` : ""}`;
+      const timer = this.card(details, "Timer", "timer", { summary, always: true, actions: head => {
+        const actions = head.createDiv({ cls: "organized-card-actions" });
+        this.iconButton(actions, running ? "Stop timer" : "Start timer", running ? "square" : "play", () => this.owner.run(() => this.owner.service.status(id, running ? "open" : "in_progress", this.owner.context ?? undefined))).setAttribute("aria-pressed", String(running));
+        this.iconButton(actions, "Add time", "plus", () => this.editSession(task, null, localDate(), null));
+        this.iconButton(actions, task.time_budget_seconds === null ? "Set budget" : "Edit budget", "target", () => new BudgetModal(this.app, task.title, task.time_budget_seconds, seconds => this.owner.run(() => this.owner.service.setBudget(id, seconds))).open());
+      } });
+      const own = budgetUse(task); if (own) this.budgetBar(timer, own, "Time budget", false);
       await this.projectBars(timer, task);
       if (task.work_sessions.length) this.sessionList(timer, task);
       if (task.planned_sessions.length) this.sessionList(timer, task, "planned");
@@ -640,7 +657,8 @@ export class OrganizedInspectorView extends ItemView {
   /** The subtasks of a task with how many are done, each with a toggle and a way in, and a button to add one under the todo in the open note. */
   private async subtaskCard(details: HTMLElement, task: Task): Promise<void> {
     const children = await this.owner.repo.subtasksOf(task); const parentTask = await this.owner.repo.parentOf(task.id); if (!children.length && !parentTask && this.module !== "Subtasks") return;
-    const card = this.card(details, "Subtasks", "list-checks"); const counted = children.filter(child => child.status !== "canceled"); const done = counted.filter(child => child.status === "completed").length;
+    const counted = children.filter(child => child.status !== "canceled"); const done = counted.filter(child => child.status === "completed").length;
+    const card = this.card(details, "Subtasks", "list-checks", { summary: counted.length ? `${done} of ${counted.length} done` : "No subtasks" });
     if (counted.length) {
       card.createDiv({ cls: "organized-muted", text: `${done} of ${counted.length} done` });
       const bar = card.createDiv({ cls: "organized-progress", attr: { role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(counted.length), "aria-valuenow": String(done), "aria-label": "Subtasks done" } });

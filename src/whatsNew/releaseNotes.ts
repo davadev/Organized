@@ -33,6 +33,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     items: [
       { title: "Plan time ahead", text: "Tap an empty spot on the Day grid, or use Add time with a time still to come, to set aside time for a task today or on a day ahead. Planned blocks are dashed and never count as worked time; one that is over can be logged as worked." },
       { title: "Tracked and planned on the task", text: "The task's Timer card shows Tracked so far and Planned, so you can compare your estimate with what it took." },
+      { title: "Fold the task panel", text: "Description, Subtasks and Timer fold away with a chevron and stay folded for every task. The Timer now has icon buttons (start or stop, add time, budget) on its header row." },
       { title: "A denser task panel", text: "Priority, schedule, recurring and projects are now small pills in one row, the Timer is one line with its buttons side by side, and an empty description is one button. Tap a project pill to open its note." },
       { title: "Project time budgets", text: "Give a project a total, daily, weekly or monthly budget (Projects tab, or the project note's properties). Every task in it shows a bar per budget, counting all the project's tasks. No budget, nothing shown." },
       { title: "Time budget", text: "Set a budget on the Timer card and a slim bar shows tracked and planned time against it, with what is left in words. Go over and the bar grows with the overrun in red. No budget, no bar." },

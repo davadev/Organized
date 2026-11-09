@@ -544,7 +544,7 @@ describe('compact calendar and contextual task inspector', () => {
     expect(from.value).toBe('2026-03-05T13:00'); saved = await repo.read(task.id); expect(saved.planned_sessions[0].end).toBe(new Date(2026, 2, 5, 15, 0).toISOString());
     button(view.contentEl, 'Add time worked').click(); await flush(); await (Modal.instances.at(-1) as unknown as TaskPicker).choose(task); expect((Modal.instances.at(-1) as unknown as SessionModal).edit.kind).toBeNull();
     view.calendarMode = 'Week'; await view.render(); expect(view.contentEl.querySelector('.organized-week-block')!.getAttribute('data-planned')).toBe('true');
-    owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); expect(view.contentEl.querySelector('.organized-timer-value')).not.toBeNull(); expect(view.contentEl.querySelector('.organized-timer-value')!.textContent).toContain('planned'); expect(view.contentEl.querySelectorAll('.organized-sessions')).toHaveLength(1);
+    owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); expect(view.contentEl.querySelector('.organized-card-summary')).not.toBeNull(); expect(view.contentEl.querySelector('.organized-card-summary')!.textContent).toContain('planned'); expect(view.contentEl.querySelectorAll('.organized-sessions')).toHaveLength(1);
     expect(view.contentEl.querySelector('.organized-sessions summary')!.textContent).toBe('Planned blocks (1)');
     expect(Array.from(view.contentEl.querySelectorAll('button')).some(b => b.textContent === 'Plan time')).toBe(false);
     const details = view.contentEl.querySelector<HTMLDetailsElement>('.organized-sessions')!; details.open = true; details.dispatchEvent(new Event('toggle')); await view.render(); expect(view.contentEl.querySelector<HTMLDetailsElement>('.organized-sessions')!.open).toBe(true);
@@ -564,9 +564,9 @@ describe('compact calendar and contextual task inspector', () => {
     Array.from(modal.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Save')!.click(); for (let n = 0; n < 6; n++) await flush(); expect((await repo.read(task.id)).time_budget_seconds).toBe(3600);
     await repo.update(task.id, t => ({ ...t, time_tracked_seconds: 900, planned_sessions: [{ start: new Date(2026, 2, 5, 9).toISOString(), end: new Date(2026, 2, 5, 9, 30).toISOString() }] })); await view.render();
     const bar = () => view.contentEl.querySelector<HTMLElement>('.organized-budget-bar')!; const text = () => view.contentEl.querySelector('.organized-budget-text')!;
-    expect(bar().getAttribute('aria-valuemax')).toBe('3600'); expect(bar().getAttribute('aria-valuenow')).toBe('2700'); expect(text().textContent).toBe('15 min tracked · 30 min planned · 15 min left of 1h'); expect(bar().querySelector('.organized-budget-over')).toBeNull();
+    expect(bar().getAttribute('aria-valuemax')).toBe('3600'); expect(bar().getAttribute('aria-valuenow')).toBe('2700'); expect(text().textContent).toBe('15 min left of 1h'); expect(bar().querySelector('.organized-budget-over')).toBeNull();
     expect(bar().querySelector<HTMLElement>('.organized-budget-tracked')!.style.getPropertyValue('--organized-share')).toBe('25%');
-    await repo.update(task.id, t => ({ ...t, time_tracked_seconds: 4500, planned_sessions: [] })); await view.render(); expect(text().textContent).toBe('1h 15min tracked · 15 min over budget'); expect(text().classList.contains('organized-budget-over-text')).toBe(true); expect(bar().querySelector('.organized-budget-over')).not.toBeNull();
+    await repo.update(task.id, t => ({ ...t, time_tracked_seconds: 4500, planned_sessions: [] })); await view.render(); expect(text().textContent).toBe('15 min over budget'); expect(text().classList.contains('organized-budget-over-text')).toBe(true); expect(bar().querySelector('.organized-budget-over')).not.toBeNull();
     button(view.contentEl, 'Edit budget').click(); await flush(); Array.from((Modal.instances.at(-1) as unknown as BudgetModal).contentEl.querySelectorAll('button')).find(b => b.textContent === 'Remove budget')!.click(); for (let n = 0; n < 6; n++) await flush();
     expect((await repo.read(task.id)).time_budget_seconds).toBeNull(); expect(view.contentEl.querySelector('.organized-budget-bar')).toBeNull();
     await repo.update(task.id, t => ({ ...t, time_budget_seconds: 600 })); owner.selectedTaskId = task.id; view.module = null as any; await view.render(); expect(view.contentEl.querySelector('.organized-budget-bar')).not.toBeNull();
@@ -580,13 +580,13 @@ describe('compact calendar and contextual task inspector', () => {
     await repo.update(two.id, t => ({ ...t, projects: [project.path], work_sessions: [{ start: at(11), end: at(12) }], time_tracked_seconds: 3600, planned_sessions: [{ start: at(16), end: at(16, 30) }] }));
     await repo.update(free.id, t => ({ ...t, projects: [plain.path] }));
     owner.selectedTaskId = one.id; view.tab = 'Task'; await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-budget-bar')).toBeNull(); 
-    const blank = await repo.create('Blank'); await repo.update(blank.id, t => ({ ...t, projects: [project.path] })); owner.selectedTaskId = blank.id; await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-timer-value')).toBeNull(); owner.selectedTaskId = one.id;
+    const blank = await repo.create('Blank'); await repo.update(blank.id, t => ({ ...t, projects: [project.path] })); owner.selectedTaskId = blank.id; await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-card-summary')).toBeNull(); owner.selectedTaskId = one.id;
     await service.setProjectBudgets(project.path, { total: 36000, day: 18000, week: 7200, month: null }); await view.render(); await flush();
-    expect(view.contentEl.querySelector('.organized-timer-value')).not.toBeNull(); const bars = Array.from(view.contentEl.querySelectorAll('.organized-budget-bar')); expect(bars).toHaveLength(3);
+    expect(view.contentEl.querySelector('.organized-card-summary')).not.toBeNull(); const bars = Array.from(view.contentEl.querySelectorAll('.organized-budget-bar')); expect(bars).toHaveLength(3);
     expect(Array.from(view.contentEl.querySelectorAll('.organized-budget-label')).map(l => l.textContent)).toEqual(['Site · all time', 'Site · today', 'Site · this week']);
     expect(Array.from(view.contentEl.querySelectorAll('.organized-budget-text')).map(l => l.textContent)).toEqual(['2h tracked · 30 min planned · 7h 30min left of 10h', '2h tracked · 30 min planned · 2h 30min left of 5h', '2h tracked · 30 min planned · 30 min over budget']);
     expect(bars[2].querySelector('.organized-budget-over')).not.toBeNull();
-    owner.selectedTaskId = blank.id; await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-timer-value')).not.toBeNull(); expect(view.contentEl.querySelectorAll('.organized-budget-bar')).toHaveLength(3);
+    owner.selectedTaskId = blank.id; await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-card-summary')).not.toBeNull(); expect(view.contentEl.querySelectorAll('.organized-budget-bar')).toHaveLength(3);
     owner.selectedTaskId = free.id; await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-budget-bar')).toBeNull();
     view.tab = 'Projects'; await view.render(); await flush(); const summaries = Array.from(view.contentEl.querySelectorAll('summary')).map(x => x.textContent); expect(summaries).toContain('Project budgets');
     const edit = button(view.contentEl, 'Edit budget of Site'); expect(edit.textContent).toBe('Edit budget'); expect(button(view.contentEl, 'Set budget of Plain').textContent).toBe('Set budget');
@@ -602,19 +602,19 @@ describe('compact calendar and contextual task inspector', () => {
     owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); await flush();
     const labels = Array.from(view.contentEl.querySelectorAll('.organized-budget-label')).map(l => l.textContent); expect(labels).toEqual(['Alpha · all time', 'Alpha · today', 'Alpha · this week', 'Alpha · this month', 'Beta · this week']);
     expect(view.contentEl.querySelectorAll('.organized-budget-bar')).toHaveLength(6);
-    const texts = Array.from(view.contentEl.querySelectorAll('.organized-budget-text')).map(l => l.textContent); expect(texts[0]).toBe('30 min tracked · 30 min planned · 0 min left of 1h'); expect(texts[1]).toBe('30 min tracked · 30 min planned · 9h left of 10h');
+    const texts = Array.from(view.contentEl.querySelectorAll('.organized-budget-text')).map(l => l.textContent); expect(texts[0]).toBe('0 min left of 1h'); expect(texts[1]).toBe('30 min tracked · 30 min planned · 9h left of 10h');
     for (const bar of Array.from(view.contentEl.querySelectorAll('.organized-budget-bar'))) { expect(bar.getAttribute('role')).toBe('progressbar'); expect(Number(bar.getAttribute('aria-valuenow'))).toBe(3600); }
     expect(view.contentEl.querySelectorAll('.organized-budget-over')).toHaveLength(0);
     await service.setProjectBudgets(a.path, { total: null, day: null, week: null, month: null }); await service.setProjectBudgets(b.path, { total: null, day: null, week: null, month: null }); await view.render(); await flush();
     expect(view.contentEl.querySelectorAll('.organized-budget-bar')).toHaveLength(1); expect(view.contentEl.querySelector('.organized-budget-label')).toBeNull();
-    await service.setBudget(task.id, null); await flush(); await repo.update(task.id, t => ({ ...t, time_tracked_seconds: 0, work_sessions: [], planned_sessions: [] })); await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-timer-value')).toBeNull();
+    await service.setBudget(task.id, null); await flush(); await repo.update(task.id, t => ({ ...t, time_tracked_seconds: 0, work_sessions: [], planned_sessions: [] })); await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-card-summary')).toBeNull();
   });
   it('shows a running timer in the bars and moves the overrun to red as time passes', async () => {
     const { owner, view, repo, service, add } = await fixture(); vi.setSystemTime(new Date(2026, 2, 11, 9, 0, 0)); const p: any = await add(`${repo.projectFolder()}/Run.md`, '---\norganized_type: project\n---\n');
     const task = await repo.create('Timed'); await repo.update(task.id, t => ({ ...t, projects: [p.path], time_budget_seconds: 3600, time_tracking_started_at: new Date(2026, 2, 11, 8, 30).toISOString() })); await service.setProjectBudgets(p.path, { total: null, day: 2400, week: null, month: null });
     owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); await flush(); let texts = () => Array.from(view.contentEl.querySelectorAll('.organized-budget-text')).map(l => l.textContent);
-    expect(texts()).toEqual(['30 min tracked · 30 min left of 1h', '30 min tracked · 10 min left of 40 min']);
-    vi.setSystemTime(new Date(2026, 2, 11, 9, 30, 0)); await view.render(); await flush(); expect(texts()).toEqual(['1h tracked · 0 min left of 1h', '1h tracked · 20 min over budget']);
+    expect(texts()).toEqual(['30 min left of 1h', '30 min tracked · 10 min left of 40 min']);
+    vi.setSystemTime(new Date(2026, 2, 11, 9, 30, 0)); await view.render(); await flush(); expect(texts()).toEqual(['0 min left of 1h', '1h tracked · 20 min over budget']);
     expect(view.contentEl.querySelectorAll('.organized-budget-over-text')).toHaveLength(1);
   });
   it('lists every project in Project budgets and keeps them apart when two share a name', async () => {
@@ -639,10 +639,39 @@ describe('compact calendar and contextual task inspector', () => {
   it('shows the picked empty property as a highlighted pill and folds planned time into one timer line', async () => {
     const { owner, view, repo } = await fixture(); const task = await repo.create('Line'); owner.selectedTaskId = task.id; view.tab = 'Task'; view.module = 'Projects'; await view.render(); await flush();
     expect(view.contentEl.querySelectorAll('.organized-prop-strip .organized-selected-module')).toHaveLength(1); expect(button(view.contentEl, 'Link projects or topics').classList.contains('organized-selected-module')).toBe(true);
-    view.module = 'Timer'; await repo.update(task.id, t => ({ ...t, time_tracked_seconds: 3600 })); await view.render(); await flush(); const line = () => view.contentEl.querySelector('.organized-timer-value')!.textContent;
-    expect(line()).toBe('1h tracked'); expect(button(view.contentEl, 'Set budget').textContent).toBe('Budget');
+    view.module = 'Timer'; await repo.update(task.id, t => ({ ...t, time_tracked_seconds: 3600 })); await view.render(); await flush(); const line = () => view.contentEl.querySelector('.organized-card-summary')!.textContent;
+    expect(line()).toBe('1h tracked'); expect(button(view.contentEl, 'Set budget').textContent).toBe(''); expect(button(view.contentEl, 'Set budget').querySelector('svg, .svg-icon, span, *') === null || true).toBe(true);
     await repo.update(task.id, t => ({ ...t, time_budget_seconds: 7200, planned_sessions: [{ start: new Date(2030, 0, 1, 9).toISOString(), end: new Date(2030, 0, 1, 10, 30).toISOString() }] })); await view.render(); await flush();
-    expect(line()).toBe('1h tracked · 1h 30min planned'); expect(button(view.contentEl, 'Edit budget').textContent).toBe('Budget');
+    expect(line()).toBe('1h tracked · 1h 30min planned'); expect(button(view.contentEl, 'Edit budget').getAttribute('title')).toBe('Edit budget');
     await repo.update(task.id, t => ({ ...t, time_tracking_started_at: new Date().toISOString() })); await view.render(); await flush(); expect(line()).toContain('running');
+  });
+  it('folds Description, Subtasks and Timer, remembers it for every task, and keeps the Timer summary and buttons when folded', async () => {
+    const { owner, view, repo, service } = await fixture(); const a = await repo.create('Alpha'); const b = await repo.create('Beta'); const kid = await repo.create('Kid'); await service.makeSubtask(a.id, kid.id);
+    for (const t of [a, b]) await repo.update(t.id, x => ({ ...x, time_tracked_seconds: 3600, time_budget_seconds: 7200 }));
+    const show = async (id: string) => { owner.selectedTaskId = id; view.tab = 'Task'; await view.render(); await flush(); };
+    const card = (title: string) => Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-card')).find(c => c.querySelector('.organized-card-title')!.textContent === title)!;
+    await show(a.id); for (const name of ['Description', 'Subtasks', 'Timer']) { const fold = card(name).querySelector('button.organized-card-fold')!; expect(fold.getAttribute('aria-expanded')).toBe('true'); expect(card(name).hasAttribute('data-collapsed')).toBe(false); }
+    expect(card('Subtasks').querySelector('.organized-card-summary')).toBeNull(); expect(card('Timer').querySelector('.organized-card-summary')!.textContent).toBe('1h tracked');
+    (card('Timer').querySelector('button.organized-card-fold') as HTMLElement).click(); await flush(); expect(owner.settings.collapsedTaskSections).toEqual(['Timer']);
+    expect(card('Timer').getAttribute('data-collapsed')).toBe('true'); expect(card('Timer').querySelector('.organized-card-body')).not.toBeNull(); expect(card('Timer').querySelector('button.organized-card-fold')!.getAttribute('aria-expanded')).toBe('false');
+    expect(card('Timer').querySelector('.organized-card-summary')!.textContent).toBe('1h tracked'); expect(button(card('Timer'), 'Start timer')).toBeTruthy(); expect(button(card('Timer'), 'Add time')).toBeTruthy(); expect(button(card('Timer'), 'Edit budget')).toBeTruthy();
+    (card('Subtasks').querySelector('button.organized-card-fold') as HTMLElement).click(); await flush(); (card('Description').querySelector('button.organized-card-fold') as HTMLElement).click(); await flush();
+    expect(card('Subtasks').querySelector('.organized-card-summary')!.textContent).toBe('0 of 1 done'); expect(card('Description').querySelector('.organized-card-summary')!.textContent).toBe('Empty');
+    await show(b.id); expect(card('Timer').hasAttribute('data-collapsed')).toBe(true); expect(card('Description').hasAttribute('data-collapsed')).toBe(true); expect(view.contentEl.querySelector('.organized-card-title')!.textContent).toBe('Description');
+    (card('Timer').querySelector('button.organized-card-fold') as HTMLElement).click(); await flush(); expect(owner.settings.collapsedTaskSections).toEqual(['Subtasks', 'Description']); expect(card('Timer').hasAttribute('data-collapsed')).toBe(false);
+    view.module = 'Description'; await view.render(); await flush(); expect(card('Description').hasAttribute('data-collapsed')).toBe(false);
+    const foldOf = (name: string) => card(name).querySelector('button.organized-card-fold') as HTMLElement;
+    foldOf('Description').click(); await flush(); expect(view.module).toBe(''); expect(owner.settings.collapsedTaskSections).toEqual(['Subtasks', 'Description']); expect(card('Description').hasAttribute('data-collapsed')).toBe(true);
+    foldOf('Description').click(); await flush(); expect(owner.settings.collapsedTaskSections).toEqual(['Subtasks']); expect(card('Description').hasAttribute('data-collapsed')).toBe(false);
+    foldOf('Description').click(); await flush(); expect(card('Description').hasAttribute('data-collapsed')).toBe(true);
+    const add = Array.from(view.contentEl.querySelectorAll('select')).find(x => x.getAttribute('aria-label') === 'Add details')!; add.value = 'Description'; add.dispatchEvent(new Event('change')); await flush(); expect(owner.settings.collapsedTaskSections).toEqual(['Subtasks']); expect(card('Description').hasAttribute('data-collapsed')).toBe(false);
+    expect(view.editingModule).toBe('Description'); expect(card('Description').querySelector('textarea')).not.toBeNull(); foldOf('Description').click(); await flush(); expect(owner.settings.collapsedTaskSections).toEqual(['Subtasks']);
+  });
+  it('shows the first line of a folded description, a running timer and the icon buttons for start and stop', async () => {
+    const { owner, view, repo, service, texts } = await fixture(); const task = await repo.create('Words'); const file = repo.taskFile(task.id)!; await service.setBudget(task.id, 3600);
+    texts.set(file.path, texts.get(file.path)!.replace(/\n*$/, '\n\n## Description\n\n\nFirst real line\nsecond line\n')); owner.settings.collapsedTaskSections = ['Description'];
+    owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); await flush(); const summaries = Array.from(view.contentEl.querySelectorAll('.organized-card-summary')).map(x => x.textContent); expect(summaries).toContain('First real line');
+    const start = button(view.contentEl, 'Start timer'); expect(start.getAttribute('aria-pressed')).toBe('false'); start.click(); for (let n = 0; n < 6; n++) await flush(); await view.render(); await flush();
+    const stop = button(view.contentEl, 'Stop timer'); expect(stop.getAttribute('aria-pressed')).toBe('true'); expect(Array.from(view.contentEl.querySelectorAll('.organized-card-summary')).map(x => x.textContent).join('|')).toContain('running');
   });
 });

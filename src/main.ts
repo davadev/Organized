@@ -162,6 +162,8 @@ export default class Organized extends Plugin {
       new Notice("Release notes are off. You can turn them on again in the settings of Organized.", 8000);
     }).open();
   }
+  /** Remembers a task panel card as folded or open; it holds for every task. */
+  setTaskSectionCollapsed(name: string, collapsed: boolean): void { const rest = this.settings.collapsedTaskSections.filter(n => n !== name); this.settings.collapsedTaskSections = collapsed ? [...rest, name] : rest; this.saveSettings(false); }
   setDayTasksCollapsed(collapsed: boolean): void { this.settings.dayTasksCollapsed = collapsed; this.saveSettings(false); }
   /** Whether the Task tab's note list leaves out done tasks. */
   setHideDoneTasks(hide: boolean): void { this.settings.hideDoneTasks = hide; this.saveSettings(false); }
