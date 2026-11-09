@@ -27,6 +27,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.1.4",
+    title: "What's new in Organized 0.1.4",
+    intro: "Block time for the future, and see estimate next to actual.",
+    items: [
+      { title: "Plan time ahead", text: "Tap an empty spot on the Day grid, or choose Planned time in Add time, to set aside time for a task today or on a day ahead. Planned blocks are dashed and never count as worked time; one that is over can be logged as worked." },
+      { title: "Tracked and planned on the task", text: "The task's Timer card shows Tracked so far and Planned, so you can compare your estimate with what it took." },
+      { title: "Tasks start at their planned time", text: "A new setting under Task behavior, off by default: while Obsidian is open, a task is set in progress when its planned block begins (no timer starts) and back to open, with a notice, when it ends." },
+    ],
+  },
+  {
     version: "0.1.3",
     title: "What's new in Organized 0.1.3",
     intro: "A fix for subtasks.",

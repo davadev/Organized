@@ -11,14 +11,15 @@ export function isoFromInput(value: string): string | null {
   const date = new Date(`${value}:00`); return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 export const MAX_SESSION_HOURS = 24;
-/** Why a session cannot be saved, or null. Time cannot be logged in the future: a running timer records that. */
-export function sessionProblem(start: string | null, end: string | null, now = Date.now()): string | null {
+export type SessionKind = "worked" | "planned";
+/** Why a session cannot be saved, or null. Worked time cannot be in the future (a running timer records that); a planned block can be anywhere. */
+export function sessionProblem(start: string | null, end: string | null, now = Date.now(), kind: SessionKind = "worked"): string | null {
   if (!start || !end) return "Enter both a start and an end.";
   const from = Date.parse(start); const to = Date.parse(end);
   if (to <= from) return "The end must be after the start.";
   if (to - from < MIN_SESSION_SECONDS * 1000) return "A session must be at least a minute long.";
   if (to - from > MAX_SESSION_HOURS * 3600000) return `A session can be at most ${MAX_SESSION_HOURS} hours; split longer work.`;
-  if (to > now + 60000) return "Time cannot be logged in the future.";
+  if (kind === "worked" && to > now + 60000) return "Time cannot be logged in the future.";
   return null;
 }
 export const seconds = (session: WorkSession): number => Math.max(0, Math.round((Date.parse(session.end) - Date.parse(session.start)) / 1000));

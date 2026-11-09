@@ -18,6 +18,7 @@ import { isDestructive, normalizeRetire } from "./retire";
 
 /** How long after the layout is ready the first-run card waits, so it does not open under the settings window that switched the plugin on. */
 const FIRST_RUN_DELAY_MS = 1500;
+const PLANNING_TICK_MS = 60000;
 export default class Organized extends Plugin {
   settings: Settings = { ...DEFAULT_SETTINGS };
   repo!: Repository;
@@ -94,12 +95,25 @@ export default class Organized extends Plugin {
         this.registerEvent(this.app.workspace.on("file-open", file => { this.followCursor(); if (file) void this.run(() => this.service.reconcile(file)); }));
       });
       this.loaded = true;
+      // Planned blocks start and end tasks only while the setting is on; the check catches up on start and when the app comes back to the foreground.
+      this.app.workspace.onLayoutReady(() => {
+        this.planningTick(); this.registerInterval(window.setInterval(() => this.planningTick(), PLANNING_TICK_MS));
+        this.registerDomEvent(document, "visibilitychange", () => { if (!document.hidden) this.planningTick(); });
+      });
       this.registerInterval(window.setTimeout(() => { void writeCrashState(adapter, crashPath, DEFAULT_CRASH_STATE); }, 30000));
     } catch (error) { report(error); throw error; }
   }
   onunload(): void {
     this.loaded = false; this.unloaded = true; for (const timer of this.titleTimers.values()) window.clearTimeout(timer); this.titleTimers.clear(); for (const { timer } of this.structure.values()) window.clearTimeout(timer); this.structure.clear(); if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer); this.refreshTimer = null;
     void writeCrashState(this.app.vault.adapter, crashStatePath(this.manifest, this.app.vault.configDir), DEFAULT_CRASH_STATE);
+  }
+  /** Sets tasks in progress for planned blocks that have begun and reopens the ones whose block is over. Does nothing unless the person switched it on. */
+  planningTick(): void {
+    if (this.unloaded || !this.loaded || !this.safety.writable || !this.settings.startAtPlannedTime) return;
+    void this.run(async () => {
+      const ended = await this.service.applyPlanning();
+      if (ended.length) new Notice(ended.length === 1 ? `Planned time for “${ended[0]}” is over. Adjust the time if you need longer.` : `Planned time is over for ${ended.length} tasks: ${ended.map(title => `“${title}”`).join(", ")}. Adjust the time if you need longer.`, 10000);
+    });
   }
   assertWritable(): void { if (!this.safety.writable) throw new Error("Writes paused to protect newer/unreadable settings. Restore a compatible backup or update Organized."); }
   async run(action: () => Promise<unknown>): Promise<void> {
@@ -482,7 +496,7 @@ export default class Organized extends Plugin {
   private addTime(task: Task, context: Context): void {
     const at = (time: string) => new Date(`${this.service.daily.date(context.file.path) ?? localDate()}T${time}:00`).toISOString();
     const marker = this.ownMarker(task);
-    new SessionModal(this.app, { heading: "Add time worked", taskTitle: task.title, start: at("09:00"), end: at("10:00"), save: async next => { await this.run(() => this.service.addSession(task.id, next)); await this.run(() => this.service.clean(context, marker)); } }).open();
+    new SessionModal(this.app, { heading: "Add time worked", taskTitle: task.title, start: at("09:00"), end: at("10:00"), kind: "worked", save: async next => { await this.run(() => this.service.addSession(task.id, next)); await this.run(() => this.service.clean(context, marker)); } }).open();
   }
   /** Folders offered for a standalone note. */
   noteFolders(): string[] { return this.app.vault.getAllLoadedFiles().filter(f => f instanceof TFolder && f.path !== "/").map(f => f.path).sort(); }

@@ -2,7 +2,8 @@ import { inBatches } from "./batches";
 import { Notice, TFile } from "obsidian";
 import { descendants, fixIndent, insertTask, insertUnder, migrateNote, moveTask, nestUnder, noteSection, parentIds, parseTasks, projectSection, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
-import { localDate, makeId, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, Status, Task, taskFrom, WorkSession } from "./model";
+import { localDate, makeId, MAX_PLANNED_SESSIONS, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, startPlanned, Status, Task, taskFrom, WorkSession } from "./model";
+import { dueEnds, dueStarts } from "./planning";
 import { seconds } from "./sessions";
 import { projectTemplate, Repository, splitNote } from "./repository";
 import { parseWorked, retiredLines } from "./retention";
@@ -189,11 +190,11 @@ export class TaskService {
     }
     return changed;
   }
-  private async applyStatus(id: string, status: Status, context?: Context, changes?: Change[]): Promise<void> {
+  private async applyStatus(id: string, status: Status, context?: Context, changes?: Change[], change: (task: Task) => Task = t => setStatus(t, status)): Promise<void> {
     const note = changes ? this.repo.taskFile(id) : null; const noteBefore = note ? await this.repo.readText(note) : "";
-    const task = await this.repo.update(id, t => setStatus(t, status));
+    const task = await this.repo.update(id, change);
     if (note) changes!.push({ file: note, before: noteBefore, after: await this.repo.readText(note) });
-    const marker = task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.time_tracking_started_at ? "/" : " ";
+    const marker = task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.status === "in_progress" ? "/" : " ";
     const today = localDate();
     for (const occurrence of await this.repo.occurrences(id)) {
       const date = this.daily.date(occurrence.file.path);
@@ -477,6 +478,40 @@ export class TaskService {
       const sessions = to ? t.work_sessions.map((s, n) => n === at ? to : s) : t.work_sessions.filter((_s, n) => n !== at);
       return { ...t, work_sessions: sessions, time_tracked_seconds: Math.max(0, t.time_tracked_seconds - seconds(from) + (to ? seconds(to) : 0)) };
     }); this.changed();
+  }
+  /** Sets time aside for a task: a block that never counts as worked. */
+  async addPlanned(id: string, block: WorkSession): Promise<void> {
+    await this.repo.update(id, t => ({ ...t, planned_sessions: [...t.planned_sessions, block].slice(-MAX_PLANNED_SESSIONS) })); this.changed();
+  }
+  /** Replaces one planned block, or removes it when `to` is null. */
+  async changePlanned(id: string, from: WorkSession, to: WorkSession | null): Promise<void> {
+    await this.repo.update(id, t => {
+      const at = t.planned_sessions.findIndex(s => s.start === from.start && s.end === from.end); if (at < 0) throw new Error("That planned block no longer exists; it may have been changed elsewhere.");
+      return { ...t, planned_sessions: to ? t.planned_sessions.map((s, n) => n === at ? to : s) : t.planned_sessions.filter((_s, n) => n !== at) };
+    }); this.changed();
+  }
+  /** The block turned out as planned: it becomes worked time and leaves the plan. */
+  async logPlanned(id: string, block: WorkSession): Promise<void> {
+    await this.repo.update(id, t => {
+      if (!t.planned_sessions.some(s => s.start === block.start && s.end === block.end)) throw new Error("That planned block no longer exists; it may have been changed elsewhere.");
+      return { ...t, planned_sessions: t.planned_sessions.filter(s => s.start !== block.start || s.end !== block.end), work_sessions: [...t.work_sessions, block].slice(-MAX_WORK_SESSIONS), time_tracked_seconds: t.time_tracked_seconds + seconds(block) };
+    }); this.changed();
+  }
+  /**
+   * Sets tasks in progress while a planned block is under way and puts them back to open when it is over (only when this set them in progress and nothing since changed them).
+   * Returns the titles of tasks whose block ended, so the caller can tell the person to adjust the time.
+   */
+  async applyPlanning(now = Date.now()): Promise<string[]> {
+    const tasks = await this.repo.list();
+    const ended: string[] = []; const ends = dueEnds(tasks, now); const starts = dueStarts(tasks, now);
+    for (const end of ends) {
+      if (end.action === "move") await this.repo.update(end.task.id, t => ({ ...t, auto_started_block: end.block!.start }));
+      else if (end.action === "release") await this.repo.update(end.task.id, t => ({ ...t, auto_started_block: null }));
+      else { await this.applyStatus(end.task.id, "open"); ended.push(end.task.title); }
+    }
+    for (const { task, block } of starts) await this.applyStatus(task.id, "in_progress", undefined, undefined, t => startPlanned(t, block));
+    if (ends.length || starts.length) this.changed();
+    return ended;
   }
   async setProjectColor(notePath: string, color: string | null): Promise<void> {
     const file = this.repo.file(notePath); if (!file) throw new Error("The project note was renamed or removed.");

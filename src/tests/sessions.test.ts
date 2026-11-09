@@ -7,6 +7,10 @@ describe("manual sessions", () => {
   it("round-trips local datetime-local values", () => {
     expect(localInput(at(9, 5))).toBe("2026-03-04T09:05"); expect(isoFromInput("2026-03-04T09:05")).toBe(at(9, 5)); expect(isoFromInput("2026-03-04 09:05")).toBeNull(); expect(isoFromInput("")).toBeNull(); expect(isoFromInput("2026-13-45T99:99")).toBeNull();
   });
+  it("lets a planned block lie in the future but keeps its other limits", () => {
+    expect(sessionProblem(at(16), at(17), NOW)).toContain("future"); expect(sessionProblem(at(16), at(17), NOW, "planned")).toBeNull();
+    expect(sessionProblem(at(10), at(9), NOW, "planned")).toContain("after the start"); expect(sessionProblem(at(0, 0, 1), at(0, 0, 9), NOW, "planned")).toContain("24 hours");
+  });
   it("explains why a session cannot be saved", () => {
     expect(sessionProblem(null, at(10), NOW)).toContain("both"); expect(sessionProblem(at(9), null, NOW)).toContain("both");
     expect(sessionProblem(at(10), at(9), NOW)).toContain("after the start"); expect(sessionProblem(at(9), at(9), NOW)).toContain("after the start");

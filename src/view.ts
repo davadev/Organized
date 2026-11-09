@@ -7,7 +7,8 @@ import { elapsed, localDate, PRIORITIES, Section, STATUS_ICONS, STATUSES, Task, 
 import { byPriority, report } from "./service";
 import { cells, HeatScale, MAX_CELLS, scaleFor, slider } from "./movement";
 import { DatePicker, SessionModal, TaskPicker } from "./modals";
-import { formatMinutes, lengthOf, lengthOfSeconds, seconds } from "./sessions";
+import { formatMinutes, lengthOf, lengthOfSeconds, seconds, SessionKind } from "./sessions";
+import { plannedSeconds } from "./planning";
 import { descendants, NoteSection, NOTE_SECTIONS, noteSection, parseTasks, TaskLine } from "./codec";
 import { splitNote } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
@@ -36,6 +37,7 @@ export class OrganizedInspectorView extends ItemView {
   private renderId = 0;
   private placed = "";
   private sessionsOpen = false;
+  private plannedOpen = false;
   private expandedLists = new Set<string>();
   private scrolledModule = "";
   private doneToday = new Set<string>();
@@ -366,34 +368,46 @@ export class OrganizedInspectorView extends ItemView {
       const track = row.createDiv({ cls: "organized-week-track" });
       for (const block of blocks[i]) {
         const left = (block.startMin - from * 60) / ((to - from) * 60) * 100; const width = (block.endMin - block.startMin) / ((to - from) * 60) * 100;
-        const part = track.createSpan({ cls: "organized-week-block", attr: { "data-status": this.shownStatus(block.task) } }); this.tint(part, block.task);
+        const part = track.createSpan({ cls: "organized-week-block", attr: { "data-status": this.shownStatus(block.task) } }); this.tint(part, block.task); if (block.planned) part.setAttribute("data-planned", "true");
         part.setCssProps({ "--organized-start": String(left), "--organized-width": String(width) });
       }
       row.createSpan({ cls: "organized-week-count", text: total ? `${done}/${total}` : "–" });
       row.addEventListener("click", () => { this.selectedDate = key; this.calendarMode = "Day"; void this.render().catch(report); });
     });
   }
-  /** Every recorded session, newest first and grouped by day with the day's total, folded away by default because the list grows quickly. */
-  private sessionList(host: HTMLElement, task: Task): void {
-    const box = host.createEl("details", { cls: "organized-sessions" }); box.open = this.sessionsOpen;
-    box.createEl("summary", { text: `Sessions (${task.work_sessions.length})` }); box.addEventListener("toggle", () => { this.sessionsOpen = box.open; });
+  /** Every recorded session (or planned block), newest first and grouped by day with the day's total, folded away by default because the list grows quickly. */
+  private sessionList(host: HTMLElement, task: Task, kind: SessionKind = "worked"): void {
+    const blocks = kind === "planned" ? task.planned_sessions : task.work_sessions;
+    const box = host.createEl("details", { cls: "organized-sessions" }); box.open = kind === "planned" ? this.plannedOpen : this.sessionsOpen;
+    box.createEl("summary", { text: `${kind === "planned" ? "Planned blocks" : "Sessions"} (${blocks.length})` }); box.addEventListener("toggle", () => { if (kind === "planned") this.plannedOpen = box.open; else this.sessionsOpen = box.open; });
     const clock = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
     const days = new Map<string, WorkSession[]>();
-    for (const session of [...task.work_sessions].sort((a, b) => Date.parse(b.start) - Date.parse(a.start))) { const day = localDate(new Date(session.start)); days.set(day, [...(days.get(day) ?? []), session]); }
+    for (const session of [...blocks].sort((a, b) => Date.parse(b.start) - Date.parse(a.start))) { const day = localDate(new Date(session.start)); days.set(day, [...(days.get(day) ?? []), session]); }
     for (const [day, sessions] of days) {
       box.createDiv({ cls: "organized-session-day", text: `${day} · ${lengthOfSeconds(sessions.reduce((sum, session) => sum + seconds(session), 0))}` });
-      for (const session of sessions) this.button(box, `${clock(new Date(session.start))}–${clock(new Date(session.end))} · ${lengthOf(session)}`, () => this.editSession(task, session, day)).addClass("organized-session-row");
+      for (const session of sessions) this.button(box, `${clock(new Date(session.start))}–${clock(new Date(session.end))} · ${lengthOf(session)}`, () => this.editSession(task, session, day, kind)).addClass("organized-session-row");
     }
   }
-  /** Adds a block of time to a task, or edits/deletes a recorded one. */
-  private editSession(task: Task, session: WorkSession | null, date: string): void {
+  /** Adds a block of time to a task, or edits/deletes a recorded or planned one. A new block on a later day starts as a plan. */
+  private editSession(task: Task, session: WorkSession | null, date: string, kind?: SessionKind, startAt?: string): void {
     const at = (time: string) => new Date(`${date}T${time}:00`).toISOString();
+    const start = session?.start ?? startAt ?? at("09:00"); const end = session?.end ?? (startAt ? new Date(Date.parse(startAt) + 3600000).toISOString() : at("10:00"));
+    const type: SessionKind = kind ?? (Date.parse(start) > Date.now() ? "planned" : "worked"); const service = this.owner.service;
     new SessionModal(this.app, {
-      heading: session ? "Edit time worked" : "Add time worked", taskTitle: task.title, start: session?.start ?? at("09:00"), end: session?.end ?? at("10:00"),
-      save: next => this.owner.run(() => session ? this.owner.service.changeSession(task.id, session, next) : this.owner.service.addSession(task.id, next)),
-      remove: session ? () => this.owner.run(() => this.owner.service.changeSession(task.id, session, null)) : undefined,
+      heading: session ? (type === "planned" ? "Edit planned time" : "Edit time worked") : "Add time", taskTitle: task.title, start, end, kind: type, switchable: !session,
+      save: (next, saved) => this.owner.run(async () => {
+        if (!session) await (saved === "planned" ? service.addPlanned(task.id, next) : service.addSession(task.id, next));
+        else await (type === "planned" ? service.changePlanned(task.id, session, next) : service.changeSession(task.id, session, next));
+      }),
+      remove: session ? () => this.owner.run(() => type === "planned" ? service.changePlanned(task.id, session, null) : service.changeSession(task.id, session, null)) : undefined,
       openTask: session ? () => this.openCalendarTask(task) : undefined,
+      logWorked: session && type === "planned" && Date.parse(session.end) <= Date.now() ? () => this.owner.run(() => service.logPlanned(task.id, session)) : undefined,
     }).open();
+  }
+  /** Picks a task, then asks to plan an hour from `start` (a spot tapped on the day grid). */
+  private async planAt(start: string, date: string): Promise<void> {
+    const tasks = (await this.owner.repo.list()).filter(t => t.status === "open" || t.status === "in_progress");
+    new TaskPicker(this.app, tasks, async choice => { if (typeof choice === "object" && "id" in choice) this.editSession(choice, null, date, "planned", start); }, "", false, false).open();
   }
   /** Picks an existing task, then asks for the time to log on it. */
   private async addTime(date: string): Promise<void> {
@@ -435,24 +449,30 @@ export class OrganizedInspectorView extends ItemView {
     const timeline = this.section(host, "Time", blocks.length);
     const timeHead = timeline.querySelector<HTMLElement>(".organized-section-head")!;
     const addTime = this.iconButton(timeHead, "Add time worked", "plus", () => this.addTime(date)); addTime.addClass("organized-head-action"); timeHead.insertBefore(addTime, timeHead.querySelector(".organized-count"));
-    if (!blocks.length) { timeline.createDiv({ cls: "organized-empty", text: "No tracked time this day. Set a task In Progress to record it." }); return; }
+    if (!blocks.length) timeline.createDiv({ cls: "organized-empty", text: "No time tracked or planned this day. Set a task In Progress to record it, or tap the grid to plan a block." });
     const [from, to] = hourRange(blocks); const span = (to - from) * 60;
     const grid = timeline.createDiv({ cls: "organized-day-grid" }); grid.setCssProps({ "--organized-hours": String(to - from) });
+    // A tap on an empty spot plans an hour there (snapped to a quarter); a tap on a block is that block's own.
+    grid.addEventListener("click", event => {
+      const box = grid.getBoundingClientRect(); if ((event.target as HTMLElement).closest(".organized-block") || box.height <= 0) return;
+      const minute = Math.min(1380, Math.floor((from * 60 + (event.clientY - box.top) / box.height * span) / 15) * 15);
+      const [year, month, day] = date.split("-").map(Number); void this.planAt(new Date(year, month - 1, day, 0, minute).toISOString(), date).catch(report);
+    });
     for (let hour = from; hour <= to; hour++) {
       const line = grid.createDiv({ cls: "organized-hour-line" }); line.setCssProps({ "--organized-at": String((hour - from) / (to - from) * 100) });
       line.createSpan({ cls: "organized-hour-label", text: `${pad(hour % 24)}:00` });
     }
     for (const block of blocks) {
       const title = block.task.title; const range = `${clock(block.startMin)}–${block.endMin >= 1440 ? "24:00" : clock(block.endMin)}`;
-      const part = grid.createEl("button", { cls: "organized-block", attr: { type: "button", "data-status": this.shownStatus(block.task), "aria-label": `${title}, ${range}${block.running ? ", running" : ""}`, title: `${title} · ${range}` } });
-      this.tint(part, block.task);
+      const part = grid.createEl("button", { cls: "organized-block", attr: { type: "button", "data-status": this.shownStatus(block.task), "aria-label": `${title}, ${range}${block.running ? ", running" : block.planned ? ", planned" : ""}`, title: `${title} · ${range}` } });
+      this.tint(part, block.task); if (block.planned) part.setAttribute("data-planned", "true");
       part.setCssProps({ "--organized-top": String((block.startMin - from * 60) / span * 100), "--organized-height": String((block.endMin - block.startMin) / span * 100), "--organized-lane": String(block.lane), "--organized-lanes": String(block.lanes) });
       const shown = this.shownStatus(block.task); setIcon(part.createSpan({ cls: "organized-block-status", attr: { "data-status": shown, "aria-hidden": "true" } }), STATUS_ICONS[shown]);
       part.createSpan({ cls: "organized-block-title", text: title }); if (block.endMin - block.startMin >= 30) part.createSpan({ cls: "organized-block-time", text: range });
       // A retired task has no task note: open the daily note that kept its time instead.
       const kept = retired.get(block.task.id);
       // A stored session opens for editing (with an Open task button); a running timer has nothing to edit yet.
-      part.addEventListener("click", () => { if (!kept && block.session) { this.editSession(block.task, block.session, date); return; } void (kept ? this.openNote(kept.path) : this.openCalendarTask(block.task)).catch(report); });
+      part.addEventListener("click", () => { if (!kept && block.session) { this.editSession(block.task, block.session, date, block.planned ? "planned" : "worked"); return; } void (kept ? this.openNote(kept.path) : this.openCalendarTask(block.task)).catch(report); });
     }
     const minutes = new Date(now).getHours() * 60 + new Date(now).getMinutes();
     if (date === localDate() && minutes >= from * 60 && minutes <= to * 60) { const nowLine = grid.createDiv({ cls: "organized-now-line", attr: { "aria-hidden": "true" } }); nowLine.setCssProps({ "--organized-at": String((minutes - from * 60) / span * 100) }); }
@@ -501,12 +521,16 @@ export class OrganizedInspectorView extends ItemView {
     await this.subtaskCard(details, task);
     if (task.priority !== "none" || this.module === "Priority") this.select(this.card(details, "Priority", "flag"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.service.setPriority(id, value as Task["priority"], this.owner.context?.line.id === id ? this.owner.context : undefined); this.owner.refresh(); }); });
     if (task.scheduled || this.module === "Schedule") this.button(this.card(details, "Schedule", "calendar"), task.scheduled ?? "Choose date", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined)), task.scheduled ? () => this.owner.run(() => this.owner.service.unschedule(id)) : undefined).open(); });
-    if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || this.module === "Timer") {
-      const timer = this.card(details, "Timer", "timer"); const row = timer.createDiv({ cls: "organized-timer-row" });
+    if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || task.planned_sessions.length || this.module === "Timer") {
+      const timer = this.card(details, "Timer", "timer"); timer.createDiv({ cls: "organized-timer-label", text: "Tracked so far" }); const row = timer.createDiv({ cls: "organized-timer-row" });
       row.createDiv({ cls: "organized-timer-value", text: `${formatMinutes(Math.floor(elapsed(task) / 60))}${task.time_tracking_started_at ? " · running" : ""}` });
       this.button(row, task.time_tracking_started_at ? "Stop timer" : "Start timer", () => this.owner.run(() => this.owner.service.status(id, task.time_tracking_started_at ? "open" : "in_progress", this.owner.context ?? undefined)));
-      this.button(row, "Add time", () => this.editSession(task, null, localDate()));
+      this.button(row, "Add time", () => this.editSession(task, null, localDate(), "worked"));
       if (task.work_sessions.length) this.sessionList(timer, task);
+      timer.createDiv({ cls: "organized-timer-label", text: "Planned" }); const plan = timer.createDiv({ cls: "organized-timer-row" });
+      plan.createDiv({ cls: "organized-timer-value", text: formatMinutes(Math.floor(plannedSeconds(task) / 60)) });
+      this.button(plan, "Plan time", () => this.editSession(task, null, localDate(), "planned"));
+      if (task.planned_sessions.length) this.sessionList(timer, task, "planned");
     }
     if (task.recurring || task.recurrence_periods.length || this.module === "Recurring") {
       const recurring = this.card(details, "Recurring", "repeat");

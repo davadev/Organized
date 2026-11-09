@@ -83,6 +83,9 @@ export class OrganizedSettingsTab extends PluginSettingTab {
         row("Long-press marker menu", "On a phone or tablet, press and hold a todo's checkbox in a daily note to pick its marker from a menu instead of typing it.", setting => {
           setting.addToggle(t => t.setValue(this.owner.settings.longPressMenu).onChange(value => { this.owner.settings.longPressMenu = value; this.owner.saveSettings(); }));
         }),
+        row("Start tasks at their planned time", "While Obsidian is open, a task is set in progress when a block planned for it begins and put back to open when the block ends, with a notice to adjust the time. No timer is started. Off by default.", setting => {
+          setting.addToggle(t => t.setValue(this.owner.settings.startAtPlannedTime).onChange(value => { this.owner.settings.startAtPlannedTime = value; this.owner.saveSettings(); if (value) this.owner.planningTick(); }));
+        }),
         row("Missing sections", "Choose what happens when a destination heading is missing.", setting => {
           setting.addDropdown(d => d.addOption("recreate", "Recreate heading path").addOption("ask", "Ask before inserting").setValue(this.owner.settings.missingSection).onChange(value => { this.owner.settings.missingSection = value === "ask" ? "ask" : "recreate"; this.owner.saveSettings(); }));
         }),

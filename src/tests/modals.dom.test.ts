@@ -93,19 +93,19 @@ describe("native task, date, source and project modals", () => {
   it("adds or edits a session with a live length, refuses a bad range and offers Open task and Delete when editing", async () => {
     const h = harness(); const at = (hour: number, min = 0) => new Date(2026, 2, 4, hour, min).toISOString(); const now = new Date(2026, 2, 4, 18, 0).getTime();
     const save = vi.fn(async () => undefined); const remove = vi.fn(async () => undefined); const open = vi.fn(async () => undefined);
-    const modal = new SessionModal(h.app, { heading: "Edit time worked", taskTitle: "Plan", start: at(9), end: at(10, 30), save, remove, openTask: open }, () => now); modal.open(); decorated(modal);
+    const modal = new SessionModal(h.app, { heading: "Edit time worked", taskTitle: "Plan", start: at(9), end: at(10, 30), kind: "worked", save, remove, openTask: open }, () => now); modal.open(); decorated(modal);
     const [start, end] = sessionFields(modal.contentEl); const note = () => modal.contentEl.querySelector('.organized-session-note')!;
     expect(modal.contentEl.querySelector('.organized-session-task')!.textContent).toBe("Plan"); expect(start.value).toBe("2026-03-04T09:00"); expect(note().textContent).toBe("Length: 1h 30min"); expect(modal.contentEl.querySelectorAll("button")).toHaveLength(3);
     end.value = "2026-03-04T08:00"; end.dispatchEvent(new Event("input")); expect(note().textContent).toContain("after the start"); expect(note().classList.contains("organized-session-problem")).toBe(true);
     const buttons = () => Array.from(modal.contentEl.querySelectorAll("button")); buttons().find(b => b.textContent === "Save")!.click(); await flush(); expect(save).not.toHaveBeenCalled();
     end.value = "2026-03-04T09:20"; end.dispatchEvent(new Event("input")); expect(note().textContent).toBe("Length: 20 min"); expect(note().classList.contains("organized-session-problem")).toBe(false);
-    buttons().find(b => b.textContent === "Save")!.click(); await flush(); expect(save).toHaveBeenCalledWith({ start: at(9), end: at(9, 20) });
-    const again = new SessionModal(h.app, { heading: "Edit", taskTitle: "Plan", start: at(9), end: at(10), save, remove, openTask: open }, () => now); again.open();
+    buttons().find(b => b.textContent === "Save")!.click(); await flush(); expect(save).toHaveBeenCalledWith({ start: at(9), end: at(9, 20) }, "worked");
+    const again = new SessionModal(h.app, { heading: "Edit", taskTitle: "Plan", start: at(9), end: at(10), kind: "worked", save, remove, openTask: open }, () => now); again.open();
     Array.from(again.contentEl.querySelectorAll("button")).find(b => b.textContent === "Open task")!.click(); await flush(); expect(open).toHaveBeenCalledOnce();
-    const third = new SessionModal(h.app, { heading: "Edit", taskTitle: "Plan", start: at(9), end: at(10), save, remove, openTask: open }, () => now); third.open();
+    const third = new SessionModal(h.app, { heading: "Edit", taskTitle: "Plan", start: at(9), end: at(10), kind: "worked", save, remove, openTask: open }, () => now); third.open();
     Array.from(third.contentEl.querySelectorAll("button")).find(b => b.textContent === "Delete")!.click(); await flush(); expect(remove).toHaveBeenCalledOnce();
-    const fresh = new SessionModal(h.app, { heading: "Add time worked", taskTitle: "New", start: at(9), end: at(10), save }); fresh.open(); expect(fresh.contentEl.querySelectorAll("button")).toHaveLength(1); fresh.close(); expect(fresh.contentEl.childElementCount).toBe(0);
-    const failing = new SessionModal(h.app, { heading: "Add", taskTitle: "x", start: at(9), end: at(10), save: async () => { throw Error("save failed"); } }, () => now); failing.open(); failing.contentEl.querySelector("button")!.click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain("save failed");
+    const fresh = new SessionModal(h.app, { heading: "Add time worked", taskTitle: "New", start: at(9), end: at(10), kind: "worked", save }); fresh.open(); expect(fresh.contentEl.querySelectorAll("button")).toHaveLength(1); fresh.close(); expect(fresh.contentEl.childElementCount).toBe(0);
+    const failing = new SessionModal(h.app, { heading: "Add", taskTitle: "x", start: at(9), end: at(10), kind: "worked", save: async () => { throw Error("save failed"); } }, () => now); failing.open(); failing.contentEl.querySelector("button")!.click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain("save failed");
     const picker = new TaskPicker(h.app, [newTask("Alpha task", "alpha12345")], async () => undefined, "", false, false); expect(picker.getSuggestions("Alpha").length).toBe(1); expect(picker.getSuggestions("nothing like it")).toEqual([]); expect(new TaskPicker(h.app, [], async () => undefined).getSuggestions("brand new")).toEqual(["brand new"]);
   });
   it("tells the user when tracked time keeps the task note", () => {
