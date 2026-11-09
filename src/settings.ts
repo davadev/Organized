@@ -52,8 +52,10 @@ export class OrganizedSettingsTab extends PluginSettingTab {
         }),
       ] },
       { type: "group", heading: "Daily notes", items: [
-        row("Daily-note source", "Custom settings are required because core daily-note configuration has no public API.", setting => {
-          setting.addDropdown(d => d.addOption("custom", "Custom settings").setValue("custom").setDisabled(true));
+        row("Daily-note source", this.owner.service.daily.followed() ? `Following the Daily Notes plugin: folder "${this.owner.service.daily.setup().dailyFolder || "(vault root)"}", format ${this.owner.service.daily.setup().dailyFormat}. The fields below are used only when you choose custom settings.` : "Follow the folder, format and template of the Daily Notes (or Periodic Notes) plugin, or set them here. Nothing is followed when neither plugin has a setup.", setting => {
+          setting.addDropdown(d => d.addOption("plugin", "Follow the daily notes plugin").addOption("custom", "Custom settings").setValue(this.owner.settings.dailySource).onChange(value => {
+            if (value === "plugin" || value === "custom") { this.owner.settings.dailySource = value; this.owner.saveSettings(); this.renderInto(this.containerEl); }
+          }));
         }),
         row("Daily-note folder", "Match your daily-note setup; leave empty for the vault root.", setting => {
           setting.addText(t => t.setValue(this.owner.settings.dailyFolder).onChange(value => {
