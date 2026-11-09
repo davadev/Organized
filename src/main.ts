@@ -1,13 +1,14 @@
 import { Editor, MarkdownView, Notice, Plugin, TFile, TFolder, WorkspaceLeaf } from "obsidian";
 import { Transaction } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
-import { ACTION_MARKERS, parentIds, parseTasks, sameNesting, NOTE_MARKER, NoteSection, PROJECT_MARKER, SECTION_MARKERS, SUBTASK_MARKER, TaskLine, TIME_MARKER, writeNoteSection } from "./codec";
+import { ACTION_MARKERS, parentIds, parseTasks, sameNesting, NOTE_MARKER, NoteSection, PROJECT_MARKER, RECURRING_MARKER, SECTION_MARKERS, SUBTASK_MARKER, TaskLine, TIME_MARKER, writeNoteSection } from "./codec";
 import { DEFAULT_SETTINGS, elapsed, localDate, object, Settings, Status, Task } from "./model";
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
+import { taskRule } from "./recurrence";
 import { Context, report, TaskService } from "./service";
 import { formatMinutes } from "./sessions";
-import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RetireModal, SessionModal, TaskPicker, WhatsNewModal } from "./modals";
+import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RecurrencePicker, RetireModal, SessionModal, TaskPicker, WhatsNewModal } from "./modals";
 import { notesOfLine, notesToShow, ReleaseNote } from "./whatsNew/releaseNotes";
 import { OrganizedInspectorView, VIEW_TYPE } from "./view";
 import { OrganizedSettingsTab } from "./settings";
@@ -481,9 +482,15 @@ export default class Organized extends Plugin {
     else if (marker in SECTION_MARKERS) { await this.openInspector("Task", SECTION_MARKERS[marker]); await this.run(() => this.service.clean(context)); }
     else if (marker === PROJECT_MARKER) this.pickProjects(await this.repo.read(id), context);
     else if (marker === NOTE_MARKER) this.convertToNote(await this.repo.read(id), context);
+    else if (marker === RECURRING_MARKER) this.pickRecurrence(await this.repo.read(id), context, true);
     else if (marker === TIME_MARKER) this.addTime(await this.repo.read(id), context);
     else if (marker === SUBTASK_MARKER) await this.addSubtaskFromMarker(await this.repo.read(id), context);
     else await this.run(() => this.service.marker(context, marker));
+  }
+  /** Asks how the task repeats. From a typed `[r]` (`typed`), cancelling puts the todo's own marker back; from the panel there is no marker to put back. */
+  pickRecurrence(task: Task, context?: Context, typed = false): void {
+    new RecurrencePicker(this.app, localDate(), task.recurring ? taskRule(task) : null, rule => this.run(() => this.service.recurrence(task.id, rule, context)),
+      typed && context ? () => { void this.run(() => this.service.clean(context, this.ownMarker(task))); } : undefined).open();
   }
   /** The marker a task's own status shows (a running timer is `[/]`). */
   private ownMarker(task: Task): string { return task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.status === "in_progress" ? "/" : " "; }

@@ -19,13 +19,15 @@ export const MAX_PLANNED_SESSIONS = 500;
 /** Task properties written only while they hold something, so a task that never plans time carries no extra keys. */
 /** The task panel cards that can be folded away. */
 export const FOLDABLE_CARDS: readonly string[] = ["Description", "Subtasks", "Timer"];
-export const OPTIONAL_KEYS = ["planned_sessions", "auto_started_block", "time_budget_seconds"] as const;
+export const OPTIONAL_KEYS = ["planned_sessions", "auto_started_block", "time_budget_seconds", "recurrence"] as const;
 /** The longest time budget a task can hold (9999 hours); anything else in a note is ignored. */
 export const MAX_BUDGET_SECONDS = 9999 * 3600;
 export interface Task {
   schema_version: number; id: string; title: string; status: Status; priority: Priority;
   scheduled: string | null; created: string; time_tracked_seconds: number;
   time_tracking_started_at: string | null; recurring: boolean; closed_at: string | null;
+  /** How the task repeats while `recurring` is on, in the one-line form `parseRule` reads (`weekdays`, `every 3 weeks on thu`). Empty means every day. */
+  recurrence: string | null;
   recurrence_periods: { start: string; stop: string | null }[];
   starred: boolean; projects: string[]; movement_history: Movement[];
   daily_note_section_path: Section[]; work_sessions: WorkSession[];
@@ -163,7 +165,7 @@ export function taskFrom(value: unknown, expectedId: string): Task {
     time_tracked_seconds: typeof v.time_tracked_seconds === "number" && Number.isFinite(v.time_tracked_seconds) && v.time_tracked_seconds >= 0 ? v.time_tracked_seconds : 0,
     time_tracking_started_at: typeof v.time_tracking_started_at === "string" && Number.isFinite(Date.parse(v.time_tracking_started_at)) ? v.time_tracking_started_at : null,
     closed_at: typeof v.closed_at === "string" && Number.isFinite(Date.parse(v.closed_at)) ? v.closed_at : null,
-    recurring: v.recurring === true, recurrence_periods: periods as unknown as Task["recurrence_periods"], starred: v.starred === true,
+    recurring: v.recurring === true, recurrence: typeof v.recurrence === "string" && v.recurrence.trim() ? v.recurrence.trim() : null, recurrence_periods: periods as unknown as Task["recurrence_periods"], starred: v.starred === true,
     projects: [...new Set(strings(v.projects).filter(p => { try { return path(p) === p && p.endsWith(".md"); } catch { return false; } }))],
     movement_history: history as unknown as Movement[], daily_note_section_path: sections as unknown as Section[], work_sessions: sessions,
     planned_sessions: sessionsOf(v.planned_sessions, MAX_PLANNED_SESSIONS),

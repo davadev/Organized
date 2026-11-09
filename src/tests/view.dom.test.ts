@@ -10,6 +10,7 @@ import { localDate } from '../model';
 import { moment } from '../moment';
 import { BudgetModal, ProjectBudgetModal, DatePicker, SessionModal, TaskPicker } from '../modals';
 import { parseTasks } from '../codec';
+import { DAILY } from '../recurrence';
 
 installObsidianDom();
 const flush = async () => { for (let i = 0; i < 100; i++) await Promise.resolve(); };
@@ -79,11 +80,11 @@ describe('compact calendar and contextual task inspector', () => {
     choose(view, 'Add details', 'Schedule'); await flush(); button(view.contentEl, 'Choose date').click(); let modal = Modal.instances.at(-1) as DatePicker; const schedule = vi.spyOn(owner.service, 'scheduleTask').mockResolvedValue(); await modal.choose('2099-01-01'); expect(schedule).toHaveBeenCalledWith(task.id, '2099-01-01', undefined); modal.close(); expect(modal.clear).toBeUndefined();
     await repo.update(task.id, t => ({ ...t, scheduled: '2099-01-01' })); await view.render(); button(view.contentEl, '2099-01-01').click(); modal = Modal.instances.at(-1) as DatePicker; expect(modal.initial).toBe('2099-01-01'); const unschedule = vi.spyOn(owner.service, 'unschedule').mockResolvedValue(); await modal.clear!(); expect(unschedule).toHaveBeenCalledWith(task.id); modal.close();
     choose(view, 'Add details', 'Timer'); await flush(); button(view.contentEl, 'Start timer').click(); await flush(); expect((await repo.read(task.id)).time_tracking_started_at).not.toBeNull(); expect(view.contentEl.textContent).toContain('running'); button(view.contentEl, 'Stop timer').click(); await flush(); expect((await repo.read(task.id)).time_tracking_started_at).toBeNull();
-    choose(view, 'Add details', 'Recurring'); await flush(); button(view.contentEl, 'Recurring').click(); await flush(); expect((await repo.read(task.id)).recurring).toBe(true); expect(button(view.contentEl, 'Recurring').title).toContain('→ active'); button(view.contentEl, 'Recurring').click(); await flush(); expect((await repo.read(task.id)).recurring).toBe(false);
+    choose(view, 'Add details', 'Recurring'); await flush(); button(view.contentEl, 'Recurring').click(); await flush(); (Modal.instances.at(-1) as any).onChooseSuggestion({ rule: DAILY }); await flush(); expect((await repo.read(task.id)).recurring).toBe(true); expect(button(view.contentEl, 'Recurring').title).toContain('→ active'); expect(button(view.contentEl, 'Recurring').textContent).toBe('Every day'); button(view.contentEl, 'Recurring').click(); await flush(); (Modal.instances.at(-1) as any).onChooseSuggestion({ rule: null }); await flush(); expect((await repo.read(task.id)).recurring).toBe(false);
     choose(view, 'Add details', 'Projects'); await flush(); const projects = vi.spyOn(owner, 'pickProjects').mockImplementation(() => undefined); button(view.contentEl, 'Link projects or topics').click(); expect(projects).toHaveBeenCalled();
     await repo.update(task.id, t => ({ ...t, projects: ['Project.md'], time_tracked_seconds: 60 })); view.module = ''; await view.render(); expect(button(view.contentEl, 'Link projects or topics')).toBeTruthy(); expect(view.contentEl.querySelector('.organized-prop-project .organized-prop-text')!.textContent).toBe('Project'); expect(titles(view)).toContain('Timer');
     owner.context = { file: {} as any, line: parseTasks(`- [ ] Actions <!--organized:${task.id}-->`)[0] }; const status = vi.spyOn(owner.service, 'status').mockResolvedValue(); choose(view, 'Status', 'open'); await flush(); expect(status).toHaveBeenCalledWith(task.id, 'open', owner.context);
-    const recurrence = vi.spyOn(owner.service, 'recurrence').mockResolvedValue(); button(view.contentEl, 'Recurring').click(); await flush(); expect(recurrence).toHaveBeenCalledWith(task.id, owner.context);
+    const recurrence = vi.spyOn(owner.service, 'recurrence').mockResolvedValue(); button(view.contentEl, 'Recurring').click(); await flush(); (Modal.instances.at(-1) as any).onChooseSuggestion({ rule: DAILY }); await flush(); expect(recurrence).toHaveBeenCalledWith(task.id, DAILY, owner.context);
   });
   it('renders existing rich modules without duplicates and collapses history/references', async () => {
     const { owner, view, repo } = await fixture(); const task = await repo.create('Notes'); const file = repo.taskFile(task.id)!; const before = await repo.readText(file);
@@ -630,7 +631,7 @@ describe('compact calendar and contextual task inspector', () => {
     await repo.update(task.id, t => ({ ...t, priority: 'high', scheduled: '2026-03-12', recurring: true, projects: [blue.path, plain.path, 'Gone/Missing.md'] })); await view.render(); await flush();
     const strip = view.contentEl.querySelector<HTMLElement>('.organized-prop-strip')!; expect(strip.querySelectorAll('.organized-prop').length).toBe(7);
     expect(titles(view)).not.toEqual(expect.arrayContaining(['Priority', 'Schedule', 'Recurring', 'Projects'])); expect(strip.querySelector('select')!.value).toBe('high'); expect(button(strip, 'Schedule: 2026-03-12').textContent).toBe('2026-03-12');
-    const switchEl = button(strip, 'Recurring'); expect(switchEl.getAttribute('aria-checked')).toBe('true'); expect(switchEl.textContent).toBe('On');
+    const switchEl = button(strip, 'Recurring'); expect(switchEl.textContent).toBe('Every day'); expect(switchEl.title).toBe('Recurring: Every day');
     const pills = Array.from(strip.querySelectorAll<HTMLElement>('.organized-prop-project')); expect(pills.map(p => p.getAttribute('aria-label'))).toEqual(['Open project A very long project name that must not stretch the panel', 'Open project Plain', 'Project Gone/Missing']);
     expect(pills[0].title).toBe('A very long project name that must not stretch the panel'); expect(pills[0].hasAttribute('data-project')).toBe(true); expect(pills[0].style.getPropertyValue('--organized-chip-bg')).toBe(rgbOf('#3b82f6')); expect(pills[1].hasAttribute('data-project')).toBe(false);
     expect(pills[2].tagName).toBe('SPAN'); expect(pills[0].tagName).toBe('BUTTON');

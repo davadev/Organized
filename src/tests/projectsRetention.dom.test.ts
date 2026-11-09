@@ -5,6 +5,7 @@ import { harness } from "./harness";
 import { localDate } from "../model";
 import { Notice } from "./__mocks__/obsidian";
 import { moveTask, parseTasks, sectionNamed, writeNoteSection } from "../codec";
+import { DAILY } from "../recurrence";
 import { projectTemplate } from "../repository";
 
 installObsidianDom();
@@ -147,10 +148,10 @@ describe("project sections and start date", () => {
     const habit = await h.repo.create("Water plants"); await h.repo.update(habit.id, t => ({ ...t, recurring: true })); await h.service.projects(habit.id, [note.path]); expect(under("Ongoing")).toEqual(["- [ ] Water plants"]); expect(under("Open")).toEqual([]);
     await h.service.status(habit.id, "completed"); expect(under("Ongoing")).toEqual(["- [ ] Water plants"]); expect(under("Done")).toEqual([]);
     const task = await h.repo.create("Weekly review"); await h.service.projects(task.id, [note.path]); expect(under("Open")).toEqual(["- [ ] Weekly review"]);
-    await h.service.recurrence(task.id); expect(under("Ongoing")).toEqual(["- [ ] Water plants", "- [ ] Weekly review"]); expect(under("Open")).toEqual([]);
-    await h.service.recurrence(task.id); expect(under("Open")).toEqual(["- [ ] Weekly review"]); expect(under("Ongoing")).toEqual(["- [ ] Water plants"]);
+    await h.service.recurrence(task.id, DAILY); expect(under("Ongoing")).toEqual(["- [ ] Water plants", "- [ ] Weekly review"]); expect(under("Open")).toEqual([]);
+    await h.service.recurrence(task.id, null); expect(under("Open")).toEqual(["- [ ] Weekly review"]); expect(under("Ongoing")).toEqual(["- [ ] Water plants"]);
     // A project line that was deleted by hand is skipped, not an error.
-    const gone = await h.repo.create("Gone"); await h.service.projects(gone.id, [note.path]); h.texts.set(note.path, h.texts.get(note.path)!.replace(/- \[ \] Gone.*\n/, "")); await h.repo.update(gone.id, t => ({ ...t, projects: [...t.projects, "Missing project.md"] })); await h.service.recurrence(gone.id); expect(h.texts.get(note.path)).not.toContain("Gone");
+    const gone = await h.repo.create("Gone"); await h.service.projects(gone.id, [note.path]); h.texts.set(note.path, h.texts.get(note.path)!.replace(/- \[ \] Gone.*\n/, "")); await h.repo.update(gone.id, t => ({ ...t, projects: [...t.projects, "Missing project.md"] })); await h.service.recurrence(gone.id, DAILY); expect(h.texts.get(note.path)).not.toContain("Gone");
   });
   it("uses the headings a note already has, at any level, and creates missing ones in an older note", async () => {
     const h = harness(); const task = await h.repo.create("Legacy"); const other = await h.repo.create("Other");

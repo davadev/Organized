@@ -5,6 +5,7 @@ import { cleanTags } from "./notes";
 import { freePath, noteName } from "./names";
 import { report } from "./service";
 import { rgbOf } from "./colors";
+import { formatRule, parseRule, presetRules, Rule, ruleLabel } from "./recurrence";
 import { BUDGET_KEYS, BudgetPeriod, budgetHours, MAX_BUDGET_HOURS, projectName, ProjectBudgets } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 import { ONBOARDING_STEPS, OnboardingStep } from "./onboarding";
@@ -60,6 +61,26 @@ export class PriorityPicker extends SuggestModal<Priority> {
   getSuggestions(query: string): Priority[] { return PRIORITIES.filter(p => p.includes(query.toLowerCase())); }
   renderSuggestion(value: Priority, el: HTMLElement): void { el.setText(value[0].toUpperCase() + value.slice(1)); }
   onChooseSuggestion(value: Priority): void { void this.choose(value).catch(report); }
+}
+/** What the repeat picker offers: a rule, or `null` to stop repeating. */
+export interface RepeatChoice { label: string; rule: Rule | null }
+/** Picks how a task repeats: the usual choices as a list, or type your own ("every 3 weeks on thu") and the top entry shows how it was read. */
+export class RecurrencePicker extends SuggestModal<RepeatChoice> {
+  private picked = false;
+  /** `cancelled` runs when the picker closes without a choice, so a typed `[r]` can be put back. */
+  constructor(app: App, readonly today: string, readonly current: Rule | null, readonly choose: (rule: Rule | null) => Promise<void>, readonly cancelled?: () => void) {
+    super(app); decorate(this); this.setPlaceholder("Repeat every day, week… or type: every 3 weeks on thu"); this.emptyStateText = "Try: weekdays, every 2 weeks on mon, every month on 15";
+  }
+  getSuggestions(query: string): RepeatChoice[] {
+    const text = query.trim().toLowerCase(); const typed = text ? parseRule(text) : null;
+    const listed: RepeatChoice[] = [...presetRules(this.today).map(rule => ({ label: ruleLabel(rule), rule })), ...(this.current ? [{ label: "Stop repeating", rule: null }] : [])];
+    const matching = listed.filter(c => c.label.toLowerCase().includes(text));
+    // What was typed comes first, as read; the listed choices that also fit follow.
+    return typed ? [{ label: ruleLabel(typed), rule: typed }, ...matching.filter(c => !c.rule || formatRule(c.rule) !== formatRule(typed))] : matching;
+  }
+  renderSuggestion(value: RepeatChoice, el: HTMLElement): void { el.setText(value.label); if (value.rule && this.current && formatRule(value.rule) === formatRule(this.current)) el.createSpan({ cls: "organized-muted", text: " · current" }); }
+  onChooseSuggestion(value: RepeatChoice): void { this.picked = true; void this.choose(value.rule).catch(report); }
+  onClose(): void { super.onClose(); queueMicrotask(() => { if (!this.picked) this.cancelled?.(); }); }
 }
 export class DatePicker extends Modal {
   /** `clear`, when given, adds a button that removes the date again. */
