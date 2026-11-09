@@ -6,11 +6,11 @@ import type Organized from "./main";
 import { elapsed, localDate, PRIORITIES, Section, STATUS_ICONS, STATUSES, Task, WorkSession } from "./model";
 import { byPriority, report } from "./service";
 import { cells, HeatScale, MAX_CELLS, scaleFor, slider } from "./movement";
-import { BudgetModal, DatePicker, SessionModal, TaskPicker } from "./modals";
+import { BudgetModal, DatePicker, ProjectBudgetModal, SessionModal, TaskPicker } from "./modals";
 import { formatMinutes, lengthOf, lengthOfSeconds, seconds, SessionKind } from "./sessions";
-import { budgetUse, plannedSeconds } from "./planning";
+import { budgetUse, BudgetUse, PERIOD_LABELS, plannedSeconds, projectUse } from "./planning";
 import { descendants, NoteSection, NOTE_SECTIONS, noteSection, parseTasks, TaskLine } from "./codec";
-import { splitNote } from "./repository";
+import { BUDGET_KEYS, BudgetPeriod, splitNote } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 import { blocksOn, hourRange } from "./timeline";
 
@@ -39,13 +39,24 @@ export class OrganizedInspectorView extends ItemView {
   private sessionsOpen = false;
   private plannedOpen = false;
   /** A slim bar of tracked and planned time against the task's budget, with one line of words under it (the colour is never the only signal). Nothing is drawn without a budget. */
-  private budgetBar(host: HTMLElement, task: Task): void {
-    const use = budgetUse(task); if (!use) return;
+  private budgetBar(host: HTMLElement, use: BudgetUse, label = "Time budget"): void {
+    if (label !== "Time budget") host.createDiv({ cls: "organized-budget-label", text: label });
     const minutes = (value: number) => formatMinutes(Math.floor(value / 60));
-    const bar = host.createDiv({ cls: "organized-budget-bar", attr: { role: "progressbar", "aria-label": "Time budget", "aria-valuemin": "0", "aria-valuemax": String(use.budget), "aria-valuenow": String(use.tracked + use.planned) } });
+    const bar = host.createDiv({ cls: "organized-budget-bar", attr: { role: "progressbar", "aria-label": label, "aria-valuemin": "0", "aria-valuemax": String(use.budget), "aria-valuenow": String(use.tracked + use.planned) } });
     for (const [cls, pct] of [["tracked", use.trackedPct], ["planned", use.plannedPct], ["over", use.overPct]] as const) if (pct > 0) bar.createDiv({ cls: `organized-budget-${cls}` }).setCssProps({ "--organized-share": `${pct}%` });
     const parts = [`${minutes(use.tracked)} tracked`, ...(use.planned ? [`${minutes(use.planned)} planned`] : []), use.left < 0 ? `${minutes(-use.left)} over budget` : `${minutes(use.left)} left of ${minutes(use.budget)}`];
     host.createDiv({ cls: use.left < 0 ? "organized-budget-text organized-budget-over-text" : "organized-budget-text", text: parts.join(" · ") });
+  }
+  private budgeted(project: string): boolean { return Object.values(this.owner.repo.projectBudgets(project)).some(seconds => seconds !== null); }
+  private hasProjectBudget(task: Task): boolean { return task.projects.some(project => this.budgeted(project)); }
+  /** One bar per budget set on the task's projects, each counting the time of every task in that project over the day, week, month or the whole project. */
+  private async projectBars(host: HTMLElement, task: Task): Promise<void> {
+    const budgeted = task.projects.filter(project => this.budgeted(project)); if (!budgeted.length) return;
+    const tasks = await this.owner.repo.list(); const now = Date.now();
+    for (const project of budgeted) {
+      const budgets = this.owner.repo.projectBudgets(project);
+      for (const period of Object.keys(BUDGET_KEYS) as BudgetPeriod[]) { const budget = budgets[period]; if (budget !== null) this.budgetBar(host, projectUse(tasks, project, period, budget, now), `${this.projectLabel(project)} · ${PERIOD_LABELS[period]}`); }
+    }
   }
   private expandedLists = new Set<string>();
   private scrolledModule = "";
@@ -265,6 +276,16 @@ export class OrganizedInspectorView extends ItemView {
       row.createSpan({ cls: "organized-color-name", text: this.projectLabel(project) });
       input.addEventListener("change", () => { void this.owner.run(() => this.owner.service.setProjectColor(project, input.value)); });
       if (current) this.button(row, "Clear", () => this.owner.run(() => this.owner.service.setProjectColor(project, null))).addClass("organized-color-clear");
+    }
+  }
+  /** One row per project with its time budgets in words and a button to change them; the budgets live in the project note's frontmatter. */
+  private budgetEditors(host: HTMLElement, projects: string[]): void {
+    const box = host.createEl("details", { cls: "organized-colors" }); box.createEl("summary", { text: "Project budgets" });
+    for (const project of projects) {
+      const row = box.createDiv({ cls: "organized-budget-row" }); row.createSpan({ cls: "organized-budget-name", text: this.projectLabel(project) });
+      const budgets = this.owner.repo.projectBudgets(project);
+      const set = (Object.keys(BUDGET_KEYS) as BudgetPeriod[]).filter(period => budgets[period] !== null);
+      this.button(row, set.length ? "Edit budget" : "Set budget", () => new ProjectBudgetModal(this.app, this.projectLabel(project), budgets, next => this.owner.run(() => this.owner.service.setProjectBudgets(project, next))).open()).setAttribute("aria-label", `${set.length ? "Edit" : "Set"} budget of ${this.projectLabel(project)}`);
     }
   }
   /** The project's name as a small label, in the project's colour when it has one. */
@@ -530,13 +551,14 @@ export class OrganizedInspectorView extends ItemView {
     await this.subtaskCard(details, task);
     if (task.priority !== "none" || this.module === "Priority") this.select(this.card(details, "Priority", "flag"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.service.setPriority(id, value as Task["priority"], this.owner.context?.line.id === id ? this.owner.context : undefined); this.owner.refresh(); }); });
     if (task.scheduled || this.module === "Schedule") this.button(this.card(details, "Schedule", "calendar"), task.scheduled ?? "Choose date", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined)), task.scheduled ? () => this.owner.run(() => this.owner.service.unschedule(id)) : undefined).open(); });
-    if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || task.planned_sessions.length || task.time_budget_seconds !== null || this.module === "Timer") {
+    if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || task.planned_sessions.length || task.time_budget_seconds !== null || this.hasProjectBudget(task) || this.module === "Timer") {
       const timer = this.card(details, "Timer", "timer"); timer.createDiv({ cls: "organized-timer-label", text: "Tracked so far" }); const row = timer.createDiv({ cls: "organized-timer-row" });
       row.createDiv({ cls: "organized-timer-value", text: `${formatMinutes(Math.floor(elapsed(task) / 60))}${task.time_tracking_started_at ? " · running" : ""}` });
       this.button(row, task.time_tracking_started_at ? "Stop timer" : "Start timer", () => this.owner.run(() => this.owner.service.status(id, task.time_tracking_started_at ? "open" : "in_progress", this.owner.context ?? undefined)));
       this.button(row, "Add time", () => this.editSession(task, null, localDate(), null));
       this.button(row, task.time_budget_seconds === null ? "Set budget" : "Edit budget", () => new BudgetModal(this.app, task.title, task.time_budget_seconds, seconds => this.owner.run(() => this.owner.service.setBudget(id, seconds))).open());
-      this.budgetBar(timer, task);
+      const own = budgetUse(task); if (own) this.budgetBar(timer, own);
+      await this.projectBars(timer, task);
       if (task.work_sessions.length) this.sessionList(timer, task);
       timer.createDiv({ cls: "organized-timer-label", text: "Planned" }); timer.createDiv({ cls: "organized-timer-value", text: formatMinutes(Math.floor(plannedSeconds(task) / 60)) });
       if (task.planned_sessions.length) this.sessionList(timer, task, "planned");
@@ -657,7 +679,7 @@ export class OrganizedInspectorView extends ItemView {
     picker.createEl("option", { text: "All projects", value: "" });
     for (const project of projects) picker.createEl("option", { text: this.projectLabel(project), value: project }); picker.value = this.selectedProject;
     picker.addEventListener("change", () => { this.selectedProject = picker.value; picker.blur(); void this.render().catch(report); });
-    if (projects.length) this.colorPickers(projectSection, projects);
+    if (projects.length) { this.colorPickers(projectSection, projects); this.budgetEditors(projectSection, projects); }
     // The lists cover every task ever linked, so done and canceled ones are hidden unless asked for, and long lists stop at a page until expanded.
     const hide = this.owner.settings.hideClosedProjects;
     const head = projectSection.querySelector<HTMLElement>(".organized-section-head")!;

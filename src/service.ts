@@ -5,7 +5,7 @@ import { DailyNotes } from "./daily";
 import { localDate, makeId, MAX_PLANNED_SESSIONS, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, startPlanned, Status, Task, taskFrom, WorkSession } from "./model";
 import { dueEnds, dueStarts } from "./planning";
 import { seconds } from "./sessions";
-import { projectTemplate, Repository, splitNote } from "./repository";
+import { ProjectBudgets, projectTemplate, Repository, splitNote } from "./repository";
 import { parseWorked, retiredLines } from "./retention";
 import { buildNote } from "./notes";
 import { freePath, noteName, readableName } from "./names";
@@ -518,6 +518,10 @@ export class TaskService {
   async setProjectColor(notePath: string, color: string | null): Promise<void> {
     const file = this.repo.file(notePath); if (!file) throw new Error("The project note was renamed or removed.");
     await this.repo.setProjectColor(file, color); this.changed();
+  }
+  async setProjectBudgets(notePath: string, budgets: ProjectBudgets): Promise<void> {
+    const file = this.repo.file(notePath); if (!file) throw new Error("The project note was renamed or removed.");
+    await this.repo.setProjectBudgets(file, budgets); this.changed();
   }
   /**
    * One-time: rewrite task notes written in the old layout (`## Description`, `## Notes`) in the new one. Only real task notes are

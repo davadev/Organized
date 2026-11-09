@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
-import { TaskPicker, PriorityPicker, DatePicker, ConfirmModal, ProjectPicker, SessionModal, BudgetModal, NoteConversionModal, OnboardingModal, RetireModal, KEEP_AS_TODO } from "../modals";
+import { TaskPicker, PriorityPicker, DatePicker, ConfirmModal, ProjectPicker, SessionModal, BudgetModal, ProjectBudgetModal, NoteConversionModal, OnboardingModal, RetireModal, KEEP_AS_TODO } from "../modals";
 import { newTask } from "../model";
 import { harness, sessionFields } from "./harness";
 import { Notice, Setting } from "./__mocks__/obsidian";
@@ -204,5 +204,15 @@ describe("Retire window", () => {
     type('2', '15'); buttons()[0].click(); await flush(); expect(save).toHaveBeenCalledWith(8100);
     const edit = new BudgetModal(h.app, 'Report', 8100, save); edit.open(); const fields = Array.from(edit.contentEl.querySelectorAll<HTMLInputElement>('input')); expect([fields[0].value, fields[1].value]).toEqual(['2', '15']);
     Array.from(edit.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Remove budget')!.click(); await flush(); expect(save).toHaveBeenLastCalledWith(null); edit.close(); expect(edit.contentEl.childElementCount).toBe(0);
+  });
+  it('asks for a project budget per period in hours, leaves blanks out and rejects bad values', async () => {
+    const h = harness(); const save = vi.fn().mockResolvedValue(undefined);
+    const modal = new ProjectBudgetModal(h.app, 'Website', { total: null, day: null, week: 36000, month: 5400 }, save); modal.open();
+    const inputs = Array.from(modal.contentEl.querySelectorAll<HTMLInputElement>('input')); const note = modal.contentEl.querySelector('.organized-session-note')!; const saveButton = () => Array.from(modal.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Save')!;
+    expect(modal.contentEl.querySelector('.organized-session-task')!.textContent).toBe('Website'); expect(inputs.map(i => i.value)).toEqual(['', '', '10', '1.5']);
+    inputs[0].value = '0'; inputs[0].dispatchEvent(new Event('input')); expect(note.textContent).toContain('above 0'); expect(note.classList.contains('organized-session-problem')).toBe(true); saveButton().click(); await flush(); expect(save).not.toHaveBeenCalled();
+    inputs[0].value = '10000'; inputs[0].dispatchEvent(new Event('input')); expect(note.textContent).toContain('9999');
+    inputs[0].value = '120'; inputs[3].value = ''; inputs[3].dispatchEvent(new Event('input')); expect(note.textContent).toBe(''); saveButton().click(); await flush(); expect(save).toHaveBeenCalledWith({ total: 432000, day: null, week: 36000, month: null });
+    modal.close(); expect(modal.contentEl.childElementCount).toBe(0);
   });
 });

@@ -262,3 +262,17 @@ describe("sorting follows status and moves", () => {
     await h.service.status(a.id, "in_progress"); expect(h.texts.get(note.path)).toContain("- [/] Alpha"); expect(note).toBeTruthy();
   });
 });
+
+describe("project budgets in frontmatter", () => {
+  it("reads hours from the project note, ignores anything else, and writes and clears them without touching other properties", async () => {
+    const h = harness(); const folder = h.repo.projectFolder();
+    const a: any = await h.add(`${folder}/A.md`, "---\ntags: [x]\norganized_color: '#3b82f6'\n---\nbody");
+    await h.add(`${folder}/Bad.md`, "---\norganized_budget: ten\norganized_budget_daily: 0\norganized_budget_weekly: -2\norganized_budget_monthly: 10000\n---\n");
+    expect(h.repo.projectBudgets(a.path)).toEqual({ total: null, day: null, week: null, month: null }); expect(h.repo.projectBudgets(`${folder}/Bad.md`)).toEqual({ total: null, day: null, week: null, month: null }); expect(h.repo.projectBudgets("Missing.md")).toEqual({ total: null, day: null, week: null, month: null });
+    await h.service.setProjectBudgets(a.path, { total: 120 * 3600, day: 5400, week: 36000, month: null });
+    expect(h.repo.projectBudgets(a.path)).toEqual({ total: 432000, day: 5400, week: 36000, month: null }); const text = h.texts.get(a.path)!;
+    expect(text).toContain("organized_budget: 120"); expect(text).toContain("organized_budget_daily: 1.5"); expect(text).toContain("organized_budget_weekly: 10"); expect(text).not.toContain("organized_budget_monthly"); expect(text).toContain("tags"); expect(text).toContain("organized_color"); expect(text).toContain("organized_type: project"); expect(h.changed).toHaveBeenCalled();
+    await h.service.setProjectBudgets(a.path, { total: null, day: null, week: null, month: null }); expect(h.texts.get(a.path)).not.toContain("organized_budget");
+    await expect(h.service.setProjectBudgets("Missing.md", { total: 1, day: null, week: null, month: null })).rejects.toThrow("renamed or removed");
+  });
+});

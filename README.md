@@ -132,6 +132,19 @@ That is all a todo costs until it needs more: a title and a status. No empty for
 - **3** · A task card with status, priority, date and star.
 - **4** · The project chip, in the project's colour; it opens the project note.
 
+#### Project time budgets
+
+A project can have time budgets, all optional, kept as hours in the project note's properties (**Projects** tab → *Project budgets* edits them, or write them yourself):
+
+```yaml
+organized_budget: 120          # the whole project
+organized_budget_daily: 2
+organized_budget_weekly: 10
+organized_budget_monthly: 30
+```
+
+Every task linked to the project then shows one slim bar per budget you set, in its Timer card (which appears by itself): the tracked time of **all** the project's tasks today, this week (by your Obsidian week start), this month or in total, with planned time lighter and any overrun in red. A project without budgets shows nothing. Time logged before sessions had dates counts only toward the whole-project budget.
+
 #### Using projects
 
 A project is an ordinary note that Organized has been told is a project. To attach one to a todo:

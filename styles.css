@@ -214,12 +214,12 @@
 .organized-list-card[data-status="in_progress"] { background: var(--organized-card-active); }
 .organized-colors { margin-block: 6px; font-size: var(--font-ui-small); }
 .organized-colors summary { color: var(--text-muted); cursor: pointer; }
-.organized-color-row { display: flex; align-items: center; gap: 8px; margin-block: 4px; min-inline-size: 0; }
+.organized-color-row, .organized-budget-row { display: flex; align-items: center; gap: 8px; margin-block: 4px; min-inline-size: 0; }
 .organized-color-swatch { position: relative; flex: 0 0 22px; inline-size: 22px; block-size: 22px; overflow: hidden; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s, 5px); background: var(--organized-swatch, #808080); cursor: pointer; }
 /* The native control only receives the tap: it is invisible and fills the swatch, because mobile WebViews ignore a colour input's own size. */
 .organized-view .organized-panel .organized-color-swatch input[type="color"].organized-color-input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; min-block-size: 0; margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; }
 .organized-view .organized-panel button.organized-color-clear { flex: 0 0 auto; block-size: auto; min-block-size: 0; margin: 0; padding: 2px 10px; font-size: var(--font-ui-smaller, 12px); box-shadow: none; }
-.organized-color-name { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.organized-color-name, .organized-budget-name { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .organized-view .organized-panel .organized-list-card[data-status="in_progress"] .organized-list-open { border-inline-start-color: var(--organized-edge-done); }
 .organized-project-dot { flex: 0 0 8px; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--background-modifier-border-hover); }
 .organized-project-dot[data-project] { background: rgb(var(--organized-chip-bg)); }
@@ -633,6 +633,7 @@ SOFTWARE.
 .organized-budget-tracked { background: var(--interactive-accent); }
 .organized-budget-planned { background: var(--interactive-accent); opacity: 0.45; }
 .organized-budget-over { background: var(--text-error, var(--color-red)); border-inline-start: 2px solid var(--background-primary); }
+.organized-budget-label { margin-block-start: 6px; color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
 .organized-budget-text { margin-block-start: 2px; color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); font-variant-numeric: tabular-nums; }
 .organized-budget-text.organized-budget-over-text { color: var(--text-error, var(--color-red)); }
 .organized-progress-bar.organized-progress-complete { background: var(--color-green, #2f9e44); }

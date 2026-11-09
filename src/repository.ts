@@ -18,6 +18,15 @@ export function projectName(notePath: string, among: readonly string[] = []): st
   const name = (value: string) => value.replace(/^.*\//, "").replace(/\.md$/i, "");
   return among.filter(other => other !== notePath && name(other).toLowerCase() === name(notePath).toLowerCase()).length ? notePath.replace(/\.md$/i, "") : name(notePath);
 }
+/** Optional time budgets of a project note, in hours: one for the whole project and one each per day, week and month. */
+export const BUDGET_KEYS = { total: "organized_budget", day: "organized_budget_daily", week: "organized_budget_weekly", month: "organized_budget_monthly" } as const;
+export type BudgetPeriod = keyof typeof BUDGET_KEYS;
+/** A project's budgets in seconds; a period without one is null. */
+export type ProjectBudgets = Record<BudgetPeriod, number | null>;
+/** The longest project budget, in hours. */
+export const MAX_BUDGET_HOURS = 9999;
+/** Hours as written in a note (a number above zero and within the limit) as whole seconds; anything else is no budget. */
+export const budgetSeconds = (value: unknown): number | null => typeof value === "number" && Number.isFinite(value) && value > 0 && value <= MAX_BUDGET_HOURS ? Math.max(1, Math.round(value * 3600)) : null;
 /** The day a project started, `YYYY-MM-DD`. Set automatically; an `organized_end` date is reserved for later and not used yet. */
 export const START_KEY = "organized_start";
 /** A start date as stored: `YYYY-MM-DD` text, or a Date when a YAML reader turned the bare date into one. */
@@ -190,6 +199,18 @@ export class Repository {
   projectColor(notePath: string): string | null {
     const file = this.file(notePath); const value: unknown = file ? this.app.metadataCache.getFileCache(file)?.frontmatter?.[COLOR_KEY] : undefined;
     return validColor(value) ? value.toLowerCase() : null;
+  }
+  /** The budgets of a project note, from Obsidian's metadata cache; every period is null when unset or not a number of hours. */
+  projectBudgets(notePath: string): ProjectBudgets {
+    const file = this.file(notePath); const properties: Record<string, unknown> = (file ? this.app.metadataCache.getFileCache(file)?.frontmatter : undefined) ?? {};
+    return { total: budgetSeconds(properties[BUDGET_KEYS.total]), day: budgetSeconds(properties[BUDGET_KEYS.day]), week: budgetSeconds(properties[BUDGET_KEYS.week]), month: budgetSeconds(properties[BUDGET_KEYS.month]) };
+  }
+  /** Sets or clears (null) each budget of a project note, keeping every other property and marking the note as a project note. */
+  async setProjectBudgets(file: TFile, budgets: ProjectBudgets): Promise<void> {
+    await this.app.fileManager.processFrontMatter(file, (raw: Record<string, unknown>) => {
+      raw[PROJECT_KEY] = "project"; if (!hasStart(raw[START_KEY])) raw[START_KEY] = localDate();
+      for (const period of Object.keys(BUDGET_KEYS) as BudgetPeriod[]) { const seconds = budgets[period]; if (seconds === null) delete raw[BUDGET_KEYS[period]]; else raw[BUDGET_KEYS[period]] = Math.round(seconds / 36) / 100; }
+    });
   }
   /** A task takes the colour of its first coloured project. */
   taskColor(task: Task): string | null {
