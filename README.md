@@ -65,7 +65,7 @@ You do not need the panel to use Organized. Put a letter between the brackets of
 | `[!]` | Choose a priority |
 | `[<]` | Schedule it for a date (or clear the date) |
 | `[/]` | Start a timer; its time is recorded |
-| `[t]` | Log time you already worked |
+| `[t]` | Add time: worked or planned |
 | `[*]` | Favourite it |
 | `[j]` | Link it to projects |
 | `[n]` | Turn it into a standalone note |
@@ -258,7 +258,7 @@ Identity and recurrence comments stay hidden in Live Preview, including the line
 | `[s]` | Open the Sources section for inline Markdown references (URLs/Obsidian links, optional labels/citations) |
 | `[j]` | Multi-select project notes; missing selected notes are created in the `Projects/` folder inside the task folder with `organized_type: project` and an `organized_start` date in their frontmatter and **Open / In progress / Ongoing / Done** headings that linked tasks move between as their status changes, and only such notes are listed. A project can have a colour (`organized_color: "#rrggbb"`, set from the Projects tab) shown as a dot beside its name on task cards and as the fill of its blocks in the calendar |
 | `[n]` | Make a standalone note: asks for a folder, optional tags and an optional template, creates a note titled after the todo holding its description (then sources), and replaces the todo with a link to it. If a note of that name exists you can number the new one or link the existing one. The task's other copies are removed and its task note moves to Obsidian's trash. Also on the Task tab as **Make standalone note** Tracked time is kept: a running timer is logged, and a task with tracked sessions keeps a hidden task note so the calendar still shows (and links to) its time. |
-| `[t]` | Add time worked: asks for a start and an end (on the day of the daily note, 9:00–10:00 to begin with), logs the block on the task and the calendar, then restores the todo's own marker. Cancel leaves the `[t]` |
+| `[t]` | Add time (worked or planned, switch with Type; a day ahead starts as planned): asks for a start and an end (on the day of the daily note, 9:00–10:00 to begin with), logs the block on the task and the calendar, then restores the todo's own marker. Cancel leaves the `[t]` |
 | `[+]` | Add a subtask: puts the todo's own marker back, inserts an empty indented todo under it (after its existing subtasks) and asks which task it is, like **Organized: Add subtask**. Needs the note open in the editor, so it is not offered in Reading view |
 | `[r]` | Toggle recurrence in existing/current/future and subsequently created daily notes; clear after success |
 
