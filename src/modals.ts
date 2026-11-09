@@ -5,7 +5,7 @@ import { cleanTags } from "./notes";
 import { freePath, noteName } from "./names";
 import { report } from "./service";
 import { rgbOf } from "./colors";
-import { projectName } from "./repository";
+import { BUDGET_KEYS, BudgetPeriod, MAX_BUDGET_HOURS, projectName, ProjectBudgets } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 import { ONBOARDING_STEPS, OnboardingStep } from "./onboarding";
 import type { ReleaseNote } from "./whatsNew/releaseNotes";
@@ -158,6 +158,40 @@ export class SessionModal extends Modal {
     if (this.edit.logWorked) { const log = this.edit.logWorked; actions.addButton(b => b.setButtonText("Log as worked").onClick(() => { this.close(); void log().catch(report); })); }
     if (this.edit.openTask) { const open = this.edit.openTask; actions.addButton(b => b.setButtonText("Open task").onClick(() => { this.close(); void open().catch(report); })); }
     if (this.edit.remove) { const remove = this.edit.remove; actions.addButton(b => { b.setButtonText("Delete").onClick(() => { this.close(); void remove().catch(report); }); b.buttonEl.addClass("mod-warning"); }); }
+  }
+  onClose(): void { this.contentEl.empty(); }
+}
+
+const BUDGET_ROWS: [BudgetPeriod, string][] = [["total", "Whole project"], ["day", "Per day"], ["week", "Per week"], ["month", "Per month"]];
+/** Asks for a project's time budgets in hours, one per period; a blank field means no budget for that period. */
+export class ProjectBudgetModal extends Modal {
+  constructor(app: App, readonly project: string, readonly current: ProjectBudgets, readonly save: (budgets: ProjectBudgets) => Promise<void>) { super(app); decorate(this); }
+  onOpen(): void {
+    this.titleEl.setText("Project budget"); this.contentEl.addClass("organized-modal");
+    this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-task", text: this.project });
+    this.contentEl.createDiv({ cls: "organized-modal-copy", text: `Hours, blank for none. Kept in the project note (${Object.values(BUDGET_KEYS).join(", ")}).` });
+    const fields = new Map<BudgetPeriod, HTMLInputElement>();
+    for (const [period, label] of BUDGET_ROWS) {
+      this.contentEl.createEl("label", { cls: "organized-modal-label", text: label });
+      const input = this.contentEl.createEl("input", { type: "number", attr: { min: "0", step: "any", inputmode: "decimal", "aria-label": `${label} budget in hours` } });
+      const seconds = this.current[period]; input.value = seconds === null ? "" : String(Math.round(seconds / 36) / 100); fields.set(period, input);
+    }
+    const note = this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-note", attr: { role: "status" } });
+    const read = (): ProjectBudgets | string => {
+      const budgets: ProjectBudgets = { total: null, day: null, week: null, month: null };
+      for (const [period, input] of fields) {
+        if (input.value.trim() === "") continue;
+        const hours = Number(input.value); if (!Number.isFinite(hours) || hours <= 0 || hours > MAX_BUDGET_HOURS) return `Use hours above 0 and up to ${MAX_BUDGET_HOURS}, or leave a field blank.`;
+        budgets[period] = Math.round(hours * 3600);
+      }
+      return budgets;
+    };
+    const paint = () => { const value = read(); note.setText(typeof value === "string" ? value : ""); note.toggleClass("organized-session-problem", typeof value === "string"); };
+    for (const input of fields.values()) input.addEventListener("input", paint);
+    new Setting(this.contentEl).addButton(b => b.setButtonText("Save").setCta().onClick(() => {
+      const value = read(); if (typeof value === "string") { paint(); return; }
+      this.close(); void this.save(value).catch(report);
+    }));
   }
   onClose(): void { this.contentEl.empty(); }
 }

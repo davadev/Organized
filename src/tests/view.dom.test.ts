@@ -8,7 +8,7 @@ import { installObsidianDom } from './__mocks__/obsidianDom';
 import { Notice, Modal } from './__mocks__/obsidian';
 import { localDate } from '../model';
 import { moment } from '../moment';
-import { BudgetModal, DatePicker, SessionModal, TaskPicker } from '../modals';
+import { BudgetModal, ProjectBudgetModal, DatePicker, SessionModal, TaskPicker } from '../modals';
 import { parseTasks } from '../codec';
 
 installObsidianDom();
@@ -570,5 +570,27 @@ describe('compact calendar and contextual task inspector', () => {
     button(view.contentEl, 'Edit budget').click(); await flush(); Array.from((Modal.instances.at(-1) as unknown as BudgetModal).contentEl.querySelectorAll('button')).find(b => b.textContent === 'Remove budget')!.click(); for (let n = 0; n < 6; n++) await flush();
     expect((await repo.read(task.id)).time_budget_seconds).toBeNull(); expect(view.contentEl.querySelector('.organized-budget-bar')).toBeNull();
     await repo.update(task.id, t => ({ ...t, time_budget_seconds: 600 })); owner.selectedTaskId = task.id; view.module = null as any; await view.render(); expect(view.contentEl.querySelector('.organized-budget-bar')).not.toBeNull();
+  });
+  it('shows a bar for each budget a project has on its tasks, summing every task in the project, and sets budgets from the Projects tab', async () => {
+    const { owner, view, repo, service, add } = await fixture(); vi.setSystemTime(new Date(2026, 2, 11, 15, 0, 0)); const folder = repo.projectFolder();
+    const project: any = await add(`${folder}/Site.md`, '---\norganized_type: project\n---\n'); const plain: any = await add(`${folder}/Plain.md`, '---\norganized_type: project\n---\n');
+    const one = await repo.create('One'); const two = await repo.create('Two'); const free = await repo.create('Free');
+    const at = (h: number, m = 0) => new Date(2026, 2, 11, h, m).toISOString();
+    await repo.update(one.id, t => ({ ...t, projects: [project.path], work_sessions: [{ start: at(9), end: at(10) }], time_tracked_seconds: 3600 }));
+    await repo.update(two.id, t => ({ ...t, projects: [project.path], work_sessions: [{ start: at(11), end: at(12) }], time_tracked_seconds: 3600, planned_sessions: [{ start: at(16), end: at(16, 30) }] }));
+    await repo.update(free.id, t => ({ ...t, projects: [plain.path] }));
+    owner.selectedTaskId = one.id; view.tab = 'Task'; await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-budget-bar')).toBeNull(); 
+    const blank = await repo.create('Blank'); await repo.update(blank.id, t => ({ ...t, projects: [project.path] })); owner.selectedTaskId = blank.id; await view.render(); await flush(); expect(view.contentEl.textContent).not.toContain('Tracked so far'); owner.selectedTaskId = one.id;
+    await service.setProjectBudgets(project.path, { total: 36000, day: 18000, week: 7200, month: null }); await view.render(); await flush();
+    expect(view.contentEl.textContent).toContain('Tracked so far'); const bars = Array.from(view.contentEl.querySelectorAll('.organized-budget-bar')); expect(bars).toHaveLength(3);
+    expect(Array.from(view.contentEl.querySelectorAll('.organized-budget-label')).map(l => l.textContent)).toEqual(['Site · all time', 'Site · today', 'Site · this week']);
+    expect(Array.from(view.contentEl.querySelectorAll('.organized-budget-text')).map(l => l.textContent)).toEqual(['2h tracked · 30 min planned · 7h 30min left of 10h', '2h tracked · 30 min planned · 2h 30min left of 5h', '2h tracked · 30 min planned · 30 min over budget']);
+    expect(bars[2].querySelector('.organized-budget-over')).not.toBeNull();
+    owner.selectedTaskId = blank.id; await view.render(); await flush(); expect(view.contentEl.textContent).toContain('Tracked so far'); expect(view.contentEl.querySelectorAll('.organized-budget-bar')).toHaveLength(3);
+    owner.selectedTaskId = free.id; await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-budget-bar')).toBeNull();
+    view.tab = 'Projects'; await view.render(); await flush(); const summaries = Array.from(view.contentEl.querySelectorAll('summary')).map(x => x.textContent); expect(summaries).toContain('Project budgets');
+    const edit = button(view.contentEl, 'Edit budget of Site'); expect(edit.textContent).toBe('Edit budget'); expect(button(view.contentEl, 'Set budget of Plain').textContent).toBe('Set budget');
+    edit.click(); await flush(); const modal = Modal.instances.at(-1) as unknown as ProjectBudgetModal; const fields = Array.from(modal.contentEl.querySelectorAll<HTMLInputElement>('input')); fields[3].value = '40'; fields[1].value = ''; fields[2].value = '';
+    Array.from(modal.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Save')!.click(); for (let n = 0; n < 6; n++) await flush(); expect(repo.projectBudgets(project.path)).toEqual({ total: 36000, day: null, week: null, month: 144000 });
   });
 });

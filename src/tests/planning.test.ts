@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { newTask, setStatus, startPlanned, Task } from "../model";
-import { blockAt, budgetUse, dueEnds, dueStarts, plannable, plannedSeconds } from "../planning";
+import { blockAt, budgetUse, dueEnds, overlap, periodRange, projectUse, dueStarts, plannable, plannedSeconds } from "../planning";
 
 const at = (time: string) => new Date(`2026-03-09T${time}:00Z`).getTime();
 const block = (from: string, to: string) => ({ start: new Date(at(from)).toISOString(), end: new Date(at(to)).toISOString() });
@@ -48,5 +48,28 @@ describe("planning", () => {
     expect(budgetUse(task({ ...base, time_tracked_seconds: 5400, planned_sessions: [] }))!.overPct).toBeCloseTo(100 / 3);
     const running = task({ ...base, planned_sessions: [], time_tracking_started_at: new Date(at("09:00")).toISOString() });
     expect(budgetUse(running, at("09:10"))?.tracked).toBe(1500);
+  });
+  it("works out the day, week and month and counts only the part of a session inside them", () => {
+    const now = new Date(2026, 2, 11, 15, 0).getTime();
+    expect(periodRange("total", now)).toBeNull();
+    expect(periodRange("day", now)).toEqual([new Date(2026, 2, 11).getTime(), new Date(2026, 2, 12).getTime()]);
+    expect(periodRange("month", now)).toEqual([new Date(2026, 2, 1).getTime(), new Date(2026, 3, 1).getTime()]);
+    const [from, to] = periodRange("week", now)!; expect(from <= now && now < to).toBe(true); expect(Math.round((to - from) / 3600000 / 24)).toBe(7);
+    const day = periodRange("day", now)!; const across = [{ start: new Date(2026, 2, 10, 23, 0).toISOString(), end: new Date(2026, 2, 11, 1, 0).toISOString() }, { start: new Date(2026, 2, 9, 9).toISOString(), end: new Date(2026, 2, 9, 10).toISOString() }];
+    expect(overlap(across, day)).toBe(3600); expect(overlap([], day)).toBe(0);
+  });
+  it("sums a project's time over every task linked to it, per period", () => {
+    const now = new Date(2026, 2, 11, 15, 0).getTime(); const at2 = (d: number, h: number, m = 0) => new Date(2026, 2, d, h, m).toISOString(); const P = "Projects/P.md";
+    const a = task({ id: "aaaaaaaa", projects: [P], time_tracked_seconds: 7200, work_sessions: [{ start: at2(11, 9), end: at2(11, 10) }, { start: at2(2, 9), end: at2(2, 10) }], planned_sessions: [{ start: at2(11, 16), end: at2(11, 16, 30) }] });
+    const b = task({ id: "bbbbbbbb", projects: [P, "Projects/Q.md"], status: "completed", time_tracked_seconds: 1800, work_sessions: [{ start: at2(11, 12), end: at2(11, 12, 30) }], planned_sessions: [{ start: at2(11, 17), end: at2(11, 18) }] });
+    const c = task({ id: "cccccccc", projects: [P], time_tracking_started_at: at2(11, 14) });
+    const other = task({ id: "dddddddd", projects: ["Projects/Q.md"], time_tracked_seconds: 99999, work_sessions: [{ start: at2(11, 1), end: at2(11, 2) }] });
+    const future = task({ id: "eeeeeeee", projects: [P], time_tracking_started_at: at2(11, 16) });
+    const tasks = [a, b, c, other, future];
+    expect(projectUse(tasks, P, "day", 36000, now)).toMatchObject({ tracked: 3600 + 1800 + 3600, planned: 1800 });
+    expect(projectUse(tasks, P, "total", 360000, now)).toMatchObject({ tracked: 7200 + 1800 + 3600, planned: 1800 });
+    expect(projectUse(tasks, P, "month", 36000, now)).toMatchObject({ tracked: 3600 + 3600 + 1800 + 3600, planned: 1800 });
+    expect(projectUse(tasks, "Projects/Q.md", "day", 3600, now)).toMatchObject({ tracked: 1800 + 3600, left: -1800 });
+    expect(projectUse(tasks, "Projects/None.md", "day", 3600, now)).toMatchObject({ tracked: 0, planned: 0, left: 3600 });
   });
 });

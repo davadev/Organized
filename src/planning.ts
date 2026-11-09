@@ -1,4 +1,5 @@
 import { elapsed, Task, WorkSession } from "./model";
+import { moment } from "./moment";
 import { seconds } from "./sessions";
 
 /** Total length of the time set aside for a task. */
@@ -39,11 +40,36 @@ export interface BudgetUse {
   /** Share of the bar (0 to 100) taken by tracked time, planned time and the part beyond the budget; the three sum to 100 and, when over budget, the bar is the whole total rather than the budget. */
   trackedPct: number; plannedPct: number; overPct: number;
 }
-/** Tracked plus planned time measured against a task's budget, or null when it has none. Tracked time that fits fills the bar first; planned time follows; whatever passes the budget is shown as the overrun. */
-export function budgetUse(task: Task, now = Date.now()): BudgetUse | null {
-  const budget = task.time_budget_seconds; if (budget === null) return null;
-  const tracked = elapsed(task, now), planned = plannedSeconds(task), total = tracked + planned, scale = Math.max(budget, total);
+/** Tracked and planned seconds measured against a budget: tracked time that fits fills the bar first, planned time follows, and whatever passes the budget is the overrun. */
+export function fillOf(budget: number, tracked: number, planned: number): BudgetUse {
+  const total = tracked + planned, scale = Math.max(budget, total);
   const over = Math.max(0, total - budget), within = total - over;
   const trackedFit = Math.min(tracked, within);
   return { budget, tracked, planned, left: budget - total, trackedPct: 100 * trackedFit / scale, plannedPct: 100 * (within - trackedFit) / scale, overPct: 100 * over / scale };
 }
+/** A task's tracked plus planned time measured against its own budget, or null when it has none. */
+export const budgetUse = (task: Task, now = Date.now()): BudgetUse | null => task.time_budget_seconds === null ? null : fillOf(task.time_budget_seconds, elapsed(task, now), plannedSeconds(task));
+
+/** The span a project budget covers: the whole project, or the current day, week or month. */
+export type Period = "total" | "day" | "week" | "month";
+export const PERIOD_LABELS: Record<Period, string> = { total: "all time", day: "today", week: "this week", month: "this month" };
+/** Local-time start and end (ms) of the day, week (by the Obsidian locale, like the calendar) or month holding `now`; null for the whole project. */
+export function periodRange(period: Period, now: number): [number, number] | null {
+  if (period === "total") return null;
+  const start = moment(now).startOf(period); return [start.valueOf(), start.clone().add(1, period).valueOf()];
+}
+/** Seconds of the sessions that fall inside a range (a session crossing its edge counts only for the part inside). */
+export const overlap = (sessions: WorkSession[], range: [number, number]): number => sessions.reduce((sum, s) => sum + Math.max(0, Math.min(Date.parse(s.end), range[1]) - Math.max(Date.parse(s.start), range[0])), 0) / 1000;
+/** Tracked plus planned time of every task in a project over a period, measured against one of the project's budgets. */
+export function projectUse(tasks: Task[], project: string, period: Period, budget: number, now = Date.now()): BudgetUse {
+  const range = periodRange(period, now); let tracked = 0, planned = 0;
+  for (const task of tasks) {
+    if (!task.projects.includes(project)) continue;
+    const plans = plannable(task) ? task.planned_sessions : [];
+    if (!range) { tracked += elapsed(task, now); planned += plannedOf(plans); continue; }
+    const running = task.time_tracking_started_at !== null && Date.parse(task.time_tracking_started_at) < now ? [{ start: task.time_tracking_started_at, end: new Date(now).toISOString() }] : [];
+    tracked += overlap([...task.work_sessions, ...running], range); planned += overlap(plans, range);
+  }
+  return fillOf(budget, Math.floor(tracked), Math.floor(planned));
+}
+const plannedOf = (blocks: WorkSession[]): number => blocks.reduce((sum, b) => sum + seconds(b), 0);
