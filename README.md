@@ -77,7 +77,7 @@ Almost everything the panel does to a todo has a letter (the [full list](#marker
 <img src="resources/screenshots/task-minimal-annotated.png" alt="The Task tab for a task with nothing added: a title, a status, an Add details menu and an empty description." width="360">
 
 - **1** · **Status**: open, in progress, completed or canceled. In progress records the time.
-- **2** · **Add details…**: priority, schedule, timer, recurrence, projects, subtasks, description, sources. Each appears as its own card only when you ask for it.
+- **2** · **Add details…**: priority, schedule, timer, recurrence, projects, subtasks, description, sources. Each appears only when you ask for it.
 - **3** · **Favourite**: the star, in case this is one to keep close.
 
 That is all a todo costs until it needs more: a title and a status. No empty form with twenty fields; the panel shows only what you chose to use. If this is all you ever want, [stay here](#use-as-little-or-as-much-as-you-like).
@@ -87,16 +87,14 @@ That is all a todo costs until it needs more: a title and a status. No empty for
 <img src="resources/screenshots/task-annotated.png" alt="The Task tab for a task that uses every card: status, description, subtasks, priority, schedule, a running timer, projects, sources and a strip of squares showing how often it moved." width="360">
 
 - **1** · **Status**, and **2** · **Add details…**: the same two controls as above.
-- **3** · **Description** is the text of the task note itself. Write `[[Note]]` in it to link any note.
-- **4** · **Subtasks** with their progress. Indent a todo under another in your note (Tab) and it becomes a subtask; completing, canceling or forwarding the parent takes the open ones along.
-- **5** · Three buttons to **add a subtask**, **link an existing task** or **make this a subtask of another**. Each row has a small unlink button.
-- **6** · **Priority**.
-- **7** · **Schedule**: pick a date, or clear it again. Scheduled tasks arrive in that day's note.
-- **8** · **Timer**: *Tracked so far* (the time worked, **Stop timer**, **Add time** by hand (past blocks are worked, future ones planned), a list of sessions you can correct) and *Planned* (the time you set aside, and a list of planned blocks), so you can compare an estimate with what it took. **Set budget** adds an optional time budget: a slim bar in your accent colour fills with tracked time, planned time follows lighter, and a budget that is passed turns the overrun red and the bar grows to show it. Without a budget there is no bar.
-- **9** · **Projects** the task belongs to.
-- **10** · **Sources**: links and notes it came from.
-- **11** · **Moves**: one small square per time the task was scheduled or carried over. Squares turn from green to red against how often *you* usually carry things over (per project, once a project has enough tasks), and take your accent colour when you picked the date yourself. Hover a square, or open *Details*, to see each move.
-- **12** · **Open task note**, **Make standalone note**, **Delete task**.
+- **3** · **Priority**, **Schedule** (pick a date, or clear it again; scheduled tasks arrive in that day's note), **Recurring** and the task's **Projects** sit together as small pills in one wrapping row, above the description. A project pill takes its faint project colour, is cut short when the name is long, and opens the project note when tapped; the folder button links more projects.
+- **4** · **Description** is the text of the task note itself. Write `[[Note]]` in it to link any note.
+- **5** · **Subtasks** with their progress. Indent a todo under another in your note (Tab) and it becomes a subtask; completing, canceling or forwarding the parent takes the open ones along.
+- **6** · Three buttons to **add a subtask**, **link an existing task** or **make this a subtask of another**. Each row has a small unlink button.
+- **7** · **Timer**: one line with the time worked and, when you have planned some, the time set aside; **Start timer**, **Add time** by hand (past blocks are worked, future ones planned), **Budget**, and lists of sessions and planned blocks you can correct, so you can compare an estimate with what it took. **Set budget** adds an optional time budget: a slim bar in your accent colour fills with tracked time, planned time follows lighter, and a budget that is passed turns the overrun red and the bar grows to show it. Without a budget there is no bar.
+- **8** · **Sources**: links and notes it came from.
+- **9** · **Moves**: one small square per time the task was scheduled or carried over. Squares turn from green to red against how often *you* usually carry things over (per project, once a project has enough tasks), and take your accent colour when you picked the date yourself. Hover a square, or open *Details*, to see each move.
+- **10** · **Open task note**, **Make standalone note**, **Delete task**.
 
 ### Calendar: month, week and day
 

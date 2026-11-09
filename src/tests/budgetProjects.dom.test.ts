@@ -38,8 +38,8 @@ describe('a task in several projects', () => {
   it('shows only the projects that have budgets, in the order the task lists them, and ignores stale paths', async () => {
     const { repo, project, show, lines, view } = await fixture(); const plain = await project('Plain'); const b = await project('Beta', { weekly: 5 }); const c = await project('Gamma', { total: 9, monthly: 3 });
     const task = await repo.create('Mixed'); await repo.update(task.id, t => ({ ...t, projects: ['Gone/Missing.md', c.path, plain.path, b.path] }));
-    await show(task.id); expect(lines()).toEqual(['Gamma · all time', 'Gamma · this month', 'Beta · this week']); expect(view.contentEl.textContent).toContain('Tracked so far');
-    await repo.update(task.id, t => ({ ...t, projects: ['Gone/Missing.md', plain.path] })); await show(task.id); expect(view.contentEl.textContent).not.toContain('Tracked so far');
+    await show(task.id); expect(lines()).toEqual(['Gamma · all time', 'Gamma · this month', 'Beta · this week']); expect(view.contentEl.querySelector('.organized-timer-value')).not.toBeNull();
+    await repo.update(task.id, t => ({ ...t, projects: ['Gone/Missing.md', plain.path] })); await show(task.id); expect(view.contentEl.querySelector('.organized-timer-value')).toBeNull();
   });
   it('draws a bar for every budget of many projects without breaking', async () => {
     const { repo, project, show, lines, view } = await fixture(); const paths: string[] = [];

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **A denser task panel.** Priority, Schedule, Recurring and the linked projects now sit together as small icon pills in one wrapping row instead of a titled card each; project pills carry a faint tint of the project colour, are cut short when long and open the project note when tapped. The Timer card is one line (`4h tracked · 1h planned`) with Start, Add time and Budget side by side, and an empty Description is a single *Add description…* button. Same controls, much less scrolling on a phone.
+
 - **One Add time dialog for worked and planned time.** Typing `[t]` in a todo, or choosing *Add time* in the phone long-press menu, now opens the same dialog as the calendar, and decides for itself: a block that has ended is saved as time worked, one still to come as planned time (the dialog says which). The task's Timer card has a single **Add time** button.
 
 - Fixed a very small project budget (a few seconds) vanishing when saved, and a done or canceled task's leftover planned blocks counting against its own time budget (project bars already ignored them). Also: renaming or moving a project note now moves its tasks' links along (before, its budgets and colour stopped applying to them); time from a todo that became a standalone note keeps counting toward its project's budgets; and a project linked twice on a task is listed once.

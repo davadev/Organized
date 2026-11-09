@@ -15,6 +15,8 @@ installObsidianDom();
 const task = newTask('A task title that stays readable at phone widths', 'task1234');
 const at = (day: number, hour: number, minute = 0) => new Date(2026, 2, day, hour, minute).toISOString();
 const browseTask = { ...task, work_sessions: [{ start: at(4, 13), end: at(4, 17, 30) }, { start: at(2, 9), end: at(2, 12) }], starred: true, projects: ['Research and project notes.md', 'Reading list.md'], priority: 'high' };
+const panelTask = { ...task, priority: 'high', scheduled: '2026-03-12', recurring: true, projects: ['A project with a rather long name that has to be cut short.md', 'Reading list.md', 'Notes.md'], time_tracked_seconds: 14400, work_sessions: [{ start: at(4, 9), end: at(4, 13) }], planned_sessions: [{ start: at(12, 9), end: at(12, 10, 30) }], time_budget_seconds: 18000 };
+let showPanelTask = false;
 const doneTask = { ...newTask('A finished task', 'task9001'), status: 'completed', starred: true, work_sessions: [{ start: at(4, 9), end: at(4, 10, 30) }] };
 const activeTask = { ...newTask('A task in progress', 'task9002'), status: 'in_progress', starred: true, work_sessions: [{ start: at(4, 10), end: at(4, 11) }, { start: at(4, 14), end: at(4, 15) }] };
 const canceledTask = { ...newTask('A canceled task', 'task5678'), status: 'canceled' };
@@ -28,7 +30,7 @@ const owner: any = {
   saveSettings() {}, onEditorUpdate() {}, deleteTask: async () => undefined,
   assertWritable() {}, run: async (fn: () => unknown) => fn(), contextFor: () => null,
   pickProjects() {}, setHideClosedProjects(value: boolean) { owner.settings.hideClosedProjects = value; }, saveModule: async () => undefined, refresh() {},
-  repo: { projectFolder: () => 'Tasks/Projects', taskColor: (t: any) => t.projects?.length ? '#3b82f6' : null, projectColor: () => '#3b82f6', projectBudgets: () => ({ total: null, day: null, week: null, month: null }), list: async () => [browseTask, doneTask, activeTask, canceledTask], file: (path: string) => path.startsWith('Tasks/') || path.startsWith('Daily/2026-03') ? { path } : null, read: async () => task, taskPath: () => 'Tasks/task1234.md', sourcePath: () => 'Tasks/task1234.md', taskFile: () => ({ path: 'Tasks/task1234.md' }), resolve: async () => ({ path: 'Tasks/task1234.md' }), readText: async () => note, parentOf: async () => null, subtasksOf: async (t: any) => t.id === task.id ? [doneTask, activeTask, newTask('A third subtask whose long title has to wrap on a narrow phone', 'task9003'), canceledTask] : [], progress: async () => null },
+  repo: { projectFolder: () => 'Tasks/Projects', taskColor: (t: any) => t.projects?.length ? '#3b82f6' : null, projectColor: () => '#3b82f6', projectBudgets: () => ({ total: null, day: null, week: null, month: null }), list: async () => [browseTask, doneTask, activeTask, canceledTask], file: (path: string) => path.startsWith('Tasks/') || path.startsWith('Daily/2026-03') ? { path } : null, read: async () => showPanelTask ? panelTask : task, taskPath: () => 'Tasks/task1234.md', sourcePath: () => 'Tasks/task1234.md', taskFile: () => ({ path: 'Tasks/task1234.md' }), resolve: async () => ({ path: 'Tasks/task1234.md' }), readText: async () => note, parentOf: async () => null, subtasksOf: async (t: any) => t.id === task.id ? [doneTask, activeTask, newTask('A third subtask whose long title has to wrap on a narrow phone', 'task9003'), canceledTask] : [], progress: async () => null },
    service: { daily: { path: (d: string) => `Daily/${d}.md`, open: async () => null }, refs: async () => [], retiredWork: async () => [], reconcile: async () => undefined, resolve: async (context: any) => ({ text: noteTasksDoc, line: context.line }) },
    taskSourceEditor: () => ({ editor: noteTasksEditor, file: noteTasksFile }), taskLines: async () => parseTasks(noteTasksDoc),
 };
@@ -37,6 +39,7 @@ const root = document.querySelector('#app')!; root.appendChild(view.contentEl);
 let editor: EditorView | null = null;
 let modal: DatePicker | SessionModal | NoteConversionModal | OnboardingModal | RetireModal | WhatsNewModal | null = null;
 (window as any).scene = async (tab: string) => {
+  showPanelTask = tab === 'Task';
   editor?.destroy(); editor = null; modal?.close(); modal = null; root.replaceChildren();
   if (tab === 'Settings' || tab === 'LegacySettings') {
     const settings = new OrganizedSettingsTab(app, owner);

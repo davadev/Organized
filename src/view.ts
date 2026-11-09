@@ -179,8 +179,9 @@ export class OrganizedInspectorView extends ItemView {
     if (this.editingModule === section) { this.inlineEditor(box, id, section, text); return; }
     if (text) await renderMarkdownLinks(this.app, text, box.createDiv({ cls: "organized-task-notes" }), filePath, this.markdown);
     // Only Description renders without text; other empty sections stay hidden.
-    else box.createDiv({ cls: "organized-muted", text: "Add context, details or links. Write [[Note]] to link a note." });
-    this.button(box, `${text ? "Edit" : "Add"} ${section.toLowerCase()}`, () => { this.editingModule = section; this.module = section; return this.render(); });
+    const open = () => { this.editingModule = section; this.module = section; return this.render(); };
+    if (text) { this.button(box, `Edit ${section.toLowerCase()}`, open); return; }
+    const add = this.button(box, `Add ${section.toLowerCase()}…`, open); add.addClass("organized-add-module"); add.setAttribute("aria-label", `Add ${section.toLowerCase()}`); add.title = "Add context, details or links. Link a note with double square brackets.";
   }
   /** Moves the editor cursor off every task line, which is what switches the Task tab back to the note overview. */
   private async showNoteTasks(): Promise<void> {
@@ -286,6 +287,38 @@ export class OrganizedInspectorView extends ItemView {
       const budgets = this.owner.repo.projectBudgets(project);
       const set = (Object.keys(BUDGET_KEYS) as BudgetPeriod[]).filter(period => budgets[period] !== null);
       this.button(row, set.length ? "Edit budget" : "Set budget", () => new ProjectBudgetModal(this.app, this.projectLabel(project), budgets, next => this.owner.run(() => this.owner.service.setProjectBudgets(project, next))).open()).setAttribute("aria-label", `${set.length ? "Edit" : "Set"} budget of ${this.projectLabel(project)}`);
+    }
+  }
+  /** Priority, schedule, recurrence and linked projects as small icon-led pills in one wrapping row, instead of a titled card each. */
+  private propertyStrip(details: HTMLElement, task: Task): void {
+    const id = task.id; const showPriority = task.priority !== "none" || this.module === "Priority"; const showSchedule = task.scheduled !== null || this.module === "Schedule";
+    const showRecurring = task.recurring || task.recurrence_periods.length > 0 || this.module === "Recurring"; const showProjects = task.projects.length > 0 || this.module === "Projects";
+    if (!showPriority && !showSchedule && !showRecurring && !showProjects) return;
+    const strip = details.createDiv({ cls: "organized-prop-strip" });
+    const pill = (host: HTMLElement, tag: "div" | "span", icon: string, label: string, module: string) => {
+      const el = host.createEl(tag, { cls: "organized-prop", attr: { title: label } }); setIcon(el.createSpan({ cls: "organized-prop-icon", attr: { "aria-hidden": "true" } }), icon);
+      if (this.module === module) el.addClass("organized-selected-module"); return el;
+    };
+    const action = (icon: string, label: string, text: string, module: string, run: () => Promise<unknown> | void): HTMLButtonElement => {
+      const b = this.button(strip, "", run); b.addClass("organized-prop"); b.setAttribute("aria-label", label); b.title = label; setIcon(b.createSpan({ cls: "organized-prop-icon", attr: { "aria-hidden": "true" } }), icon); b.createSpan({ cls: "organized-prop-text", text });
+      if (this.module === module) b.addClass("organized-selected-module"); return b;
+    };
+    if (showPriority) this.select(pill(strip, "div", "flag", "Priority", "Priority"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.service.setPriority(id, value as Task["priority"], this.owner.context?.line.id === id ? this.owner.context : undefined); this.owner.refresh(); }); });
+    if (showSchedule) action("calendar", task.scheduled ? `Schedule: ${task.scheduled}` : "Schedule", task.scheduled ?? "Choose date", "Schedule", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined)), task.scheduled ? () => this.owner.run(() => this.owner.service.unschedule(id)) : undefined).open(); });
+    if (showRecurring) {
+      const span = task.recurrence_periods.length ? `: ${task.recurrence_periods[0].start} → ${task.recurring ? "active" : task.recurrence_periods[task.recurrence_periods.length - 1].stop}` : "";
+      const toggle = action("repeat", "Recurring", task.recurring ? "On" : "Off", "Recurring", () => this.owner.run(() => this.owner.service.recurrence(id, this.owner.context?.line.id === id ? this.owner.context : undefined)));
+      toggle.title = `Recurring${span}`; toggle.setAttribute("role", "switch"); toggle.setAttribute("aria-checked", String(task.recurring));
+    }
+    if (showProjects) {
+      for (const project of task.projects) {
+        const name = this.projectLabel(project); const note = this.owner.repo.file(project); const color = this.owner.repo.projectColor(project);
+        const chip = note ? this.button(strip, "", () => this.app.workspace.getLeaf(false).openFile(note)) : strip.createSpan();
+        chip.addClass("organized-prop", "organized-prop-project"); chip.setAttribute("aria-label", note ? `Open project ${name}` : `Project ${name}`); chip.title = name; chip.createSpan({ cls: "organized-prop-text", text: name });
+        if (color) { chip.setAttribute("data-project", ""); chip.setCssProps({ "--organized-chip-bg": rgbOf(color) }); }
+      }
+      const link = this.iconButton(strip, "Link projects or topics", "plus", () => this.owner.pickProjects(task)); link.addClass("organized-prop");
+      if (this.module === "Projects") link.addClass("organized-selected-module");
     }
   }
   /** The project's name as a small label, in the project's colour when it has one. */
@@ -547,30 +580,20 @@ export class OrganizedInspectorView extends ItemView {
     const file = await this.owner.repo.resolve(id, "showing the task"); const body = splitNote(await this.owner.repo.readText(file)).body;
     if (generation !== this.renderId) return;
     const details = host.createDiv({ cls: "organized-task-details" });
+    this.propertyStrip(details, task);
     await this.moduleCard(details, file.path, id, "Description", noteSection(body, "Description"));
     await this.subtaskCard(details, task);
-    if (task.priority !== "none" || this.module === "Priority") this.select(this.card(details, "Priority", "flag"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.service.setPriority(id, value as Task["priority"], this.owner.context?.line.id === id ? this.owner.context : undefined); this.owner.refresh(); }); });
-    if (task.scheduled || this.module === "Schedule") this.button(this.card(details, "Schedule", "calendar"), task.scheduled ?? "Choose date", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined)), task.scheduled ? () => this.owner.run(() => this.owner.service.unschedule(id)) : undefined).open(); });
     if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || task.planned_sessions.length || task.time_budget_seconds !== null || this.hasProjectBudget(task) || this.module === "Timer") {
-      const timer = this.card(details, "Timer", "timer"); timer.createDiv({ cls: "organized-timer-label", text: "Tracked so far" }); const row = timer.createDiv({ cls: "organized-timer-row" });
-      row.createDiv({ cls: "organized-timer-value", text: `${formatMinutes(Math.floor(elapsed(task) / 60))}${task.time_tracking_started_at ? " · running" : ""}` });
+      const timer = this.card(details, "Timer", "timer"); const planned = plannedSeconds(task);
+      timer.createDiv({ cls: "organized-timer-value", text: `${formatMinutes(Math.floor(elapsed(task) / 60))} tracked${task.time_tracking_started_at ? " · running" : ""}${planned ? ` · ${formatMinutes(Math.floor(planned / 60))} planned` : ""}` });
+      const row = timer.createDiv({ cls: "organized-timer-row" });
       this.button(row, task.time_tracking_started_at ? "Stop timer" : "Start timer", () => this.owner.run(() => this.owner.service.status(id, task.time_tracking_started_at ? "open" : "in_progress", this.owner.context ?? undefined)));
       this.button(row, "Add time", () => this.editSession(task, null, localDate(), null));
-      this.button(row, task.time_budget_seconds === null ? "Set budget" : "Edit budget", () => new BudgetModal(this.app, task.title, task.time_budget_seconds, seconds => this.owner.run(() => this.owner.service.setBudget(id, seconds))).open());
+      const budget = this.button(row, "Budget", () => new BudgetModal(this.app, task.title, task.time_budget_seconds, seconds => this.owner.run(() => this.owner.service.setBudget(id, seconds))).open()); budget.setAttribute("aria-label", task.time_budget_seconds === null ? "Set budget" : "Edit budget");
       const own = budgetUse(task); if (own) this.budgetBar(timer, own);
       await this.projectBars(timer, task);
       if (task.work_sessions.length) this.sessionList(timer, task);
-      timer.createDiv({ cls: "organized-timer-label", text: "Planned" }); timer.createDiv({ cls: "organized-timer-value", text: formatMinutes(Math.floor(plannedSeconds(task) / 60)) });
       if (task.planned_sessions.length) this.sessionList(timer, task, "planned");
-    }
-    if (task.recurring || task.recurrence_periods.length || this.module === "Recurring") {
-      const recurring = this.card(details, "Recurring", "repeat");
-      const toggle = this.button(recurring, task.recurring ? "On" : "Off", () => this.owner.run(() => this.owner.service.recurrence(id, this.owner.context?.line.id === id ? this.owner.context : undefined))); toggle.setAttribute("role", "switch"); toggle.setAttribute("aria-label", "Recurring"); toggle.setAttribute("aria-checked", String(task.recurring));
-      if (task.recurrence_periods.length) recurring.createDiv({ cls: "organized-muted", text: `${task.recurrence_periods[0].start} → ${task.recurring ? "active" : task.recurrence_periods[task.recurrence_periods.length - 1].stop}` });
-    }
-    if (task.projects.length || this.module === "Projects") {
-      const projects = this.card(details, "Projects", "folder"); for (const project of task.projects) projects.createDiv({ text: this.projectLabel(project) });
-      this.button(projects, "Link projects or topics", () => this.owner.pickProjects(task));
     }
     const sources = noteSection(body, "Sources");
     if (sources || this.module === "Sources") await this.moduleCard(details, file.path, id, "Sources", sources);
