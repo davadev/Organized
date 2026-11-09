@@ -123,3 +123,17 @@ describe("Markdown task codec", () => {
     for (const scope of ['list', 'section', 'first'] as const) expect(titles(sortTasks(text, 2, scope, priorities)), scope).toEqual(['A', 'A high', 'A low', 'B', 'B low', 'B high']);
   });
 });
+
+describe('inserting under a lone heading', () => {
+  it('reuses that heading when the note nests it deeper, instead of adding a copy each time', () => {
+    const lone = [{ level: 2, text: 'Habits', ordinal: 0 }];
+    let text = '# Day\n\n## Habits\n\n## Notes\nText\n';
+    for (const title of ['One', 'Two', 'Three']) { const result = insertTask(text, `- [ ] ${title}`, lone); expect(result.missing).toBe(false); text = result.text; }
+    expect(text.match(/## Habits/g)).toHaveLength(1); expect(text.indexOf('Three')).toBeLessThan(text.indexOf('## Notes'));
+  });
+  it('still creates the heading when no heading of that name and level exists, and picks the right one of several', () => {
+    const lone = [{ level: 2, text: 'Habits', ordinal: 0 }];
+    expect(insertTask('# Day\n', '- [ ] One', lone).missing).toBe(true); expect(insertTask('# Day\n### Habits\n', '- [ ] One', lone).missing).toBe(true);
+    const second = insertTask('# A\n## Habits\n# B\n## Habits\n## End\n', '- [ ] One', [{ level: 2, text: 'Habits', ordinal: 1 }]); expect(second.missing).toBe(false); expect(second.text.indexOf('One')).toBeGreaterThan(second.text.lastIndexOf('## Habits')); expect(second.text.indexOf('One')).toBeLessThan(second.text.indexOf('## End'));
+  });
+});
