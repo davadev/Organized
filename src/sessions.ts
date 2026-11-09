@@ -12,6 +12,8 @@ export function isoFromInput(value: string): string | null {
 }
 export const MAX_SESSION_HOURS = 24;
 export type SessionKind = "worked" | "planned";
+/** What a new block is, from its times alone: one that has ended is time worked, one still to come (or under way) is planned. */
+export const kindOf = (end: string | null, now = Date.now()): SessionKind => end !== null && Date.parse(end) <= now + 60000 ? "worked" : "planned";
 /** Why a session cannot be saved, or null. Worked time cannot be in the future (a running timer records that); a planned block can be anywhere. */
 export function sessionProblem(start: string | null, end: string | null, now = Date.now(), kind: SessionKind = "worked"): string | null {
   if (!start || !end) return "Enter both a start and an end.";

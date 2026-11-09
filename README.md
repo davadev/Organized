@@ -65,7 +65,7 @@ You do not need the panel to use Organized. Put a letter between the brackets of
 | `[!]` | Choose a priority |
 | `[<]` | Schedule it for a date (or clear the date) |
 | `[/]` | Start a timer; its time is recorded |
-| `[t]` | Add time: worked or planned |
+| `[t]` | Add time: worked or planned, by its times |
 | `[*]` | Favourite it |
 | `[j]` | Link it to projects |
 | `[n]` | Turn it into a standalone note |
@@ -92,7 +92,7 @@ That is all a todo costs until it needs more: a title and a status. No empty for
 - **5** · Three buttons to **add a subtask**, **link an existing task** or **make this a subtask of another**. Each row has a small unlink button.
 - **6** · **Priority**.
 - **7** · **Schedule**: pick a date, or clear it again. Scheduled tasks arrive in that day's note.
-- **8** · **Timer**: *Tracked so far* (the time worked, **Stop timer**, **Add time** by hand, a list of sessions you can correct) and *Planned* (the time you set aside, **Plan time**, and a list of planned blocks), so you can compare an estimate with what it took.
+- **8** · **Timer**: *Tracked so far* (the time worked, **Stop timer**, **Add time** by hand (past blocks are worked, future ones planned), a list of sessions you can correct) and *Planned* (the time you set aside, and a list of planned blocks), so you can compare an estimate with what it took.
 - **9** · **Projects** the task belongs to.
 - **10** · **Sources**: links and notes it came from.
 - **11** · **Moves**: one small square per time the task was scheduled or carried over. Squares turn from green to red against how often *you* usually carry things over (per project, once a project has enough tasks), and take your accent colour when you picked the date yourself. Hover a square, or open *Details*, to see each move.
@@ -258,7 +258,7 @@ Identity and recurrence comments stay hidden in Live Preview, including the line
 | `[s]` | Open the Sources section for inline Markdown references (URLs/Obsidian links, optional labels/citations) |
 | `[j]` | Multi-select project notes; missing selected notes are created in the `Projects/` folder inside the task folder with `organized_type: project` and an `organized_start` date in their frontmatter and **Open / In progress / Ongoing / Done** headings that linked tasks move between as their status changes, and only such notes are listed. A project can have a colour (`organized_color: "#rrggbb"`, set from the Projects tab) shown as a dot beside its name on task cards and as the fill of its blocks in the calendar |
 | `[n]` | Make a standalone note: asks for a folder, optional tags and an optional template, creates a note titled after the todo holding its description (then sources), and replaces the todo with a link to it. If a note of that name exists you can number the new one or link the existing one. The task's other copies are removed and its task note moves to Obsidian's trash. Also on the Task tab as **Make standalone note** Tracked time is kept: a running timer is logged, and a task with tracked sessions keeps a hidden task note so the calendar still shows (and links to) its time. |
-| `[t]` | Add time (worked or planned, switch with Type; a day ahead starts as planned): asks for a start and an end (on the day of the daily note, 9:00–10:00 to begin with), logs the block on the task and the calendar, then restores the todo's own marker. Cancel leaves the `[t]` |
+| `[t]` | Add time (a block that has ended is saved as time worked, one still to come as planned time): asks for a start and an end (on the day of the daily note, 9:00–10:00 to begin with), logs the block on the task and the calendar, then restores the todo's own marker. Cancel leaves the `[t]` |
 | `[+]` | Add a subtask: puts the todo's own marker back, inserts an empty indented todo under it (after its existing subtasks) and asks which task it is, like **Organized: Add subtask**. Needs the note open in the editor, so it is not offered in Reading view |
 | `[r]` | Toggle recurrence in existing/current/future and subsequently created daily notes; clear after success |
 
