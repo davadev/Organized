@@ -486,7 +486,7 @@ export default class Organized extends Plugin {
     else await this.run(() => this.service.marker(context, marker));
   }
   /** The marker a task's own status shows (a running timer is `[/]`). */
-  private ownMarker(task: Task): string { return task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.time_tracking_started_at ? "/" : " "; }
+  private ownMarker(task: Task): string { return task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.status === "in_progress" ? "/" : " "; }
   /** `[+]`: puts the todo's own marker back, then adds an empty subtask under it as the command does. */
   private async addSubtaskFromMarker(task: Task, context: Context): Promise<void> {
     await this.run(() => this.service.clean(context, this.ownMarker(task)));

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed a task started by its planned time sometimes showing in progress in the side panel while its todo kept `[ ]`: if the note changed at that moment (you were typing, or the editor saved older text over the change), the marker was lost and never retried. While a planned block is running the marker is now checked every minute and put back in every note that holds the todo; a status you chose yourself is never rewritten. Also fixed `[t]` (add time) turning `/` back into `[ ]` on a task started by a planned block, and forwarding or linking such a task to a project writing `[ ]` instead of `[/]`.
 - Fixed a todo that only lives in an earlier daily note not showing its status: when it was set in progress (by a planned block, the timer or the side panel), done or canceled, its checkbox stayed `[ ]`. That line now follows the status. A todo that also has a line in today's, a later or an undated note keeps the old note as history, and forwarded `[>]`/`[<]` lines are never changed.
 
 - **Fold Description, Subtasks and Timer.** Each of these task panel cards now has a chevron to fold it away; a folded card keeps a one-line summary (the first line of the description, `1 of 3 done`, the time tracked) and the choice is remembered for every task. The Timer is tighter: its start/stop, add time and budget buttons are small icons in the header row, and the budget bar no longer repeats the numbers already in the summary.

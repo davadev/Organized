@@ -100,7 +100,7 @@ export class TaskService {
       movement_history: current.scheduled === date ? current.movement_history : [...current.movement_history, event] }));
     changes.push({ file: taskFile, before: beforeTask, after: await this.repo.readText(taskFile) });
     const under = options.under !== undefined ? options.under : (await this.repo.parentOf(task.id))?.id ?? null;
-    await this.insert(target, next, task.time_tracking_started_at && kind === "forward" ? "/" : " ", false, changes, under);
+    await this.insert(target, next, task.status === "in_progress" && kind === "forward" ? "/" : " ", false, changes, under);
     if (target.path !== context.file.path) {
       const current = await this.resolve(context);
       await this.edit(context.file, current.text, replaceTask(current.text, current.line, { marker: kind === "forward" ? (this.daily.date(context.file.path) ? ">" : " ") : "<" }), changes);
@@ -194,8 +194,13 @@ export class TaskService {
     const note = changes ? this.repo.taskFile(id) : null; const noteBefore = note ? await this.repo.readText(note) : "";
     const task = await this.repo.update(id, change);
     if (note) changes!.push({ file: note, before: noteBefore, after: await this.repo.readText(note) });
+    await this.syncLines(task, status, await this.repo.occurrences(id), context, changes);
+    this.changed();
+  }
+  /** Writes the marker of a task's status into its todo lines (today's and later daily notes, undated notes, project notes; see the rules below). */
+  private async syncLines(task: Task, status: Status, occurrences: { file: TFile; text: string; tasks: TaskLine[] }[], context?: Context, changes?: Change[]): Promise<void> {
     const marker = task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.status === "in_progress" ? "/" : " ";
-    const today = localDate(); const occurrences = await this.repo.occurrences(id);
+    const today = localDate();
     // Earlier daily notes are history, except for a todo that only ever lived in one of them (never carried forward): that line is the task's only one, so it follows the status.
     const dated = (o: { file: TFile }) => this.daily.date(o.file.path); const live = occurrences.some(o => { const d = dated(o); return !d || d >= today; });
     const latestPast = live ? undefined : occurrences.reduce<(typeof occurrences)[number] | undefined>((best, o) => !best || dated(o)! > dated(best)! ? o : best, undefined);
@@ -210,11 +215,10 @@ export class TaskService {
         after = replaceTask(after, line, { marker: occurrenceMarker });
       }
       // In a project note the line also moves to the heading for the new status.
-      if (occurrence.tasks.length === 1 && this.isProjectFile(occurrence.file)) after = moveTask(after, id, projectSection(task));
+      if (occurrence.tasks.length === 1 && this.isProjectFile(occurrence.file)) after = moveTask(after, task.id, projectSection(task));
       await this.edit(occurrence.file, occurrence.text, after, changes);
       if (!this.isProjectFile(occurrence.file) && !(date && date < today)) await this.resortAfter(occurrence.file, task, changes);
     }
-    this.changed();
   }
   async title(id: string, title: string): Promise<void> {
     if (!title.trim() || /[\r\n]/.test(title)) throw new Error("Use a nonempty, single-line title.");
@@ -440,7 +444,7 @@ export class TaskService {
       const file = await this.repo.ensure(notePath, projectTemplate()); await this.repo.markProject(file);
       // A linked task lands under the heading for its status, so the project reads as open / in progress / done.
       const section = sectionNamed(await this.repo.readText(file), projectSection(task));
-      await this.insert(file, { ...task, daily_note_section_path: section }, task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.time_tracking_started_at ? "/" : " ", false);
+      await this.insert(file, { ...task, daily_note_section_path: section }, task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.status === "in_progress" ? "/" : " ", false);
     }
     for (const removed of task.projects.filter(p => !projects.includes(p))) {
       const file = this.repo.file(removed);
@@ -515,9 +519,24 @@ export class TaskService {
       else if (end.action === "release") await this.repo.update(end.task.id, t => ({ ...t, auto_started_block: null }));
       else { await this.applyStatus(end.task.id, "open"); ended.push(end.task.title); }
     }
-    for (const { task, block } of starts) await this.applyStatus(task.id, "in_progress", undefined, undefined, t => startPlanned(t, block));
+    // A write that loses a race with the person typing (or an editor saving older text over it) leaves the status set but the note unchanged; the next pass puts the marker back, so such a start is never dropped.
+    const lost = (error: unknown) => error instanceof Error && error.message.includes("changed concurrently");
+    for (const { task, block } of starts) { try { await this.applyStatus(task.id, "in_progress", undefined, undefined, t => startPlanned(t, block)); } catch (error) { if (!lost(error)) throw error; } }
+    const moving = new Set([...ends, ...starts].map(item => item.task.id));
+    for (const task of tasks) {
+      if (task.auto_started_block === null || task.status !== "in_progress" || task.time_tracking_started_at !== null || moving.has(task.id)) continue;
+      try { await this.healStarted(task); } catch (error) { if (!lost(error)) throw error; }
+    }
     if (ends.length || starts.length) this.changed();
     return ended;
+  }
+  /** Writes the in-progress marker on the todo lines of a task a planned block started, wherever its lines are; lines that already show it are not written. */
+  private async healStarted(task: Task): Promise<void> {
+    const found: { file: TFile; text: string; tasks: TaskLine[] }[] = [];
+    for (const notePath of await this.refs(task.id)) {
+      const file = this.repo.file(notePath)!; const text = await this.repo.readText(file); const tasks = parseTasks(text).filter(t => t.id === task.id); if (tasks.length) found.push({ file, text, tasks });
+    }
+    await this.syncLines(task, "in_progress", found);
   }
   async setProjectColor(notePath: string, color: string | null): Promise<void> {
     const file = this.repo.file(notePath); if (!file) throw new Error("The project note was renamed or removed.");
