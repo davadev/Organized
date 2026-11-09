@@ -5,7 +5,7 @@ import { cleanTags } from "./notes";
 import { freePath, noteName } from "./names";
 import { report } from "./service";
 import { rgbOf } from "./colors";
-import { formatRule, parseRule, presetRules, Rule, ruleLabel } from "./recurrence";
+import { formatRule, presetRules, Rule, ruleLabel, Unit } from "./recurrence";
 import { BUDGET_KEYS, BudgetPeriod, budgetHours, MAX_BUDGET_HOURS, projectName, ProjectBudgets } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 import { ONBOARDING_STEPS, OnboardingStep } from "./onboarding";
@@ -62,25 +62,58 @@ export class PriorityPicker extends SuggestModal<Priority> {
   renderSuggestion(value: Priority, el: HTMLElement): void { el.setText(value[0].toUpperCase() + value.slice(1)); }
   onChooseSuggestion(value: Priority): void { void this.choose(value).catch(report); }
 }
-/** What the repeat picker offers: a rule, or `null` to stop repeating. */
-export interface RepeatChoice { label: string; rule: Rule | null }
-/** Picks how a task repeats: the usual choices as a list, or type your own ("every 3 weeks on thu") and the top entry shows how it was read. */
-export class RecurrencePicker extends SuggestModal<RepeatChoice> {
+const REPEAT_UNITS: [Unit, string][] = [["day", "days"], ["week", "weeks"], ["month", "months"], ["year", "years"]];
+const WEEKDAY_LETTERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+/** Asks how a task repeats. The usual choices are one tap each; below them everything else is a form (every [3] [weeks], on which days) that reads back in plain words before it is saved. */
+export class RecurrencePicker extends Modal {
   private picked = false;
-  /** `cancelled` runs when the picker closes without a choice, so a typed `[r]` can be put back. */
-  constructor(app: App, readonly today: string, readonly current: Rule | null, readonly choose: (rule: Rule | null) => Promise<void>, readonly cancelled?: () => void) {
-    super(app); decorate(this); this.setPlaceholder("Repeat every day, week… or type: every 3 weeks on thu"); this.emptyStateText = "Try: weekdays, every 2 weeks on mon, every month on 15";
+  /** `cancelled` runs when the dialog closes without a choice, so a typed `[r]` can be put back. */
+  constructor(app: App, readonly today: string, readonly current: Rule | null, readonly choose: (rule: Rule | null) => Promise<void>, readonly cancelled?: () => void) { super(app); decorate(this); }
+  private done(rule: Rule | null): void { this.picked = true; this.close(); void this.choose(rule).catch(report); }
+  onOpen(): void {
+    this.titleEl.setText("Repeat"); this.contentEl.addClass("organized-modal");
+    const presets = this.contentEl.createDiv({ cls: "organized-repeat-presets", attr: { role: "group", "aria-label": "Common repeats" } });
+    const now = this.current ? formatRule(this.current) : "";
+    for (const rule of presetRules(this.today)) {
+      const b = presets.createEl("button", { cls: "organized-repeat-preset", text: ruleLabel(rule).replace(/^Every /, ""), attr: { "aria-pressed": String(formatRule(rule) === now) } });
+      b.addEventListener("click", () => this.done(rule));
+    }
+    this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Or set your own" });
+    const start = this.current ?? presetRules(this.today)[2];
+    const row = this.contentEl.createDiv({ cls: "organized-datetime organized-repeat-row" });
+    row.createSpan({ cls: "organized-muted", text: "Every" });
+    const every = row.createEl("input", { type: "number", attr: { min: "1", max: "999", step: "1", inputmode: "numeric", "aria-label": "Repeat every" } }); every.value = String(start.every);
+    const unit = row.createEl("select", { attr: { "aria-label": "Repeat unit" } });
+    for (const [value, plural] of REPEAT_UNITS) unit.createEl("option", { value, text: plural });
+    unit.value = start.unit;
+    const days = this.contentEl.createDiv({ cls: "organized-repeat-days", attr: { role: "group", "aria-label": "Repeat on" } });
+    const chosen = new Set(start.days.length ? start.days : presetRules(this.today)[2].days);
+    const chips = WEEKDAY_LETTERS.map((name, day) => { const c = days.createEl("button", { cls: "organized-repeat-day", text: name, attr: { "aria-pressed": "false" } }); c.addEventListener("click", () => { if (chosen.has(day) && chosen.size > 1) chosen.delete(day); else chosen.add(day); paint(); }); return c; });
+    const month = this.contentEl.createDiv({ cls: "organized-datetime organized-repeat-row" });
+    month.createSpan({ cls: "organized-muted", text: "On" });
+    const monthDay = month.createEl("select", { attr: { "aria-label": "Day of the month" } });
+    for (let d = 1; d <= 31; d++) monthDay.createEl("option", { value: String(d), text: `Day ${d}` });
+    monthDay.createEl("option", { value: "last", text: "Last day" });
+    monthDay.value = String(start.monthDay ?? presetRules(this.today)[3].monthDay);
+    const summary = this.contentEl.createDiv({ cls: "organized-modal-copy organized-repeat-summary", attr: { role: "status" } });
+    const read = (): Rule | null => {
+      const n = Number(every.value); if (!Number.isInteger(n) || n < 1 || n > 999) return null;
+      const u = unit.value as Unit;
+      return { every: n, unit: u, days: u === "week" ? [...chosen].sort((a, b) => a - b) : [], monthDay: u === "month" ? (monthDay.value === "last" ? "last" : Number(monthDay.value)) : null };
+    };
+    const paint = () => {
+      const rule = read(); const u = unit.value;
+      days.toggleClass("organized-hidden", u !== "week"); month.toggleClass("organized-hidden", u !== "month");
+      chips.forEach((c, day) => c.setAttribute("aria-pressed", String(chosen.has(day))));
+      summary.setText(rule ? ruleLabel(rule) : "Use a whole number from 1 to 999."); summary.toggleClass("organized-session-problem", !rule);
+    };
+    for (const control of [every, unit, monthDay]) control.addEventListener("input", paint);
+    paint();
+    const actions = new Setting(this.contentEl);
+    actions.addButton(b => b.setButtonText("Save").setCta().onClick(() => { const rule = read(); if (rule) this.done(rule); else paint(); }));
+    if (this.current) actions.addButton(b => { b.setButtonText("Stop repeating").onClick(() => this.done(null)); b.buttonEl.addClass("mod-warning"); });
   }
-  getSuggestions(query: string): RepeatChoice[] {
-    const text = query.trim().toLowerCase(); const typed = text ? parseRule(text) : null;
-    const listed: RepeatChoice[] = [...presetRules(this.today).map(rule => ({ label: ruleLabel(rule), rule })), ...(this.current ? [{ label: "Stop repeating", rule: null }] : [])];
-    const matching = listed.filter(c => c.label.toLowerCase().includes(text));
-    // What was typed comes first, as read; the listed choices that also fit follow.
-    return typed ? [{ label: ruleLabel(typed), rule: typed }, ...matching.filter(c => !c.rule || formatRule(c.rule) !== formatRule(typed))] : matching;
-  }
-  renderSuggestion(value: RepeatChoice, el: HTMLElement): void { el.setText(value.label); if (value.rule && this.current && formatRule(value.rule) === formatRule(this.current)) el.createSpan({ cls: "organized-muted", text: " · current" }); }
-  onChooseSuggestion(value: RepeatChoice): void { this.picked = true; void this.choose(value.rule).catch(report); }
-  onClose(): void { super.onClose(); queueMicrotask(() => { if (!this.picked) this.cancelled?.(); }); }
+  onClose(): void { this.contentEl.empty(); queueMicrotask(() => { if (!this.picked) this.cancelled?.(); }); }
 }
 export class DatePicker extends Modal {
   /** `clear`, when given, adds a button that removes the date again. */
