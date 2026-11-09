@@ -13,6 +13,7 @@ import { descendants, NoteSection, NOTE_SECTIONS, noteSection, parseTasks, TaskL
 import { BUDGET_KEYS, BudgetPeriod, splitNote } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 import { blocksOn, hourRange } from "./timeline";
+import { ruleLabel, taskRule } from "./recurrence";
 
 const sameHeading = (a: Section, b: Section): boolean => a.level === b.level && a.text === b.text && a.ordinal === b.ordinal;
 export const VIEW_TYPE = "organized-inspector";
@@ -322,8 +323,9 @@ export class OrganizedInspectorView extends ItemView {
     if (showSchedule) action("calendar", task.scheduled ? `Schedule: ${task.scheduled}` : "Schedule", task.scheduled ?? "Choose date", "Schedule", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined)), task.scheduled ? () => this.owner.run(() => this.owner.service.unschedule(id)) : undefined).open(); });
     if (showRecurring) {
       const span = task.recurrence_periods.length ? `: ${task.recurrence_periods[0].start} → ${task.recurring ? "active" : task.recurrence_periods[task.recurrence_periods.length - 1].stop}` : "";
-      const toggle = action("repeat", "Recurring", task.recurring ? "On" : "Off", "Recurring", () => this.owner.run(() => this.owner.service.recurrence(id, this.owner.context?.line.id === id ? this.owner.context : undefined)));
-      toggle.title = `Recurring${span}`; toggle.setAttribute("role", "switch"); toggle.setAttribute("aria-checked", String(task.recurring));
+      const rule = task.recurring ? ruleLabel(taskRule(task)) : "Off";
+      const toggle = action("repeat", "Recurring", rule, "Recurring", () => this.owner.pickRecurrence(task, this.owner.context?.line.id === id ? this.owner.context : undefined));
+      toggle.title = `Recurring: ${rule}${span}`;
     }
     if (showProjects) {
       for (const project of task.projects) {

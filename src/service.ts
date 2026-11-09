@@ -1,9 +1,10 @@
 import { inBatches } from "./batches";
 import { Notice, TFile } from "obsidian";
-import { descendants, fixIndent, insertTask, insertUnder, migrateNote, moveTask, nestUnder, noteSection, parentIds, parseTasks, projectSection, RECURRING_MARKER, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
+import { descendants, fixIndent, insertTask, insertUnder, migrateNote, moveTask, nestUnder, noteSection, parentIds, parseTasks, projectSection, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, MAX_PLANNED_SESSIONS, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, startPlanned, Status, Task, taskFrom, WorkSession } from "./model";
 import { dueEnds, dueStarts } from "./planning";
+import { formatRule, repeatsOn, Rule, sameCadence, taskRule } from "./recurrence";
 import { seconds } from "./sessions";
 import { ProjectBudgets, projectTemplate, Repository, splitNote } from "./repository";
 import { parseWorked, retiredLines } from "./retention";
@@ -343,14 +344,18 @@ export class TaskService {
   private async resortAfter(file: TFile, task: Task, changes?: Change[]): Promise<void> {
     if (this.repo.settings().sortScope === "none") return; await this.resort(file, task, changes).catch(() => undefined);
   }
-  async recurrence(id: string, context?: Context): Promise<void> {
+  /** Makes the task repeat by `rule`, or stops it with `null`. Daily notes from today on get (or lose) their copy to match; today's copy and every earlier one stay. */
+  async recurrence(id: string, rule: Rule | null, context?: Context): Promise<void> {
     const today = localDate(); const changes: Change[] = []; const skipped: string[] = [];
     const file = await this.repo.resolve(id); const before = await this.repo.readText(file);
     const task = await this.repo.update(id, t => {
       const periods = t.recurrence_periods.map(p => ({ ...p }));
-      if (t.recurring) { const last = [...periods].reverse().find(p => p.stop === null); if (last) last.stop = today; }
-      else periods.push({ start: today, stop: null });
-      return { ...t, status: "open", recurring: !t.recurring, recurrence_periods: periods, daily_note_section_path: context?.line.section ?? t.daily_note_section_path };
+      const open = [...periods].reverse().find(p => p.stop === null);
+      // A new interval or unit starts a new count; a change of weekday keeps it.
+      const keep = rule !== null && t.recurring && sameCadence(taskRule(t), rule);
+      if (!keep && open) open.stop = today;
+      if (rule !== null && !keep) periods.push({ start: today, stop: null });
+      return { ...t, status: "open", recurring: rule !== null, recurrence: rule ? formatRule(rule) : null, recurrence_periods: periods, daily_note_section_path: context?.line.section ?? t.daily_note_section_path };
     });
     changes.push({ file, before, after: await this.repo.readText(file) });
     // In a project note the line moves between Ongoing and its status heading.
@@ -360,10 +365,11 @@ export class TaskService {
     }
     for (const daily of this.daily.files().filter(d => d.date >= today)) {
       try {
-        if (task.recurring) await this.insert(daily.file, task, " ", true, changes);
+        if (repeatsOn(task, daily.date)) await this.insert(daily.file, task, " ", true, changes);
         else if (daily.date > today) {
+          // Only a copy nobody has touched goes; a ticked or edited one is the person's now.
           const text = await this.repo.readText(daily.file); const matches = parseTasks(text).filter(t => t.id === id && t.repeat);
-          if (matches.length === 1) await this.edit(daily.file, text, removeUnique(text, id, true), changes);
+          if (matches.length === 1 && matches[0].marker === " ") await this.edit(daily.file, text, removeUnique(text, id, true), changes);
           else if (matches.length > 1) skipped.push(daily.file.path);
         }
       } catch { skipped.push(daily.file.path); }
@@ -373,11 +379,11 @@ export class TaskService {
       catch { skipped.push(context.file.path); }
     }
     const skippedPaths = [...new Set(skipped)];
-    this.summarize(changes, task.recurring ? "Recurrence enabled" : "Recurrence disabled", skippedPaths.length ? `Skipped/preserved for repair: ${skippedPaths.join(", ")}` : "");
+    this.summarize(changes, task.recurring ? "Recurrence set" : "Recurrence disabled", skippedPaths.length ? `Skipped/preserved for repair: ${skippedPaths.join(", ")}` : "");
   }
   async onDailyCreated(file: TFile): Promise<void> {
     const date = this.daily.date(file.path); if (!date || date < localDate()) return;
-    for (const task of (await this.repo.list()).filter(t => t.recurring)) await this.insert(file, task, " ", true);
+    for (const task of (await this.repo.list()).filter(t => repeatsOn(t, date))) await this.insert(file, task, " ", true);
     this.changed();
   }
   async reconcile(file: TFile): Promise<void> {
@@ -829,7 +835,6 @@ export class TaskService {
     if (marker === ">") await this.schedule(context, nextDate(localDate()), "forward");
     else if ([" ", "x", "X", "/", "-"].includes(marker)) await this.status(id, marker === "x" || marker === "X" ? "completed" : marker === "/" ? "in_progress" : marker === "-" ? "canceled" : "open", context);
     else if (marker === "*") { await this.repo.update(id, t => ({ ...t, starred: !t.starred })); this.changed(); }
-    else if (marker === RECURRING_MARKER) await this.recurrence(id, context);
   }
 }
 export function report(error: unknown): void { new Notice(`Organized: ${error instanceof Error ? error.message : String(error)}`, 10000); }

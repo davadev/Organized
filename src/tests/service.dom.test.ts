@@ -6,6 +6,7 @@ import { parseTasks } from "../codec";
 import { localDate, nextDate } from "../model";
 import { Notice } from "./__mocks__/obsidian";
 import { byPriority, report } from "../service";
+import { DAILY } from "../recurrence";
 import { splitNote } from "../repository";
 
 installObsidianDom();
@@ -101,20 +102,20 @@ describe("repository and explicit task actions", () => {
     const h = harness(); const task = await h.repo.create('Repeat'); const today = localDate(); const tomorrow = nextDate(today);
     const file: any = await h.add(`Daily/${today}.md`, `# Work\n- [r] Repeat <!--organized:${task.id}-->`); await h.add(`Daily/${tomorrow}.md`);
     const context = { file, line: parseTasks(await h.repo.readText(file))[0] };
-    await h.service.recurrence(task.id, context); expect((await h.repo.read(task.id)).recurring).toBe(true); expect(h.texts.get(`Daily/${tomorrow}.md`)).toContain('<!--organized:repeat-->');
+    await h.service.recurrence(task.id, DAILY, context); expect((await h.repo.read(task.id)).recurring).toBe(true); expect(h.texts.get(`Daily/${tomorrow}.md`)).toContain('<!--organized:repeat-->');
     const current = { file, line: parseTasks(await h.repo.readText(file))[0] };
     await h.service.status(task.id, 'completed', current); expect(h.texts.get(file.path)).toContain('[x]'); expect(h.texts.get(`Daily/${tomorrow}.md`)).toContain('[ ]'); expect((await h.repo.read(task.id)).status).toBe('open');
     await h.service.status(task.id, 'canceled', current); expect(h.texts.get(file.path)).toContain('[-]');
     await h.service.status(task.id, 'in_progress', current); expect(h.texts.get(file.path)).toContain('[/]');
     await h.service.status(task.id, 'open'); expect(h.texts.get(file.path)).toContain('[/]');
-    await h.service.recurrence(task.id); expect(h.texts.get(`Daily/${tomorrow}.md`)).not.toContain(task.id); expect(h.texts.get(file.path)).toContain(task.id);
+    await h.service.recurrence(task.id, null); expect(h.texts.get(`Daily/${tomorrow}.md`)).not.toContain(task.id); expect(h.texts.get(file.path)).toContain(task.id);
     await h.service.undo(); expect((await h.repo.read(task.id)).recurring).toBe(true); expect(h.texts.get(`Daily/${tomorrow}.md`)).toContain(task.id);
     const future: any = await h.add('Daily/2099-01-01.md'); await h.service.onDailyCreated(future); await h.service.onDailyCreated(future); expect(parseTasks(await h.repo.readText(future))).toHaveLength(1);
     const other: any = await h.add('Other.md'); await h.service.onDailyCreated(other); expect(h.texts.get('Other.md')).toBe('');
     const past: any = await h.add('Daily/2020-01-01.md'); await h.service.onDailyCreated(past); expect(h.texts.get(past.path)).toBe('');
   });
   it("preserves concurrent edits during undo and missing-section cancellation", async () => {
-    const h = harness(); const task = await h.repo.create('Repeat'); await h.add('Daily/2099-01-01.md'); await h.service.recurrence(task.id);
+    const h = harness(); const task = await h.repo.create('Repeat'); await h.add('Daily/2099-01-01.md'); await h.service.recurrence(task.id, DAILY);
     h.texts.set('Daily/2099-01-01.md', 'Concurrent user change'); await h.service.undo(); expect(h.texts.get('Daily/2099-01-01.md')).toBe('Concurrent user change'); expect(Notice.instances.at(-1)?.message).toContain('concurrent');
     h.setSettings({ missingSection: 'ask' }); h.confirm.mockResolvedValue(false);
     const file: any = await h.add('Missing.md'); await expect(h.service.insert(file, { ...task, daily_note_section_path: [{ level: 1, text: 'Work', ordinal: 0 }] }, ' ', false)).rejects.toThrow('canceled'); expect(h.texts.get('Missing.md')).toBe('');
@@ -287,7 +288,7 @@ describe("repository and explicit task actions", () => {
     for (const marker of ['*', '*', '/', 'x', 'X', '-', ' ', 'k']) await h.service.marker(fresh(), marker);
     expect((await h.repo.read(task.id)).starred).toBe(false); expect((await h.repo.read(task.id)).status).toBe('open');
     await h.service.marker(fresh(), '>'); expect((await h.repo.read(task.id)).scheduled).toBe(nextDate(localDate()));
-    await h.service.marker(fresh(), 'r'); expect((await h.repo.read(task.id)).recurring).toBe(true);
+    await h.service.marker(fresh(), 'r'); expect((await h.repo.read(task.id)).recurring).toBe(false); await h.service.recurrence(task.id, DAILY, fresh()); expect((await h.repo.read(task.id)).recurring).toBe(true);
     await h.service.marker({ file, line: parseTasks('- [k] Visual')[0] }, 'k'); expect((await h.repo.list())).toHaveLength(1);
     await expect(h.service.priority({ file, line: parseTasks('- [!] Plain')[0] }, 'low')).rejects.toThrow();
     report(Error('Visible')); report('String error'); expect(Notice.instances.at(-1)?.message).toContain('String error');

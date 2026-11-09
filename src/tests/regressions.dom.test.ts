@@ -5,6 +5,7 @@ import { parseTasks, insertTask, sortTasks } from '../codec';
 import { localDate, nextDate } from '../model';
 import { installObsidianDom } from './__mocks__/obsidianDom';
 import { Notice } from './__mocks__/obsidian';
+import { DAILY } from "../recurrence";
 import { DataSafety } from '../safety';
 
 installObsidianDom();
@@ -60,15 +61,15 @@ describe('conflict and structural regression cases', () => {
     const today: any = await h.add(`Daily/${localDate()}.md`, `- [ ] Repeat <!--organized:${task.id}-->`); const tomorrow = `Daily/${nextDate(localDate())}.md`; const line = `- [ ] Repeat <!--organized:${task.id}--> <!--organized:repeat-->`;
     await h.add(tomorrow, line + '\n' + line); await h.add('Daily/2099-01-01.md', '- [ ] Plain');
     await h.service.status(task.id, 'open', { file: today, line: parseTasks(h.texts.get(today.path)!)[0] }); expect(h.texts.get(today.path)).toContain('[ ]');
-    await h.service.recurrence(task.id); expect(h.texts.get(tomorrow)).toContain(line); expect((Notice.instances.at(-1)?.message as DocumentFragment).textContent).toContain('preserved for repair');
-    await h.repo.update(task.id, t => ({ ...t, recurring: true, recurrence_periods: [{ start: '2020-01-01', stop: '2020-02-01' }] })); await h.service.recurrence(task.id); expect((await h.repo.read(task.id)).recurring).toBe(false);
+    await h.service.recurrence(task.id, null); expect(h.texts.get(tomorrow)).toContain(line); expect((Notice.instances.at(-1)?.message as DocumentFragment).textContent).toContain('preserved for repair');
+    await h.repo.update(task.id, t => ({ ...t, recurring: true, recurrence_periods: [{ start: '2020-01-01', stop: '2020-02-01' }] })); await h.service.recurrence(task.id, null); expect((await h.repo.read(task.id)).recurring).toBe(false);
     const fragment = Notice.instances.at(-1)!.message as DocumentFragment; fragment.querySelector<HTMLButtonElement>('button')!.click(); for (let i = 0; i < 50; i++) await Promise.resolve(); expect((await h.repo.read(task.id)).recurring).toBe(true);
   });
   it('reports recurrence conflicts with usable Undo instead of abandoning the successful part of a batch', async () => {
     const h = harness(); const task = await h.repo.create('Repeat'); const source: any = await h.add('Origin.md', `- [r] Repeat <!--organized:${task.id}-->`); const context = { file: source, line: parseTasks(h.texts.get(source.path)!)[0] };
     await h.add('Daily/2099-01-01.md'); await h.add('Daily/2099-01-02.md');
     h.raw.vault.process.mockImplementationOnce(async () => { h.texts.set(source.path, 'Concurrent source change'); throw Error('concurrent destination'); });
-    await h.service.recurrence(task.id, context); expect(h.texts.get('Daily/2099-01-01.md')).toBe(''); expect(h.texts.get('Daily/2099-01-02.md')).toContain(task.id); expect(h.texts.get(source.path)).toBe('Concurrent source change'); expect((Notice.instances.at(-1)?.message as DocumentFragment).textContent).toContain('preserved for repair');
+    await h.service.recurrence(task.id, DAILY, context); expect(h.texts.get('Daily/2099-01-01.md')).toBe(''); expect(h.texts.get('Daily/2099-01-02.md')).toContain(task.id); expect(h.texts.get(source.path)).toBe('Concurrent source change'); expect((Notice.instances.at(-1)?.message as DocumentFragment).textContent).toContain('preserved for repair');
     await h.service.undo(); expect((await h.repo.read(task.id)).recurring).toBe(false); expect(h.texts.get('Daily/2099-01-02.md')).toBe(''); expect(h.texts.get(source.path)).toBe('Concurrent source change');
   });
   it('creates project controls with every status, preserves missing unlinks and indexes ordinary unlinked tasks safely', async () => {
