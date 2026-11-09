@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
-import { TaskPicker, PriorityPicker, DatePicker, ConfirmModal, ProjectPicker, SessionModal, NoteConversionModal, OnboardingModal, RetireModal, KEEP_AS_TODO } from "../modals";
+import { TaskPicker, PriorityPicker, DatePicker, ConfirmModal, ProjectPicker, SessionModal, BudgetModal, NoteConversionModal, OnboardingModal, RetireModal, KEEP_AS_TODO } from "../modals";
 import { newTask } from "../model";
 import { harness, sessionFields } from "./harness";
 import { Notice, Setting } from "./__mocks__/obsidian";
@@ -192,5 +192,17 @@ describe("Retire window", () => {
     const broken = new RetireModal(h.app, base, async () => { throw new Error("vault unreadable"); }, async () => undefined); broken.open(); await flush(); expect(status(broken)).toBe("Could not read your notes: vault unreadable"); expect(go(broken).disabled).toBe(true);
     const text = new RetireModal(h.app, base, async () => { throw "odd"; }, async () => undefined); text.open(); await flush(); expect(status(text)).toBe("Could not read your notes: odd");
     const failing = new RetireModal(h.app, base, async () => scan(1), async () => { throw new Error("write failed"); }); failing.open(); await flush(); go(failing).click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain("write failed");
+  });
+  it('asks for a time budget in hours and minutes, validates it and can remove it', async () => {
+    const h = harness(); const save = vi.fn().mockResolvedValue(undefined);
+    const modal = new BudgetModal(h.app, 'Report', null, save); modal.open(); const [hours, mins] = Array.from(modal.contentEl.querySelectorAll<HTMLInputElement>('input')); const note = modal.contentEl.querySelector('.organized-session-note')!;
+    const buttons = () => Array.from(modal.contentEl.querySelectorAll('button')); const type = (a: string, b: string) => { hours.value = a; mins.value = b; hours.dispatchEvent(new Event('input')); };
+    expect(modal.contentEl.querySelector('.organized-session-task')!.textContent).toBe('Report'); expect(hours.value).toBe('0'); expect(buttons().map(b => b.textContent)).toEqual(['Save']);
+    buttons()[0].click(); await flush(); expect(save).not.toHaveBeenCalled(); expect(note.textContent).toContain('longer than zero');
+    type('', '90'); expect(note.textContent).toContain('whole hours'); type('1.5', '0'); expect(note.textContent).toContain('whole hours'); type('10000', '0'); expect(note.textContent).toContain('9999 hours');
+    type('', '30'); expect(note.textContent).toBe(''); expect(note.classList.contains('organized-session-problem')).toBe(false);
+    type('2', '15'); buttons()[0].click(); await flush(); expect(save).toHaveBeenCalledWith(8100);
+    const edit = new BudgetModal(h.app, 'Report', 8100, save); edit.open(); const fields = Array.from(edit.contentEl.querySelectorAll<HTMLInputElement>('input')); expect([fields[0].value, fields[1].value]).toEqual(['2', '15']);
+    Array.from(edit.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Remove budget')!.click(); await flush(); expect(save).toHaveBeenLastCalledWith(null); edit.close(); expect(edit.contentEl.childElementCount).toBe(0);
   });
 });

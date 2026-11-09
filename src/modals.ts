@@ -1,5 +1,5 @@
 import { App, Component, Modal, Setting, SuggestModal } from "obsidian";
-import { path, PRIORITIES, Priority, Task, validDate, WorkSession } from "./model";
+import { MAX_BUDGET_SECONDS, path, PRIORITIES, Priority, Task, validDate, WorkSession } from "./model";
 import { isoFromInput, kindOf, lengthOf, localInput, SessionKind, sessionProblem } from "./sessions";
 import { cleanTags } from "./notes";
 import { freePath, noteName } from "./names";
@@ -158,6 +158,38 @@ export class SessionModal extends Modal {
     if (this.edit.logWorked) { const log = this.edit.logWorked; actions.addButton(b => b.setButtonText("Log as worked").onClick(() => { this.close(); void log().catch(report); })); }
     if (this.edit.openTask) { const open = this.edit.openTask; actions.addButton(b => b.setButtonText("Open task").onClick(() => { this.close(); void open().catch(report); })); }
     if (this.edit.remove) { const remove = this.edit.remove; actions.addButton(b => { b.setButtonText("Delete").onClick(() => { this.close(); void remove().catch(report); }); b.buttonEl.addClass("mod-warning"); }); }
+  }
+  onClose(): void { this.contentEl.empty(); }
+}
+
+/** Asks how much time a task may take, in hours and minutes; the saved budget is `seconds`, null removes it. */
+export class BudgetModal extends Modal {
+  constructor(app: App, readonly taskTitle: string, readonly current: number | null, readonly save: (seconds: number | null) => Promise<void>) { super(app); decorate(this); }
+  onOpen(): void {
+    this.titleEl.setText("Time budget"); this.contentEl.addClass("organized-modal");
+    this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-task", text: this.taskTitle });
+    const minutes = this.current === null ? 0 : Math.round(this.current / 60);
+    this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Budget" });
+    const row = this.contentEl.createDiv({ cls: "organized-datetime" });
+    const hours = row.createEl("input", { type: "number", attr: { min: "0", step: "1", inputmode: "numeric", "aria-label": "Budget hours" } }); hours.value = String(Math.floor(minutes / 60));
+    row.createSpan({ cls: "organized-muted", text: "h" });
+    const mins = row.createEl("input", { type: "number", attr: { min: "0", max: "59", step: "1", inputmode: "numeric", "aria-label": "Budget minutes" } }); mins.value = String(minutes % 60);
+    row.createSpan({ cls: "organized-muted", text: "min" });
+    const note = this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-note", attr: { role: "status" } });
+    const read = (): number | string => {
+      const h = Number(hours.value), m = Number(mins.value);
+      if (!Number.isInteger(h) || !Number.isInteger(m) || h < 0 || m < 0 || m > 59) return "Use whole hours and minutes (0 to 59).";
+      const total = (h * 60 + m) * 60;
+      return total <= 0 ? "Enter a budget longer than zero, or remove it." : total > MAX_BUDGET_SECONDS ? "The longest budget is 9999 hours." : total;
+    };
+    const paint = () => { const value = read(); note.setText(typeof value === "string" ? value : ""); note.toggleClass("organized-session-problem", typeof value === "string"); };
+    for (const input of [hours, mins]) input.addEventListener("input", paint);
+    const actions = new Setting(this.contentEl);
+    actions.addButton(b => b.setButtonText("Save").setCta().onClick(() => {
+      const value = read(); if (typeof value === "string") { paint(); return; }
+      this.close(); void this.save(value).catch(report);
+    }));
+    if (this.current !== null) actions.addButton(b => { b.setButtonText("Remove budget").onClick(() => { this.close(); void this.save(null).catch(report); }); b.buttonEl.addClass("mod-warning"); });
   }
   onClose(): void { this.contentEl.empty(); }
 }

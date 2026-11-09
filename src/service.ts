@@ -479,6 +479,8 @@ export class TaskService {
       return { ...t, work_sessions: sessions, time_tracked_seconds: Math.max(0, t.time_tracked_seconds - seconds(from) + (to ? seconds(to) : 0)) };
     }); this.changed();
   }
+  /** Sets or removes (null) the time a task is allowed to take. */
+  async setBudget(id: string, seconds: number | null): Promise<void> { await this.repo.update(id, t => ({ ...t, time_budget_seconds: seconds })); this.changed(); }
   /** Sets time aside for a task: a block that never counts as worked. */
   async addPlanned(id: string, block: WorkSession): Promise<void> {
     await this.repo.update(id, t => ({ ...t, planned_sessions: [...t.planned_sessions, block].slice(-MAX_PLANNED_SESSIONS) })); this.changed();

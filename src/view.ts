@@ -6,9 +6,9 @@ import type Organized from "./main";
 import { elapsed, localDate, PRIORITIES, Section, STATUS_ICONS, STATUSES, Task, WorkSession } from "./model";
 import { byPriority, report } from "./service";
 import { cells, HeatScale, MAX_CELLS, scaleFor, slider } from "./movement";
-import { DatePicker, SessionModal, TaskPicker } from "./modals";
+import { BudgetModal, DatePicker, SessionModal, TaskPicker } from "./modals";
 import { formatMinutes, lengthOf, lengthOfSeconds, seconds, SessionKind } from "./sessions";
-import { plannedSeconds } from "./planning";
+import { budgetUse, plannedSeconds } from "./planning";
 import { descendants, NoteSection, NOTE_SECTIONS, noteSection, parseTasks, TaskLine } from "./codec";
 import { splitNote } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
@@ -38,6 +38,15 @@ export class OrganizedInspectorView extends ItemView {
   private placed = "";
   private sessionsOpen = false;
   private plannedOpen = false;
+  /** A slim bar of tracked and planned time against the task's budget, with one line of words under it (the colour is never the only signal). Nothing is drawn without a budget. */
+  private budgetBar(host: HTMLElement, task: Task): void {
+    const use = budgetUse(task); if (!use) return;
+    const minutes = (value: number) => formatMinutes(Math.floor(value / 60));
+    const bar = host.createDiv({ cls: "organized-budget-bar", attr: { role: "progressbar", "aria-label": "Time budget", "aria-valuemin": "0", "aria-valuemax": String(use.budget), "aria-valuenow": String(use.tracked + use.planned) } });
+    for (const [cls, pct] of [["tracked", use.trackedPct], ["planned", use.plannedPct], ["over", use.overPct]] as const) if (pct > 0) bar.createDiv({ cls: `organized-budget-${cls}` }).setCssProps({ "--organized-share": `${pct}%` });
+    const parts = [`${minutes(use.tracked)} tracked`, ...(use.planned ? [`${minutes(use.planned)} planned`] : []), use.left < 0 ? `${minutes(-use.left)} over budget` : `${minutes(use.left)} left of ${minutes(use.budget)}`];
+    host.createDiv({ cls: use.left < 0 ? "organized-budget-text organized-budget-over-text" : "organized-budget-text", text: parts.join(" · ") });
+  }
   private expandedLists = new Set<string>();
   private scrolledModule = "";
   private doneToday = new Set<string>();
@@ -521,11 +530,13 @@ export class OrganizedInspectorView extends ItemView {
     await this.subtaskCard(details, task);
     if (task.priority !== "none" || this.module === "Priority") this.select(this.card(details, "Priority", "flag"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.service.setPriority(id, value as Task["priority"], this.owner.context?.line.id === id ? this.owner.context : undefined); this.owner.refresh(); }); });
     if (task.scheduled || this.module === "Schedule") this.button(this.card(details, "Schedule", "calendar"), task.scheduled ?? "Choose date", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined)), task.scheduled ? () => this.owner.run(() => this.owner.service.unschedule(id)) : undefined).open(); });
-    if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || task.planned_sessions.length || this.module === "Timer") {
+    if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || task.planned_sessions.length || task.time_budget_seconds !== null || this.module === "Timer") {
       const timer = this.card(details, "Timer", "timer"); timer.createDiv({ cls: "organized-timer-label", text: "Tracked so far" }); const row = timer.createDiv({ cls: "organized-timer-row" });
       row.createDiv({ cls: "organized-timer-value", text: `${formatMinutes(Math.floor(elapsed(task) / 60))}${task.time_tracking_started_at ? " · running" : ""}` });
       this.button(row, task.time_tracking_started_at ? "Stop timer" : "Start timer", () => this.owner.run(() => this.owner.service.status(id, task.time_tracking_started_at ? "open" : "in_progress", this.owner.context ?? undefined)));
       this.button(row, "Add time", () => this.editSession(task, null, localDate(), null));
+      this.button(row, task.time_budget_seconds === null ? "Set budget" : "Edit budget", () => new BudgetModal(this.app, task.title, task.time_budget_seconds, seconds => this.owner.run(() => this.owner.service.setBudget(id, seconds))).open());
+      this.budgetBar(timer, task);
       if (task.work_sessions.length) this.sessionList(timer, task);
       timer.createDiv({ cls: "organized-timer-label", text: "Planned" }); timer.createDiv({ cls: "organized-timer-value", text: formatMinutes(Math.floor(plannedSeconds(task) / 60)) });
       if (task.planned_sessions.length) this.sessionList(timer, task, "planned");

@@ -17,7 +17,9 @@ export const MIN_SESSION_SECONDS = 60;
 /** Planned blocks (time set aside for later) are kept under the same cap as worked sessions. */
 export const MAX_PLANNED_SESSIONS = 500;
 /** Task properties written only while they hold something, so a task that never plans time carries no extra keys. */
-export const OPTIONAL_KEYS = ["planned_sessions", "auto_started_block"] as const;
+export const OPTIONAL_KEYS = ["planned_sessions", "auto_started_block", "time_budget_seconds"] as const;
+/** The longest time budget a task can hold (9999 hours); anything else in a note is ignored. */
+export const MAX_BUDGET_SECONDS = 9999 * 3600;
 export interface Task {
   schema_version: number; id: string; title: string; status: Status; priority: Priority;
   scheduled: string | null; created: string; time_tracked_seconds: number;
@@ -29,6 +31,8 @@ export interface Task {
   planned_sessions: WorkSession[];
   /** Start of the planned block that set this task in progress by itself; lets that flip be undone without touching a status the person chose. */
   auto_started_block: string | null;
+  /** Time the person allows for this task; tracked plus planned time is compared with it. Null when there is no budget. */
+  time_budget_seconds: number | null;
   /** Path of the standalone note this task became. Set only when the task note is kept for the time it tracked; such a task has no todo line and is hidden from every list. */
   converted_to: string | null;
   /** Links to the task notes of this task's subtasks (`[[Name]]`), kept in step with the todos nested under it in the notes. */
@@ -159,6 +163,7 @@ export function taskFrom(value: unknown, expectedId: string): Task {
     movement_history: history as unknown as Movement[], daily_note_section_path: sections as unknown as Section[], work_sessions: sessions,
     planned_sessions: sessionsOf(v.planned_sessions, MAX_PLANNED_SESSIONS),
     auto_started_block: typeof v.auto_started_block === "string" && Number.isFinite(Date.parse(v.auto_started_block)) ? v.auto_started_block : null,
+    time_budget_seconds: Number.isInteger(v.time_budget_seconds) && Number(v.time_budget_seconds) > 0 && Number(v.time_budget_seconds) <= MAX_BUDGET_SECONDS ? Number(v.time_budget_seconds) : null,
     converted_to: typeof v.converted_to === "string" && v.converted_to.endsWith(".md") ? v.converted_to : null,
     subtasks: [...new Set(strings(v.subtasks).filter(isNoteLink))],
   };

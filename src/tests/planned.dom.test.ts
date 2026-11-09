@@ -90,4 +90,11 @@ describe('planned time', () => {
     const again = new SessionModal(app, { heading: 'Edit', taskTitle: 'Plan', start: iso(9), end: iso(10), kind: 'planned', save, logWorked: log }, () => now); again.open(); expect(again.contentEl.querySelector('.organized-session-note')!.textContent).toBe('Length: 1h');
     Array.from(again.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Log as worked')!.click(); await flush(); expect(log).toHaveBeenCalledOnce(); expect(Modal.instances.length).toBeGreaterThan(0);
   });
+  it('stores a time budget only while one is set', async () => {
+    const { service, repo } = await fixture(); const task = await repo.create('Budget'); const file = repo.taskFile(task.id)!;
+    expect(splitNote(await repo.readText(file)).frontmatter).not.toHaveProperty('time_budget_seconds');
+    await service.setBudget(task.id, 7200); expect((await repo.read(task.id)).time_budget_seconds).toBe(7200); expect(splitNote(await repo.readText(file)).frontmatter).toHaveProperty('time_budget_seconds', 7200);
+    await service.setBudget(task.id, null); expect((await repo.read(task.id)).time_budget_seconds).toBeNull(); expect(splitNote(await repo.readText(file)).frontmatter).not.toHaveProperty('time_budget_seconds');
+    for (const bad of [0, -5, 1.5, '3600', 9999 * 3600 + 1, Number.NaN]) expect(taskFrom({ id: task.id, title: 'x', time_budget_seconds: bad }, task.id).time_budget_seconds).toBeNull();
+  });
 });
