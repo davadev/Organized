@@ -492,11 +492,13 @@ export default class Organized extends Plugin {
     if (!active || active.file.path !== context.file.path) { new Notice("Open the note to add a subtask."); return; }
     await this.addSubtask(active.editor, active.file);
   }
-  /** Asks for a block of time worked on the todo (on the day of its daily note, or today), then puts the todo's own marker back. Cancelling leaves the `[t]` in place. */
+  /** Asks for a block of time on the todo, worked or planned (on the day of its daily note, or today), then puts the todo's own marker back. Cancelling leaves the `[t]` in place. */
   private addTime(task: Task, context: Context): void {
     const at = (time: string) => new Date(`${this.service.daily.date(context.file.path) ?? localDate()}T${time}:00`).toISOString();
     const marker = this.ownMarker(task);
-    new SessionModal(this.app, { heading: "Add time worked", taskTitle: task.title, start: at("09:00"), end: at("10:00"), kind: "worked", save: async next => { await this.run(() => this.service.addSession(task.id, next)); await this.run(() => this.service.clean(context, marker)); } }).open();
+    // One dialog for both: a start in the future begins as planned time, and the type can be switched either way.
+    const start = at("09:00");
+    new SessionModal(this.app, { heading: "Add time", taskTitle: task.title, start, end: at("10:00"), kind: Date.parse(start) > Date.now() ? "planned" : "worked", switchable: true, save: async (next, kind) => { await this.run(() => kind === "planned" ? this.service.addPlanned(task.id, next) : this.service.addSession(task.id, next)); await this.run(() => this.service.clean(context, marker)); } }).open();
   }
   /** Folders offered for a standalone note. */
   noteFolders(): string[] { return this.app.vault.getAllLoadedFiles().filter(f => f instanceof TFolder && f.path !== "/").map(f => f.path).sort(); }
