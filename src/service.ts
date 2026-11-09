@@ -195,20 +195,24 @@ export class TaskService {
     const task = await this.repo.update(id, change);
     if (note) changes!.push({ file: note, before: noteBefore, after: await this.repo.readText(note) });
     const marker = task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.status === "in_progress" ? "/" : " ";
-    const today = localDate();
-    for (const occurrence of await this.repo.occurrences(id)) {
-      const date = this.daily.date(occurrence.file.path);
-      if (date && date < today) continue;
+    const today = localDate(); const occurrences = await this.repo.occurrences(id);
+    // Earlier daily notes are history, except for a todo that only ever lived in one of them (never carried forward): that line is the task's only one, so it follows the status.
+    const dated = (o: { file: TFile }) => this.daily.date(o.file.path); const live = occurrences.some(o => { const d = dated(o); return !d || d >= today; });
+    const latestPast = live ? undefined : occurrences.reduce<(typeof occurrences)[number] | undefined>((best, o) => !best || dated(o)! > dated(best)! ? o : best, undefined);
+    for (const occurrence of occurrences) {
+      const date = dated(occurrence);
+      if (date && date < today && occurrence !== latestPast) continue;
       if (task.recurring && date && (!context || occurrence.file.path !== context.file.path)) continue;
       let after = occurrence.text;
       for (const line of occurrence.tasks) {
+        if (date && date < today && (line.marker === ">" || line.marker === "<")) continue;
         const occurrenceMarker = task.recurring && date ? (status === "completed" ? "x" : status === "canceled" ? "-" : status === "in_progress" ? "/" : " ") : marker;
         after = replaceTask(after, line, { marker: occurrenceMarker });
       }
       // In a project note the line also moves to the heading for the new status.
       if (occurrence.tasks.length === 1 && this.isProjectFile(occurrence.file)) after = moveTask(after, id, projectSection(task));
       await this.edit(occurrence.file, occurrence.text, after, changes);
-      if (!this.isProjectFile(occurrence.file)) await this.resortAfter(occurrence.file, task, changes);
+      if (!this.isProjectFile(occurrence.file) && !(date && date < today)) await this.resortAfter(occurrence.file, task, changes);
     }
     this.changed();
   }

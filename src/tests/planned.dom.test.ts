@@ -97,4 +97,35 @@ describe('planned time', () => {
     await service.setBudget(task.id, null); expect((await repo.read(task.id)).time_budget_seconds).toBeNull(); expect(splitNote(await repo.readText(file)).frontmatter).not.toHaveProperty('time_budget_seconds');
     for (const bad of [0, -5, 1.5, '3600', 9999 * 3600 + 1, Number.NaN]) expect(taskFrom({ id: task.id, title: 'x', time_budget_seconds: bad }, task.id).time_budget_seconds).toBeNull();
   });
+  describe('the todo line follows the status when it lives in an earlier daily note', () => {
+    const day = (d: number) => localDate(new Date(2026, 2, d));
+    async function setup() {
+      vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 2, 4, 8, 0)); const f = await fixture();
+      const task = await f.repo.create('Old line'); await f.service.addPlanned(task.id, block(9, 10)); const path = (d: number) => f.service.daily.path(day(d));
+      const put = (d: number, text: string) => f.add(path(d), text.split('ID').join(task.id)); const read = (d: number) => f.texts.get(path(d));
+      return { ...f, task, put, read, path };
+    }
+    it('marks a line that only exists in an earlier note when the block begins, and clears it when the block ends', async () => {
+      const { service, repo, task, put, read } = await setup(); await put(1, '- [ ] Other\n- [ ] Old line <!--organized:ID-->\n- [x] Done thing');
+      await service.applyPlanning(new Date(2026, 2, 4, 9, 0).getTime()); expect((await repo.read(task.id)).status).toBe('in_progress'); expect(read(1)).toBe(`- [ ] Other\n- [/] Old line <!--organized:${task.id}-->\n- [x] Done thing`);
+      await service.applyPlanning(new Date(2026, 2, 4, 10, 0).getTime()); expect(read(1)).toBe(`- [ ] Other\n- [ ] Old line <!--organized:${task.id}-->\n- [x] Done thing`);
+    });
+    it('follows a status chosen in the side panel too, without reordering the old note', async () => {
+      const { service, task, put, read } = await setup(); await put(2, '- [ ] Old line <!--organized:ID-->\n- [ ] Next <!--organized:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-->');
+      await service.status(task.id, 'completed'); expect(read(2)!.split('\n')[0]).toBe(`- [x] Old line <!--organized:${task.id}-->`);
+      await service.status(task.id, 'in_progress'); expect(read(2)!.split('\n')[0]).toBe(`- [/] Old line <!--organized:${task.id}-->`);
+    });
+    it('leaves earlier notes alone when the task also has a line today, in a future note or in an undated note', async () => {
+      for (const [where, put] of [['today', (p: any) => p.put(4, '- [ ] Old line <!--organized:ID-->')], ['future', (p: any) => p.put(9, '- [ ] Old line <!--organized:ID-->')], ['undated', (p: any) => p.add('Notes/Topic.md', `- [ ] Old line <!--organized:${p.task.id}-->`)]] as const) {
+        const p: any = await setup(); await p.put(1, '- [ ] Old line <!--organized:ID-->'); await put(p);
+        await p.service.applyPlanning(new Date(2026, 2, 4, 9, 0).getTime()); expect(p.read(1), where).toBe(`- [ ] Old line <!--organized:${p.task.id}-->`);
+        const other = where === 'today' ? p.read(4) : where === 'future' ? p.read(9) : p.texts.get('Notes/Topic.md'); expect(other, where).toContain('- [/] Old line');
+      }
+    });
+    it('keeps forwarded history lines and changes only the most recent earlier note', async () => {
+      const { service, task, put, read } = await setup(); await put(3, '- [<] Old line <!--organized:ID-->\n- [ ] Old line <!--organized:ID-->'); await put(1, '- [>] Old line <!--organized:ID-->'); await put(2, '- [ ] Old line <!--organized:ID-->');
+      await service.applyPlanning(new Date(2026, 2, 4, 9, 0).getTime());
+      expect(read(1)).toContain('[>]'); expect(read(2)).toContain('- [ ] Old line'); expect(read(3)!.split('\n')).toEqual([`- [<] Old line <!--organized:${task.id}-->`, `- [/] Old line <!--organized:${task.id}-->`]);
+    });
+  });
 });
