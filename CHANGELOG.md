@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed a new daily note missing some of its recurring tasks: if one task could not be written (the note was already open and being typed in, or a sync was writing it), the tasks after it were skipped and never retried. Each task is now added on its own, a failed one gets a second try, and any that still fail are named in one message. Added tests for sync and race cases: notes arriving from another device, overlapping rule changes, Windows line endings, front-matter-only notes, 60 recurring tasks at once, conflict copies of a task note and a task note edited by sync.
+
 - Fixed the Repeat dialog showing today's weekday (or day of the month) for a task whose rule leaves that out, such as `recurrence: every 2 weeks` written by hand: it now shows the day the repeat actually started on, so saving without changes keeps the same days. Also hardened the repeat rules against dates before 1970, and added tests that check them against an independent reference over five years of dates, and the daily-note flow day by day.
 
 - Tidied the Repeat dialog: shorter preset buttons (Daily, Weekdays, Weekly, Monthly, Yearly; hover shows the exact rule), "Every [number] [unit]" on one line, equal-width weekday buttons (M T W T F S S) and a divider above the plain-words result.
