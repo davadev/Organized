@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed a task started by its planned time sometimes showing in progress in the side panel while its todo kept `[ ]`: if the note changed at that moment (you were typing, or the editor saved older text over the change), the marker was lost and never retried. While a planned block is running the marker is now checked every minute and put back in every note that holds the todo; a status you chose yourself is never rewritten. Also fixed `[t]` (add time) turning `/` back into `[ ]` on a task started by a planned block, and forwarding or linking such a task to a project writing `[ ]` instead of `[/]`.
+
 - **Fold Description, Subtasks and Timer.** Each of these task panel cards now has a chevron to fold it away; a folded card keeps a one-line summary (the first line of the description, `1 of 3 done`, the time tracked) and the choice is remembered for every task. The Timer is tighter: its start/stop, add time and budget buttons are small icons in the header row, and the budget bar no longer repeats the numbers already in the summary.
 
 - **A denser task panel.** Priority, Schedule, Recurring and the linked projects now sit together as small icon pills in one wrapping row instead of a titled card each; project pills carry a faint tint of the project colour, are cut short when long and open the project note when tapped. The Timer card is one line (`4h tracked · 1h planned`) with Start, Add time and Budget side by side, and an empty Description is a single *Add description…* button. Same controls, much less scrolling on a phone.

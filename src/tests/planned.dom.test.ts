@@ -97,4 +97,38 @@ describe('planned time', () => {
     await service.setBudget(task.id, null); expect((await repo.read(task.id)).time_budget_seconds).toBeNull(); expect(splitNote(await repo.readText(file)).frontmatter).not.toHaveProperty('time_budget_seconds');
     for (const bad of [0, -5, 1.5, '3600', 9999 * 3600 + 1, Number.NaN]) expect(taskFrom({ id: task.id, title: 'x', time_budget_seconds: bad }, task.id).time_budget_seconds).toBeNull();
   });
+  describe('a start whose note write was lost is put right on the next pass', () => {
+    async function started() {
+      vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 2, 4, 8, 0)); const f = await fixture(); const task = await f.repo.create('Subtask'); await f.service.addPlanned(task.id, block(9, 10));
+      const note = f.service.daily.path(localDate(new Date(2026, 2, 4))); await f.add(note, `- [ ] Parent\n  - [ ] Subtask <!--organized:${task.id}-->`); return { ...f, task, note };
+    }
+    const at = (h: number, m = 0) => new Date(2026, 2, 4, h, m).getTime();
+    it('when the write loses a race with the person typing', async () => {
+      const { service, repo, task, note, texts } = await started(); const write = vi.spyOn(repo, 'write').mockRejectedValueOnce(new Error(`${note} changed concurrently; preserved. Retry the action.`));
+      expect(await service.applyPlanning(at(9))).toEqual([]); expect(await repo.read(task.id)).toMatchObject({ status: 'in_progress', auto_started_block: iso(9) }); expect(texts.get(note)).toContain('[ ] Subtask');
+      await service.applyPlanning(at(9, 1)); expect(texts.get(note)).toContain('  - [/] Subtask'); const text = texts.get(note); expect(write).toHaveBeenCalled();
+      await service.applyPlanning(at(9, 2)); expect(texts.get(note)).toBe(text);
+    });
+    it('when an editor saves older text over it, and in every note that holds the todo', async () => {
+      const { service, repo, task, note, texts, add } = await started(); const other = `${repo.projectFolder()}/Plan.md`; await add(other, `- [ ] Subtask <!--organized:${task.id}-->`);
+      await service.applyPlanning(at(9)); texts.set(note, texts.get(note)!.replace('[/]', '[ ]')); texts.set(other, texts.get(other)!.replace('[/]', '[ ]'));
+      await service.applyPlanning(at(9, 5)); expect(texts.get(note)).toContain('[/] Subtask'); expect(texts.get(other)).toContain('[/] Subtask');
+    });
+    it('survives a heal that is itself raced or finds a note whose line was removed', async () => {
+      const { service, repo, task, note, texts, add } = await started(); const other = `${repo.projectFolder()}/Gone.md`; await add(other, `- [ ] Subtask <!--organized:${task.id}-->`);
+      await service.applyPlanning(at(9)); await service.refs(task.id); texts.set(note, texts.get(note)!.replace('[/]', '[ ]')); texts.set(other, 'the line was removed');
+      const write = vi.spyOn(repo, 'write').mockRejectedValueOnce(new Error('x changed concurrently; preserved.')); await service.applyPlanning(at(9, 1)); expect(texts.get(note)).toContain('[ ] Subtask');
+      write.mockRejectedValueOnce(new Error('disk full')); await expect(service.applyPlanning(at(9, 2))).rejects.toThrow('disk full'); await service.applyPlanning(at(9, 3)); expect(texts.get(note)).toContain('[/] Subtask');
+    });
+    it('only for a start the plugin made: a status the person chose is never rewritten, and other write errors still surface', async () => {
+      const { service, repo, task, note, texts } = await started(); await service.status(task.id, 'in_progress'); texts.set(note, texts.get(note)!.replace('[/]', '[ ]'));
+      await service.applyPlanning(at(9, 5)); expect(texts.get(note)).toContain('[ ] Subtask');
+      await repo.update(task.id, t => ({ ...t, status: 'open', time_tracking_started_at: null })); vi.spyOn(repo, 'write').mockRejectedValueOnce(new Error('disk full'));
+      await expect(service.applyPlanning(at(9, 6))).rejects.toThrow('disk full');
+    });
+    it('keeps the marker when a started task is forwarded or linked to a project', async () => {
+      const { service, repo, task } = await started(); await service.applyPlanning(at(9)); expect((await repo.read(task.id)).status).toBe('in_progress');
+      const project = `${repo.projectFolder()}/Proj.md`; await service.projects(task.id, [project]); expect(await repo.readText(repo.file(project)!)).toContain('- [/] Subtask');
+    });
+  });
 });
