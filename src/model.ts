@@ -17,6 +17,8 @@ export const MIN_SESSION_SECONDS = 60;
 /** Planned blocks (time set aside for later) are kept under the same cap as worked sessions. */
 export const MAX_PLANNED_SESSIONS = 500;
 /** Task properties written only while they hold something, so a task that never plans time carries no extra keys. */
+/** The task panel cards that can be folded away. */
+export const FOLDABLE_CARDS: readonly string[] = ["Description", "Subtasks", "Timer"];
 export const OPTIONAL_KEYS = ["planned_sessions", "auto_started_block", "time_budget_seconds"] as const;
 /** The longest time budget a task can hold (9999 hours); anything else in a note is ignored. */
 export const MAX_BUDGET_SECONDS = 9999 * 3600;
@@ -66,6 +68,8 @@ export interface Settings {
   projectStartsSet: boolean;
   retentionDetail: RetentionDetail;
   dayTasksCollapsed: boolean;
+  /** Task panel cards the person folded away (Description, Subtasks, Timer); the choice holds for every task. */
+  collapsedTaskSections: string[];
   hideDoneTasks: boolean;
   hideClosedProjects: boolean;
   noteFolder: string;
@@ -85,7 +89,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   taskFolder: "Tasks", dailyFolder: "Daily", dailyFormat: "YYYY-MM-DD", autoForward: true,
   missingSection: "recreate", sortScope: "list", displayProperties: [], propertiesAlign: "text", showScheduledDate: true, longPressMenu: true, startAtPlannedTime: false, taskRetentionDays: 0,
-  lastSeenVersion: "", showWhatsNew: true, dailyTemplate: "", knownProjects: [], collapsedHeadings: {}, projectsMigrated: false, projectNotesMarked: false, projectStartsSet: false, retentionDetail: "title", dayTasksCollapsed: false, hideDoneTasks: false, hideClosedProjects: true, noteFolder: "", onboardingSeen: false, taskNotesMigrated: false, taskNoteNamesMigrated: false, subtaskNestingMigrated: false, subtaskIndentMigrated: false,
+  lastSeenVersion: "", showWhatsNew: true, dailyTemplate: "", knownProjects: [], collapsedHeadings: {}, collapsedTaskSections: [], projectsMigrated: false, projectNotesMarked: false, projectStartsSet: false, retentionDetail: "title", dayTasksCollapsed: false, hideDoneTasks: false, hideClosedProjects: true, noteFolder: "", onboardingSeen: false, taskNotesMigrated: false, taskNoteNamesMigrated: false, subtaskNestingMigrated: false, subtaskIndentMigrated: false,
 };
 export function object(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -135,6 +139,7 @@ export function settingsFrom(value: unknown): Settings {
   try { if (typeof v.dailyTemplate === "string" && v.dailyTemplate.trim()) { const template = path(v.dailyTemplate); if (template.endsWith(".md")) s.dailyTemplate = template; } } catch { /* Invalid persisted paths use safe defaults. */ }
   s.knownProjects = [...new Set(strings(v.knownProjects).filter(p => { try { return path(p) === p && p.endsWith(".md"); } catch { return false; } }))];
   s.projectsMigrated = v.projectsMigrated === true; s.projectNotesMarked = v.projectNotesMarked === true; s.projectStartsSet = v.projectStartsSet === true; s.retentionDetail = member(v.retentionDetail, RETENTION_DETAILS, "title"); s.dayTasksCollapsed = v.dayTasksCollapsed === true; s.hideDoneTasks = v.hideDoneTasks === true; s.hideClosedProjects = typeof v.hideClosedProjects === "boolean" ? v.hideClosedProjects : true; s.onboardingSeen = v.onboardingSeen === true; s.taskNotesMigrated = v.taskNotesMigrated === true; s.taskNoteNamesMigrated = v.taskNoteNamesMigrated === true; s.subtaskNestingMigrated = v.subtaskNestingMigrated === true; s.subtaskIndentMigrated = v.subtaskIndentMigrated === true;
+  s.collapsedTaskSections = [...new Set(strings(v.collapsedTaskSections).filter(name => FOLDABLE_CARDS.includes(name)))];
   s.collapsedHeadings = {};
   for (const [notePath, keys] of Object.entries(object(v.collapsedHeadings))) { const kept = [...new Set(strings(keys))]; if (kept.length) s.collapsedHeadings[notePath] = kept; }
   return s;

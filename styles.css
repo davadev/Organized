@@ -127,6 +127,13 @@
 .organized-task-details .organized-card { gap: 6px; padding: 8px 0; border: 0; border-radius: 0; background: transparent; }
 .organized-task-details .organized-card + .organized-card { border-block-start: 1px solid var(--background-modifier-border); }
 .organized-card-head { display: flex; align-items: center; gap: 8px; inline-size: 100%; }
+.organized-view .organized-panel .organized-card-head button.organized-card-fold { flex: 1 1 auto; justify-content: flex-start; min-inline-size: 0; min-block-size: 28px; padding: 0; border: 0; background: transparent; box-shadow: none; color: var(--text-normal); gap: 8px; text-align: start; }
+.organized-view .organized-panel .organized-card-head button.organized-card-fold:hover { background: transparent; color: var(--text-normal); }
+.organized-card-actions { display: flex; flex: 0 0 auto; gap: 2px; margin-inline-start: auto; }
+.organized-view .organized-panel .organized-card-head button.organized-icon-button { flex: 0 0 32px; inline-size: 32px; block-size: 32px; min-block-size: 0; padding: 4px; }
+.organized-card-summary { color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.organized-card-body { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; inline-size: 100%; }
+.organized-card[data-collapsed] > .organized-card-body { display: none; }
 .organized-card-icon { display: inline-flex; color: var(--interactive-accent); }
 .organized-card .organized-card-title { margin: 0; color: var(--text-normal); font-size: 13px; line-height: 1.4; font-weight: 600; }
 .organized-selected-module { border-color: var(--background-modifier-border-hover); }
