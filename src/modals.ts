@@ -1,6 +1,6 @@
 import { App, Component, Modal, Setting, SuggestModal } from "obsidian";
 import { path, PRIORITIES, Priority, Task, validDate, WorkSession } from "./model";
-import { isoFromInput, lengthOf, localInput, sessionProblem } from "./sessions";
+import { isoFromInput, lengthOf, localInput, SessionKind, sessionProblem } from "./sessions";
 import { cleanTags } from "./notes";
 import { freePath, noteName } from "./names";
 import { report } from "./service";
@@ -120,14 +120,20 @@ export class ProjectPicker extends Modal {
 
 export interface SessionEdit {
   heading: string; taskTitle: string; start: string; end: string;
-  save: (session: WorkSession) => Promise<void>; remove?: () => Promise<void>; openTask?: () => Promise<void>;
+  /** What the block is. A new block can be switched between the two; an existing one keeps its kind. */
+  kind: SessionKind; switchable?: boolean;
+  save: (session: WorkSession, kind: SessionKind) => Promise<void>; remove?: () => Promise<void>; openTask?: () => Promise<void>;
+  /** For a planned block that is over: turns it into worked time. */
+  logWorked?: () => Promise<void>;
 }
-/** Adds or edits one block of time worked: the task, a start and an end, with the length shown as you type. */
+/** Adds or edits one block of time, worked or planned: the task, a start and an end, with the length shown as you type. */
 export class SessionModal extends Modal {
   constructor(app: App, readonly edit: SessionEdit, readonly now = () => Date.now()) { super(app); decorate(this); }
   onOpen(): void {
     this.titleEl.setText(this.edit.heading); this.contentEl.addClass("organized-modal");
     this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-task", text: this.edit.taskTitle });
+    let kind = this.edit.kind;
+    if (this.edit.switchable) new Setting(this.contentEl).setName("Type").addDropdown(d => d.addOption("worked", "Time worked").addOption("planned", "Planned time").setValue(kind).onChange(value => { kind = value === "planned" ? "planned" : "worked"; paint(); }));
     // A date and a time side by side: one datetime-local field is wider than a phone's dialog and opens its picker over the form the moment it is focused.
     const field = (label: string, iso: string) => {
       this.contentEl.createEl("label", { cls: "organized-modal-label", text: label });
@@ -140,16 +146,17 @@ export class SessionModal extends Modal {
     const note = this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-note", attr: { role: "status" } });
     const read = () => ({ start: isoFromInput(start.value()), end: isoFromInput(end.value()) });
     const paint = () => {
-      const { start: from, end: to } = read(); const problem = sessionProblem(from, to, this.now());
+      const { start: from, end: to } = read(); const problem = sessionProblem(from, to, this.now(), kind);
       note.setText(problem ?? `Length: ${lengthOf({ start: from!, end: to! })}`); note.toggleClass("organized-session-problem", problem !== null);
     };
     for (const input of [...start.inputs, ...end.inputs]) input.addEventListener("input", paint);
     paint();
     const actions = new Setting(this.contentEl);
     actions.addButton(b => b.setButtonText("Save").setCta().onClick(() => {
-      const { start: from, end: to } = read(); const problem = sessionProblem(from, to, this.now()); if (problem) { paint(); return; }
-      this.close(); void this.edit.save({ start: from!, end: to! }).catch(report);
+      const { start: from, end: to } = read(); const problem = sessionProblem(from, to, this.now(), kind); if (problem) { paint(); return; }
+      this.close(); void this.edit.save({ start: from!, end: to! }, kind).catch(report);
     }));
+    if (this.edit.logWorked) { const log = this.edit.logWorked; actions.addButton(b => b.setButtonText("Log as worked").onClick(() => { this.close(); void log().catch(report); })); }
     if (this.edit.openTask) { const open = this.edit.openTask; actions.addButton(b => b.setButtonText("Open task").onClick(() => { this.close(); void open().catch(report); })); }
     if (this.edit.remove) { const remove = this.edit.remove; actions.addButton(b => { b.setButtonText("Delete").onClick(() => { this.close(); void remove().catch(report); }); b.buttonEl.addClass("mod-warning"); }); }
   }

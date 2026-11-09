@@ -14,6 +14,10 @@ export interface WorkSession { start: string; end: string }
 export const MAX_WORK_SESSIONS = 500;
 /** Shorter timer runs still count toward tracked time but are not worth a block on the calendar. */
 export const MIN_SESSION_SECONDS = 60;
+/** Planned blocks (time set aside for later) are kept under the same cap as worked sessions. */
+export const MAX_PLANNED_SESSIONS = 500;
+/** Task properties written only while they hold something, so a task that never plans time carries no extra keys. */
+export const OPTIONAL_KEYS = ["planned_sessions", "auto_started_block"] as const;
 export interface Task {
   schema_version: number; id: string; title: string; status: Status; priority: Priority;
   scheduled: string | null; created: string; time_tracked_seconds: number;
@@ -21,6 +25,10 @@ export interface Task {
   recurrence_periods: { start: string; stop: string | null }[];
   starred: boolean; projects: string[]; movement_history: Movement[];
   daily_note_section_path: Section[]; work_sessions: WorkSession[];
+  /** Blocks of time set aside for the future (or the past, as an estimate). They never count toward `time_tracked_seconds`. */
+  planned_sessions: WorkSession[];
+  /** Start of the planned block that set this task in progress by itself; lets that flip be undone without touching a status the person chose. */
+  auto_started_block: string | null;
   /** Path of the standalone note this task became. Set only when the task note is kept for the time it tracked; such a task has no todo line and is hidden from every list. */
   converted_to: string | null;
   /** Links to the task notes of this task's subtasks (`[[Name]]`), kept in step with the todos nested under it in the notes. */
@@ -43,6 +51,8 @@ export interface Settings {
   showScheduledDate: boolean;
   /** On a phone or tablet, long-pressing a todo's checkbox in a daily note offers its markers. */
   longPressMenu: boolean;
+  /** While Obsidian is open, a task is set in progress when a block planned for it begins and put back to open when the block ends. */
+  startAtPlannedTime: boolean;
   taskRetentionDays: number;
   dailyTemplate: string;
   knownProjects: string[];
@@ -70,7 +80,7 @@ export interface Settings {
 }
 export const DEFAULT_SETTINGS: Settings = {
   taskFolder: "Tasks", dailyFolder: "Daily", dailyFormat: "YYYY-MM-DD", autoForward: true,
-  missingSection: "recreate", sortScope: "list", displayProperties: [], propertiesAlign: "text", showScheduledDate: true, longPressMenu: true, taskRetentionDays: 0,
+  missingSection: "recreate", sortScope: "list", displayProperties: [], propertiesAlign: "text", showScheduledDate: true, longPressMenu: true, startAtPlannedTime: false, taskRetentionDays: 0,
   lastSeenVersion: "", showWhatsNew: true, dailyTemplate: "", knownProjects: [], collapsedHeadings: {}, projectsMigrated: false, projectNotesMarked: false, projectStartsSet: false, retentionDetail: "title", dayTasksCollapsed: false, hideDoneTasks: false, hideClosedProjects: true, noteFolder: "", onboardingSeen: false, taskNotesMigrated: false, taskNoteNamesMigrated: false, subtaskNestingMigrated: false, subtaskIndentMigrated: false,
 };
 export function object(value: unknown): Record<string, unknown> {
@@ -115,6 +125,7 @@ export function settingsFrom(value: unknown): Settings {
   s.showWhatsNew = typeof v.showWhatsNew === "boolean" ? v.showWhatsNew : true;
   s.lastSeenVersion = typeof v.lastSeenVersion === "string" ? v.lastSeenVersion : "";
   s.longPressMenu = typeof v.longPressMenu === "boolean" ? v.longPressMenu : true;
+  s.startAtPlannedTime = v.startAtPlannedTime === true;
   s.taskRetentionDays = Number.isInteger(v.taskRetentionDays) && Number(v.taskRetentionDays) >= 0 && Number(v.taskRetentionDays) <= 36500 ? Number(v.taskRetentionDays) : 0;
   try { if (typeof v.noteFolder === "string") s.noteFolder = path(v.noteFolder, true); } catch { /* An invalid remembered folder falls back to the vault root. */ }
   try { if (typeof v.dailyTemplate === "string" && v.dailyTemplate.trim()) { const template = path(v.dailyTemplate); if (template.endsWith(".md")) s.dailyTemplate = template; } } catch { /* Invalid persisted paths use safe defaults. */ }
@@ -133,8 +144,9 @@ export function taskFrom(value: unknown, expectedId: string): Task {
   const periods = Array.isArray(v.recurrence_periods) ? v.recurrence_periods.map(object).filter(p => validDate(p.start) && (p.stop === null || validDate(p.stop))) : [];
   const history = Array.isArray(v.movement_history) ? v.movement_history.map(object).filter(m => typeof m.id === "string" && ["schedule", "reschedule", "forward"].includes(String(m.kind)) && ["manual", "automatic"].includes(String(m.source)) && typeof m.from === "string" && validDate(m.to) && typeof m.at === "string" && Number.isFinite(Date.parse(m.at))) : [];
   const sections = Array.isArray(v.daily_note_section_path) ? v.daily_note_section_path.map(object).filter(s => Number.isInteger(s.level) && Number(s.level) >= 1 && Number(s.level) <= 6 && typeof s.text === "string" && Number.isInteger(s.ordinal) && Number(s.ordinal) >= 0) : [];
-  const sessions = (Array.isArray(v.work_sessions) ? v.work_sessions.map(object) : []).flatMap(w => typeof w.start === "string" && typeof w.end === "string" && Date.parse(w.start) < Date.parse(w.end) ? [{ start: w.start, end: w.end }] : [])
-    .sort((a, b) => Date.parse(a.start) - Date.parse(b.start)).slice(-MAX_WORK_SESSIONS);
+  const sessionsOf = (value: unknown, cap: number): WorkSession[] => (Array.isArray(value) ? value.map(object) : []).flatMap(w => typeof w.start === "string" && typeof w.end === "string" && Date.parse(w.start) < Date.parse(w.end) ? [{ start: w.start, end: w.end }] : [])
+    .sort((a, b) => Date.parse(a.start) - Date.parse(b.start)).slice(-cap);
+  const sessions = sessionsOf(v.work_sessions, MAX_WORK_SESSIONS);
   return {
     schema_version: 1, id: v.id, title: v.title.trim(), status: member(v.status, STATUSES, "open"), priority: member(v.priority, PRIORITIES, "none"),
     scheduled: validDate(v.scheduled) ? v.scheduled : null,
@@ -145,6 +157,8 @@ export function taskFrom(value: unknown, expectedId: string): Task {
     recurring: v.recurring === true, recurrence_periods: periods as unknown as Task["recurrence_periods"], starred: v.starred === true,
     projects: strings(v.projects).filter(p => { try { return path(p) === p && p.endsWith(".md"); } catch { return false; } }),
     movement_history: history as unknown as Movement[], daily_note_section_path: sections as unknown as Section[], work_sessions: sessions,
+    planned_sessions: sessionsOf(v.planned_sessions, MAX_PLANNED_SESSIONS),
+    auto_started_block: typeof v.auto_started_block === "string" && Number.isFinite(Date.parse(v.auto_started_block)) ? v.auto_started_block : null,
     converted_to: typeof v.converted_to === "string" && v.converted_to.endsWith(".md") ? v.converted_to : null,
     subtasks: [...new Set(strings(v.subtasks).filter(isNoteLink))],
   };
@@ -161,7 +175,8 @@ export function elapsed(task: Task, now = Date.now()): number {
   return task.time_tracked_seconds + (task.time_tracking_started_at ? Math.max(0, Math.floor((now - Date.parse(task.time_tracking_started_at)) / 1000)) : 0);
 }
 export function setStatus(task: Task, status: Status, now = new Date()): Task {
-  const next = { ...task, status: task.recurring ? "open" as const : status };
+  // Any status change made through here is the person's (or a marker's), so a flip made by a planned block no longer applies.
+  const next = { ...task, status: task.recurring ? "open" as const : status, auto_started_block: null };
   if (next.status === "completed" || next.status === "canceled") next.closed_at = task.status === next.status && task.closed_at ? task.closed_at : now.toISOString();
   else next.closed_at = null;
   if (status === "in_progress") next.time_tracking_started_at = task.time_tracking_started_at ?? now.toISOString();
@@ -172,4 +187,8 @@ export function setStatus(task: Task, status: Status, now = new Date()): Task {
     next.time_tracked_seconds = elapsed(task, now.getTime()); next.time_tracking_started_at = null;
   }
   return next;
+}
+/** A planned block has begun: the task is in progress but nothing is timed, and the block is remembered so only this flip is undone. */
+export function startPlanned(task: Task, block: WorkSession): Task {
+  return { ...task, status: "in_progress", closed_at: null, auto_started_block: block.start };
 }

@@ -1,7 +1,7 @@
 import { inBatches } from "./batches";
 import { App, Editor, normalizePath, TFile, parseYaml, stringifyYaml } from "obsidian";
 import { validColor } from "./colors";
-import { localDate, makeId, newTask, object, path, Task, taskFrom, Settings, validDate, validId } from "./model";
+import { localDate, makeId, newTask, object, OPTIONAL_KEYS, path, Task, taskFrom, Settings, validDate, validId } from "./model";
 import { freePath, readableName } from "./names";
 import { parseTasks, PROJECT_ONGOING, PROJECT_SECTIONS, TaskLine } from "./codec";
 
@@ -21,6 +21,9 @@ export function projectName(notePath: string, among: readonly string[] = []): st
 /** The day a project started, `YYYY-MM-DD`. Set automatically; an `organized_end` date is reserved for later and not used yet. */
 export const START_KEY = "organized_start";
 /** A start date as stored: `YYYY-MM-DD` text, or a Date when a YAML reader turned the bare date into one. */
+const isEmpty = (value: unknown): boolean => value === null || (Array.isArray(value) && !value.length);
+/** A task as written to its note: without the optional properties that hold nothing. */
+const withoutEmptyOptional = (task: Task): Record<string, unknown> => Object.fromEntries(Object.entries(task).filter(([key, value]) => !((OPTIONAL_KEYS as readonly string[]).includes(key) && isEmpty(value))));
 const hasStart = (value: unknown): boolean => validDate(value) || (value instanceof Date && Number.isFinite(value.getTime()));
 /** A new project note: frontmatter marking it, dating its start, and one heading per status that linked tasks move between. */
 export function projectTemplate(today = localDate()): string {
@@ -214,7 +217,7 @@ export class Repository {
     try { return await this.app.vault.create(notePath, content); } catch (error) { const concurrent = this.file(notePath); if (concurrent) return concurrent; throw error; }
   }
   async create(title: string): Promise<Task> {
-    const task = newTask(title, makeId()); const content = `---\n${stringifyYaml(task)}---\n\n`;
+    const task = newTask(title, makeId()); const content = `---\n${stringifyYaml(withoutEmptyOptional(task))}---\n\n`;
     // Named after the title; a clash from a note created in between gets the next counter, and a name the file system refuses falls back to the id.
     for (let attempt = 0; ; attempt++) {
       const notePath = attempt < 2 ? path(freePath(this.settings().taskFolder, readableName(title), this.nameTaken())) : this.taskPath(task.id);
@@ -241,6 +244,8 @@ export class Repository {
     let result: Task | null = null;
     await this.app.fileManager.processFrontMatter(file, (raw: Record<string, unknown>) => {
       result = taskFrom(mutate(taskFrom(raw, id)), id); Object.assign(raw, result);
+      // Object.assign never removes a key, and a task that plans nothing should not carry empty ones.
+      for (const key of OPTIONAL_KEYS) if (isEmpty(result[key])) delete raw[key];
     });
     this.parsed.delete(file.path);
     if (!result) throw new Error("The frontmatter update did not complete."); return result;

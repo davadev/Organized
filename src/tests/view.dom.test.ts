@@ -346,7 +346,7 @@ describe('compact calendar and contextual task inspector', () => {
     const task = await repo.create('Midday'); await repo.update(task.id, t => ({ ...t, status: 'in_progress', time_tracking_started_at: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 11, 0).toISOString() }));
     view.selectedDate = localDate(); view.calendarMode = 'Day'; await view.render();
     expect(view.contentEl.querySelector('.organized-now-line')).toBeTruthy(); expect(view.contentEl.textContent).toContain('There is no daily note for this day yet.'); expect(files.has(service.daily.path(localDate()))).toBe(false);
-    const next = moment(localDate(), 'YYYY-MM-DD').add(1, 'day').format('YYYY-MM-DD'); button(view.contentEl, 'Next day').click(); await flush(); expect(view.selectedDate).toBe(next); expect(view.contentEl.textContent).toContain('No tracked time this day.'); expect(view.contentEl.querySelector('.organized-day-grid')).toBeNull();
+    const next = moment(localDate(), 'YYYY-MM-DD').add(1, 'day').format('YYYY-MM-DD'); button(view.contentEl, 'Next day').click(); await flush(); expect(view.selectedDate).toBe(next); expect(view.contentEl.textContent).toContain('No time tracked or planned this day.'); expect(view.contentEl.querySelector('.organized-day-grid')).toBeTruthy();
     button(view.contentEl, 'Previous day').click(); await flush(); expect(view.selectedDate).toBe(localDate()); button(view.contentEl, 'Next day').click(); await flush(); button(view.contentEl, 'Today').click(); await flush(); expect(view.selectedDate).toBe(localDate());
     const create = vi.spyOn(view, 'selectDay').mockResolvedValue(); button(view.contentEl, 'Create daily note').click(); await flush(); expect(create).toHaveBeenCalledWith(localDate()); expect(files.has(service.daily.path(localDate()))).toBe(false);
   });
@@ -368,7 +368,7 @@ describe('compact calendar and contextual task inspector', () => {
     const head = () => view.contentEl.querySelector<HTMLElement>('.organized-section-fold')!; const rows = () => view.contentEl.querySelectorAll('.organized-day-task').length;
     expect(rows()).toBe(3); expect(head().getAttribute('aria-expanded')).toBe('true'); expect(head().querySelector('.organized-count')!.textContent).toBe('3'); expect(owner.settings.dayTasksCollapsed).toBe(false);
     head().click(); await flush(); expect(owner.settings.dayTasksCollapsed).toBe(true); expect(rows()).toBe(0); expect(head().getAttribute('aria-expanded')).toBe('false'); expect(head().querySelector('.organized-count')!.textContent).toBe('3');
-    await view.render(); expect(rows()).toBe(0); expect(view.contentEl.querySelector('.organized-day-grid') === null).toBe(true);
+    await view.render(); expect(rows()).toBe(0); expect(view.contentEl.querySelector('.organized-day-grid') === null).toBe(false);
     await add(service.daily.path('2026-03-05'), ''); view.selectedDate = '2026-03-05'; await view.render(); expect(view.contentEl.textContent).not.toContain("No tasks in this day's note.");
     view.selectedDate = '2026-03-06'; await view.render(); expect(view.contentEl.textContent).toContain('There is no daily note for this day yet.'); expect(button(view.contentEl, 'Create daily note')).toBeTruthy();
     head().click(); await flush(); expect(owner.settings.dayTasksCollapsed).toBe(false); view.selectedDate = '2026-03-04'; await view.render(); expect(rows()).toBe(3);
@@ -469,7 +469,7 @@ describe('compact calendar and contextual task inspector', () => {
     blocks()[1].click(); await flush(); const editor = Modal.instances.at(-1) as unknown as SessionModal; const [from, to] = sessionFields(editor.contentEl); expect(from.value).toBe('2026-03-04T12:00'); to.value = '2026-03-04T14:00'; to.dispatchEvent(new Event('input'));
     Array.from(editor.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Save')!.click(); for (let n = 0; n < 6; n++) await flush(); saved = await repo.read(task.id); expect(saved.work_sessions[1].end).toBe(new Date(2026, 2, 4, 14, 0).toISOString()); expect(saved.time_tracked_seconds).toBe(3600 + 7200);
     owner.selectedTaskId = task.id; view.tab = 'Task'; view.module = 'Timer'; await view.render(); const rows = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-session-row')); expect(rows.map(r => r.textContent)).toEqual(['12:00–14:00 · 2h', '09:00–10:00 · 1h']); expect(view.contentEl.querySelector('.organized-session-day')!.textContent).toBe('2026-03-04 · 3h'); expect(view.contentEl.querySelector('summary')?.textContent).toContain('Sessions (2)');
-    button(view.contentEl, 'Add time').click(); await flush(); const added = Modal.instances.at(-1) as unknown as SessionModal; expect(added.titleEl.textContent).toBe('Add time worked'); expect(sessionFields(added.contentEl)[0].value).toBe(`${localDate()}T09:00`); added.close();
+    button(view.contentEl, 'Add time').click(); await flush(); const added = Modal.instances.at(-1) as unknown as SessionModal; expect(added.titleEl.textContent).toBe('Add time'); expect(sessionFields(added.contentEl)[0].value).toBe(`${localDate()}T09:00`); added.close();
     rows[1].click(); await flush(); const old = Modal.instances.at(-1) as unknown as SessionModal; Array.from(old.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Delete')!.click(); for (let n = 0; n < 6; n++) await flush(); saved = await repo.read(task.id); expect(saved.work_sessions).toHaveLength(1); expect(saved.time_tracked_seconds).toBe(7200);
   });
   it('opens the task, not an editor, from a running block', async () => {
@@ -526,5 +526,34 @@ describe('compact calendar and contextual task inspector', () => {
     const { owner, view, repo } = await fixture(); const task = await repo.create('Convertible'); const convert = vi.spyOn(owner, 'convertToNote').mockImplementation(() => undefined);
     owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); await flush(); button(view.contentEl, 'Make standalone note').click(); expect(convert).toHaveBeenLastCalledWith(expect.objectContaining({ id: task.id }), undefined);
     const context: any = { file: { path: 'Daily/x.md' }, line: { id: task.id } }; owner.context = context; await view.render(); await flush(); button(view.contentEl, 'Make standalone note').click(); expect(convert).toHaveBeenLastCalledWith(expect.objectContaining({ id: task.id }), context);
+  });
+  it('plans time ahead from the day grid, shows it apart from tracked time and logs a finished plan as worked', async () => {
+    const { owner, view, repo } = await fixture(); vi.setSystemTime(new Date(2026, 2, 4, 15, 0, 0)); const task = await repo.create('Write report');
+    const underway = await repo.create('Underway'); await repo.update(underway.id, t => ({ ...t, status: 'in_progress' })); const closed = await repo.create('Finished'); await repo.update(closed.id, t => ({ ...t, status: 'completed' }));
+    view.selectedDate = '2026-03-05'; view.calendarMode = 'Day'; await view.render(); const grid = () => view.contentEl.querySelector<HTMLElement>('.organized-day-grid')!;
+    const before = Modal.instances.length; grid().click(); await flush(); expect(Modal.instances.length).toBe(before);
+    grid().getBoundingClientRect = () => ({ top: 100, height: 600 } as DOMRect); grid().dispatchEvent(new MouseEvent('click', { clientY: 400 })); await flush();
+    const picker = Modal.instances.at(-1) as unknown as TaskPicker; expect(picker.getSuggestions('').map((t: any) => t.title).sort()).toEqual(['Underway', 'Write report']); await picker.choose('typed text' as any); expect(Modal.instances.at(-1)).toBe(picker as any); await picker.choose(task); const modal = Modal.instances.at(-1) as unknown as SessionModal;
+    expect(modal.edit).toMatchObject({ heading: 'Add time', kind: 'planned', switchable: true }); const [start, end] = sessionFields(modal.contentEl); expect(start.value).toBe('2026-03-05T13:00'); expect(end.value).toBe('2026-03-05T14:00');
+    Array.from(modal.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Save')!.click(); for (let n = 0; n < 6; n++) await flush();
+    let saved = await repo.read(task.id); expect(saved.planned_sessions).toHaveLength(1); expect(saved.work_sessions).toHaveLength(0); expect(saved.time_tracked_seconds).toBe(0);
+    await view.render(); const planned = view.contentEl.querySelector<HTMLElement>('.organized-block')!; expect(planned.getAttribute('data-planned')).toBe('true'); expect(planned.getAttribute('aria-label')).toContain('planned');
+    const open = Modal.instances.length; planned.click(); await flush(); expect(Modal.instances.length).toBe(open + 1); const editor = Modal.instances.at(-1) as unknown as SessionModal;
+    expect(editor.edit).toMatchObject({ heading: 'Edit planned time', kind: 'planned', switchable: false, logWorked: undefined });
+    const [from, to] = sessionFields(editor.contentEl); to.value = '2026-03-05T15:00'; to.dispatchEvent(new Event('input')); Array.from(editor.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Save')!.click(); for (let n = 0; n < 6; n++) await flush();
+    expect(from.value).toBe('2026-03-05T13:00'); saved = await repo.read(task.id); expect(saved.planned_sessions[0].end).toBe(new Date(2026, 2, 5, 15, 0).toISOString());
+    button(view.contentEl, 'Add time worked').click(); await flush(); await (Modal.instances.at(-1) as unknown as TaskPicker).choose(task); expect((Modal.instances.at(-1) as unknown as SessionModal).edit.kind).toBe('planned');
+    view.calendarMode = 'Week'; await view.render(); expect(view.contentEl.querySelector('.organized-week-block')!.getAttribute('data-planned')).toBe('true');
+    owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); expect(view.contentEl.textContent).toContain('Tracked so far'); expect(view.contentEl.textContent).toContain('Planned'); expect(view.contentEl.querySelectorAll('.organized-sessions')).toHaveLength(1);
+    expect(view.contentEl.querySelector('.organized-sessions summary')!.textContent).toBe('Planned blocks (1)');
+    button(view.contentEl, 'Plan time').click(); await flush(); const plan = Modal.instances.at(-1) as unknown as SessionModal; expect(plan.edit.kind).toBe('planned'); plan.close();
+    const details = view.contentEl.querySelector<HTMLDetailsElement>('.organized-sessions')!; details.open = true; details.dispatchEvent(new Event('toggle')); await view.render(); expect(view.contentEl.querySelector<HTMLDetailsElement>('.organized-sessions')!.open).toBe(true);
+    const row = view.contentEl.querySelector<HTMLElement>('.organized-session-row')!; row.click(); await flush(); const fromList = Modal.instances.at(-1) as unknown as SessionModal; expect(fromList.edit.kind).toBe('planned');
+    Array.from(fromList.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Delete')!.click(); for (let n = 0; n < 6; n++) await flush(); expect((await repo.read(task.id)).planned_sessions).toHaveLength(0);
+    const past = { start: new Date(2026, 2, 4, 9, 0).toISOString(), end: new Date(2026, 2, 4, 10, 0).toISOString() }; await repo.update(task.id, t => ({ ...t, planned_sessions: [past] }));
+    view.tab = 'Calendar'; view.calendarMode = 'Day'; view.selectedDate = '2026-03-04'; await view.render(); view.contentEl.querySelector<HTMLElement>('.organized-block')!.click(); await flush();
+    const finished = Modal.instances.at(-1) as unknown as SessionModal; Array.from(finished.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Log as worked')!.click(); for (let n = 0; n < 6; n++) await flush();
+    saved = await repo.read(task.id); expect(saved.planned_sessions).toHaveLength(0); expect(saved.work_sessions).toEqual([past]); expect(saved.time_tracked_seconds).toBe(3600);
+    await view.render(); const worked = view.contentEl.querySelector<HTMLElement>('.organized-block')!; worked.click(); await flush(); expect((Modal.instances.at(-1) as unknown as SessionModal).edit.kind).toBe('worked');
   });
 });

@@ -1,6 +1,7 @@
 import type { Task, WorkSession } from "./model";
+import { plannable } from "./planning";
 
-export interface Block { task: Task; startMin: number; endMin: number; running: boolean; lane: number; lanes: number; /** The stored session behind the block, unclipped; absent for a running timer. */ session?: WorkSession }
+export interface Block { task: Task; startMin: number; endMin: number; running: boolean; /** Time set aside rather than worked. */ planned: boolean; lane: number; lanes: number; /** The stored session behind the block, unclipped; absent for a running timer. */ session?: WorkSession }
 export const DEFAULT_HOURS: readonly [number, number] = [8, 18];
 
 /** A block is drawn at least this tall (see `.organized-block`), so a shorter run still occupies this much of the grid and must not share a column with the next one. */
@@ -24,19 +25,20 @@ export function assignLanes(blocks: Block[]): Block[] {
   close();
   return sorted;
 }
-/** In-progress blocks of every task on one local day, with the running timer drawn up to `now`. Sessions that cross midnight appear on both days. */
+/** Tracked and planned blocks of every task on one local day, with the running timer drawn up to `now`. Sessions that cross midnight appear on both days. */
 export function blocksOn(tasks: Task[], date: string, now: number): Block[] {
   const [year, month, day] = date.split("-").map(Number);
   const start = new Date(year, month - 1, day); const end = new Date(year, month - 1, day + 1);
   const blocks: Block[] = [];
   for (const task of tasks) {
     const running = task.time_tracking_started_at !== null;
-    const sessions: { start: number; end: number; running: boolean; session?: WorkSession }[] = [...task.work_sessions.map(s => ({ start: Date.parse(s.start), end: Date.parse(s.end), running: false, session: s })),
-      ...(running ? [{ start: Date.parse(task.time_tracking_started_at!), end: now, running: true }] : [])];
+    const sessions: { start: number; end: number; running: boolean; planned: boolean; session?: WorkSession }[] = [...task.work_sessions.map(s => ({ start: Date.parse(s.start), end: Date.parse(s.end), running: false, planned: false, session: s })),
+      ...(plannable(task) ? task.planned_sessions.map(s => ({ start: Date.parse(s.start), end: Date.parse(s.end), running: false, planned: true, session: s })) : []),
+      ...(running ? [{ start: Date.parse(task.time_tracking_started_at!), end: now, running: true, planned: false }] : [])];
     for (const session of sessions) {
       if (session.end <= start.getTime() || session.start >= end.getTime() || session.end <= session.start) continue;
       const startMin = minutesInto(session.start, start, end); const endMin = minutesInto(session.end, start, end);
-      if (endMin > startMin) blocks.push({ task, startMin, endMin, running: session.running, lane: 0, lanes: 1, session: session.session });
+      if (endMin > startMin) blocks.push({ task, startMin, endMin, running: session.running, planned: session.planned, lane: 0, lanes: 1, session: session.session });
     }
   }
   return assignLanes(blocks);

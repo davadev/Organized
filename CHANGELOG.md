@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Plan your time ahead.** Time blocks can now be set aside for later, not only logged afterwards. Tap an empty spot on the Day grid (or use **Add time** and choose *Planned time*) to block time for a task, on today or any day ahead. Planned blocks are drawn dashed next to tracked ones and never count as worked time. A planned block that is over can be logged as worked in one tap.
+- **Tracked and planned, side by side.** The task's Timer card now has *Tracked so far* and *Planned*, so you can compare an estimate with what the work took.
+- **Tasks start at their planned time (optional).** The new setting *Start tasks at their planned time* (Task behavior, off by default) sets a task in progress, without starting a timer, when its planned block begins, and puts it back to open with a notice when the block ends. A status you set yourself is never changed.
+
 ## 0.1.3
 
 - What's new now has a note for this fix too, so someone updating from 0.1.1 straight to 0.1.3 sees both releases, oldest first.

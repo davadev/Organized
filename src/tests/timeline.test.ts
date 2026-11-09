@@ -32,7 +32,7 @@ describe("timeline", () => {
     const same = blocksOn([task("p", [["2026-03-02", "09:00:00", "2026-03-02", "10:00:00"]]), task("q", [["2026-03-02", "09:00:00", "2026-03-02", "09:30:00"]])], "2026-03-02", 0); expect(same.map(b => b.task.title)).toEqual(["q", "p"]);
   });
   it("keeps the working day and widens it only when a block falls outside", () => {
-    expect(hourRange([])).toEqual([8, 18]); const block = (startMin: number, endMin: number) => ({ task: task("t"), startMin, endMin, running: false, lane: 0, lanes: 1 });
+    expect(hourRange([])).toEqual([8, 18]); const block = (startMin: number, endMin: number) => ({ task: task("t"), startMin, endMin, running: false, planned: false, lane: 0, lanes: 1 });
     expect(hourRange([block(600, 660)])).toEqual([8, 18]); expect(hourRange([block(330, 400), block(1100, 1250)])).toEqual([5, 21]); expect(hourRange([block(0, 1440)])).toEqual([0, 24]); expect(hourRange([], [6, 20])).toEqual([6, 20]);
   });
   it("puts a task started right after a very short run beside it, and handles several running at once", () => {
@@ -42,7 +42,14 @@ describe("timeline", () => {
     expect(blocksOn([run("x", "10:00:00"), run("y", "10:30:00"), run("z", "10:45:00")], "2026-03-02", now).map(b => [b.task.title, b.lane, b.lanes])).toEqual([["x", 0, 3], ["y", 1, 3], ["z", 2, 3]]);
   });
   it("widens the hours to fit a short block drawn past its end", () => {
-    const short = { task: task("t"), startMin: 1040, endMin: 1041, running: false, lane: 0, lanes: 1 }; expect(hourRange([short])).toEqual([8, 18]);
+    const short = { task: task("t"), startMin: 1040, endMin: 1041, running: false, planned: false, lane: 0, lanes: 1 }; expect(hourRange([short])).toEqual([8, 18]);
     expect(hourRange([{ ...short, startMin: 1075, endMin: 1076 }])).toEqual([8, 19]); expect(hourRange([{ ...short, startMin: 1430, endMin: 1431 }])).toEqual([8, 24]);
+  });
+  it("draws planned blocks for tasks still to do, beside tracked ones, and hides them for closed or converted tasks", () => {
+    const planned = (id: string, status: "open" | "completed" = "open", converted: string | null = null) => ({ ...task(id), status, converted_to: converted, planned_sessions: [{ start: local("2026-03-09", "09:00:00"), end: local("2026-03-09", "10:00:00") }] });
+    const worked = task("worked", [["2026-03-09", "09:30:00", "2026-03-09", "10:30:00"]]);
+    const day = blocksOn([planned("plan"), worked, planned("done", "completed"), planned("gone", "open", "Note.md")], "2026-03-09", 0);
+    expect(day.map(b => [b.task.title, b.planned, b.lanes])).toEqual([["plan", true, 2], ["worked", false, 2]]);
+    expect(day[0].session).toEqual({ start: local("2026-03-09", "09:00:00"), end: local("2026-03-09", "10:00:00") });
   });
 });

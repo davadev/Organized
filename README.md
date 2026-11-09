@@ -92,7 +92,7 @@ That is all a todo costs until it needs more: a title and a status. No empty for
 - **5** · Three buttons to **add a subtask**, **link an existing task** or **make this a subtask of another**. Each row has a small unlink button.
 - **6** · **Priority**.
 - **7** · **Schedule**: pick a date, or clear it again. Scheduled tasks arrive in that day's note.
-- **8** · **Timer**: the time worked, **Stop timer**, **Add time** by hand, and a list of sessions you can correct.
+- **8** · **Timer**: *Tracked so far* (the time worked, **Stop timer**, **Add time** by hand, a list of sessions you can correct) and *Planned* (the time you set aside, **Plan time**, and a list of planned blocks), so you can compare an estimate with what it took.
 - **9** · **Projects** the task belongs to.
 - **10** · **Sources**: links and notes it came from.
 - **11** · **Moves**: one small square per time the task was scheduled or carried over. Squares turn from green to red against how often *you* usually carry things over (per project, once a project has enough tasks), and take your accent colour when you picked the date yourself. Hover a square, or open *Details*, to see each move.
@@ -119,7 +119,7 @@ That is all a todo costs until it needs more: a title and a status. No empty for
 - **1** · A task of the day with its status, priority, date, star and project.
 - **2** · Finished tasks stay in the list, marked done.
 - **3** · A plain, unlinked todo from the daily note is listed too; it is labelled *Regular todo*.
-- **4** · **Add time worked** by hand, or tap any block to correct it.
+- **4** · **Add time worked** by hand, or tap any block to correct it. Tap an empty spot on the grid to plan an hour there; planned blocks have a dashed outline and can be anywhere, including days ahead. A planned block that is over can be logged as worked.
 - **5** · The time grid: a block for each stretch of work, overlapping blocks side by side.
 - **6** · The line for **now**.
 
@@ -214,6 +214,8 @@ What the window never touches: project notes (their `organized_type`, `organized
 Try it in a **test vault** first if you like; your notes stay plain Markdown either way.
 
 Open **Settings → Organized** and match **Daily-note folder** and **Filename format** to your daily-note setup. Core configuration is not read through undocumented APIs. Set **Daily-note template** to a note such as `Templates/Daily.md` so daily notes Organized creates (for example when scheduling to a new date) start from it; `{{date}}`, `{{date:FORMAT}}` and `{{title}}` are filled in. Task files default to `Tasks/` (visible Markdown, not a hidden `.tasks` directory).
+
+**Planned time** is never counted as worked: it lives in its own list on the task. With *Start tasks at their planned time* on (off by default, under Task behavior), while Obsidian is open a task is set in progress when its planned block begins and put back to open when the block ends, with a notice to adjust the time. No timer is started, and a status you set yourself (done, canceled, or a running timer) is never changed. Recurring tasks are not started this way.
 
 **Auto-forward is on by default.** Opening today's daily note carries the latest unfinished non-recurring tasks forward, updates their schedule and marks prior occurrences forwarded; it does not create today's note on a timer. Recurring `[f]` occurrences are skipped because recurrence creates their next daily-note occurrence. Turn auto-forward off in settings if unwanted. A formatted batch summary offers Undo. **Show scheduled date link** controls date links globally and is on by default.
 
