@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed the Repeat dialog showing today's weekday (or day of the month) for a task whose rule leaves that out, such as `recurrence: every 2 weeks` written by hand: it now shows the day the repeat actually started on, so saving without changes keeps the same days. Also hardened the repeat rules against dates before 1970, and added tests that check them against an independent reference over five years of dates, and the daily-note flow day by day.
+
 - Tidied the Repeat dialog: shorter preset buttons (Daily, Weekdays, Weekly, Monthly, Yearly; hover shows the exact rule), "Every [number] [unit]" on one line, equal-width weekday buttons (M T W T F S S) and a divider above the plain-words result.
 
 - **Repeat rules.** Typing `[r]` in a todo (or tapping the Recurring pill) now opens a Repeat dialog instead of switching repeating on and off: one-tap buttons for every day, weekday, week (on today's weekday), month (on today's date) or year, and below them a small form (*Every [3] [weeks]*, weekday buttons, day of the month) with the result read back in words. The rule is kept in the task note as `recurrence`; the task is added to the daily notes the rule produces, and the pill shows it. Tasks that only had `recurring: true` keep repeating every day. Stopping or changing a rule removes only future copies nobody has touched.
