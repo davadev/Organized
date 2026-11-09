@@ -5,7 +5,7 @@ import { cleanTags } from "./notes";
 import { freePath, noteName } from "./names";
 import { report } from "./service";
 import { rgbOf } from "./colors";
-import { BUDGET_KEYS, BudgetPeriod, MAX_BUDGET_HOURS, projectName, ProjectBudgets } from "./repository";
+import { BUDGET_KEYS, BudgetPeriod, budgetHours, MAX_BUDGET_HOURS, projectName, ProjectBudgets } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 import { ONBOARDING_STEPS, OnboardingStep } from "./onboarding";
 import type { ReleaseNote } from "./whatsNew/releaseNotes";
@@ -174,7 +174,7 @@ export class ProjectBudgetModal extends Modal {
     for (const [period, label] of BUDGET_ROWS) {
       this.contentEl.createEl("label", { cls: "organized-modal-label", text: label });
       const input = this.contentEl.createEl("input", { type: "number", attr: { min: "0", step: "any", inputmode: "decimal", "aria-label": `${label} budget in hours` } });
-      const seconds = this.current[period]; input.value = seconds === null ? "" : String(Math.round(seconds / 36) / 100); fields.set(period, input);
+      const seconds = this.current[period]; input.value = seconds === null ? "" : String(budgetHours(seconds)); fields.set(period, input);
     }
     const note = this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-note", attr: { role: "status" } });
     const read = (): ProjectBudgets | string => {

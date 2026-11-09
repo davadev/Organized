@@ -593,4 +593,34 @@ describe('compact calendar and contextual task inspector', () => {
     edit.click(); await flush(); const modal = Modal.instances.at(-1) as unknown as ProjectBudgetModal; const fields = Array.from(modal.contentEl.querySelectorAll<HTMLInputElement>('input')); fields[3].value = '40'; fields[1].value = ''; fields[2].value = '';
     Array.from(modal.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Save')!.click(); for (let n = 0; n < 6; n++) await flush(); expect(repo.projectBudgets(project.path)).toEqual({ total: 36000, day: null, week: null, month: 144000 });
   });
+  it('handles different budget setups on one task: own budget, two projects, a plain project, a missing note and all four periods', async () => {
+    const { owner, view, repo, service, add } = await fixture(); vi.setSystemTime(new Date(2026, 2, 11, 15, 0, 0)); const f = repo.projectFolder();
+    const a: any = await add(`${f}/Alpha.md`, '---\norganized_type: project\n---\n'); const b: any = await add(`${f}/Beta.md`, '---\norganized_type: project\n---\n'); const c: any = await add(`${f}/Gamma.md`, '---\norganized_type: project\n---\n');
+    const task = await repo.create('Multi'); const at = (h: number, m = 0) => new Date(2026, 2, 11, h, m).toISOString();
+    await repo.update(task.id, t => ({ ...t, projects: [a.path, b.path, c.path, 'Gone/Missing.md'], time_budget_seconds: 3600, time_tracked_seconds: 1800, work_sessions: [{ start: at(9), end: at(9, 30) }], planned_sessions: [{ start: at(16), end: at(16, 30) }] }));
+    await service.setProjectBudgets(a.path, { total: 36000, day: 7200, week: 36000, month: 108000 }); await service.setProjectBudgets(b.path, { total: null, day: null, week: 18000, month: null });
+    owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); await flush();
+    const labels = Array.from(view.contentEl.querySelectorAll('.organized-budget-label')).map(l => l.textContent); expect(labels).toEqual(['Alpha · all time', 'Alpha · today', 'Alpha · this week', 'Alpha · this month', 'Beta · this week']);
+    expect(view.contentEl.querySelectorAll('.organized-budget-bar')).toHaveLength(6);
+    const texts = Array.from(view.contentEl.querySelectorAll('.organized-budget-text')).map(l => l.textContent); expect(texts[0]).toBe('30 min tracked · 30 min planned · 0 min left of 1h'); expect(texts[1]).toBe('30 min tracked · 30 min planned · 9h left of 10h');
+    for (const bar of Array.from(view.contentEl.querySelectorAll('.organized-budget-bar'))) { expect(bar.getAttribute('role')).toBe('progressbar'); expect(Number(bar.getAttribute('aria-valuenow'))).toBe(3600); }
+    expect(view.contentEl.querySelectorAll('.organized-budget-over')).toHaveLength(0);
+    await service.setProjectBudgets(a.path, { total: null, day: null, week: null, month: null }); await service.setProjectBudgets(b.path, { total: null, day: null, week: null, month: null }); await view.render(); await flush();
+    expect(view.contentEl.querySelectorAll('.organized-budget-bar')).toHaveLength(1); expect(view.contentEl.querySelector('.organized-budget-label')).toBeNull();
+    await service.setBudget(task.id, null); await flush(); await repo.update(task.id, t => ({ ...t, time_tracked_seconds: 0, work_sessions: [], planned_sessions: [] })); await view.render(); await flush(); expect(view.contentEl.textContent).not.toContain('Tracked so far');
+  });
+  it('shows a running timer in the bars and moves the overrun to red as time passes', async () => {
+    const { owner, view, repo, service, add } = await fixture(); vi.setSystemTime(new Date(2026, 2, 11, 9, 0, 0)); const p: any = await add(`${repo.projectFolder()}/Run.md`, '---\norganized_type: project\n---\n');
+    const task = await repo.create('Timed'); await repo.update(task.id, t => ({ ...t, projects: [p.path], time_budget_seconds: 3600, time_tracking_started_at: new Date(2026, 2, 11, 8, 30).toISOString() })); await service.setProjectBudgets(p.path, { total: null, day: 2400, week: null, month: null });
+    owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); await flush(); let texts = () => Array.from(view.contentEl.querySelectorAll('.organized-budget-text')).map(l => l.textContent);
+    expect(texts()).toEqual(['30 min tracked · 30 min left of 1h', '30 min tracked · 10 min left of 40 min']);
+    vi.setSystemTime(new Date(2026, 2, 11, 9, 30, 0)); await view.render(); await flush(); expect(texts()).toEqual(['1h tracked · 0 min left of 1h', '1h tracked · 20 min over budget']);
+    expect(view.contentEl.querySelectorAll('.organized-budget-over-text')).toHaveLength(1);
+  });
+  it('lists every project in Project budgets and keeps them apart when two share a name', async () => {
+    const { view, repo, add, owner } = await fixture(); await add('One/Site.md', '---\norganized_type: project\norganized_budget_daily: 1\n---\n'); await add('Two/Site.md', '---\norganized_type: project\n---\n');
+    const task = await repo.create('Linked'); await repo.update(task.id, t => ({ ...t, projects: ['One/Site.md', 'Two/Site.md'] })); owner.rememberProjects(['One/Site.md', 'Two/Site.md']);
+    view.tab = 'Projects'; await view.render(); await flush(); const rows = Array.from(view.contentEl.querySelectorAll('.organized-budget-row'));
+    expect(rows.map(r => r.querySelector('.organized-budget-name')!.textContent)).toEqual(['One/Site', 'Two/Site']); expect(rows.map(r => r.querySelector('button')!.textContent)).toEqual(['Edit budget', 'Set budget']);
+  });
 });

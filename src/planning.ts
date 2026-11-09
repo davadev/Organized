@@ -48,7 +48,7 @@ export function fillOf(budget: number, tracked: number, planned: number): Budget
   return { budget, tracked, planned, left: budget - total, trackedPct: 100 * trackedFit / scale, plannedPct: 100 * (within - trackedFit) / scale, overPct: 100 * over / scale };
 }
 /** A task's tracked plus planned time measured against its own budget, or null when it has none. */
-export const budgetUse = (task: Task, now = Date.now()): BudgetUse | null => task.time_budget_seconds === null ? null : fillOf(task.time_budget_seconds, elapsed(task, now), plannedSeconds(task));
+export const budgetUse = (task: Task, now = Date.now()): BudgetUse | null => task.time_budget_seconds === null ? null : fillOf(task.time_budget_seconds, elapsed(task, now), plannable(task) ? plannedSeconds(task) : 0);
 
 /** The span a project budget covers: the whole project, or the current day, week or month. */
 export type Period = "total" | "day" | "week" | "month";

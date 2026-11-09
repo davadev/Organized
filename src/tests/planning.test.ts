@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { moment } from "../moment";
 import { newTask, setStatus, startPlanned, Task } from "../model";
-import { blockAt, budgetUse, dueEnds, overlap, periodRange, projectUse, dueStarts, plannable, plannedSeconds } from "../planning";
+import { blockAt, budgetUse, fillOf, dueEnds, overlap, periodRange, projectUse, dueStarts, plannable, plannedSeconds } from "../planning";
 
 const at = (time: string) => new Date(`2026-03-09T${time}:00Z`).getTime();
 const block = (from: string, to: string) => ({ start: new Date(at(from)).toISOString(), end: new Date(at(to)).toISOString() });
@@ -71,5 +72,86 @@ describe("planning", () => {
     expect(projectUse(tasks, P, "month", 36000, now)).toMatchObject({ tracked: 3600 + 3600 + 1800 + 3600, planned: 1800 });
     expect(projectUse(tasks, "Projects/Q.md", "day", 3600, now)).toMatchObject({ tracked: 1800 + 3600, left: -1800 });
     expect(projectUse(tasks, "Projects/None.md", "day", 3600, now)).toMatchObject({ tracked: 0, planned: 0, left: 3600 });
+  });
+  describe("budget edge cases", () => {
+    const L = (d: number, h: number, m = 0, mo = 2, y = 2026) => new Date(y, mo, d, h, m).toISOString();
+    const span = (a: string, b: string) => ({ start: a, end: b });
+    const P = "Projects/P.md";
+
+    it("keeps the three shares in range and adding up to the used part of the bar, whatever the numbers", () => {
+      for (const budget of [1, 60, 3600, 36000]) for (const tracked of [0, 1, 59, 3600, 40000]) for (const planned of [0, 1, 1800, 90000]) {
+        const use = fillOf(budget, tracked, planned); const total = tracked + planned;
+        for (const pct of [use.trackedPct, use.plannedPct, use.overPct]) { expect(pct).toBeGreaterThanOrEqual(0); expect(pct).toBeLessThanOrEqual(100); }
+        expect(use.trackedPct + use.plannedPct + use.overPct).toBeCloseTo(100 * total / Math.max(budget, total), 9);
+        expect(use.left).toBe(budget - total); expect(use.overPct > 0).toBe(total > budget);
+      }
+    });
+    it("shows the overrun when tracked time alone passes the budget, and nothing planned inside the bar", () => {
+      expect(fillOf(3600, 7200, 1800)).toMatchObject({ left: -5400, trackedPct: (3600 / 9000) * 100, plannedPct: 0 });
+      expect(fillOf(3600, 3600, 0)).toMatchObject({ left: 0, trackedPct: 100, overPct: 0 });
+      expect(fillOf(3600, 0, 0)).toMatchObject({ trackedPct: 0, plannedPct: 0, overPct: 0, left: 3600 });
+    });
+    it("ignores plans of a task that is done, canceled or has become a note", () => {
+      const plans = [block("09:00", "10:00")];
+      for (const other of [{ status: "completed" as const }, { status: "canceled" as const }, { converted_to: "N.md" }]) expect(budgetUse(task({ time_budget_seconds: 7200, planned_sessions: plans, ...other }))!.planned).toBe(0);
+      expect(budgetUse(task({ time_budget_seconds: 7200, planned_sessions: plans, status: "in_progress" }))!.planned).toBe(3600);
+    });
+    it("counts a running timer in the task budget, and a timer started in the future (clock skew) as nothing", () => {
+      expect(budgetUse(task({ time_budget_seconds: 7200, time_tracking_started_at: new Date(at("09:00")).toISOString() }), at("09:30"))!.tracked).toBe(1800);
+      expect(budgetUse(task({ time_budget_seconds: 7200, time_tracking_started_at: new Date(at("10:00")).toISOString() }), at("09:30"))!.tracked).toBe(0);
+    });
+
+    it("splits a session at midnight, month end and year end", () => {
+      const midnight = [span(L(10, 23), L(11, 1))];
+      expect(overlap(midnight, periodRange("day", new Date(2026, 2, 10, 12).getTime())!)).toBe(3600); expect(overlap(midnight, periodRange("day", new Date(2026, 2, 11, 12).getTime())!)).toBe(3600);
+      const monthEnd = [span(L(31, 22), L(1, 2, 0, 3))];
+      expect(overlap(monthEnd, periodRange("month", new Date(2026, 2, 15).getTime())!)).toBe(2 * 3600); expect(overlap(monthEnd, periodRange("month", new Date(2026, 3, 15).getTime())!)).toBe(2 * 3600);
+      const yearEnd = [span(L(31, 23, 0, 11), L(1, 1, 0, 0, 2027))];
+      expect(overlap(yearEnd, periodRange("month", new Date(2026, 11, 20).getTime())!)).toBe(3600); expect(overlap(yearEnd, periodRange("month", new Date(2027, 0, 5).getTime())!)).toBe(3600);
+    });
+    it("knows February in a leap year and the first and last instant of a period", () => {
+      const [from, to] = periodRange("month", new Date(2028, 1, 10).getTime())!; expect(Math.round((to - from) / 86400000)).toBe(29);
+      const [d0, d1] = periodRange("day", new Date(2026, 2, 10, 12).getTime())!;
+      expect(overlap([span(new Date(d0).toISOString(), new Date(d1).toISOString())], [d0, d1])).toBe(86400); expect(overlap([span(new Date(d1).toISOString(), new Date(d1 + 1000).toISOString())], [d0, d1])).toBe(0);
+    });
+    it("starts the week on the day the Obsidian locale says", () => {
+      const wed = new Date(2026, 2, 11, 12).getTime(); const saved = moment.localeData().firstDayOfWeek();
+      try {
+        moment.updateLocale("en", { week: { dow: 1, doy: 4 } }); expect(new Date(periodRange("week", wed)![0]).getDay()).toBe(1);
+        moment.updateLocale("en", { week: { dow: 0, doy: 6 } }); expect(new Date(periodRange("week", wed)![0]).getDay()).toBe(0);
+        moment.updateLocale("en", { week: { dow: 6, doy: 12 } }); expect(new Date(periodRange("week", wed)![0]).getDay()).toBe(6);
+        // Sunday 00:00 belongs to the week that starts the previous Monday under a Monday start, and to the new week under a Sunday start.
+        const sunday = new Date(2026, 2, 15, 0, 0).getTime(); moment.updateLocale("en", { week: { dow: 1, doy: 4 } }); const [mf, mt] = periodRange("week", sunday)!; expect(mf).toBe(new Date(2026, 2, 9).getTime()); expect(sunday < mt).toBe(true);
+        moment.updateLocale("en", { week: { dow: 0, doy: 6 } }); expect(periodRange("week", sunday)![0]).toBe(sunday);
+      } finally { moment.updateLocale("en", { week: { dow: saved, doy: saved === 1 ? 4 : 6 } }); }
+    });
+
+    it("clips a running timer that began before the period, and ignores one that has not begun", () => {
+      const now = new Date(2026, 2, 11, 9, 0).getTime();
+      const overnight = task({ projects: [P], time_tracking_started_at: L(10, 22) });
+      expect(projectUse([overnight], P, "day", 36000, now).tracked).toBe(9 * 3600); expect(projectUse([overnight], P, "total", 36000, now).tracked).toBe(11 * 3600);
+      expect(projectUse([task({ projects: [P], time_tracking_started_at: L(11, 12) })], P, "day", 36000, now).tracked).toBe(0);
+    });
+    it("counts planned blocks that are partly in the period, but never for done, canceled or converted tasks", () => {
+      const now = new Date(2026, 2, 11, 9, 0).getTime();
+      const plans = [span(L(11, 23, 30), L(12, 0, 30)), span(L(10, 23, 30), L(11, 0, 30))];
+      expect(projectUse([task({ projects: [P], planned_sessions: plans })], P, "day", 36000, now).planned).toBe(3600);
+      for (const other of [{ status: "completed" as const }, { status: "canceled" as const }, { converted_to: "N.md" }]) expect(projectUse([task({ projects: [P], planned_sessions: plans, ...other })], P, "day", 36000, now).planned).toBe(0);
+    });
+    it("counts worked time of done and canceled tasks, and of every task for a project that shares its name with another", () => {
+      const now = new Date(2026, 2, 11, 18, 0).getTime(); const done = [span(L(11, 9), L(11, 10))];
+      const tasks = [task({ id: "t1xxxxxx", projects: [P], status: "completed", work_sessions: done }), task({ id: "t2xxxxxx", projects: [P], status: "canceled", work_sessions: done }), task({ id: "t3xxxxxx", projects: ["Other/P.md"], work_sessions: done })];
+      expect(projectUse(tasks, P, "day", 36000, now).tracked).toBe(7200); expect(projectUse(tasks, "Other/P.md", "day", 36000, now).tracked).toBe(3600);
+    });
+    it("uses tracked seconds without sessions only for the whole project, and survives a task that lists a project twice", () => {
+      const now = new Date(2026, 2, 11, 18, 0).getTime(); const legacy = task({ projects: [P, P], time_tracked_seconds: 5000 });
+      expect(projectUse([legacy], P, "total", 36000, now).tracked).toBe(5000); expect(projectUse([legacy], P, "week", 36000, now).tracked).toBe(0);
+    });
+    it("copes with a very large number of sessions and with sessions far in the past or future", () => {
+      const now = new Date(2026, 2, 11, 12, 0).getTime(); const many = Array.from({ length: 500 }, (_v, n) => span(new Date(2020, 0, 1, 9, n % 50).toISOString(), new Date(2020, 0, 1, 9, (n % 50) + 1).toISOString()));
+      const far = [span(L(1, 9, 0, 0, 2099), L(1, 10, 0, 0, 2099))];
+      const t = task({ projects: [P], work_sessions: [...many, ...far], planned_sessions: far });
+      expect(projectUse([t], P, "month", 36000, now)).toMatchObject({ tracked: 0, planned: 0 });
+    });
   });
 });

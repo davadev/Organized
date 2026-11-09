@@ -276,3 +276,46 @@ describe("project budgets in frontmatter", () => {
     await expect(h.service.setProjectBudgets("Missing.md", { total: 1, day: null, week: null, month: null })).rejects.toThrow("renamed or removed");
   });
 });
+
+describe("project budget setups", () => {
+  const none = { total: null, day: null, week: null, month: null };
+  it("reads hand-written notes: decimals, ints, quoted or odd values, a bare marker, and CRLF notes", async () => {
+    const h = harness(); const f = h.repo.projectFolder();
+    await h.add(`${f}/Dec.md`, "---\norganized_type: project\norganized_budget_weekly: 7.5\norganized_budget_daily: 0.25\n---\n");
+    await h.add(`${f}/Str.md`, "---\norganized_budget: '10'\norganized_budget_weekly: \"5\"\n---\n");
+    await h.add(`${f}/Odd.md`, "---\norganized_budget: .nan\norganized_budget_daily: .inf\norganized_budget_weekly: [1, 2]\norganized_budget_monthly: true\n---\n");
+    await h.add(`${f}/Edge.md`, "---\norganized_budget: 9999\norganized_budget_daily: 9999.0001\norganized_budget_weekly: 0.0001\n---\n");
+    await h.add(`${f}/Crlf.md`, "---\r\norganized_budget_monthly: 30\r\n---\r\nbody");
+    await h.add(`${f}/NoFm.md`, "just text");
+    expect(h.repo.projectBudgets(`${f}/Dec.md`)).toEqual({ ...none, week: 27000, day: 900 });
+    expect(h.repo.projectBudgets(`${f}/Str.md`)).toEqual(none); expect(h.repo.projectBudgets(`${f}/Odd.md`)).toEqual(none);
+    expect(h.repo.projectBudgets(`${f}/Edge.md`)).toEqual({ ...none, total: 9999 * 3600, week: 1 }); expect(h.repo.projectBudgets(`${f}/Crlf.md`)).toEqual({ ...none, month: 108000 }); expect(h.repo.projectBudgets(`${f}/NoFm.md`)).toEqual(none);
+  });
+  it("round-trips any budget through the note, even one of a few seconds or a fraction of an hour", async () => {
+    const h = harness(); const f = h.repo.projectFolder(); const a: any = await h.add(`${f}/A.md`, "body only");
+    for (const total of [4, 90, 1800, 5400, 3600 * 7 + 1260, 9999 * 3600]) {
+      await h.service.setProjectBudgets(a.path, { total, day: total, week: null, month: null });
+      const read = h.repo.projectBudgets(a.path); expect(Math.abs(read.total! - total)).toBeLessThanOrEqual(2); expect(read.day).toBe(read.total);
+    }
+    expect(h.texts.get(a.path)).toContain("organized_type: project"); expect(h.texts.get(a.path)).toContain("body only"); expect(h.texts.get(a.path)).toMatch(/organized_start: \d{4}-\d{2}-\d{2}/);
+  });
+  it("keeps an existing start date, other properties and the budgets it was not asked to change", async () => {
+    const h = harness(); const f = h.repo.projectFolder(); const a: any = await h.add(`${f}/A.md`, "---\norganized_type: project\norganized_start: 2024-01-02\naliases: [Alpha]\norganized_budget_weekly: 10\n---\nbody");
+    await h.service.setProjectBudgets(a.path, { ...none, day: 3600, week: 36000 }); const text = h.texts.get(a.path)!;
+    expect(text).toContain("organized_start: 2024-01-02"); expect(text).toContain("aliases"); expect(text).toContain("organized_budget_weekly: 10"); expect(text).toContain("organized_budget_daily: 1");
+    await h.service.setProjectBudgets(a.path, { ...none, day: 3600, week: 36000 }); expect(h.texts.get(a.path)).toBe(text);
+  });
+  it("keeps two projects of the same name in different folders apart", async () => {
+    const h = harness(); await h.add("One/Site.md", "---\norganized_budget_daily: 1\n---\n"); await h.add("Two/Site.md", "---\norganized_budget_daily: 2\n---\n");
+    expect(h.repo.projectBudgets("One/Site.md").day).toBe(3600); expect(h.repo.projectBudgets("Two/Site.md").day).toBe(7200);
+  });
+});
+describe("task budget in the note", () => {
+  it("is kept by other edits, ignored when invalid, and not written for new notes", async () => {
+    const h = harness(); const task = await h.repo.create("Budgeted"); const file = h.repo.taskFile(task.id)!;
+    await h.service.setBudget(task.id, 5400); await h.service.status(task.id, "in_progress"); await h.service.status(task.id, "open"); await h.service.setPriority(task.id, "high");
+    expect((await h.repo.read(task.id)).time_budget_seconds).toBe(5400); expect(await h.repo.readText(file)).toContain("time_budget_seconds: 5400");
+    await h.service.setBudget(task.id, 5400); await h.service.setBudget(task.id, 7200); expect((await h.repo.read(task.id)).time_budget_seconds).toBe(7200);
+    const fresh = await h.repo.create("Fresh"); expect(await h.repo.readText(h.repo.taskFile(fresh.id)!)).not.toContain("time_budget_seconds");
+  });
+});
