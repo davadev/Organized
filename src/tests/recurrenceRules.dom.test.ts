@@ -114,6 +114,7 @@ describe('typing r', () => {
     (picker.contentEl.querySelectorAll('.organized-repeat-preset')[1] as HTMLElement).click(); await flush(); expect(set).toHaveBeenCalledWith(task.id, rule('weekdays'), expect.objectContaining({ file })); picker.close(); await flush(); expect(clean).not.toHaveBeenCalled();
     await plugin.trigger(context()); picker = Modal.instances.at(-1) as RecurrencePicker; picker.close(); await flush(); expect(clean).toHaveBeenCalledWith(expect.objectContaining({ file }), ' ');
     await plugin.repo.update(task.id, t => ({ ...t, recurring: true, recurrence: 'every 2 days' })); const fresh = await plugin.repo.read(task.id);
-    plugin.pickRecurrence(fresh); picker = Modal.instances.at(-1) as RecurrencePicker; expect(picker.current).toEqual(rule('every 2 days')); clean.mockClear(); picker.close(); await flush(); expect(clean).not.toHaveBeenCalled();
+    plugin.pickRecurrence(fresh); picker = Modal.instances.at(-1) as RecurrencePicker; expect(picker.current).toEqual(rule('every 2 days'));
+    await plugin.repo.update(task.id, t => ({ ...t, recurrence: 'every 2 weeks', recurrence_periods: [{ start: '2026-03-04', stop: null }] })); plugin.pickRecurrence(await plugin.repo.read(task.id)); expect((Modal.instances.at(-1) as RecurrencePicker).current).toEqual(rule('every 2 weeks on wed')); clean.mockClear(); picker.close(); await flush(); expect(clean).not.toHaveBeenCalled();
   });
 });
