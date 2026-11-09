@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Tidied the Repeat dialog: shorter preset buttons (Daily, Weekdays, Weekly, Monthly, Yearly; hover shows the exact rule), "Every [number] [unit]" on one line, equal-width weekday buttons (M T W T F S S) and a divider above the plain-words result.
+
 - **Repeat rules.** Typing `[r]` in a todo (or tapping the Recurring pill) now opens a Repeat dialog instead of switching repeating on and off: one-tap buttons for every day, weekday, week (on today's weekday), month (on today's date) or year, and below them a small form (*Every [3] [weeks]*, weekday buttons, day of the month) with the result read back in words. The rule is kept in the task note as `recurrence`; the task is added to the daily notes the rule produces, and the pill shows it. Tasks that only had `recurring: true` keep repeating every day. Stopping or changing a rule removes only future copies nobody has touched.
 
 - Fixed a task started by its planned time sometimes showing in progress in the side panel while its todo kept `[ ]`: if the note changed at that moment (you were typing, or the editor saved older text over the change), the marker was lost and never retried. While a planned block is running the marker is now checked every minute and put back in every note that holds the todo; a status you chose yourself is never rewritten. Also fixed `[t]` (add time) turning `/` back into `[ ]` on a task started by a planned block, and forwarding or linking such a task to a project writing `[ ]` instead of `[/]`.

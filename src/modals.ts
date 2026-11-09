@@ -63,6 +63,7 @@ export class PriorityPicker extends SuggestModal<Priority> {
   onChooseSuggestion(value: Priority): void { void this.choose(value).catch(report); }
 }
 const REPEAT_UNITS: [Unit, string][] = [["day", "days"], ["week", "weeks"], ["month", "months"], ["year", "years"]];
+const PRESET_NAMES = { day: "Daily", weekdays: "Weekdays", week: "Weekly", month: "Monthly", year: "Yearly" };
 const WEEKDAY_LETTERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 /** Asks how a task repeats. The usual choices are one tap each; below them everything else is a form (every [3] [weeks], on which days) that reads back in plain words before it is saved. */
 export class RecurrencePicker extends Modal {
@@ -75,12 +76,12 @@ export class RecurrencePicker extends Modal {
     const presets = this.contentEl.createDiv({ cls: "organized-repeat-presets", attr: { role: "group", "aria-label": "Common repeats" } });
     const now = this.current ? formatRule(this.current) : "";
     for (const rule of presetRules(this.today)) {
-      const b = presets.createEl("button", { cls: "organized-repeat-preset", text: ruleLabel(rule).replace(/^Every /, ""), attr: { "aria-pressed": String(formatRule(rule) === now) } });
+      const b = presets.createEl("button", { cls: "organized-repeat-preset", text: PRESET_NAMES[rule.unit === "week" && rule.days.length > 1 ? "weekdays" : rule.unit], attr: { "aria-pressed": String(formatRule(rule) === now), title: ruleLabel(rule) } });
       b.addEventListener("click", () => this.done(rule));
     }
-    this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Or set your own" });
+    this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Custom" });
     const start = this.current ?? presetRules(this.today)[2];
-    const row = this.contentEl.createDiv({ cls: "organized-datetime organized-repeat-row" });
+    const row = this.contentEl.createDiv({ cls: "organized-repeat-row" });
     row.createSpan({ cls: "organized-muted", text: "Every" });
     const every = row.createEl("input", { type: "number", attr: { min: "1", max: "999", step: "1", inputmode: "numeric", "aria-label": "Repeat every" } }); every.value = String(start.every);
     const unit = row.createEl("select", { attr: { "aria-label": "Repeat unit" } });
@@ -88,8 +89,8 @@ export class RecurrencePicker extends Modal {
     unit.value = start.unit;
     const days = this.contentEl.createDiv({ cls: "organized-repeat-days", attr: { role: "group", "aria-label": "Repeat on" } });
     const chosen = new Set(start.days.length ? start.days : presetRules(this.today)[2].days);
-    const chips = WEEKDAY_LETTERS.map((name, day) => { const c = days.createEl("button", { cls: "organized-repeat-day", text: name, attr: { "aria-pressed": "false" } }); c.addEventListener("click", () => { if (chosen.has(day) && chosen.size > 1) chosen.delete(day); else chosen.add(day); paint(); }); return c; });
-    const month = this.contentEl.createDiv({ cls: "organized-datetime organized-repeat-row" });
+    const chips = WEEKDAY_LETTERS.map((name, day) => { const c = days.createEl("button", { cls: "organized-repeat-day", text: name[0], attr: { "aria-pressed": "false", "aria-label": name, title: name } }); c.addEventListener("click", () => { if (chosen.has(day) && chosen.size > 1) chosen.delete(day); else chosen.add(day); paint(); }); return c; });
+    const month = this.contentEl.createDiv({ cls: "organized-repeat-row" });
     month.createSpan({ cls: "organized-muted", text: "On" });
     const monthDay = month.createEl("select", { attr: { "aria-label": "Day of the month" } });
     for (let d = 1; d <= 31; d++) monthDay.createEl("option", { value: String(d), text: `Day ${d}` });

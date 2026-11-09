@@ -62,13 +62,13 @@ describe('repeat dialog', () => {
   const open = (current: any = null, choose = vi.fn().mockResolvedValue(undefined), cancelled?: () => void) => { const h = harness(); const dialog = new RecurrencePicker(h.app, '2026-03-12', current, choose, cancelled); dialog.open(); return { dialog, choose, el: dialog.contentEl }; };
   const field = (el: HTMLElement, label: string) => el.querySelector<any>(`[aria-label="${label}"]`)!;
   const type = (input: any, value: string) => { input.value = value; input.dispatchEvent(new Event('input')); };
-  const byText = (el: HTMLElement, text: string) => Array.from(el.querySelectorAll<HTMLButtonElement>('button')).find(b => b.textContent === text)!;
+  const byText = (el: HTMLElement, text: string) => Array.from(el.querySelectorAll<HTMLButtonElement>('button')).find(b => (b.getAttribute('aria-label') ?? b.textContent) === text)!;
   it('saves a common repeat with one tap', async () => {
-    const { el, choose, dialog } = open(); expect(Array.from(el.querySelectorAll('.organized-repeat-preset')).map(b => b.textContent)).toEqual(['day', 'weekday', 'week on Thu', 'month on the 12th', 'year']);
+    const { el, choose, dialog } = open(); expect(Array.from(el.querySelectorAll('.organized-repeat-preset')).map(b => b.textContent)).toEqual(['Daily', 'Weekdays', 'Weekly', 'Monthly', 'Yearly']);
     (el.querySelectorAll('.organized-repeat-preset')[1] as HTMLElement).click(); await flush(); expect(choose).toHaveBeenCalledWith(rule('weekdays')); expect((dialog as any).isOpen).toBe(false);
   });
   it('marks the current repeat and offers to stop it', async () => {
-    const { el, choose } = open(rule('weekdays')); const pressed = Array.from(el.querySelectorAll('.organized-repeat-preset')).map(b => b.getAttribute('aria-pressed')); expect(pressed).toEqual(['false', 'true', 'false', 'false', 'false']);
+    const { el, choose } = open(rule('weekdays')); const pressed = Array.from(el.querySelectorAll('.organized-repeat-preset')).map(b => b.getAttribute('aria-pressed')); expect(pressed).toEqual(['false', 'true', 'false', 'false', 'false']); expect(el.querySelectorAll('.organized-repeat-preset')[2].getAttribute('title')).toBe('Every week on Thu');
     expect(field(el, 'Repeat every').value).toBe('1'); byText(el, 'Stop repeating').click(); await flush(); expect(choose).toHaveBeenCalledWith(null);
     expect(open().el.textContent).not.toContain('Stop repeating');
   });
