@@ -4,7 +4,7 @@
  * Shown once per device per release: `settings.lastSeenVersion` remembers the newest version the person has been told about
  * (never synced on purpose), and `notesToShow` picks the entries newer than that and not newer than the version that is
  * running. Only the `X.Y.Z` part is compared, so every beta of a version counts as that version: a tester sees its note on the
- * first beta that has it, not again on later betas or on the stable release. Notes stack within a minor line: never delete an
+ * first beta that has it, not again on later betas or on the stable release. Notes stack within a minor line so a device that skipped a release is told about each: never delete an
  * earlier entry of the line you are in (`npm run check-release` fails if you do). A fresh install is told nothing, it gets the
  * onboarding card instead. See docs/onboarding-and-whats-new.md.
  */
@@ -29,21 +29,17 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   {
     version: "0.1.4",
     title: "What's new in Organized 0.1.4",
-    intro: "Block time for the future, and see estimate next to actual.",
+    intro: "Repeat rules, planned time and budgets, and safer use on several devices. These are the changes since 0.1.3.",
     items: [
-      { title: "Calendar follows your daily note", text: "Open or create a daily note and the side panel's calendar and day view move to that day. Paging to another day in the day view opens that day's daily note when it exists." },
+      { title: "Repeat rules", text: "Type [r] in a todo, or tap the Recurring pill, to choose how it repeats: one tap for every day, weekday, week, month or year, or set your own, such as every 3 weeks on Monday and Thursday, with a form that says the result in words. The rule is saved in the task note, and the task shows up in the daily notes that match it.", figure: "repeat" },
+      { title: "Plan time ahead", text: "Tap an empty spot on the Day grid, or use Add time with a time still to come, to set aside time for a task today or on a day ahead. Planned blocks are dashed and never count as worked time; one that is over can be logged as worked. The task's Timer card shows Tracked so far and Planned, so you can compare your estimate with what it took. A setting under Task behavior (off by default) sets a task in progress when its planned block begins.", figure: "plan" },
+      { title: "Time budgets", text: "Set a budget on a task's Timer card, or a total, daily, weekly or monthly budget on a project (Projects tab, or the project note's properties). A slim bar shows tracked and planned time against it, with what is left in words; go over and it grows red. No budget, no bar." },
+      { title: "A calmer task panel", text: "Priority, schedule, recurring and projects are small pills in one row, the Timer is one line with icon buttons, and Description, Subtasks and Timer fold away and stay folded for every task. Tap a project pill to open its note." },
+      { title: "Follows your daily note", text: "Organized uses the folder, filename format and template of the core Daily Notes plugin (or Periodic Notes) automatically (Settings → Organized → Daily notes switches back to custom values; installs that already set them keep them). Open or create a daily note and the side panel's calendar moves to that day; paging the day view on a desktop opens that day's note, and on a phone it opens when you close the panel." },
+      { title: "Several devices without sync conflicts", text: "Settings → Organized → This device: set a phone or tablet to Secondary (it edits tasks but never creates or fills daily notes) or Mirror (view only; every change is refused with a notice). The choice stays on that device. Use it where a daily note may be opened before your main device has synced it.", figure: "devices" },
       { title: "Repairs for recurring tasks", text: "Two commands: Add missing recurring tasks to this daily note, and Remove duplicate recurring lines in this note (for a note two devices both filled). Task notes that Organized has to leave out, such as sync conflict copies, are now named in a notice instead of silently not repeating." },
-      { title: "Several devices without sync conflicts", text: "Settings → Organized → This device: set a phone or tablet to Secondary (it edits tasks but never creates or fills daily notes) or Mirror (view only; every change is refused with a notice). The choice stays on that device. Use it where a daily note may be opened before your main device has synced it." },
-      { title: "Project picker from the keyboard", text: "Arrow keys move through the projects, Enter ticks one, Enter in the search box picks the best match and Ctrl/Cmd+Enter saves. On a phone the list stays above the keyboard so every project can be reached." },
-      { title: "Follows your Daily Notes plugin", text: "Organized now uses the folder, filename format and template of the core Daily Notes plugin (or Periodic Notes) automatically, so there is nothing to copy over. Settings → Organized → Daily notes lets you switch back to custom values; installs that already set them keep them." },
-      { title: "Repeat rules", text: "Type [r] in a todo, or tap the Recurring pill, to choose how it repeats: one tap for every day, weekday, week, month or year, or set your own, such as every 3 weeks on Monday and Thursday, with a form that says the result in words. The rule is saved in the task note, and the task shows up in the daily notes that match it." },
-      { title: "Plan time ahead", text: "Tap an empty spot on the Day grid, or use Add time with a time still to come, to set aside time for a task today or on a day ahead. Planned blocks are dashed and never count as worked time; one that is over can be logged as worked." },
-      { title: "Tracked and planned on the task", text: "The task's Timer card shows Tracked so far and Planned, so you can compare your estimate with what it took." },
-      { title: "Fold the task panel", text: "Description, Subtasks and Timer fold away with a chevron and stay folded for every task. The Timer now has icon buttons (start or stop, add time, budget) on its header row." },
-      { title: "A denser task panel", text: "Priority, schedule, recurring and projects are now small pills in one row, the Timer is one line with its buttons side by side, and an empty description is one button. Tap a project pill to open its note." },
-      { title: "Project time budgets", text: "Give a project a total, daily, weekly or monthly budget (Projects tab, or the project note's properties). Every task in it shows a bar per budget, counting all the project's tasks. No budget, nothing shown." },
-      { title: "Time budget", text: "Set a budget on the Timer card and a slim bar shows tracked and planned time against it, with what is left in words. Go over and the bar grows with the overrun in red. No budget, no bar." },
-      { title: "Tasks start at their planned time", text: "A new setting under Task behavior, off by default: while Obsidian is open, a task is set in progress when its planned block begins (no timer starts) and back to open, with a notice, when it ends." },
+      { title: "Project picker from the keyboard", text: "Arrow keys and Tab move through the search box, the projects and Save links, Enter ticks one, Enter in the search box picks the best match and Ctrl/Cmd+Enter saves. On a phone the list stays above the keyboard so every project can be reached." },
+      { title: "Steadier on a phone", text: "Tapping outside the press-and-hold menu closes it without ticking the todo, and a todo's priority and projects that do not fit its line stay right-aligned on a row of their own." },
     ],
   },
   {
@@ -79,40 +75,45 @@ function compare(a: [number, number, number], b: [number, number, number]): numb
   return 0;
 }
 
-/**
- * The entries to show: newer than `lastSeen`, not newer than `current`, oldest first, so someone who skipped a release is
- * told about both in the order they happened. An empty or unreadable `lastSeen` means "never told anything"; an
- * unreadable `current` shows nothing rather than guessing.
- */
-export function notesToShow(lastSeen: string, current: string, notes: ReleaseNote[] = RELEASE_NOTES): ReleaseNote[] {
+/** Every note not newer than `current`, oldest first. */
+function upTo(current: string, notes: ReleaseNote[]): ReleaseNote[] {
   const cur = baseVersion(current);
   if (!cur) return [];
-  const seen = baseVersion(lastSeen) ?? [0, 0, 0];
   return notes
     .filter((n) => {
       const v = baseVersion(n.version);
-      return v !== null && compare(v, seen) > 0 && compare(v, cur) <= 0;
+      return v !== null && compare(v, cur) <= 0;
     })
     .sort((a, b) => compare(baseVersion(a.version) as [number, number, number], baseVersion(b.version) as [number, number, number]));
 }
 
 /**
- * What the "Show what's new" command opens: every note of the running minor line (0.9.0 and 0.9.1 for a 0.9.1), oldest
- * first, so someone can look back at the whole line on demand. The popup after an update shows each release only once;
- * this is the way back. A version whose line has no note of its own falls back to the newest note there is.
+ * The entries to show: newer than `lastSeen`, not newer than `current`, oldest first, so someone who skipped a release is
+ * told about both in the order they happened. An empty or unreadable `lastSeen` is not "the whole history": a device that
+ * has never been told anything gets the note of the running release only. An unreadable `current` shows nothing rather
+ * than guessing.
+ */
+export function notesToShow(lastSeen: string, current: string, notes: ReleaseNote[] = RELEASE_NOTES): ReleaseNote[] {
+  const seen = baseVersion(lastSeen);
+  if (!seen) {
+    const latest = latestNote(current, notes);
+    return latest ? [latest] : [];
+  }
+  return upTo(current, notes).filter((n) => compare(baseVersion(n.version) as [number, number, number], seen) > 0);
+}
+
+/**
+ * What the "Show what's new" command opens: the note of the running release, i.e. what changed since the last stable one,
+ * not the history of the line. The popup after an update shows each release only once; this is the way back. A version
+ * without a note of its own falls back to the newest note there is.
  */
 export function notesOfLine(current: string, notes: ReleaseNote[] = RELEASE_NOTES): ReleaseNote[] {
-  const cur = baseVersion(current);
-  const line = notesToShow("", current, notes).filter((n) => {
-    const v = baseVersion(n.version);
-    return cur !== null && v !== null && v[0] === cur[0] && v[1] === cur[1];
-  });
   const latest = latestNote(current, notes);
-  return line.length > 0 ? line : latest ? [latest] : [];
+  return latest ? [latest] : [];
 }
 
 /** The newest note that is not newer than `current`. */
 export function latestNote(current: string, notes: ReleaseNote[] = RELEASE_NOTES): ReleaseNote | null {
-  const all = notesToShow("", current, notes);
+  const all = upTo(current, notes);
   return all.length > 0 ? all[all.length - 1] : null;
 }

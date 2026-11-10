@@ -72,9 +72,9 @@ describe('an update', () => {
     expect([...news()[0].contentEl.querySelectorAll('h3')].map(n => n.textContent)).toEqual(["What's new in Organized 0.1.2", "What's new in Organized 0.1.3"]);
     expect((await s.saved()).lastSeenVersion).toBe('0.1.3');
   });
-  it('tells someone who already saw 0.1.2 only about 0.1.3, and a pre-feature install about both', async () => {
+  it('tells someone who already saw 0.1.2 only about 0.1.3, and a pre-feature install only about the running release', async () => {
     await start({ data: stored({ onboardingSeen: true, lastSeenVersion: '0.1.2' }), version: '0.1.3' }); expect(news()[0].notes.map(n => n.version)).toEqual(['0.1.3']);
-    await start({ data: stored({ taskFolder: 'Tasks' }), version: '0.1.3' }); expect(news()[0].notes.map(n => n.version)).toEqual(['0.1.2', '0.1.3']);
+    await start({ data: stored({ taskFolder: 'Tasks' }), version: '0.1.3' }); expect(news()[0].notes.map(n => n.version)).toEqual(['0.1.3']);
   });
   it('treats every beta of a version as that version, so later betas and the stable release stay quiet', async () => {
     for (const version of ['0.1.2-beta.8', '0.1.2-beta.99', '0.1.2']) { await start({ data: seen('0.1.2-beta.7'), version }); expect(news(), version).toHaveLength(0); }

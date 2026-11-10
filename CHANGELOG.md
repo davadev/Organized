@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **What's new** now shows the note of the running release only (what changed since the last stable one), both in the popup after an update and from *Show what's new*, instead of the history of the whole minor line. The 0.1.4 note is reorganised by benefit, with pictures for repeat rules, planned time and device roles. README screenshots show a repeating task, a time budget and a planned block.
 - On a phone, the day you paged to in the side panel's day view now opens as the daily note when you close the panel (paging itself still keeps the panel open).
 - On a phone, paging through days in the side panel's day view no longer opens the daily note (which closed the panel after one day). Desktop still opens it.
 - Project picker: the project row and the *Save links* button that have keyboard focus are now outlined, so Tab and the arrow keys visibly reach Save.

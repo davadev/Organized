@@ -8,9 +8,9 @@ import { LONG_PRESS_MARKERS } from "./longPress";
  * screenshots: they follow the user's theme and font, add almost nothing to the plugin's size and cannot go stale the way
  * a picture does. They are decoration (aria-hidden, not interactive); the step's text carries the meaning.
  */
-export type FigureId = "settings" | "tabs" | "calendar" | "follow" | "forward" | "card" | "props" | "keys" | "commands" | "press" | "hotkey";
+export type FigureId = "settings" | "tabs" | "calendar" | "follow" | "forward" | "card" | "props" | "keys" | "commands" | "press" | "hotkey" | "repeat" | "plan" | "devices";
 /** Every figure id; the tests walk it so a new figure cannot ship undrawn. */
-export const FIGURE_IDS: FigureId[] = ["settings", "tabs", "calendar", "follow", "forward", "card", "props", "keys", "commands", "press", "hotkey"];
+export const FIGURE_IDS: FigureId[] = ["settings", "tabs", "calendar", "follow", "forward", "card", "props", "keys", "commands", "press", "hotkey", "repeat", "plan", "devices"];
 
 const box = (host: HTMLElement, marker: string): void => {
   const b = host.createSpan({ cls: "organized-welcome-fig-box", text: marker === "x" ? "" : marker.trim(), attr: { "data-marker": marker } });
@@ -152,7 +152,20 @@ function hotkeyFigure(fig: HTMLElement): void {
   row.createSpan({ cls: "organized-welcome-fig-pill", text: "Alt + X" });
 }
 
-const BUILDERS: Record<FigureId, (fig: HTMLElement) => void> = { settings: settingsFigure, tabs: tabsFigure, calendar: calendarFigure, follow: followFigure, forward: forwardFigure, card: cardFigure, props: propsFigure, keys: keysFigure, commands: commandsFigure, press: pressFigure, hotkey: hotkeyFigure };
+/** A row of the figure: a label chip and what it does. */
+const chipRows = (fig: HTMLElement, rows: [string, string][]): void => {
+  const list = fig.createDiv({ cls: "organized-welcome-fig-rows" });
+  for (const [chip, role] of rows) {
+    const row = list.createDiv({ cls: "organized-welcome-fig-row" });
+    row.createSpan({ cls: "organized-welcome-fig-pill", text: chip });
+    row.createSpan({ cls: "organized-welcome-fig-row-role", text: role });
+  }
+};
+const repeatFigure = (fig: HTMLElement): void => chipRows(fig, [["Every day", "One tap"], ["Weekdays", "Monday to Friday"], ["Custom", "Every 3 weeks on Monday and Thursday"]]);
+const planFigure = (fig: HTMLElement): void => chipRows(fig, [["09:00–10:30", "Draft the Q1 review (planned)"], ["10:30–11:00", "Reply to Anna (planned)"], ["Tracked 1h 13min", "of 1h 30min planned"]]);
+const devicesFigure = (fig: HTMLElement): void => chipRows(fig, [["Main", "Edits and fills daily notes"], ["Secondary", "Edits, never creates daily notes"], ["Mirror", "View only"]]);
+
+const BUILDERS: Record<FigureId, (fig: HTMLElement) => void> = { settings: settingsFigure, tabs: tabsFigure, calendar: calendarFigure, follow: followFigure, forward: forwardFigure, card: cardFigure, props: propsFigure, keys: keysFigure, commands: commandsFigure, press: pressFigure, hotkey: hotkeyFigure, repeat: repeatFigure, plan: planFigure, devices: devicesFigure };
 
 /** Draw the illustration `id` into `parent`. */
 export function renderFigure(parent: HTMLElement, id: FigureId): HTMLElement {

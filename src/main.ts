@@ -172,7 +172,7 @@ export default class Organized extends Plugin {
   showOnboarding(remember: boolean): void {
     new OnboardingModal(this.app, () => { if (remember && !this.settings.onboardingSeen) { this.settings.onboardingSeen = true; this.settings.lastSeenVersion = this.manifest.version; this.saveSettings(false); } }).open();
   }
-  /** Opens this version's notes again (the whole minor line, oldest first), whatever has been shown before. */
+  /** Opens the note of this release again (what changed since the last stable one), whatever has been shown before. */
   showWhatsNew(): void {
     const notes = notesOfLine(this.manifest.version);
     if (!notes.length) { new Notice(`There are no release notes for ${this.manifest.version}.`); return; }
