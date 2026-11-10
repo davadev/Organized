@@ -458,8 +458,9 @@ describe('a running timer follows its [/] marker', () => {
     }
   });
   it('still stops while another action is running, because the stop queues behind it', async () => {
-    const { plugin, task, before, editor } = await running(); const u = change(before, ' '); editor.setValue(u.state.doc.toString()); editor.setCursor({ line: 1, ch: 2 }); (plugin as any).busy = 1;
-    plugin.onEditorUpdate(u); await flush(); expect((await timer(plugin, task.id)).time_tracking_started_at).toBeNull();
+    const { plugin, task, before, editor } = await running(); const u = change(before, ' '); editor.setValue(u.state.doc.toString()); editor.setCursor({ line: 1, ch: 2 });
+    let release!: () => void; const other = plugin.run(() => new Promise<void>(done => { release = done; }));
+    plugin.onEditorUpdate(u); await flush(); expect((await timer(plugin, task.id)).time_tracking_started_at).not.toBeNull(); release(); await other; await flush(); expect((await timer(plugin, task.id)).time_tracking_started_at).toBeNull();
   });
   it('leaves the timer running for markers that are not a stop, edits that are not the person\'s, and a note that is not the active one', async () => {
     for (const [insert, event] of [['!', 'input.type'], [' ', 'input.organized.edit'], [' ', 'undo'], [' ', null]] as const) {

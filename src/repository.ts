@@ -44,6 +44,8 @@ export class Repository {
   private tail: Promise<unknown> = Promise.resolve();
   /** Told which task notes are left out of the list: copies that share an id, and notes with an id that cannot be read as a task. */
   onSkipped: ((copies: string[], broken: string[]) => void) | null = null;
+  /** The text this plugin last put into a note through its editor, so the editor update that follows (also in a second pane on the same note) is not taken for the person's edit. */
+  ownText: string | null = null;
   constructor(readonly app: App, readonly settings: () => Settings, readonly activeEditor: () => { file: TFile; editor: Editor } | null) {}
   serial<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.tail.catch(() => undefined).then(fn); this.tail = next; return next;
@@ -296,7 +298,7 @@ export class Repository {
       let start = 0; while (start < before.length && start < after.length && before[start] === after[start]) start++;
       let end = before.length; let afterEnd = after.length;
       while (end > start && afterEnd > start && before[end - 1] === after[afterEnd - 1]) { end--; afterEnd--; }
-      const selection = active.editor.listSelections();
+      const selection = active.editor.listSelections(); this.ownText = after;
       active.editor.transaction({ changes: [{ from: active.editor.offsetToPos(start), to: active.editor.offsetToPos(end), text: after.slice(start, afterEnd) }] }, "input.organized");
       // A todo that was re-sorted keeps the cursor: it follows the line by its hidden id instead of staying at the same offset.
       const beforeLines = before.split("\n"); const afterLines = after.split("\n");

@@ -100,6 +100,11 @@ Built from the bugs the 0.1.4 betas of this plugin shipped and then fixed, plus 
     - Ask: who else refers to this note by name or path (parent lists, project links, `converted_to`)? When the note goes, is each reference removed, and if it cannot be (deleted by hand, sync), can a new note take the name and inherit the reference?
     - Test: remove the child through every pipeline, create a task with the same title, assert `parentOf` is null and the parent's list no longer holds the link.
 
+21. **Input dropped instead of queued, and the host's edits that carry no user event** (a `busy` counter made `onEditorUpdate` ignore every tick while any action was running, so a todo ticked right after another one, or during the minute check, stayed open in the panel; a Live Preview click on `[/]` or `[-]` makes `[ ]` with no user event and no cursor on the line, and nothing handled it).
+    - Grep: `if (this.busy`, `if (this.pickerOpen`, every early `return` in an event handler (`onEditorUpdate`, vault events, `render`) that depends on "something else is going on"; `userEvent`, `!user`.
+    - Ask: is the person's action lost for good when this returns, or done later? A guard against the plugin's own writes must recognise that write (`Repository.ownText`), not a time window in which the person may act too. Which host actions change the note without a user event (checkbox click, mobile toolbar, a second pane), and for each marker, what does a click turn it into?
+    - Test: start an action that does not finish (`plugin.run(() => promise)`), send the edit, then let it finish and assert the edit took effect; click every marker with no user event and the cursor elsewhere.
+
 ## Method
 1. Scope the diff; list changed behaviours.
 2. For each, walk every class; write the question down only if it could apply.
