@@ -1,7 +1,7 @@
 import { Editor, MarkdownView, Notice, Plugin, TFile, TFolder, WorkspaceLeaf } from "obsidian";
 import { Transaction } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
-import { ACTION_MARKERS, parentIds, parseTasks, sameNesting, NOTE_MARKER, NoteSection, PROJECT_MARKER, RECURRING_MARKER, SECTION_MARKERS, SUBTASK_MARKER, TaskLine, TIME_MARKER, writeNoteSection } from "./codec";
+import { ACTION_MARKERS, duplicateRepeats, parentIds, parseTasks, sameNesting, NOTE_MARKER, NoteSection, PROJECT_MARKER, RECURRING_MARKER, SECTION_MARKERS, SUBTASK_MARKER, TaskLine, TIME_MARKER, writeNoteSection } from "./codec";
 import { DEFAULT_SETTINGS, elapsed, localDate, object, Settings, Status, Task } from "./model";
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
@@ -60,6 +60,7 @@ export default class Organized extends Plugin {
       // Disabled while the awaits above were pending: onunload already ran, so registering now would leak handlers and timers into a dead plugin.
       if (this.unloaded) return;
       this.repo = new Repository(this.app, () => this.settings, () => this.activeEditor());
+      this.repo.onSkipped = (copies, broken) => this.reportSkipped(copies, broken);
       this.service = new TaskService(this.repo, () => this.refresh(), (message, heading, confirmLabel) => this.confirm(message, heading, confirmLabel));
       this.registerView(VIEW_TYPE, leaf => new OrganizedInspectorView(leaf, this));
       this.addSettingTab(new OrganizedSettingsTab(this.app, this));
@@ -71,6 +72,8 @@ export default class Organized extends Plugin {
       this.addCommand({ id: "unlink-note-tasks", name: "Convert tasks in this note back to todos", editorCallback: (_editor, view) => { if (view.file) void this.run(() => this.service.unlinkTasks([view.file!], "this note")).catch(report); } });
       this.addCommand({ id: "add-subtask", name: "Add subtask", editorCallback: (editor, view) => { if (view.file) void this.addSubtask(editor, view.file).catch(report); } });
       this.addCommand({ id: "repair-subtasks", name: "Repair subtask links in this note", editorCallback: (_editor, view) => { const file = view.file; if (file) void this.run(() => this.service.repairSubtasks(file)).catch(report); } });
+      this.addCommand({ id: "add-recurring-today", name: "Add missing recurring tasks to this daily note", callback: () => { void this.addMissingRecurring(); } });
+      this.addCommand({ id: "remove-duplicate-repeats", name: "Remove duplicate recurring lines in this note", editorCallback: (_editor, view) => { if (view.file) void this.removeDuplicates(view.file); } });
       this.addCommand({ id: "nest-subtasks", name: "Indent subtasks under their parents", callback: () => { void this.run(() => this.nestSubtasks(true)).catch(report); } });
       this.addCommand({ id: "retire-tasks", name: "Retire tasks…", callback: () => { this.retireTasks(); } });
       this.addCommand({ id: "rename-task-notes", name: "Rename task notes to their titles", callback: () => { void this.run(() => this.migrateTaskNoteNames(true)).catch(report); } });
@@ -87,7 +90,7 @@ export default class Organized extends Plugin {
       this.app.workspace.onLayoutReady(() => {
         if (!this.loaded) return;
         // Registration happens AFTER Obsidian's initial existing-file create events.
-        this.registerEvent(this.app.vault.on("create", file => { if (file instanceof TFile) { void this.repo.track(file); if (this.role === "main") void this.fillNew(file); void this.service.index(file).catch(report); } }));
+        this.registerEvent(this.app.vault.on("create", file => { if (file instanceof TFile) { void this.repo.track(file); if (this.role === "main") void this.fillNew(file); else this.explainNoFill(file); void this.service.index(file).catch(report); } }));
         this.registerEvent(this.app.vault.on("modify", file => { if (file instanceof TFile) {
           void this.repo.track(file); const id = this.selectedTaskId; const wasReference = this.service.hasReference(id, file.path);
           void this.service.index(file).then(() => {
@@ -101,13 +104,13 @@ export default class Organized extends Plugin {
         // A moment after the layout is ready (immediately so when the plugin is switched on in a running session): the settings window that switched it on may still be closing.
         this.registerInterval(window.setTimeout(() => { void this.maybeShowStartupCard().catch(report); }, FIRST_RUN_DELAY_MS));
         void this.runQuiet(async () => { await this.repo.reindex(); await this.migrateProjects(); await this.markProjectNotes(); await this.migrateTaskNotes(); await this.migrateTaskNoteNames(); await this.nestSubtasks(); });
-        this.registerEvent(this.app.workspace.on("file-open", file => { this.followCursor(); if (file && this.role === "main") void this.run(() => this.service.reconcile(file)); }));
+        this.registerEvent(this.app.workspace.on("file-open", file => { this.followCursor(); if (file && this.role === "main") void this.run(() => this.service.reconcile(file)); if (file) void this.warnDuplicates(file); }));
       });
       this.loaded = true;
       // Planned blocks start and end tasks only while the setting is on; the check catches up on start and when the app comes back to the foreground.
       this.app.workspace.onLayoutReady(() => {
         this.planningTick(); this.registerInterval(window.setInterval(() => this.planningTick(), PLANNING_TICK_MS));
-        this.registerDomEvent(document, "visibilitychange", () => { if (!document.hidden) this.planningTick(); });
+        this.registerDomEvent(document, "visibilitychange", () => { if (!document.hidden) { this.planningTick(); this.newDay(); } });
       });
       this.registerInterval(window.setTimeout(() => { void writeCrashState(adapter, crashPath, DEFAULT_CRASH_STATE); }, 30000));
     } catch (error) { report(error); throw error; }
@@ -280,6 +283,44 @@ export default class Organized extends Plugin {
     const current = this.activeEditor() ?? this.recentEditor(); if (current) this.lastNoteEditor = current;
     if (this.lastNoteEditor && !this.repo.file(this.lastNoteEditor.file.path)) this.lastNoteEditor = null;
     return this.lastNoteEditor;
+  }
+  private told = new Set<string>();
+  /** A notice that is shown once per distinct text in a session. */
+  private tellOnce(message: string): void { if (this.told.has(message)) return; this.told.add(message); new Notice(message, 12000); }
+  /** Task notes the list leaves out would otherwise just stop repeating without a word. */
+  private reportSkipped(copies: string[], broken: string[]): void {
+    const parts = [copies.length ? `share a task id with another note (${copies.join(", ")}): delete or change the id of one` : "", broken.length ? `cannot be read as tasks (${broken.join(", ")}): check their properties` : ""].filter(Boolean);
+    this.tellOnce(`Organized left out task notes that ${parts.join("; and ")}. Until then those tasks are not listed and do not repeat.`);
+  }
+  /** A secondary or mirror device does not fill new daily notes; say so, once per note, so a day without its recurring tasks is not a mystery. */
+  private explainNoFill(file: TFile): void {
+    const date = this.service.daily.date(file.path); if (!date || date < localDate()) return;
+    this.tellOnce(`This device is ${this.role === "mirror" ? "a mirror" : "secondary"}, so it did not add recurring tasks to ${file.path}. Let your main device add them and sync, or run "Add missing recurring tasks to this daily note".`);
+  }
+  /** Tells, without changing anything, when a daily note holds the same recurring line twice. */
+  private async warnDuplicates(file: TFile): Promise<void> {
+    try {
+      if (!this.service.daily.date(file.path)) return;
+      const extra = duplicateRepeats(parseTasks(await this.repo.readText(file))).length;
+      if (extra) this.tellOnce(`${file.path} has ${extra} duplicate recurring line${extra === 1 ? "" : "s"} (two devices filled it). Run "Remove duplicate recurring lines in this note" to clean up.`);
+    } catch { /* The note went away; nothing to say. */ }
+  }
+  private async removeDuplicates(file: TFile): Promise<void> {
+    await this.run(async () => { if (!(await this.service.removeDuplicateRepeats(file))) new Notice("No duplicate recurring lines in this note."); });
+  }
+  /** The recurring tasks that belong on the open daily note (today's when another note is open) and are missing from it. */
+  private async addMissingRecurring(): Promise<void> {
+    const open = this.app.workspace.getActiveFile(); const opened = open ? this.service.daily.date(open.path) : null;
+    const date = opened && opened >= localDate() ? opened : localDate();
+    await this.run(async () => {
+      const added = await this.service.catchUp(date);
+      new Notice(added.length ? `Added ${added.length} recurring task${added.length === 1 ? "" : "s"} to ${date}: ${added.join(", ")}.` : `Nothing was missing from ${date}.`);
+    });
+  }
+  /** Phone or desktop left open past midnight: the day's carry-forward would otherwise wait for the next note to be opened. */
+  private newDay(): void {
+    const file = this.app.workspace.getActiveFile();
+    if (file && this.role === "main" && this.service.daily.date(file.path) === localDate()) void this.run(() => this.service.reconcile(file));
   }
   /** Fills a new daily note with its recurring tasks. The wait for the note to settle happens before the write queue is taken, so it never holds up other changes. */
   private async fillNew(file: TFile): Promise<void> {

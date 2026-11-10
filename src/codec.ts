@@ -201,6 +201,15 @@ export function removeUnique(text: string, id: string, repeatOnly = false): stri
   if (matches.length !== 1) throw new Error("Occurrence is missing or ambiguous; preserved for repair.");
   const lines = text.split("\n"); lines.splice(matches[0].line, 1); return lines.join("\n");
 }
+/** Zero-based lines of repeat copies that say exactly what an earlier open copy of the same task says: what two devices that both filled a note leave behind once a sync merges them. A line with something nested under it stays. */
+export function duplicateRepeats(tasks: TaskLine[]): number[] {
+  const first = new Map<string, string>(); const parents = new Set(tasks.map(t => t.parent));
+  return tasks.filter(t => {
+    if (!t.id || !t.repeat || t.marker !== " ") return false;
+    const raw = first.get(t.id); if (raw === undefined) { first.set(t.id, t.raw); return false; }
+    return raw === t.raw && !parents.has(t.line);
+  }).map(t => t.line);
+}
 const indentation = (raw: string): number => /^\s*/.exec(raw)![0].replace(/\t/g, "    ").length;
 /** Inserts `line` as the last subtask of the todo `parentId`, after everything already nested under it; null when that todo is not in the text exactly once. */
 export function insertUnder(text: string, parentId: string, line: string, unit = "\t"): string | null {

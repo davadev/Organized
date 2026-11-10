@@ -97,7 +97,8 @@ describe("native task, date, source and project modals", () => {
     boxes().forEach(box => { box.scrollIntoView = vi.fn(); });
     expect(key(search, 'ArrowDown').defaultPrevented).toBe(true); expect(document.activeElement).toBe(boxes()[0]);
     key(boxes()[0], 'ArrowDown'); expect(document.activeElement).toBe(boxes()[1]);
-    key(boxes()[1], 'ArrowDown'); key(boxes()[2], 'ArrowDown'); expect(document.activeElement).toBe(boxes()[2]);
+    key(boxes()[1], 'ArrowDown'); expect(document.activeElement).toBe(boxes()[2]);
+    const saveButton = modal.contentEl.querySelector('button')!; key(boxes()[2], 'ArrowDown'); expect(document.activeElement).toBe(saveButton); key(saveButton, 'ArrowUp'); expect(document.activeElement).toBe(boxes()[2]); key(saveButton, 'x');
     key(boxes()[2], 'ArrowUp'); key(boxes()[1], 'ArrowUp'); expect(document.activeElement).toBe(boxes()[0]);
     key(boxes()[0], 'ArrowUp'); expect(document.activeElement).toBe(search);
     boxes()[1].dispatchEvent(new Event('focus')); expect(boxes()[1].scrollIntoView).toHaveBeenCalled();
@@ -107,7 +108,7 @@ describe("native task, date, source and project modals", () => {
     search.value = 'zzz'; search.dispatchEvent(new Event('input')); key(search, 'Enter');
     key(search, 'Enter', { metaKey: true }); await flush(); expect(save).toHaveBeenCalledWith(['Beta.md', 'Gamma.md', 'zzz.md']);
     const empty = new ProjectPicker(h.app, [], [], save); empty.open(); const emptySearch = empty.contentEl.querySelector('input[type=search]') as HTMLInputElement;
-    key(emptySearch, 'ArrowDown'); key(emptySearch, 'Enter'); expect(empty.contentEl.querySelectorAll('input[type=checkbox]')).toHaveLength(0); empty.close();
+    key(emptySearch, 'ArrowDown'); expect(document.activeElement).toBe(empty.contentEl.querySelector('button')); key(empty.contentEl.querySelector('button')!, 'ArrowUp'); expect(document.activeElement).toBe(emptySearch); key(emptySearch, 'Enter'); expect(empty.contentEl.querySelectorAll('input[type=checkbox]')).toHaveLength(0); empty.close();
   });
   it("keeps the list above the on-screen keyboard and stops listening when closed", () => {
     const h = harness(); const listeners = new Map<string, () => void>();
