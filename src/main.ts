@@ -2,7 +2,7 @@ import { Editor, MarkdownView, Notice, Platform, Plugin, TFile, TFolder, Workspa
 import { Transaction } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
 import { ACTION_MARKERS, duplicateRepeats, parentIds, parseTasks, sameNesting, NOTE_MARKER, NoteSection, PROJECT_MARKER, RECURRING_MARKER, SECTION_MARKERS, SUBTASK_MARKER, TaskLine, TIME_MARKER, writeNoteSection } from "./codec";
-import { DEFAULT_SETTINGS, elapsed, localDate, object, Settings, Status, Task } from "./model";
+import { DEFAULT_SETTINGS, elapsed, localDate, markerOf, object, Settings, Status, Task } from "./model";
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
 import { anchorOf, explicitRule, taskRule } from "./recurrence";
@@ -112,6 +112,7 @@ export default class Organized extends Plugin {
       this.loaded = true;
       // Planned blocks start and end tasks only while the setting is on; the check catches up on start and when the app comes back to the foreground.
       this.app.workspace.onLayoutReady(() => {
+        if (!this.loaded) return;
         this.planningTick(); this.registerInterval(window.setInterval(() => this.planningTick(), PLANNING_TICK_MS));
         this.registerDomEvent(document, "visibilitychange", () => { if (!document.hidden) { this.planningTick(); this.newDay(); } });
       });
@@ -288,6 +289,8 @@ export default class Organized extends Plugin {
     return this.lastNoteEditor;
   }
   private told = new Set<string>();
+  /** The day whose note "Add missing recurring tasks" is creating and filling, so the no-fill notice stays quiet for it. */
+  private catchingUp: string | null = null;
   /** A notice that is shown once per distinct text in a session. */
   private tellOnce(message: string): void { if (this.told.has(message)) return; this.told.add(message); new Notice(message, 12000); }
   /** Task notes the list leaves out would otherwise just stop repeating without a word. */
@@ -297,7 +300,7 @@ export default class Organized extends Plugin {
   }
   /** A secondary or mirror device does not fill new daily notes; say so, once per note, so a day without its recurring tasks is not a mystery. */
   private explainNoFill(file: TFile): void {
-    const date = this.service.daily.date(file.path); if (!date || date < localDate()) return;
+    const date = this.service.daily.date(file.path); if (!date || date < localDate() || date === this.catchingUp) return;
     this.tellOnce(`This device is ${this.role === "mirror" ? "a mirror" : "secondary"}, so it did not add recurring tasks to ${file.path}. Let your main device add them and sync, or run "Add missing recurring tasks to this daily note".`);
   }
   /** Tells, without changing anything, when a daily note holds the same recurring line twice. */
@@ -315,15 +318,17 @@ export default class Organized extends Plugin {
   private async addMissingRecurring(): Promise<void> {
     const open = this.app.workspace.getActiveFile(); const opened = open ? this.service.daily.date(open.path) : null;
     const date = opened && opened >= localDate() ? opened : localDate();
-    await this.run(async () => {
+    // The note this command creates is not "left unfilled": it is being filled right now.
+    this.catchingUp = date;
+    try { await this.run(async () => {
       const added = await this.service.catchUp(date);
       new Notice(added.length ? `Added ${added.length} recurring task${added.length === 1 ? "" : "s"} to ${date}: ${added.join(", ")}.` : `Nothing was missing from ${date}.`);
-    });
+    }); } finally { this.catchingUp = null; }
   }
   /** Phone or desktop left open past midnight: the day's carry-forward would otherwise wait for the next note to be opened. */
   private newDay(): void {
     const file = this.app.workspace.getActiveFile();
-    if (file && this.role === "main" && this.service.daily.date(file.path) === localDate()) void this.run(() => this.service.reconcile(file));
+    if (!this.unloaded && file && this.role === "main" && this.service.daily.date(file.path) === localDate()) void this.run(() => this.service.reconcile(file));
   }
   /** Fills a new daily note with its recurring tasks. The wait for the note to settle happens before the write queue is taken, so it never holds up other changes. */
   private async fillNew(file: TFile): Promise<void> {
@@ -572,13 +577,12 @@ export default class Organized extends Plugin {
   /** Asks how the task repeats. From a typed `[r]` (`typed`), cancelling puts the todo's own marker back; from the panel there is no marker to put back. */
   pickRecurrence(task: Task, context?: Context, typed = false): void {
     new RecurrencePicker(this.app, localDate(), task.recurring ? explicitRule(taskRule(task), anchorOf(task)) : null, rule => this.run(() => this.service.recurrence(task.id, rule, context)),
-      typed && context ? () => { void this.run(() => this.service.clean(context, this.ownMarker(task))); } : undefined).open();
+      typed && context ? () => { void this.run(() => this.service.clean(context, markerOf(task))); } : undefined).open();
   }
   /** The marker a task's own status shows (a running timer is `[/]`). */
-  private ownMarker(task: Task): string { return task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.status === "in_progress" ? "/" : " "; }
   /** `[+]`: puts the todo's own marker back, then adds an empty subtask under it as the command does. */
   private async addSubtaskFromMarker(task: Task, context: Context): Promise<void> {
-    await this.run(() => this.service.clean(context, this.ownMarker(task)));
+    await this.run(() => this.service.clean(context, markerOf(task)));
     const active = this.activeEditor();
     if (!active || active.file.path !== context.file.path) { new Notice("Open the note to add a subtask."); return; }
     await this.addSubtask(active.editor, active.file);
@@ -586,7 +590,7 @@ export default class Organized extends Plugin {
   /** Asks for a block of time on the todo, worked or planned (on the day of its daily note, or today), then puts the todo's own marker back. Cancelling leaves the `[t]` in place. */
   private addTime(task: Task, context: Context): void {
     const at = (time: string) => new Date(`${this.service.daily.date(context.file.path) ?? localDate()}T${time}:00`).toISOString();
-    const marker = this.ownMarker(task);
+    const marker = markerOf(task);
     // One dialog for both: a block that has ended is time worked, one still to come is planned.
     new SessionModal(this.app, { heading: "Add time", taskTitle: task.title, start: at("09:00"), end: at("10:00"), kind: null, save: async (next, kind) => { await this.run(() => kind === "planned" ? this.service.addPlanned(task.id, next) : this.service.addSession(task.id, next)); await this.run(() => this.service.clean(context, marker)); } }).open();
   }

@@ -25,10 +25,17 @@ describe("planning", () => {
       expect(dueStarts([task({ planned_sessions: planned, ...other })], at("09:30"))).toEqual([]);
     }
   });
-  it("sets a task in progress without timing it, and any later status change drops the claim", () => {
+  it("does not start a task again for the block that already started it and was put back", () => {
+    const planned = block("09:00", "10:00"); const put = setStatus(startPlanned(task({ planned_sessions: [planned] }), planned), "open");
+    expect(dueStarts([put], at("09:30"))).toEqual([]);
+    const next = block("10:00", "11:00"); expect(dueStarts([{ ...put, planned_sessions: [planned, next] }], at("10:30")).map(d => d.block)).toEqual([next]);
+  });
+  it("sets a task in progress without timing it, and a manual start drops the claim, other changes keep it", () => {
     const started = startPlanned(task({ status: "completed", closed_at: "2026-03-01T00:00:00.000Z" }), block("09:00", "10:00"));
     expect(started).toMatchObject({ status: "in_progress", closed_at: null, auto_started_block: block("09:00", "10:00").start, time_tracking_started_at: null });
-    expect(setStatus(started, "completed").auto_started_block).toBeNull(); expect(setStatus(started, "open").auto_started_block).toBeNull();
+    expect(setStatus(started, "in_progress").auto_started_block).toBeNull();
+    // Putting the task back (or finishing it) keeps the claim, so the block that is still under way does not start it again.
+    expect(setStatus(started, "completed").auto_started_block).toBe(started.auto_started_block); expect(setStatus(started, "open").auto_started_block).toBe(started.auto_started_block);
   });
   it("ends a claim: reopen when the block is over, release when the person changed the task, move to a back-to-back block", () => {
     const first = block("09:00", "10:00"); const planned = [first, block("10:00", "11:00")];

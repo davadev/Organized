@@ -8,7 +8,7 @@ description: Definition-of-done checklist for any feature or user-visible change
 Run through every line before the PR is marked ready. Skip a line only when it truly does not apply, and say so in the PR.
 
 1. **Branch + PR**: work on `fix/<slug>` or `feat/<slug>`, never on `main`.
-2. **Tests**: new/changed code has tests; `npm run test:cov` stays at 100 % (no `v8 ignore`; unreachable code is deleted, see `plugin-design-rules`).
+2. **Tests**: new/changed code has tests; `npm run test:cov` stays at 100 % (no `v8 ignore`; unreachable code is deleted, see `plugin-design-rules`). **A bug fix always carries a regression test** that failed on the old code (revert the fix once to prove it) and covers the neighbouring states; see `bug-hunt`.
 3. **Checks**, all with zero warnings: `npm run build` (includes tsc), `npm run lint`, `npm run check:dead-code` (new code is reachable from `src/main.ts`; nothing left half-finished), `npm run lint:css` if `styles.css` changed, `npm run lint:deps` if `package.json` changed.
 4. **Settings**: a new setting goes under a section heading (never appended flat) and is covered in `src/tests/settingsCoverage.dom.test.ts`. Remind the user a full Obsidian restart is needed to see a new group.
 5. **Docs**: update the matching `docs/<page>.md` and `docs/index.md` if a page was added; `README.md` if user-visible.
