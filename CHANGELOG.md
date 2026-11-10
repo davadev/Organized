@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A subtask with a long title now wraps inside its row in the Task tab instead of running over the unlink button.
 - On a phone, the day you paged to in the side panel's day view now opens as the daily note when you close the panel (paging itself still keeps the panel open).
 - On a phone, paging through days in the side panel's day view no longer opens the daily note (which closed the panel after one day). Desktop still opens it.
 - Project picker: the project row and the *Save links* button that have keyboard focus are now outlined, so Tab and the arrow keys visibly reach Save.
