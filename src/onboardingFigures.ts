@@ -8,9 +8,9 @@ import { LONG_PRESS_MARKERS } from "./longPress";
  * screenshots: they follow the user's theme and font, add almost nothing to the plugin's size and cannot go stale the way
  * a picture does. They are decoration (aria-hidden, not interactive); the step's text carries the meaning.
  */
-export type FigureId = "settings" | "tabs" | "calendar" | "follow" | "forward" | "card" | "props" | "keys" | "commands" | "press" | "hotkey" | "repeat" | "plan" | "devices";
+export type FigureId = "settings" | "tabs" | "calendar" | "follow" | "forward" | "card" | "props" | "keys" | "commands" | "press" | "hotkey" | "repeat" | "plan" | "devices" | "budget" | "repairs";
 /** Every figure id; the tests walk it so a new figure cannot ship undrawn. */
-export const FIGURE_IDS: FigureId[] = ["settings", "tabs", "calendar", "follow", "forward", "card", "props", "keys", "commands", "press", "hotkey", "repeat", "plan", "devices"];
+export const FIGURE_IDS: FigureId[] = ["settings", "tabs", "calendar", "follow", "forward", "card", "props", "keys", "commands", "press", "hotkey", "repeat", "plan", "devices", "budget", "repairs"];
 
 const box = (host: HTMLElement, marker: string): void => {
   const b = host.createSpan({ cls: "organized-welcome-fig-box", text: marker === "x" ? "" : marker.trim(), attr: { "data-marker": marker } });
@@ -152,20 +152,65 @@ function hotkeyFigure(fig: HTMLElement): void {
   row.createSpan({ cls: "organized-welcome-fig-pill", text: "Alt + X" });
 }
 
-/** A row of the figure: a label chip and what it does. */
-const chipRows = (fig: HTMLElement, rows: [string, string][]): void => {
+/** Says where in the interface the thing is, above the picture of it. */
+const where = (fig: HTMLElement, path: string): void => { fig.createDiv({ cls: "organized-welcome-fig-caption", text: path }); };
+/** A settings-style row: a name and the field it holds. */
+const settingRow = (host: HTMLElement, name: string, value: string): void => {
+  const row = host.createDiv({ cls: "organized-welcome-fig-row" });
+  row.createSpan({ cls: "organized-welcome-fig-row-name", text: name });
+  row.createSpan({ cls: "organized-welcome-fig-field", text: value });
+};
+
+/** The two places a repeat rule is set: the marker in the note, and the Recurring pill in the Task tab. */
+function repeatFigure(fig: HTMLElement): void {
+  const days = fig.createDiv({ cls: "organized-welcome-fig-days" });
+  const note = days.createDiv({ cls: "organized-welcome-fig-note" });
+  where(note, "In your note: type [r]");
+  line(note, "r", "Water the plants", "is-current");
+  setIcon(days.createSpan({ cls: "organized-welcome-fig-arrow" }), "arrow-right");
+  const panel = days.createDiv({ cls: "organized-welcome-fig-note" });
+  where(panel, "Task tab: Recurring");
+  const pill = panel.createSpan({ cls: "organized-welcome-fig-field" });
+  setIcon(pill.createSpan(), "repeat"); pill.createSpan({ text: " Every 3 weeks on Thu" });
+}
+/** The Day grid of the Calendar tab, with a stretch of worked time and the empty spot to tap for a planned one. */
+function planFigure(fig: HTMLElement): void {
   const list = fig.createDiv({ cls: "organized-welcome-fig-rows" });
-  for (const [chip, role] of rows) {
+  where(list, "Calendar tab, Day view");
+  settingRow(list, "09:20–10:15", "Draft the Q1 review");
+  list.createDiv({ cls: "organized-welcome-fig-add", text: "Tap an empty spot to plan time: 16:00–17:30" });
+  settingRow(list, "Task tab, Timer", "2h 20min tracked · 1h 30min planned");
+}
+function devicesFigure(fig: HTMLElement): void {
+  const list = fig.createDiv({ cls: "organized-welcome-fig-rows" });
+  where(list, "Settings › Organized › This device");
+  settingRow(list, "Role of this device", "Secondary");
+  for (const [chip, role] of [["Main", "Edits and fills daily notes"], ["Secondary", "Edits, never creates daily notes"], ["Mirror", "View only"]]) {
     const row = list.createDiv({ cls: "organized-welcome-fig-row" });
     row.createSpan({ cls: "organized-welcome-fig-pill", text: chip });
     row.createSpan({ cls: "organized-welcome-fig-row-role", text: role });
   }
-};
-const repeatFigure = (fig: HTMLElement): void => chipRows(fig, [["Every day", "One tap"], ["Weekdays", "Monday to Friday"], ["Custom", "Every 3 weeks on Monday and Thursday"]]);
-const planFigure = (fig: HTMLElement): void => chipRows(fig, [["09:00–10:30", "Draft the Q1 review (planned)"], ["10:30–11:00", "Reply to Anna (planned)"], ["Tracked 1h 13min", "of 1h 30min planned"]]);
-const devicesFigure = (fig: HTMLElement): void => chipRows(fig, [["Main", "Edits and fills daily notes"], ["Secondary", "Edits, never creates daily notes"], ["Mirror", "View only"]]);
+}
+/** Where a budget is set, and what it shows on the task. */
+function budgetFigure(fig: HTMLElement): void {
+  const list = fig.createDiv({ cls: "organized-welcome-fig-rows" });
+  where(list, "Task tab, Timer: the target icon");
+  settingRow(list, "Budget", "4h");
+  where(list, "Projects tab › Project budgets");
+  settingRow(list, "Weekly", "10h");
+}
+/** The two repair commands as they appear in the command palette. */
+function repairsFigure(fig: HTMLElement): void {
+  const list = fig.createDiv({ cls: "organized-welcome-fig-rows" });
+  where(list, "Command palette (Ctrl/Cmd+P)");
+  for (const name of ["Add missing recurring tasks to this daily note", "Remove duplicate recurring lines in this note"]) {
+    const row = list.createDiv({ cls: "organized-welcome-fig-row" });
+    row.createSpan({ cls: "organized-welcome-fig-cap", text: "Organized" });
+    row.createSpan({ cls: "organized-welcome-fig-row-role", text: name });
+  }
+}
 
-const BUILDERS: Record<FigureId, (fig: HTMLElement) => void> = { settings: settingsFigure, tabs: tabsFigure, calendar: calendarFigure, follow: followFigure, forward: forwardFigure, card: cardFigure, props: propsFigure, keys: keysFigure, commands: commandsFigure, press: pressFigure, hotkey: hotkeyFigure, repeat: repeatFigure, plan: planFigure, devices: devicesFigure };
+const BUILDERS: Record<FigureId, (fig: HTMLElement) => void> = { settings: settingsFigure, tabs: tabsFigure, calendar: calendarFigure, follow: followFigure, forward: forwardFigure, card: cardFigure, props: propsFigure, keys: keysFigure, commands: commandsFigure, press: pressFigure, hotkey: hotkeyFigure, repeat: repeatFigure, plan: planFigure, devices: devicesFigure, budget: budgetFigure, repairs: repairsFigure };
 
 /** Draw the illustration `id` into `parent`. */
 export function renderFigure(parent: HTMLElement, id: FigureId): HTMLElement {
