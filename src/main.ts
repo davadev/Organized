@@ -345,6 +345,9 @@ export default class Organized extends Plugin {
   followCursor(): void {
     // The task list shows the note in the main area, so switching notes must repaint it even when no task is selected on either side.
     const note = this.taskSourceEditor()?.file.path ?? null; const noteChanged = note !== this.shownNote; this.shownNote = note;
+    // The calendar follows the daily note in view, so the day view never shows yesterday beside today's note.
+    const day = noteChanged && note ? this.service.daily.date(note) : null;
+    if (day) this.eachView(view => view.showDate(day));
     const active = this.activeEditor();
     // Focusing the inspector is not leaving the selected task. Only an actual
     // Markdown editor cursor change can replace its context.

@@ -315,6 +315,13 @@ describe('plugin lifecycle and user-only editor actions', () => {
     recent.mockReturnValue({ view: Object.assign(new MarkdownView(), { file: null, editor }) } as any); expect(plugin.taskSourceEditor()).toEqual({ editor, file });
     recent.mockReturnValue(null); h.files.delete(file.path); expect(plugin.taskSourceEditor()).toBeNull();
   });
+  it('points the calendar at the daily note that comes into view', async () => {
+    const { h, plugin } = await loaded(); h.layout[0]();
+    const view = new OrganizedInspectorView({ app: h.app } as any, plugin); vi.spyOn(view, 'render').mockResolvedValue(); h.raw.workspace.getLeavesOfType.mockReturnValue([{ view }]);
+    const daily: any = await h.add(plugin.service.daily.path('2031-04-05'), '- [ ] Today'); const other: any = await h.add('Other.md', '- [ ] x');
+    h.setActive(other); plugin.followCursor(); expect(view.selectedDate).not.toBe('2031-04-05');
+    h.setActive(daily); plugin.followCursor(); expect(view.selectedDate).toBe('2031-04-05'); expect(view.month.format('YYYY-MM')).toBe('2031-04');
+  });
   it('repaints the task list when the note changes even if no task is selected before or after, and on file-open', async () => {
     const { h, plugin } = await loaded(); h.layout[0]();
     const first: any = await h.add('Recovery.md', '- [ ] Plain one'); const second: any = await h.add('Daily.md', 'Intro\n- [ ] Plain two');

@@ -412,12 +412,13 @@ export class OrganizedInspectorView extends ItemView {
     }).catch(() => stats.setText("Task statistics unavailable"));
   }
   /** Navigation row shared by the week and day views: previous, title, next and Today. */
-  private rangeNav(host: HTMLElement, title: string, previous: string, next: string, step: () => void, back: () => void): void {
+  private rangeNav(host: HTMLElement, title: string, previous: string, next: string, step: () => void, back: () => void, follow = false): void {
+    const go = async (change: () => void) => { change(); if (follow) await this.openDay(); await this.render(); };
     const nav = host.createDiv({ cls: "organized-calendar-nav" });
-    this.iconButton(nav, previous, "chevron-left", () => { back(); return this.render(); });
+    this.iconButton(nav, previous, "chevron-left", () => go(back));
     nav.createEl("h3", { text: title, attr: { "aria-live": "polite" } });
-    this.iconButton(nav, next, "chevron-right", () => { step(); return this.render(); });
-    this.button(nav, "Today", () => { this.selectedDate = localDate(); return this.render(); }).addClass("organized-today-button");
+    this.iconButton(nav, next, "chevron-right", () => go(step));
+    this.button(nav, "Today", () => go(() => { this.selectedDate = localDate(); })).addClass("organized-today-button");
   }
   /** A task that became a standalone note opens that note; any other opens in the Task tab. */
   private openCalendarTask(task: Task): Promise<void> { return task.converted_to ? this.openNote(task.converted_to) : this.openFromCalendar(task.id); }
@@ -509,7 +510,7 @@ export class OrganizedInspectorView extends ItemView {
   private async dayView(host: HTMLElement, generation: number): Promise<void> {
     const date = this.selectedDate; const day = moment(date, "YYYY-MM-DD");
     this.rangeNav(host, day.format("ddd, MMM D, YYYY"), "Previous day", "Next day",
-      () => { this.selectedDate = day.clone().add(1, "day").format("YYYY-MM-DD"); }, () => { this.selectedDate = day.clone().subtract(1, "day").format("YYYY-MM-DD"); });
+      () => { this.selectedDate = day.clone().add(1, "day").format("YYYY-MM-DD"); }, () => { this.selectedDate = day.clone().subtract(1, "day").format("YYYY-MM-DD"); }, true);
     const tasks = await this.owner.repo.list(true); const now = Date.now();
     const retired = new Map((await this.owner.service.retiredWork(date, date)).map(item => [item.task.id, item]));
     const blocks = blocksOn([...tasks, ...[...retired.values()].map(item => item.task)], date, now);
@@ -557,6 +558,13 @@ export class OrganizedInspectorView extends ItemView {
     }
     const minutes = new Date(now).getHours() * 60 + new Date(now).getMinutes();
     if (date === localDate() && minutes >= from * 60 && minutes <= to * 60) { const nowLine = grid.createDiv({ cls: "organized-now-line", attr: { "aria-hidden": "true" } }); nowLine.setCssProps({ "--organized-at": String((minutes - from * 60) / span * 100) }); }
+  }
+  /** Points the calendar at a day without writing anything; the caller repaints. */
+  showDate(date: string): void { this.selectedDate = date; this.month = moment(date, "YYYY-MM-DD").startOf("month"); }
+  /** Opens the day's note when it exists, so the editor shows the day the panel does. A missing note is not created by paging. */
+  private async openDay(): Promise<void> {
+    const file = this.owner.repo.file(this.owner.service.daily.path(this.selectedDate));
+    if (file && this.app.workspace.getActiveFile()?.path !== file.path) await this.app.workspace.getLeaf(false).openFile(file);
   }
   async selectDay(date: string): Promise<void> {
     this.owner.assertWritable(); this.selectedDate = date;

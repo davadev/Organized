@@ -342,6 +342,14 @@ describe('compact calendar and contextual task inspector', () => {
     button(view.contentEl, 'Back to calendar').click(); await flush(); expect(view.tab).toBe('Calendar'); expect(view.contentEl.querySelector('.organized-day-grid')).toBeTruthy();
     view.contentEl.querySelectorAll<HTMLElement>('.organized-day-task .organized-list-open')[0].click(); await flush(); expect(owner.selectedTaskId).toBe(a.id); view.origin = 'Projects / favorites'; await view.render(); button(view.contentEl, 'Back to projects').click(); await flush(); expect(view.tab).toBe('Projects');
   });
+  it('opens the daily note of the day paged to when it exists, and never creates one', async () => {
+    const { view, repo, files, service } = await fixture(); const open = vi.fn(async () => undefined); (view.app.workspace.getLeaf as any).mockReturnValue({ openFile: open });
+    const tomorrow = moment(localDate(), 'YYYY-MM-DD').add(1, 'day').format('YYYY-MM-DD'); await repo.ensure(service.daily.path(tomorrow), '- [ ] Later');
+    view.selectedDate = localDate(); view.calendarMode = 'Day'; await view.render();
+    button(view.contentEl, 'Next day').click(); await flush(); expect(open).toHaveBeenCalledWith(expect.objectContaining({ path: service.daily.path(tomorrow) }));
+    (view.app.workspace.getActiveFile as any) = () => ({ path: service.daily.path(tomorrow) }); open.mockClear(); button(view.contentEl, 'Today').click(); await flush(); button(view.contentEl, 'Next day').click(); await flush(); expect(open).not.toHaveBeenCalled();
+    button(view.contentEl, 'Next day').click(); await flush(); expect(files.has(service.daily.path(moment(tomorrow, 'YYYY-MM-DD').add(1, 'day').format('YYYY-MM-DD')))).toBe(false); expect(open).not.toHaveBeenCalled();
+  });
   it('shows a now line on today, navigates days and offers to create a missing daily note without creating it while browsing', async () => {
     const { view, repo, files, service } = await fixture(); const now = new Date(); vi.setSystemTime(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0));
     const task = await repo.create('Midday'); await repo.update(task.id, t => ({ ...t, status: 'in_progress', time_tracking_started_at: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 11, 0).toISOString() }));
