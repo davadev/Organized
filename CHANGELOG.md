@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Retiring tasks with 0.1.4 metadata.** A recurring task that is retired while its note stays now stops repeating (before, the next daily note brought its todo back); Undo gives the rule back. The Retire window's last line now says how many recurring tasks will stop repeating and how many planned blocks and time budgets are not kept when notes are stripped or trashed. Time worked that is kept under a retired todo now carries the task's projects as links, so project budgets (all time, this month) keep counting it; notes retired by earlier versions have no project and stay out of the budget.
 - The onboarding tour (fresh installs) has three more cards for what 0.1.4 added: repeating a todo, planning time and setting a budget, and using several devices (Secondary and Mirror roles). It is now 15 cards, the most the tour allows.
 - The What's new note now shows real crops of the plugin's own panel (the Recurring pill row, the Timer card with its budget bar, a planned block on the Day grid), in light and dark, instead of drawn sketches; the pictures for Settings and the command palette say where to find the thing in words. `npm run screenshots` renders the crops into `src/whatsNew/shots/` and they are bundled into `main.js` (about 150 KB).
 - The pictures in the What's new note now say where each thing lives (the `[r]` marker and Recurring pill, the Day grid and Timer card, Settings › Organized › This device, the command palette) instead of only listing options; budgets and the repair commands got pictures too.

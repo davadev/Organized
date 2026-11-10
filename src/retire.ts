@@ -30,6 +30,8 @@ export function normalizeRetire(o: RetireOptions): RetireOptions {
 }
 /** Whether what the task note held is lost from the vault unless it is written under the todo (so the "keep" choice matters). */
 export const losesNote = (o: RetireOptions): boolean => o.notes === "trash" || o.yaml === "strip";
+/** Whether the task note is still there, with its properties, once the run is over. */
+export const keepsNote = (o: RetireOptions): boolean => o.notes !== "trash" && o.yaml === "keep";
 export const isDestructive = (o: RetireOptions): boolean => losesNote(o);
 /** The tasks a retire run covers. Recurring and unfinished tasks are only covered by `all`. */
 export function selectTasks(tasks: Task[], o: RetireOptions, now: number): Task[] {
@@ -60,12 +62,13 @@ export function stripOrganized(text: string): string {
 /** What the scan of the vault found: the tasks, and where their todos are. */
 /** `unnamed`: ids of tasks whose note is still named after the id; notes already named after their title are not renamed. */
 export interface RetireScan { tasks: Task[]; files: Map<string, TFile[]>; lines: Map<string, number>; unnamed: Set<string> }
-export interface RetirePreview { tasks: number; todos: number; notes: number; renamed: number; stripped: number; trashed: number }
+/** `plans`, `budgets` and `rules`: how many of the chosen tasks hold planned blocks, a time budget or a repeat rule, which a retired task no longer has. */
+export interface RetirePreview { tasks: number; todos: number; notes: number; renamed: number; stripped: number; trashed: number; plans: number; budgets: number; rules: number }
 export function retirePreview(scan: RetireScan, raw: RetireOptions, now: number): RetirePreview {
   const o = normalizeRetire(raw); const chosen = selectTasks(scan.tasks, o, now);
   const touched = new Set<string>(); let todos = 0;
   for (const task of chosen) { todos += scan.lines.get(task.id) ?? 0; for (const file of scan.files.get(task.id) ?? []) touched.add(file.path); }
-  return { tasks: chosen.length, todos, notes: touched.size, renamed: o.notes === "rename" ? chosen.filter(task => scan.unnamed.has(task.id)).length : 0, stripped: o.yaml === "strip" ? chosen.length : 0, trashed: o.notes === "trash" ? chosen.length : 0 };
+  return { tasks: chosen.length, todos, notes: touched.size, renamed: o.notes === "rename" ? chosen.filter(task => scan.unnamed.has(task.id)).length : 0, stripped: o.yaml === "strip" ? chosen.length : 0, trashed: o.notes === "trash" ? chosen.length : 0, plans: losesNote(o) ? chosen.filter(task => task.planned_sessions.length).length : 0, budgets: losesNote(o) ? chosen.filter(task => task.time_budget_seconds !== null).length : 0, rules: chosen.filter(task => task.recurring).length };
 }
 export const plural = (n: number, one: string): string => `${n} ${one}${n === 1 ? "" : "s"}`;
 export function describePreview(p: RetirePreview): string {
@@ -74,5 +77,10 @@ export function describePreview(p: RetirePreview): string {
   if (p.renamed) parts.push(`${plural(p.renamed, "task note")} renamed to its title`);
   if (p.stripped) parts.push(`${plural(p.stripped, "task note")} stripped of properties`);
   if (p.trashed) parts.push(`${plural(p.trashed, "task note")} moved to Obsidian's trash`);
-  return `${parts.join(" · ")}.`;
+  return `${parts.join(" · ")}.${leftBehind(p)}`;
+}
+/** What the chosen tasks hold that a todo cannot: said before anything is retired. Planned blocks and budgets are lost with the note (stripped or trashed); a repeat always ends, since nothing writes the todo into new daily notes any more. */
+function leftBehind(p: RetirePreview): string {
+  const lost = [p.plans ? `planned blocks of ${plural(p.plans, "task")}` : "", p.budgets ? `time budgets of ${plural(p.budgets, "task")}` : ""].filter(Boolean);
+  return `${p.rules ? ` ${plural(p.rules, "recurring task")} will stop repeating.` : ""}${lost.length ? ` Not kept: ${lost.join(" and ")}.` : ""}`;
 }

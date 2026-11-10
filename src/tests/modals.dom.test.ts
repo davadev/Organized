@@ -223,6 +223,14 @@ describe("Retire window", () => {
     expect(status(modal)).toBe("No tasks match. Nothing will change."); expect(go(modal).disabled).toBe(true); choose(select(modal, "Which tasks"), "all"); expect(go(modal).disabled).toBe(false);
     go(modal).click(); await flush(); expect(run).toHaveBeenCalledWith({ which: "all", olderThanDays: 30, lines: "link", keep: "all", notes: "rename", yaml: "keep" }); expect(modal.contentEl.children).toHaveLength(0);
   });
+  it("tells before anything is retired which repeat rules end and which plans and budgets are not kept", async () => {
+    const h = harness(); const plan = [{ start: "2026-03-12T09:00:00.000Z", end: "2026-03-12T10:00:00.000Z" }];
+    const rich = { tasks: [{ ...newTask("Planned", "task0001"), planned_sessions: plan }, { ...newTask("Budgeted", "task0002"), time_budget_seconds: 3600 }, { ...newTask("Repeats", "task0003"), recurring: true }], files: new Map(), lines: new Map(), unnamed: new Set<string>() };
+    const modal = new RetireModal(h.app, base, async () => rich, async () => undefined); decorated(modal); modal.open(); await flush();
+    expect(status(modal)).toBe("3 tasks · 0 todos in 0 notes unlinked. 1 recurring task will stop repeating."); // the task notes stay, so plans and budgets stay in them
+    choose(select(modal, "Properties of task notes"), "strip"); expect(status(modal)).toContain("1 recurring task will stop repeating. Not kept: planned blocks of 1 task and time budgets of 1 task.");
+    choose(select(modal, "Properties of task notes"), "keep"); choose(select(modal, "Task notes"), "trash"); expect(status(modal)).toContain("Not kept: planned blocks of 1 task and time budgets of 1 task.");
+  });
   it("cancels, and reports a scan that failed or a run that failed", async () => {
     const h = harness(); const cancelled = new RetireModal(h.app, base, async () => scan(1), async () => undefined); cancelled.open(); await flush();
     [...cancelled.contentEl.querySelectorAll("button")].find(b => b.textContent === "Cancel")!.click(); expect(cancelled.contentEl.children).toHaveLength(0);

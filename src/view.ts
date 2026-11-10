@@ -25,6 +25,8 @@ const pad = (value: number): string => String(value).padStart(2, "0");
 const clock = (minutes: number): string => `${pad(Math.floor(minutes / 60) % 24)}:${pad(Math.floor(minutes % 60))}`;
 /** Rows drawn before a long list asks to be expanded. */
 const LIST_LIMIT = 50;
+/** The span the whole-project budget reads retired time from: every daily note there is. */
+const RETIRED_FROM = "1970-01-01"; const RETIRED_TO = "2999-12-31";
 export class OrganizedInspectorView extends ItemView {
   tab: Tab = "Calendar";
   calendarMode: CalendarMode = "Month";
@@ -54,7 +56,8 @@ export class OrganizedInspectorView extends ItemView {
   /** One bar per budget set on the task's projects, each counting the time of every task in that project over the day, week, month or the whole project. */
   private async projectBars(host: HTMLElement, task: Task): Promise<void> {
     const budgeted = task.projects.filter(project => this.budgeted(project)); if (!budgeted.length) return;
-    const tasks = await this.owner.repo.list(true); const now = Date.now();
+    // Time kept under retired todos (see retention.ts) still counts toward the project it was worked for.
+    const tasks = [...await this.owner.repo.list(true), ...(await this.owner.service.retiredWork(RETIRED_FROM, RETIRED_TO)).map(item => item.task)]; const now = Date.now();
     for (const project of budgeted) {
       const budgets = this.owner.repo.projectBudgets(project);
       for (const period of Object.keys(BUDGET_KEYS) as BudgetPeriod[]) { const budget = budgets[period]; if (budget !== null) this.budgetBar(host, projectUse(tasks, project, period, budget, now), `${this.projectLabel(project)} · ${PERIOD_LABELS[period]}`); }

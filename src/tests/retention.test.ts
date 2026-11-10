@@ -33,4 +33,28 @@ describe("retention details", () => {
     expect(found[0].work_sessions).toEqual(sessions); expect(found[2].work_sessions[0]).toEqual({ start: at(2026, 3, 5, 12, 0), end: at(2026, 3, 5, 13, 0) });
     expect(new Set(found.map(t => t.id)).size).toBe(4); expect(parseWorked("- [x] Nothing\nplain")).toEqual([]); expect(parseWorked("  - Worked 2026-03-02: 08:00–09:00")).toEqual([]);
   });
+  it("keeps the projects of worked time as links, so retired time still counts toward their budgets", () => {
+    const sessions = [{ start: at(2026, 3, 2, 9, 0), end: at(2026, 3, 2, 9, 30) }];
+    expect(retiredLines(task({ work_sessions: sessions, projects: ["Tasks/Projects/Alpha.md"] }), "", "all", "  ")).toEqual(["  - Worked 2026-03-02: 09:00–09:30 (30 min)", "  - Project: [[Tasks/Projects/Alpha]]"]);
+    expect(retiredLines(task({ work_sessions: sessions, projects: ["A.md", "Tasks/B.md"] }), "", "all", "")).toEqual(["- Worked 2026-03-02: 09:00–09:30 (30 min)", "- Projects: [[A]], [[Tasks/B]]"]);
+    // No time worked, no projects, or less than everything: nothing about projects is written.
+    expect(retiredLines(task({ projects: ["A.md"] }), "", "all", "")).toEqual([]); expect(retiredLines(task({ work_sessions: sessions }), "", "all", "")).toEqual(["- Worked 2026-03-02: 09:00–09:30 (30 min)"]);
+    expect(retiredLines(task({ work_sessions: sessions, projects: ["A.md"] }), body, "description", "")).toEqual(["> Ship it.", ">", "> Second line"]);
+  });
+  it("reads the projects back onto the stand-in task, in any order, with aliases and old spellings, and ignores them elsewhere", () => {
+    const sessions = [{ start: at(2026, 3, 2, 9, 0), end: at(2026, 3, 2, 9, 30) }];
+    const written = ["- [x] Plan release", ...retiredLines(task({ work_sessions: sessions, projects: ["Tasks/Projects/Alpha.md", "Beta.md"] }), "", "all", "  ")];
+    expect(parseWorked(written.join("\n"))[0].projects).toEqual(["Tasks/Projects/Alpha.md", "Beta.md"]);
+    expect(parseWorked(["- [x] Late", "  - Project: [[Gamma|the G]], [[Gamma.md]], [[Delta#Heading]]", "  - Worked 2026-03-02: 09:00–09:30 (30 min)"].join("\n"))[0].projects).toEqual(["Gamma.md", "Delta.md"]);
+    expect(parseWorked(["- [x] Crlf", "  - Worked 2026-03-02: 09:00–09:30 (30 min)\r", "  - Project: [[Eps]]\r"].join("\n"))[0].projects).toEqual(["Eps.md"]);
+    expect(parseWorked(["- [x] Old", "  - Worked 2026-03-02: 09:00–09:30 (30 min)"].join("\n"))[0].projects).toEqual([]);
+    // A project line that is not indented under a todo with time, or has no links, belongs to nothing.
+    expect(parseWorked(["- Project: [[Stray]]", "- [x] Own", "- Project: [[Stray]]", "  - Project: no links here", "  - Worked 2026-03-02: 09:00–09:30 (30 min)"].join("\n"))[0].projects).toEqual([]);
+  });
+  it("reads the tracked total in hours, minutes or both, and ignores one that is empty, outside a todo or not under it", () => {
+    const sessions = "  - Worked 2026-03-02: 09:00–09:10 (10 min)";
+    const read = (...lines: string[]) => parseWorked(["- Tracked 9h", "- [x] A", ...lines].join("\n"))[0]?.time_tracked_seconds;
+    expect(read(sessions, "  - Tracked 2h")).toBe(7200); expect(read(sessions, "  - Tracked 45 min")).toBe(2700); expect(read(sessions, "  - Tracked 1h 5min")).toBe(3900);
+    expect(read(sessions, "  - Tracked ")).toBe(600); expect(read(sessions, "- Tracked 5h")).toBe(600); expect(read(sessions, "  - Tracked 1 min")).toBe(600); // the sessions' own total is the floor
+  });
 });
