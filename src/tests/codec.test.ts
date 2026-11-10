@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { removeLines, nestUnder, descendants, insertTask, readNote, hasLegacyHeading, migrateNote, noteSection, parseTasks, removeUnique, replaceTask, sortTasks, taskText, writeNoteSection } from "../codec";
+import { removeLines, moveTask, nestUnder, descendants, insertTask, readNote, hasLegacyHeading, migrateNote, noteSection, parseTasks, removeUnique, replaceTask, sortTasks, taskText, writeNoteSection } from "../codec";
 
 describe("Markdown task codec", () => {
   it('uses real Markdown structure for nested fences, indented code, comments and setext headings', () => {
@@ -163,5 +163,13 @@ describe("codec edits keep the document intact", () => {
     const text = "- [ ] a\n\t- [ ] a1\n- [ ] b\n\t- [ ] b1\n";
     expect(removeLines(text, [0, 2])).toBe("- [ ] a1\n- [ ] b1\n");
     expect(removeLines(text, [1])).toBe("- [ ] a\n- [ ] b\n\t- [ ] b1\n");
+  });
+  it('moveTask carries the subtasks nested under the line and keeps them visible todos', () => {
+    const text = '## Open\n\n- [ ] Parent <!--organized:aaaaaaaa-->\n\t- [ ] Child <!--organized:bbbbbbbb-->\n\t\tnote\n- [ ] Other <!--organized:cccccccc-->\n\n## Done\n';
+    const moved = moveTask(text, 'aaaaaaaa', 'Done');
+    expect(moved).toBe('## Open\n\n- [ ] Other <!--organized:cccccccc-->\n\n## Done\n\n- [ ] Parent <!--organized:aaaaaaaa-->\n\t- [ ] Child <!--organized:bbbbbbbb-->\n\t\tnote');
+    expect(parseTasks(moved).map(t => [t.title, t.parent === null ? null : parseTasks(moved)[t.parent]?.title ?? parseTasks(moved).find(p => p.line === t.parent)!.title])).toEqual([['Other', null], ['Parent', null], ['Child', 'Parent']]);
+    const nested = '## Open\n\n- [ ] Top <!--organized:dddddddd-->\n\t- [ ] Mid <!--organized:eeeeeeee-->\n\t\t- [ ] Low <!--organized:ffffffff-->\n\n## Done\n';
+    expect(moveTask(nested, 'eeeeeeee', 'Done')).toBe('## Open\n\n- [ ] Top <!--organized:dddddddd-->\n\n## Done\n\n- [ ] Mid <!--organized:eeeeeeee-->\n\t- [ ] Low <!--organized:ffffffff-->');
   });
 });
