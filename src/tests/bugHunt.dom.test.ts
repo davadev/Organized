@@ -4,12 +4,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import Organized from '../main';
 import { harness } from './harness';
 import { installObsidianDom } from './__mocks__/obsidianDom';
-import { Notice } from './__mocks__/obsidian';
+import { Modal, Notice } from './__mocks__/obsidian';
 import { saveRole } from '../device';
 import { parseTasks, writeNoteSection } from '../codec';
 import { localDate, markerOf, newTask, setStatus } from '../model';
 import { splitNote } from '../repository';
-import { ProjectBudgetModal, ProjectPicker } from '../modals';
+import { ProjectBudgetModal, ProjectPicker, SessionModal } from '../modals';
+import { OrganizedInspectorView } from '../view';
 
 installObsidianDom();
 const flush = async () => { for (let i = 0; i < 150; i++) await Promise.resolve(); };
@@ -177,5 +178,20 @@ describe('bug hunt regressions', () => {
     expect((await repo.read(task.id)).closed_at).not.toBeNull();
     await service.recurrence(task.id, { unit: 'day', every: 1, days: [], monthDay: null } as any);
     const now = await repo.read(task.id); expect(now.status).toBe('open'); expect(now.closed_at).toBeNull();
+  });
+  it('a planned block that is already under way when it is added, moved or removed takes effect at once, not at the next minute check', async () => {
+    const { h, plugin } = await loaded(); await ready(h); plugin.settings.startAtPlannedTime = true; const { repo } = plugin; const now = Date.now();
+    const covering = { start: new Date(now - 1800000).toISOString(), end: new Date(now + 1800000).toISOString() }; const later = { start: new Date(now + 3600000).toISOString(), end: new Date(now + 7200000).toISOString() };
+    const last = () => Modal.instances.at(-1) as unknown as SessionModal;
+    // From the `[t]` marker on a todo line.
+    const typed = await repo.create('Typed'); const file: any = await h.add(plugin.service.daily.path(localDate()), ''); const text = `- [t] Typed <!--organized:${typed.id}-->`; h.texts.set(file.path, text);
+    await plugin.trigger({ file, line: parseTasks(text)[0] }); await last().edit.save(covering, 'planned'); await flush();
+    expect(await repo.read(typed.id)).toMatchObject({ status: 'in_progress', auto_started_block: covering.start, time_tracking_started_at: null }); expect(h.texts.get(file.path)).toContain('[/] Typed');
+    // From the side panel: adding, moving the block away, moving it back, removing it.
+    const leaf: any = { app: h.app }; const view = new OrganizedInspectorView(leaf, plugin); const task = await repo.create('Panel'); const edit = (session: typeof covering | null) => { (view as any).editSession(task, session, localDate(), session ? 'planned' : null); return last().edit; };
+    await edit(null).save(covering, 'planned'); await flush(); expect((await repo.read(task.id)).status).toBe('in_progress');
+    await edit(covering).save(later, 'planned'); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null });
+    await edit(later).save(covering, 'planned'); await flush(); expect((await repo.read(task.id)).status).toBe('in_progress');
+    await edit(covering).remove!(); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null, planned_sessions: [] });
   });
 });

@@ -123,7 +123,7 @@ export default class Organized extends Plugin {
     this.loaded = false; this.unloaded = true; for (const timer of this.titleTimers.values()) window.clearTimeout(timer); this.titleTimers.clear(); for (const { timer } of this.structure.values()) window.clearTimeout(timer); this.structure.clear(); if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer); this.refreshTimer = null;
     void writeCrashState(this.app.vault.adapter, crashStatePath(this.manifest, this.app.vault.configDir), DEFAULT_CRASH_STATE);
   }
-  /** Sets tasks in progress for planned blocks that have begun and reopens the ones whose block is over. Does nothing unless the person switched it on. */
+  /** Sets tasks in progress for planned blocks that have begun and reopens the ones whose block is over. Does nothing unless the person switched it on. Also called right after a block is added, changed or removed, so a block that is already under way does not wait for the minute check. */
   planningTick(): void {
     if (this.unloaded || !this.loaded || !this.safety.writable || this.role === "mirror" || !this.settings.startAtPlannedTime) return;
     void this.run(async () => {
@@ -595,7 +595,7 @@ export default class Organized extends Plugin {
     const at = (time: string) => new Date(`${this.service.daily.date(context.file.path) ?? localDate()}T${time}:00`).toISOString();
     const marker = markerOf(task);
     // One dialog for both: a block that has ended is time worked, one still to come is planned.
-    new SessionModal(this.app, { heading: "Add time", taskTitle: task.title, start: at("09:00"), end: at("10:00"), kind: null, save: async (next, kind) => { await this.run(() => kind === "planned" ? this.service.addPlanned(task.id, next) : this.service.addSession(task.id, next)); await this.run(() => this.service.clean(context, marker)); } }).open();
+    new SessionModal(this.app, { heading: "Add time", taskTitle: task.title, start: at("09:00"), end: at("10:00"), kind: null, save: async (next, kind) => { await this.run(() => kind === "planned" ? this.service.addPlanned(task.id, next) : this.service.addSession(task.id, next)); await this.run(() => this.service.clean(context, marker)); this.planningTick(); } }).open();
   }
   /** Folders offered for a standalone note. */
   noteFolders(): string[] { return this.app.vault.getAllLoadedFiles().filter(f => f instanceof TFolder && f.path !== "/").map(f => f.path).sort(); }
