@@ -343,10 +343,10 @@ describe('compact calendar and contextual task inspector', () => {
     view.contentEl.querySelectorAll<HTMLElement>('.organized-day-task .organized-list-open')[0].click(); await flush(); expect(owner.selectedTaskId).toBe(a.id); view.origin = 'Projects / favorites'; await view.render(); button(view.contentEl, 'Back to projects').click(); await flush(); expect(view.tab).toBe('Projects');
   });
   it('opens the daily note of the day paged to when it exists, and never creates one', async () => {
-    const { view, repo, files, service } = await fixture(); const open = vi.fn(async () => undefined); (view.app.workspace.getLeaf as any).mockReturnValue({ openFile: open });
+    const { view, repo, files, service, owner } = await fixture(); const open = vi.fn(async () => undefined); (view.app.workspace.getLeaf as any).mockReturnValue({ openFile: open });
     const tomorrow = moment(localDate(), 'YYYY-MM-DD').add(1, 'day').format('YYYY-MM-DD'); await repo.ensure(service.daily.path(tomorrow), '- [ ] Later');
     view.selectedDate = localDate(); view.calendarMode = 'Day'; await view.render();
-    Platform.isMobile = true; button(view.contentEl, 'Next day').click(); await flush(); expect(open).not.toHaveBeenCalled(); expect(view.selectedDate).toBe(tomorrow); Platform.isMobile = false; button(view.contentEl, 'Previous day').click(); await flush(); open.mockClear();
+    Platform.isMobile = true; button(view.contentEl, 'Next day').click(); await flush(); expect(open).not.toHaveBeenCalled(); expect(view.selectedDate).toBe(tomorrow); expect(owner.pendingDay).toBe(tomorrow); view.showDate(localDate()); expect(owner.pendingDay).toBeNull(); Platform.isMobile = false; button(view.contentEl, 'Previous day').click(); await flush(); open.mockClear();
     button(view.contentEl, 'Next day').click(); await flush(); expect(open).toHaveBeenCalledWith(expect.objectContaining({ path: service.daily.path(tomorrow) }));
     (view.app.workspace.getActiveFile as any) = () => ({ path: service.daily.path(tomorrow) }); open.mockClear(); button(view.contentEl, 'Today').click(); await flush(); button(view.contentEl, 'Next day').click(); await flush(); expect(open).not.toHaveBeenCalled();
     button(view.contentEl, 'Next day').click(); await flush(); expect(files.has(service.daily.path(moment(tomorrow, 'YYYY-MM-DD').add(1, 'day').format('YYYY-MM-DD')))).toBe(false); expect(open).not.toHaveBeenCalled();

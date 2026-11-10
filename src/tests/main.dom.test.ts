@@ -4,7 +4,7 @@ import { EditorState, Transaction } from "@codemirror/state";
 import Organized from "../main";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
 import { harness, sessionFields } from "./harness";
-import { MarkdownView, Modal, Notice, TFolder } from "./__mocks__/obsidian";
+import { MarkdownView, Modal, Notice, Platform, TFolder } from "./__mocks__/obsidian";
 import { ConfirmModal, DatePicker, KEEP_AS_TODO, SessionModal, NoteConversionModal, OnboardingModal, RetireModal, PriorityPicker, ProjectPicker, TaskPicker } from "../modals";
 import { parseTasks } from "../codec";
 import { OrganizedInspectorView, VIEW_TYPE } from "../view";
@@ -314,6 +314,17 @@ describe('plugin lifecycle and user-only editor actions', () => {
     recent.mockReturnValue({ view: { file, editor } } as any); expect(plugin.taskSourceEditor()).toEqual({ editor, file });
     recent.mockReturnValue({ view: Object.assign(new MarkdownView(), { file: null, editor }) } as any); expect(plugin.taskSourceEditor()).toEqual({ editor, file });
     recent.mockReturnValue(null); h.files.delete(file.path); expect(plugin.taskSourceEditor()).toBeNull();
+  });
+  it('opens the day paged to on a phone once the side panel is closed', async () => {
+    const { h, plugin } = await loaded(); const file: any = await h.add(plugin.service.daily.path('2031-04-06'), '- [ ] x'); const open = vi.fn(async () => undefined); h.raw.workspace.getLeaf.mockReturnValue({ openFile: open });
+    const layoutChange = () => h.events['layout-change'][0]();
+    Platform.isMobile = true; try {
+      layoutChange(); expect(open).not.toHaveBeenCalled();
+      plugin.pendingDay = '2031-04-06'; h.raw.workspace.rightSplit.collapsed = false; layoutChange(); await flush(); expect(open).not.toHaveBeenCalled(); expect(plugin.pendingDay).toBe('2031-04-06');
+      h.raw.workspace.rightSplit.collapsed = true; layoutChange(); await flush(); expect(open).toHaveBeenCalledWith(file); expect(plugin.pendingDay).toBeNull();
+      plugin.pendingDay = '2031-04-06'; h.setActive(file); h.events['active-leaf-change'][0](); await flush(); expect(open).toHaveBeenCalledTimes(1); expect(plugin.pendingDay).toBeNull();
+      plugin.pendingDay = '2031-05-01'; layoutChange(); await flush(); expect(open).toHaveBeenCalledTimes(1); expect(plugin.pendingDay).toBeNull();
+    } finally { Platform.isMobile = false; h.raw.workspace.rightSplit.collapsed = false; }
   });
   it('points the calendar at the daily note that comes into view', async () => {
     const { h, plugin } = await loaded(); h.layout[0]();
