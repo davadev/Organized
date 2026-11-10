@@ -101,6 +101,12 @@ describe("native task, date, source and project modals", () => {
     const saveButton = modal.contentEl.querySelector('button')!; key(boxes()[2], 'ArrowDown'); expect(document.activeElement).toBe(saveButton); key(saveButton, 'ArrowUp'); expect(document.activeElement).toBe(boxes()[2]); key(saveButton, 'x');
     key(boxes()[2], 'ArrowUp'); key(boxes()[1], 'ArrowUp'); expect(document.activeElement).toBe(boxes()[0]);
     key(boxes()[0], 'ArrowUp'); expect(document.activeElement).toBe(search);
+    expect(key(search, 'Tab').defaultPrevented).toBe(true); expect(document.activeElement).toBe(boxes()[0]);
+    key(boxes()[0], 'Tab'); key(boxes()[1], 'Tab'); expect(document.activeElement).toBe(boxes()[2]);
+    key(boxes()[2], 'Tab'); expect(document.activeElement).toBe(saveButton);
+    key(saveButton, 'Tab', { shiftKey: true }); expect(document.activeElement).toBe(boxes()[2]);
+    key(boxes()[2], 'Tab', { ctrlKey: true }); expect(document.activeElement).toBe(boxes()[2]);
+    expect(key(saveButton, 'Tab').defaultPrevented).toBe(false); expect(key(search, 'Tab', { shiftKey: true }).defaultPrevented).toBe(false);
     boxes()[1].dispatchEvent(new Event('focus')); expect(boxes()[1].scrollIntoView).toHaveBeenCalled();
     key(boxes()[1], 'Enter'); expect(boxes()[1].checked).toBe(true); key(boxes()[1], 'Enter'); expect(boxes()[1].checked).toBe(false); key(boxes()[1], 'Enter'); key(boxes()[1], 'Enter', { ctrlKey: true }); expect(boxes()[1].checked).toBe(true);
     key(boxes()[1], 'x'); expect(boxes()[1].checked).toBe(true);

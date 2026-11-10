@@ -155,6 +155,12 @@ export class ProjectPicker extends Modal {
     this.contentEl.createEl("p", { cls: "organized-muted organized-project-hint", text: `Only notes with the property organized_type: project are listed. To use an existing note, add that property to it; typing its name here creates a new note${this.folder ? ` in ${this.folder}` : ""}.` });
     const results = this.contentEl.createDiv({ cls: "organized-project-results" });
     const boxes = () => Array.from(results.querySelectorAll<HTMLInputElement>("input[type=checkbox]"));
+    // Tab walks search, projects, Save links itself: the dialog's own focus order skipped Save on desktop. At either end the browser's own Tab leaves the dialog as usual.
+    const tabFrom = (event: KeyboardEvent, at: HTMLElement) => {
+      if (event.key !== "Tab" || event.altKey || event.ctrlKey || event.metaKey) return;
+      const order = [search, ...boxes(), saveButton!]; const next = order[order.indexOf(at) + (event.shiftKey ? -1 : 1)];
+      if (next) { event.preventDefault(); next.focus(); }
+    };
     const paint = () => {
       results.empty(); const query = search.value.trim();
       const notes = new Set([...this.notes, ...this.selected].filter(n => n.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
@@ -169,7 +175,7 @@ export class ProjectPicker extends Modal {
         input.addEventListener("change", () => toggle(input.checked));
         input.addEventListener("focus", () => input.scrollIntoView({ block: "nearest" }));
         input.addEventListener("keydown", event => {
-          const at = boxes().indexOf(input);
+          tabFrom(event, input); const at = boxes().indexOf(input);
           if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); (boxes()[at + (event.key === "ArrowDown" ? 1 : -1)] ?? (event.key === "ArrowUp" ? search : saveButton)!).focus(); }
           else if (event.key === "Enter" && !event.metaKey && !event.ctrlKey) { event.preventDefault(); toggle(!input.checked); }
         });
@@ -179,6 +185,7 @@ export class ProjectPicker extends Modal {
     let saveButton: HTMLElement | null = null;
     search.addEventListener("input", paint); paint();
     search.addEventListener("keydown", event => {
+      tabFrom(event, search);
       if (event.key === "ArrowDown") { event.preventDefault(); (boxes()[0] ?? saveButton)?.focus(); }
       else if (event.key === "Enter") {
         event.preventDefault();
@@ -190,7 +197,7 @@ export class ProjectPicker extends Modal {
     new Setting(this.contentEl).addButton(b => {
       b.setButtonText("Save links").setCta().onClick(saveLinks); saveButton = b.buttonEl;
       // The arrows lead on from the last project to Save, and back.
-      b.buttonEl.addEventListener("keydown", event => { if (event.key === "ArrowUp") { event.preventDefault(); (boxes().at(-1) ?? search).focus(); } });
+      b.buttonEl.addEventListener("keydown", event => { tabFrom(event, b.buttonEl); if (event.key === "ArrowUp") { event.preventDefault(); (boxes().at(-1) ?? search).focus(); } });
     });
     // The on-screen keyboard covers the bottom of the window without shrinking it; keep the list inside what is left so every project can be scrolled to.
     const viewport = window.visualViewport;

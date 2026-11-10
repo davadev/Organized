@@ -5,7 +5,7 @@
 - **Fewer silent failures.** Task notes that are left out of the list (two notes sharing one id, such as a sync conflict copy, or a note with an id that cannot be read as a task) are now named in one notice per session, since those tasks otherwise just stop repeating. A secondary or mirror device says once per new daily note that it did not add the recurring tasks. Opening a daily note that holds the same recurring line twice (two devices both filled it) says so.
 - **Two new commands.** *Add missing recurring tasks to this daily note* adds what is missing to the open daily note (today's when another note is open), for a note made while the plugin was not running or filled on another device. *Remove duplicate recurring lines in this note* removes the extra copies of a recurring line (open, unchanged, with nothing nested under them); it can be undone.
 - Carrying unfinished tasks forward now also runs when the app comes back to the foreground with today's note open, so an app left open past midnight does not wait for another note to be opened.
-- Project picker: the arrow keys now lead on from the last project to *Save links* and back (Enter saves from there).
+- Project picker: the arrow keys now lead on from the last project to *Save links* and back (Enter saves from there), and Tab and Shift+Tab walk the search box, the projects and *Save links* in order.
 
 - A todo's right-aligned properties that drop to a row of their own under a long title now stay right-aligned there (they were moved to the left edge in beta.16).
 
