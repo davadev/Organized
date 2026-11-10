@@ -4,15 +4,18 @@
  * It is not a release-notes list. `settings.onboardingSeen` records that it was shown (or skipped); the command
  * "Show onboarding card" and the Settings button reopen it at any time. Keep the texts short and in plain language:
  * the README and docs carry the detail. The first step is what a person who skips the rest still needs. A step with a
- * `figure` draws a small illustration under its text (see `onboardingFigures.ts`); every figure id needs a builder there.
+ * `figure` draws a small illustration under its text (see `onboardingFigures.ts`); every figure id needs a builder there. A `shot` is a real crop of the panel.
  * Backticks in a text show as code.
  */
 import type { FigureId } from "./onboardingFigures";
+import type { ShotId } from "./whatsNew/shots";
 
 export interface OnboardingStep {
   title: string;
   text: string;
   figure?: FigureId;
+  /** A real crop of the plugin's own panel, drawn instead of a figure where the step is about a part of that panel (see whatsNew/shots.ts). */
+  shot?: ShotId;
 }
 
 export const ONBOARDING_STEPS: OnboardingStep[] = [
@@ -57,6 +60,16 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     figure: "keys",
   },
   {
+    title: "Repeat a todo",
+    text: "Type `[r]` in a todo, or tap the Recurring pill in the Task tab, and pick how it repeats: every day, weekday, week, month or year, or your own, such as every 3 weeks on Monday and Thursday. The rule lives in the task note, and the todo appears in each daily note that matches it.",
+    shot: "repeat",
+  },
+  {
+    title: "Plan your time, and set a budget",
+    text: "Tap an empty spot on the Day grid, or type `[t]` with a time still to come, to set time aside; planned blocks are dashed and never count as worked. The Timer card compares tracked and planned time, and its target button sets a budget, shown as a bar.",
+    shot: "plan",
+  },
+  {
     title: "On your phone: press and hold",
     text: "No keyboard needed. In a daily note, press and hold a todo's checkbox and a menu lists the markers that act, with the current one ticked. Choosing one is the same as typing its letter. You can turn this off under Settings → Task behavior.",
     figure: "press",
@@ -65,6 +78,11 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     title: "On a computer: jump into the checkbox",
     text: "Run the command Edit checkbox marker on a todo line and its marker is selected, so the next key you type replaces it. It has no default key: give it one under Settings → Hotkeys (for example `Alt+X`).",
     figure: "hotkey",
+  },
+  {
+    title: "Using several devices",
+    text: "Two devices writing the same daily note before it has synced cause conflicts. On a phone or tablet that may open a note first, set Settings → Organized → This device to Secondary (edits, but never creates or fills daily notes) or Mirror (view only). The choice stays on that device.",
+    figure: "devices",
   },
   {
     title: "Starting, and leaving",
