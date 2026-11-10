@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- On a phone, paging through days in the side panel's day view no longer opens the daily note (which closed the panel after one day). Desktop still opens it.
 - Project picker: the project row and the *Save links* button that have keyboard focus are now outlined, so Tab and the arrow keys visibly reach Save.
 - **Calendar follows the daily note.** Switching to a daily note (for example after creating today's) now moves the side panel's calendar and day view to that day instead of leaving yesterday. Paging to another day in the day view opens that day's daily note when it exists; paging never creates one.
 - **Fewer silent failures.** Task notes that are left out of the list (two notes sharing one id, such as a sync conflict copy, or a note with an id that cannot be read as a task) are now named in one notice per session, since those tasks otherwise just stop repeating. A secondary or mirror device says once per new daily note that it did not add the recurring tasks. Opening a daily note that holds the same recurring line twice (two devices both filled it) says so.

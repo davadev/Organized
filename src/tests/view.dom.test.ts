@@ -5,7 +5,7 @@ import Organized from '../main';
 import { OrganizedInspectorView, VIEW_TYPE } from '../view';
 import { harness, sessionFields } from './harness';
 import { installObsidianDom } from './__mocks__/obsidianDom';
-import { Notice, Modal } from './__mocks__/obsidian';
+import { Notice, Modal, Platform } from './__mocks__/obsidian';
 import { localDate } from '../model';
 import { moment } from '../moment';
 import { BudgetModal, ProjectBudgetModal, DatePicker, SessionModal, TaskPicker } from '../modals';
@@ -346,6 +346,7 @@ describe('compact calendar and contextual task inspector', () => {
     const { view, repo, files, service } = await fixture(); const open = vi.fn(async () => undefined); (view.app.workspace.getLeaf as any).mockReturnValue({ openFile: open });
     const tomorrow = moment(localDate(), 'YYYY-MM-DD').add(1, 'day').format('YYYY-MM-DD'); await repo.ensure(service.daily.path(tomorrow), '- [ ] Later');
     view.selectedDate = localDate(); view.calendarMode = 'Day'; await view.render();
+    Platform.isMobile = true; button(view.contentEl, 'Next day').click(); await flush(); expect(open).not.toHaveBeenCalled(); expect(view.selectedDate).toBe(tomorrow); Platform.isMobile = false; button(view.contentEl, 'Previous day').click(); await flush(); open.mockClear();
     button(view.contentEl, 'Next day').click(); await flush(); expect(open).toHaveBeenCalledWith(expect.objectContaining({ path: service.daily.path(tomorrow) }));
     (view.app.workspace.getActiveFile as any) = () => ({ path: service.daily.path(tomorrow) }); open.mockClear(); button(view.contentEl, 'Today').click(); await flush(); button(view.contentEl, 'Next day').click(); await flush(); expect(open).not.toHaveBeenCalled();
     button(view.contentEl, 'Next day').click(); await flush(); expect(files.has(service.daily.path(moment(tomorrow, 'YYYY-MM-DD').add(1, 'day').format('YYYY-MM-DD')))).toBe(false); expect(open).not.toHaveBeenCalled();
