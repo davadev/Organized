@@ -1,10 +1,10 @@
 # Release procedure
 
-Only tag-triggered `.github/workflows/release.yml` publishes artifacts. Never run `gh release create` manually or upload local builds. Work on feature branches and merge a green PR first. Project/license attribution must be davadev; Git authors may be davadev or Dany using the verified davadev GitHub no-reply address, and committers may match or be GitHub's merge service (`GitHub <noreply@github.com>`).
+Only tag-triggered `.github/workflows/release.yml` publishes artifacts. Never run `gh release create` manually or upload local builds. Work on feature branches and merge a green PR first. Project/license attribution must be davadev; Git authors may be davadev or Dany using the verified davadev GitHub no-reply address, and committers may match or be GitHub's merge service (`GitHub <noreply@github.com>`). Dependabot's own commits (`dependabot[bot]` with its GitHub no-reply address, committed by GitHub) are accepted too, so its pull requests can pass and be merged as they are.
 
 Browser checks are required PR checks on Ubuntu 24.04 (the supported Playwright 1.58.2 host); they never run during tag publication. Validation and release use `ubuntu-latest` and explicitly assert Node 24/npm >=11.10 before installing.
 
-The identity gate checks the reviewed checkout's reachable commit history. Unmerged remote branches (for example dependency proposals) are not part of the released history and cannot change that verdict.
+The identity gate checks the reviewed checkout's reachable commit history. Unmerged remote branches are not part of the released history and cannot change that verdict.
 
 ## Initial bootstrap
 
