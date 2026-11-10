@@ -10,7 +10,7 @@ import { ProjectBudgets, projectTemplate, Repository, splitNote } from "./reposi
 import { parseWorked, retiredLines } from "./retention";
 import { buildNote } from "./notes";
 import { freePath, noteName, readableName } from "./names";
-import { losesNote, normalizeRetire, planNames, plural, selectTasks, stripOrganized, type RetireOptions, type RetireScan } from "./retire";
+import { keepsNote, losesNote, normalizeRetire, planNames, plural, selectTasks, stripOrganized, type RetireOptions, type RetireScan } from "./retire";
 
 export interface Change { file: TFile; before: string; after: string }
 export interface Context { file: TFile; line: TaskLine }
@@ -743,7 +743,7 @@ export class TaskService {
     const saved = new Map<string, string>();
     for (const task of chosen) {
       for (const file of scan.files.get(task.id) ?? []) if (!saved.has(file.path)) saved.set(file.path, await this.repo.readText(file));
-      const note = this.repo.taskFile(task.id); if (note && (o.yaml === "strip" || task.time_tracking_started_at)) saved.set(note.path, await this.repo.readText(note));
+      const note = this.repo.taskFile(task.id); if (note && (o.yaml === "strip" || task.time_tracking_started_at || (task.recurring && keepsNote(o)))) saved.set(note.path, await this.repo.readText(note));
     }
     const backupPath = await backup([...saved].map(([path, before]) => ({ path, before })), { renames: [...names].map(([id, to]) => ({ from: this.repo.taskPath(id), to })) });
     const changes: Change[] = []; const renames: { file: TFile; from: string }[] = []; const failed: string[] = [];
@@ -774,6 +774,8 @@ export class TaskService {
             }
             await this.edit(occurrence.file, occurrence.text, after, changes); todos += occurrence.todos.length;
           }
+          // A task note that stays must stop repeating, or the next daily note would bring the todo back.
+          if (task.recurring && keepsNote(o)) await this.stopRepeating(task.id, note, changes);
           if (o.yaml === "strip") { const text = await this.repo.readText(note); await this.edit(note, text, stripOrganized(text), changes); stripped++; }
           if (o.notes === "trash") { await this.repo.trashNote(note); trashed++; }
           if (from !== null) { renames.push({ file: note, from }); renamed++; }
@@ -790,6 +792,12 @@ export class TaskService {
     const detail = `${done} of ${plural(chosen.length, "task")} retired · ${plural(todos, "todo")} unlinked${renamed ? ` · ${renamed} renamed` : ""}${stripped ? ` · ${stripped} stripped` : ""}${trashed ? ` · ${trashed} moved to Obsidian's trash` : ""}${failed.length ? ` · ${failed.length} left unchanged (${failedNames})` : ""}. Old text saved in note-backups (${backupPath.split("/").pop()}).`;
     if (trashed) { this.undoChanges = []; this.undoRenames = []; new Notice(`${detail} Trashed task notes can be restored from Obsidian's trash; Undo is not offered because it would relink todos to them.`, 20000); this.changed(); }
     else this.summarize(changes, "Tasks retired", detail, renames);
+  }
+  /** Ends a task's repeat rule without touching any daily note, and records the change so Undo gives the rule back. */
+  private async stopRepeating(id: string, note: TFile, changes: Change[]): Promise<void> {
+    const before = await this.repo.readText(note); const today = localDate();
+    await this.repo.update(id, t => ({ ...t, recurring: false, recurrence: null, recurrence_periods: t.recurrence_periods.map(p => p.stop === null ? { ...p, stop: today } : p) }));
+    changes.push({ file: note, before, after: await this.repo.readText(note) });
   }
   /** A note a task became was renamed or moved: the task keeps pointing at it, so the calendar still opens the right note. */
   async followRename(oldPath: string, newPath: string): Promise<void> {
