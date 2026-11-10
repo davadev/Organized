@@ -440,7 +440,7 @@ export class TaskService {
         const occurrences = await this.repo.occurrences(task.id);
         // What the user chose to keep goes under one occurrence only (the latest daily note), so forwarded copies are not repeated.
         const keep = detail === "title" ? [] : retiredLines(task, splitNote(await this.repo.readText(taskFile)).body, detail, "");
-        const target = keep.length ? occurrences.reduce((best, item) => (this.daily.date(item.file.path) ?? "") >= (this.daily.date(best.file.path) ?? "") ? item : best) : null;
+        const target = keep.length && occurrences.length ? occurrences.reduce((best, item) => (this.daily.date(item.file.path) ?? "") >= (this.daily.date(best.file.path) ?? "") ? item : best) : null;
         for (const occurrence of occurrences) {
           let after = occurrence.text; const last = Math.max(...occurrence.tasks.map(line => line.line));
           for (const line of [...occurrence.tasks].sort((a, b) => b.line - a.line)) {
@@ -808,13 +808,19 @@ export class TaskService {
   /** A note a task became was renamed or moved: the task keeps pointing at it, so the calendar still opens the right note. */
   async followRename(oldPath: string, newPath: string): Promise<void> {
     if (!newPath.endsWith(".md")) return;
-    for (const id of this.repo.convertedTo(oldPath)) await this.repo.update(id, task => ({ ...task, converted_to: newPath }));
+    await this.eachTask(this.repo.convertedTo(oldPath), id => this.repo.update(id, task => ({ ...task, converted_to: newPath })), "follow the renamed note");
+  }
+  /** Runs `change` for every id; one task note that cannot be written does not keep the others from following, and the failures are named once at the end. */
+  private async eachTask(ids: string[], change: (id: string) => Promise<unknown>, what: string): Promise<void> {
+    const failed: string[] = [];
+    for (const id of ids) { try { await change(id); } catch { failed.push(id); } }
+    if (failed.length) throw new Error(`${plural(failed.length, "task")} could not ${what} (${failed.join(", ")}).`);
   }
   /** A project note was renamed or moved: the tasks linked to it follow it, so its colour and budgets keep applying to them. */
   async followProjectRename(oldPath: string, newPath: string): Promise<void> {
     if (!newPath.endsWith(".md")) return;
-    for (const task of await this.repo.list(true)) if (task.projects.includes(oldPath)) await this.repo.update(task.id, t => ({ ...t, projects: t.projects.map(p => p === oldPath ? newPath : p) }));
-    this.changed();
+    const linked = (await this.repo.list(true)).filter(task => task.projects.includes(oldPath)).map(task => task.id);
+    try { await this.eachTask(linked, id => this.repo.update(id, t => ({ ...t, projects: t.projects.map(p => p === oldPath ? newPath : p) })), "follow the renamed project"); } finally { this.changed(); }
   }
   async deleteTask(id: string, onConfirmed?: () => void): Promise<boolean> {
     // The inspector must clear its now-invalid selection before occurrence or
