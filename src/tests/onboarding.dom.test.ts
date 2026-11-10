@@ -12,12 +12,13 @@ installObsidianDom();
 const css = readFileSync("styles.css", "utf8");
 describe("onboarding content and figures", () => {
   it("has short, complete steps and only known figures", () => {
-    expect(ONBOARDING_STEPS).toHaveLength(12); expect(ONBOARDING_STEPS.length).toBeLessThanOrEqual(15); // the card stays a short tour
+    expect(ONBOARDING_STEPS).toHaveLength(15); expect(ONBOARDING_STEPS.length).toBeLessThanOrEqual(15); // the card stays a short tour
     for (const step of ONBOARDING_STEPS) {
       expect(step.title.trim()).not.toBe(""); expect(step.text.trim()).not.toBe("");
       expect(step.text.length).toBeLessThan(400);
       expect(step.text.split("`").length % 2).toBe(1); // backticks come in pairs
       if (step.figure) expect(FIGURE_IDS).toContain(step.figure);
+      if (step.shot) expect(Object.keys(SHOTS)).toContain(step.shot);
     }
     // Every figure is used by some step, so none ships undrawn or unused.
     expect(new Set([...ONBOARDING_STEPS.flatMap(s => s.figure ?? []), ...RELEASE_NOTES.flatMap(n => n.items.flatMap(i => i.figure ?? []))])).toEqual(new Set(FIGURE_IDS));

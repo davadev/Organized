@@ -158,7 +158,7 @@ The images in `resources/screenshots/` are rendered, not captured: `scripts/rend
 ## Onboarding card
 
 - The card's content is `src/onboarding.ts`; its figures are `src/onboardingFigures.ts` (real panel classes, no images); the modal is `OnboardingModal` in `src/modals.ts`.
-- Automated: step stepping, keys, once-only `done`, startup rules (only after layout-ready, only at a real start, not while writes are paused) and that every class a figure uses exists in `styles.css`; Chromium and WebKit layout scenes `Onboarding1`..`Onboarding12` and `WhatsNew` at 240-768 px, light/dark, LTR/RTL and 1.3x text.
+- Automated: step stepping, keys, once-only `done`, startup rules (only after layout-ready, only at a real start, not while writes are paused) and that every class a figure uses exists in `styles.css`; Chromium and WebKit layout scenes `Onboarding1`..`Onboarding15` and `WhatsNew` at 240-768 px, light/dark, LTR/RTL and 1.3x text.
 - Review the steps as pictures with `node scripts/render-screenshots.mjs --all --out <folder>` (the onboarding steps are not part of the README set) and look at them in light and dark.
 - The first-run rules (who gets the tour, who gets What's new) are in [onboarding-and-whats-new.md](./onboarding-and-whats-new.md) with their tests in `src/tests/whatsNewFlow.dom.test.ts`.
 - Manual (not covered by the host shim): delete the plugin's `data.json`, reload the plugin (or restart Obsidian), confirm the card appears once about a second after the workspace is ready (and no What's new), also when you enable the plugin in a running Obsidian, dismiss it with Skip, Esc and Get started, confirm it does not return, then run **Show onboarding card** and the Settings button. Check phone width and a large system font.

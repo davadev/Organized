@@ -23,7 +23,7 @@ const SCENES = { month: ['Month calendar', true, PANEL], week: ['Week view', tru
   'week-annotated': annotated('week', 'Week view, numbered', [{ sel: '.organized-week-row:nth-of-type(3) .organized-week-count', side: 'right' }, { sel: '.organized-week-row', nth: 3 }, { sel: '.organized-week-row:nth-of-type(4) .organized-week-track', side: 'right', line: false }]),
   'day-annotated': annotated('day', 'Day view, numbered', [{ sel: '.organized-day-task', nth: 0 }, { sel: '.organized-day-task', nth: 1, side: 'right' }, { sel: '.organized-day-task', nth: 4 }, { sel: '.organized-head-action', side: 'right', line: false }, { sel: '.organized-day-grid', line: false }, { sel: '.organized-now-line', side: 'right' }]),
   'projects-annotated': annotated('projects', 'Projects, numbered', [{ sel: '.organized-field' }, { sel: '.organized-colors', side: 'right' }, { sel: '.organized-list-card', nth: 0 }, { sel: '.organized-chip', nth: 0, side: 'right' }]),
-  ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => [`onboarding-${n}`, [`Onboarding card, step ${n}`, false, '.organized-modal-window']])) };
+  ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(n => [`onboarding-${n}`, [`Onboarding card, step ${n}`, false, '.organized-modal-window']])) };
 /** Crops of the real panel that the What's new note embeds (src/whatsNew/shots): name -> [base scene, the parts to keep, optionally the share of their height to keep as [from, to]]. */
 const SHOTS = {
   repeat: ['task', [{ sel: '.organized-prop-strip' }]],
@@ -39,7 +39,7 @@ const outDir = outArg >= 0 ? args[outArg + 1] : null;
 const wanted = args.filter((a, i) => !a.startsWith('--') && !(outArg >= 0 && i === outArg + 1));
 for (const w of wanted) if (!SCENES[w] && !SHOTS[w]) { console.error(`unknown scene "${w}"; known: ${[...Object.keys(SCENES), ...Object.keys(SHOTS)].join(', ')}`); process.exit(2); }
 const shots = wanted.length ? wanted.filter(w => SHOTS[w]) : Object.keys(SHOTS);
-const scenes = (wanted.length ? wanted.filter(w => SCENES[w]) : Object.keys(SCENES)).filter(name => check || args.includes('--all') || SCENES[name][1]);
+const scenes = wanted.length ? wanted.filter(w => SCENES[w]) : Object.keys(SCENES).filter(name => check || args.includes('--all') || SCENES[name][1]);
 const ANNOTATED_PAD = 44; // side margins that hold the number circles, in CSS px
 const out = check ? await mkdtemp(join(tmpdir(), 'organized-shots-')) : resolve(outDir ?? 'resources/screenshots');
 await mkdir(out, { recursive: true });

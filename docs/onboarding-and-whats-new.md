@@ -48,6 +48,6 @@ Manual ways in: commands **Show onboarding card** and **Show what's new** (the r
 
 ## Testing
 
-Automated: `src/tests/whatsNew.test.ts` (version logic), `src/tests/whatsNewFlow.dom.test.ts` (fresh, updated, skipped, running session, switched off, paused, stacked, commands), layout scenes `Onboarding1`..`Onboarding12` and `WhatsNew`.
+Automated: `src/tests/whatsNew.test.ts` (version logic), `src/tests/whatsNewFlow.dom.test.ts` (fresh, updated, skipped, running session, switched off, paused, stacked, commands), layout scenes `Onboarding1`..`Onboarding15` and `WhatsNew`.
 
 Manual, on a device: install the beta over an older one and restart (popup once, not on the second restart); a BRAT update inside a running session shows the note after a moment, without a restart (if it does not, that is the unverified assumption above); a fresh vault, or enabling the plugin in a running Obsidian, shows the tour and no note; remove the plugin folder's `data.json` to repeat.
