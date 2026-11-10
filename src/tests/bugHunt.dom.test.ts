@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 // Regression tests for the bugs the bug-hunt skill found in the 0.1.4 line. Each fails on the code before its fix.
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { EditorState, Transaction } from '@codemirror/state';
 import Organized from '../main';
 import { harness } from './harness';
 import { installObsidianDom } from './__mocks__/obsidianDom';
@@ -22,6 +23,16 @@ async function loaded(role?: 'secondary') {
 }
 const ready = async (h: ReturnType<typeof harness>) => { h.layout.forEach(fn => fn()); vi.useRealTimers(); await flush(); };
 const emitCreate = (h: ReturnType<typeof harness>) => { const create = h.app.vault.create.bind(h.app.vault); (h.app.vault as any).create = async (p: string, t: string) => { const f = await create(p, t); h.events.create.forEach(fn => fn(f)); return f; }; };
+/** One change as CodeMirror reports it. No user event unless one is given: a checkbox clicked in Live Preview carries none. */
+function changed(before: string, from: number, to: number, insert: string, userEvent: string | null = null) {
+  const startState = EditorState.create({ doc: before }); const transaction = startState.update({ changes: { from, to, insert }, annotations: userEvent ? Transaction.userEvent.of(userEvent) : [] });
+  return { startState, state: transaction.state, transactions: [transaction], changes: transaction.changes, docChanged: true, selectionSet: false } as any;
+}
+/** Clicks the checkbox of a linked todo in the active note: its marker becomes the given one, the cursor stays where it was. */
+function click(plugin: Organized, editor: ReturnType<ReturnType<typeof harness>['setActive']>, id: string, marker: string) {
+  const before = editor.getValue(); const at = before.lastIndexOf('[', before.indexOf(`<!--organized:${id}-->`)) + 1;
+  editor.setValue(before.slice(0, at) + marker + before.slice(at + 1)); plugin.onEditorUpdate(changed(before, at, at + 1, marker));
+}
 
 describe('bug hunt regressions', () => {
   it('a secondary device is not told its note was left unfilled while "Add missing recurring tasks" fills it, but still is for any other new note', async () => {
@@ -193,5 +204,46 @@ describe('bug hunt regressions', () => {
     await edit(covering).save(later, 'planned'); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null });
     await edit(later).save(covering, 'planned'); await flush(); expect((await repo.read(task.id)).status).toBe('in_progress');
     await edit(covering).remove!(); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null, planned_sessions: [] });
+  });
+  it('a todo ticked in a note while another action is still running reaches its task, and what the plugin itself writes is still not taken for a tick', async () => {
+    const { h, plugin } = await loaded(); await ready(h); const { repo } = plugin; const tasks = [await repo.create('First'), await repo.create('Second'), await repo.create('Third')]; const [first, second, third] = tasks;
+    const text = tasks.map(t => `- [ ] ${t.title} <!--organized:${t.id}-->`).join('\n') + '\nNotes'; const file: any = await h.add('Note.md', text); const editor = h.setActive(file, text); editor.setCursor({ line: 3, ch: 0 });
+    // Something else is under way: the minute check, a title that was just edited, a slow save.
+    let release!: () => void; const other = plugin.run(() => new Promise<void>(done => { release = done; })); await flush();
+    click(plugin, editor, first.id, 'x'); await flush(); release(); await other; await flush();
+    expect((await repo.read(first.id)).status).toBe('completed');
+    // Two todos ticked one right after the other: the second arrives while the first is being saved.
+    click(plugin, editor, second.id, 'x'); await Promise.resolve(); await Promise.resolve(); click(plugin, editor, third.id, 'x'); await flush();
+    expect([(await repo.read(second.id)).status, (await repo.read(third.id)).status]).toEqual(['completed', 'completed']); expect(Notice.instances.map(n => n.message)).toEqual([]);
+    // The plugin's own write comes back as an editor update, in a second pane on the same note without any annotation. It is not a tick.
+    const apply = editor.transaction.getMockImplementation()!; editor.transaction.mockImplementation(spec => {
+      const before = editor.getValue(); const [change] = spec.changes; const from = editor.posToOffset(change.from); const to = editor.posToOffset(change.to); apply(spec); plugin.onEditorUpdate(changed(before, from, to, change.text));
+    });
+    const status = vi.spyOn(plugin.service, 'status'); await plugin.run(() => plugin.service.status(first.id, 'open'));  await flush();
+    expect(editor.getValue()).toContain('- [ ] First'); expect(status).toHaveBeenCalledTimes(1); expect(plugin.repo.ownText).toBeNull();
+    // Afterwards the same text made by the person counts again.
+    click(plugin, editor, first.id, 'x'); await flush(); click(plugin, editor, first.id, ' '); await flush(); expect((await repo.read(first.id)).status).toBe('open'); expect(status).toHaveBeenCalledTimes(3);
+  });
+  it('a checkbox clicked in Live Preview on a todo that is in progress or canceled opens its task, and stops a running timer only when the checkbox was really pressed', async () => {
+    const { h, plugin } = await loaded(); await ready(h); plugin.settings.startAtPlannedTime = true; const { repo, service } = plugin; const now = Date.now();
+    const planned = await repo.create('Planned'); const canceled = await repo.create('Canceled'); const timed = await repo.create('Timed');
+    const text = [planned, canceled, timed].map(t => `- [ ] ${t.title} <!--organized:${t.id}-->`).join('\n') + '\nNotes'; const file: any = await h.add('Note.md', text); const editor = h.setActive(file, text); editor.setCursor({ line: 3, ch: 0 });
+    const block = { start: new Date(now - 1800000).toISOString(), end: new Date(now + 1800000).toISOString() };
+    await service.addPlanned(planned.id, block); await service.applyPlanning(); await service.status(canceled.id, 'canceled'); await service.status(timed.id, 'in_progress');
+    expect(editor.getValue()).toContain('- [/] Planned'); expect(editor.getValue()).toContain('- [-] Canceled'); expect(editor.getValue()).toContain('- [/] Timed');
+    // Started by its planned block: clicking the box puts it back, and the block does not start it again.
+    click(plugin, editor, planned.id, ' '); await flush(); expect(await repo.read(planned.id)).toMatchObject({ status: 'open', auto_started_block: block.start });
+    await service.applyPlanning(); expect((await repo.read(planned.id)).status).toBe('open'); expect(editor.getValue()).toContain('- [ ] Planned');
+    click(plugin, editor, canceled.id, ' '); await flush(); expect((await repo.read(canceled.id)).status).toBe('open');
+    // The same change with no sign of the person (a note reloaded after a sync) leaves a running timer alone.
+    click(plugin, editor, timed.id, ' '); await flush(); expect(await repo.read(timed.id)).toMatchObject({ status: 'in_progress' }); expect((await repo.read(timed.id)).time_tracking_started_at).not.toBeNull();
+    // A press on something else is no sign either; a press on the checkbox is.
+    const press = (target: unknown) => (plugin as any).domEvents.filter((d: any) => d.type === 'pointerdown').forEach((d: any) => d.cb({ target }));
+    click(plugin, editor, timed.id, '/'); await flush(); press(document); press(createDiv()); click(plugin, editor, timed.id, ' '); await flush(); expect((await repo.read(timed.id)).time_tracking_started_at).not.toBeNull();
+    const box = createEl('input', { cls: 'task-list-item-checkbox' }); click(plugin, editor, timed.id, '/'); await flush(); press(box); click(plugin, editor, timed.id, ' '); await flush();
+    expect(await repo.read(timed.id)).toMatchObject({ status: 'open', time_tracking_started_at: null });
+    // A plain todo that is clicked stays a plain todo, also with the cursor on its line.
+    const create = vi.spyOn(repo, 'create'); const plain = editor.getValue() + '\n- [ ] Plain'; editor.setValue(plain); editor.setCursor({ line: 4, ch: 3 }); const at = plain.lastIndexOf('[') + 1;
+    press(box); editor.setValue(plain.slice(0, at) + 'x' + plain.slice(at + 1)); plugin.onEditorUpdate(changed(plain, at, at + 1, 'x')); await flush(); expect(create).not.toHaveBeenCalled(); expect(editor.getValue()).toContain('- [x] Plain');
   });
 });

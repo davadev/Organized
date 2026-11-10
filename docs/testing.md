@@ -78,6 +78,7 @@ Automated tests cover the logic with synthetic touch events; only a device shows
 - Press and hold a linked todo's checkbox for half a second: the menu opens, the current marker is missing, and no text selection or system callout appears. Release without moving: the checkbox does not also tick.
 - Choose **Done**, **Schedule**, **Priority** and **Add time**: each behaves as typing that letter does, and the keyboard does not pop up uninvited.
 - A quick tap still ticks the checkbox, and scrolling the note by dragging over a checkbox never opens the menu.
+- Tick three linked todos as fast as you can: all three are done in the side panel. Tap the checkbox of a todo that is in progress `[/]`: it becomes `[ ]` and the task is open in the panel; with its timer running, the timer stops and a notice says so. With the same note open in two panes on desktop, tick in one: nothing happens twice.
 - On a plain (unlinked) todo, **Done** and **Cancel** only change the character; **Schedule** creates and links a task, as typing does.
 - The rows have icons and the current marker is ticked; choosing it does nothing. Android vibrates briefly when the menu opens.
 - Repeat in Reading view: **Done** on a linked todo completes the task, **Schedule** opens the date dialog; a plain todo only offers Open, Done and Cancel.

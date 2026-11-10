@@ -24,6 +24,7 @@ const FIRST_RUN_DELAY_MS = 1500;
 const MIRROR_NOTICE_MS = 5000;
 const SETTLE_MS = 1000; const SETTLE_TRIES = 5;
 const PLANNING_TICK_MS = 60000;
+const CHECKBOX_PRESS_MS = 1000;
 export default class Organized extends Plugin {
   settings: Settings = { ...DEFAULT_SETTINGS };
   repo!: Repository;
@@ -39,7 +40,8 @@ export default class Organized extends Plugin {
   private lastNoteEditor: { editor: Editor; file: TFile } | null = null;
   revision = 0;
   readonly projectionListeners = new Set<() => void>();
-  private busy = 0;
+  /** When the person last pressed a checkbox in a note. The change that follows may carry no user event (Live Preview), and this tells it from a note reloaded after a sync, which must not stop a timer. */
+  private checkboxPressedAt = 0;
   private pickerOpen = false;
   private settingsRaw: Record<string, unknown> = {};
   private saveTail: Promise<unknown> = Promise.resolve();
@@ -115,6 +117,7 @@ export default class Organized extends Plugin {
         if (!this.loaded) return;
         this.planningTick(); this.registerInterval(window.setInterval(() => this.planningTick(), PLANNING_TICK_MS));
         this.registerDomEvent(document, "visibilitychange", () => { if (!document.hidden) { this.planningTick(); this.newDay(); this.refreshAfterMidnight(); } });
+        this.registerDomEvent(document, "pointerdown", event => { if (event.target instanceof Element && event.target.matches("input.task-list-item-checkbox")) this.checkboxPressedAt = Date.now(); }, true);
       });
       this.registerInterval(window.setTimeout(() => { void writeCrashState(adapter, crashPath, DEFAULT_CRASH_STATE); }, 30000));
     } catch (error) { report(error); throw error; }
@@ -135,14 +138,13 @@ export default class Organized extends Plugin {
   /** Like `assertWritable`, and a mirror device may not change anything either. */
   assertEditable(): void { this.assertWritable(); if (this.role === "mirror") throw new MirrorError(); }
   async run(action: () => Promise<unknown>): Promise<void> {
-    this.busy++;
     try {
       this.assertEditable();
       await this.repo.serial(action);
     } catch (error) {
       // Typing in a note on a mirror would repeat the notice for every change.
       if (error instanceof MirrorError) { if (Date.now() - this.mirrorNoticeAt > MIRROR_NOTICE_MS) { this.mirrorNoticeAt = Date.now(); report(error); } } else report(error);
-    } finally { this.busy--; }
+    } finally { this.repo.ownText = null; }
   }
   /** For background work (migrations, following a rename): nothing at all on a mirror, instead of a notice nobody asked for. */
   runQuiet(action: () => Promise<unknown>): Promise<void> { return this.role === "mirror" ? Promise.resolve() : this.run(action); }
@@ -509,17 +511,22 @@ export default class Organized extends Plugin {
   }
   onEditorUpdate(update: ViewUpdate): void {
     if (update.selectionSet) this.followCursor();
-    if (update.docChanged) { this.watchEditedTitle(update); this.watchStructure(update); }
-    if (!update.docChanged || this.pickerOpen) return;
+    if (!update.docChanged) return;
+    this.watchEditedTitle(update); this.watchStructure(update);
+    // What the plugin itself just wrote is not the person's edit. Everything else is handled even while an action is running (its work queues behind that action): dropping it left a todo ticked in the note and the task unchanged.
+    if (update.state.doc.toString() === this.repo.ownText) return;
+    this.repo.ownText = null;
+    if (this.pickerOpen) return;
     const events = update.transactions.map(t => t.annotation(Transaction.userEvent));
     if (events.some(event => event && ["paste", "drop", "undo", "redo"].some(ignored => event.includes(ignored)))) return;
     const user = events.some(event => event && !event.startsWith("input.organized"));
-    if (user) this.stopEditedTimers(update);
-    if (this.busy) return;
+    // A checkbox pressed just now makes the change the person's own, for a timer only: a plain todo that is clicked stays a plain todo.
+    const pressed = Date.now() - this.checkboxPressedAt < CHECKBOX_PRESS_MS;
+    if (user || pressed) this.stopEditedTimers(update);
     const active = this.activeEditor(); if (!active || active.editor.getValue() !== update.state.doc.toString()) return;
     this.lastNoteEditor = active;
     // Ticking a checkbox in Live Preview replaces one marker character, often with no user event and without moving the cursor onto the line.
-    if (this.tickedLinkedTask(update, active, user)) return;
+    if (this.tickedLinkedTask(update, active, user, pressed)) return;
     let touchedLines = 0; update.changes.iterChanges((_a, _b, from, to) => { touchedLines += update.state.doc.lineAt(to).number - update.state.doc.lineAt(from).number + 1; });
     if (touchedLines > 2) return;
     const context = this.current(active.editor, active.file); if (!context) return;
@@ -550,18 +557,22 @@ export default class Organized extends Plugin {
     }
     if (context.line.id && old?.marker !== context.line.marker) queueMicrotask(() => { void this.trigger(context).catch(report); });
   }
-  /** Handles a one-character [ ] <-> [x] change on a linked task that the cursor-based path would miss; returns whether it did. */
-  private tickedLinkedTask(update: ViewUpdate, active: { editor: Editor; file: TFile }, user: boolean): boolean {
+  /** Handles a one-character marker change on a linked task that the cursor-based path would miss: a checkbox clicked in Live Preview, which turns `[ ]` into `[x]` and any other marker into `[ ]`. Returns whether it did. */
+  private tickedLinkedTask(update: ViewUpdate, active: { editor: Editor; file: TFile }, user: boolean, pressed: boolean): boolean {
     let count = 0; let at = -1; update.changes.iterChanges((from, to, _newFrom, _newTo, inserted) => { count++; at = to - from === 1 && inserted.length === 1 ? from : -1; });
     if (count !== 1 || at < 0) return false;
     const line = update.state.doc.lineAt(at).number - 1;
     const before = parseTasks(update.startState.doc.toString()).find(t => t.line === line); const after = parseTasks(update.state.doc.toString()).find(t => t.line === line);
     const done = (marker: string) => marker === "x" || marker === "X";
-    if (!after?.id || before?.id !== after.id || !(done(before.marker) || before.marker === " ") || !(done(after.marker) || after.marker === " ") || done(before.marker) === done(after.marker)) return false;
+    if (!after?.id || before?.id !== after.id || before.marker === after.marker || !(done(after.marker) || after.marker === " ") || (done(before.marker) && done(after.marker))) return false;
     // A typed marker with the cursor on the line is handled by the trigger path.
     if (user && active.editor.getCursor().line === line) return false;
     const context = { file: active.file, line: after }; const id = after.id;
-    queueMicrotask(() => { void this.run(() => this.service.status(id, done(after.marker) ? "completed" : "open", context)); });
+    queueMicrotask(() => { void this.run(async () => {
+      // A running timer stops only on the person's own edit (see stopEditedTimers); a note reloaded after a sync looks the same as a click here.
+      if (!user && !pressed && before.marker === "/" && (await this.repo.read(id)).time_tracking_started_at) return;
+      await this.service.status(id, done(after.marker) ? "completed" : "open", context);
+    }); });
     return true;
   }
   async trigger(context: Context): Promise<void> {
