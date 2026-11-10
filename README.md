@@ -112,13 +112,13 @@ That is all a todo costs until it needs more: a title and a status. No empty for
 - **2** · A row per day; tap it to open that day.
 - **3** · The bars are the time tasks were in progress, in the colour of their project.
 
-<img src="resources/screenshots/day-annotated.png" alt="The Calendar tab in day view: the day's tasks above a time grid with a block for each stretch of work and a line for the current time." width="360">
+<img src="resources/screenshots/day-annotated.png" alt="The Calendar tab in day view: the day's tasks above a time grid with a block for each stretch of work, a dashed planned block and a line for the current time." width="360">
 
 - **1** · A task of the day with its status, priority, date, star and project.
 - **2** · Finished tasks stay in the list, marked done.
 - **3** · A plain, unlinked todo from the daily note is listed too; it is labelled *Regular todo*.
 - **4** · **Add time worked** by hand, or tap any block to correct it. Tap an empty spot on the grid to plan an hour there; planned blocks have a dashed outline and can be anywhere, including days ahead. A planned block that is over can be logged as worked.
-- **5** · The time grid: a block for each stretch of work, overlapping blocks side by side.
+- **5** · The time grid: a block for each stretch of work, overlapping blocks side by side. The dashed block after the now line is planned time (here 16:00–17:30), not yet worked.
 - **6** · The line for **now**.
 
 ### Projects
@@ -198,7 +198,7 @@ flowchart TB
 
 The first time Organized starts on a fresh install it shows a short **onboarding card**: twelve steps with small illustrations: the two settings to make first, the idea behind the plugin, the side panel and calendar, showing task properties in the note, the checkbox letters, pressing and holding on a phone, jumping into a checkbox from the keyboard, and how to start and leave. Skip it whenever you like; it appears once. Reopen it with the command **Organized: Show onboarding card** or the **Onboarding card** button in **Settings → Organized → Help**.
 
-After an update, Organized shows a short **What's new** note once, instead of the tour (a fresh install never sees it). Reopen the notes for your version with **Organized: Show what's new**, or switch them off with **Show what's new after updates** under **Settings → Organized → Help**.
+After an update, Organized shows a short **What's new** note once, instead of the tour (a fresh install never sees it). The note covers what changed since the last stable release, not the whole history. Reopen it with **Organized: Show what's new**, or switch them off with **Show what's new after updates** under **Settings → Organized → Help**.
 
 ## Leaving Organized
 

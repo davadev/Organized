@@ -20,9 +20,10 @@ describe("notesToShow", () => {
   it("shows everything newer than last seen up to the running version, oldest first", () => {
     expect(notesToShow("1.1.0", "1.2.1", NOTES).map((n) => n.version)).toEqual(["1.2.0", "1.2.1"]);
   });
-  it("treats an empty or unreadable last-seen as never told anything", () => {
+  it("gives an empty or unreadable last-seen the running release only, not the whole history", () => {
     expect(notesToShow("", "1.1.0", NOTES).map((n) => n.version)).toEqual(["1.1.0"]);
-    expect(notesToShow("junk", "1.1.0", NOTES).map((n) => n.version)).toEqual(["1.1.0"]);
+    expect(notesToShow("junk", "1.2.1", NOTES).map((n) => n.version)).toEqual(["1.2.1"]);
+    expect(notesToShow("", "0.1.0", NOTES)).toEqual([]);
   });
   it("does not repeat a note for a beta of a version already seen", () => {
     expect(notesToShow("1.2.0", "1.2.0-beta.3", NOTES)).toEqual([]);
@@ -31,13 +32,13 @@ describe("notesToShow", () => {
     expect(notesToShow("", "dev", NOTES)).toEqual([]);
   });
   it("uses the shipped list by default", () => {
-    expect(notesToShow("", "999.0.0").length).toBe(RELEASE_NOTES.length);
+    expect(notesToShow("", "999.0.0")).toEqual([RELEASE_NOTES[0]]);
   });
 });
 
 describe("notesOfLine / latestNote", () => {
-  it("returns every note of the running minor line, oldest first", () => {
-    expect(notesOfLine("1.2.1", NOTES).map((n) => n.version)).toEqual(["1.2.0", "1.2.1"]);
+  it("returns the note of the running release only", () => {
+    expect(notesOfLine("1.2.1", NOTES).map((n) => n.version)).toEqual(["1.2.1"]);
   });
   it("falls back to the newest earlier note when the line has none", () => {
     expect(notesOfLine("1.3.0", NOTES).map((n) => n.version)).toEqual(["1.2.1"]);

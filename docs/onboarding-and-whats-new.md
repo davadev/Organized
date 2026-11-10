@@ -25,13 +25,13 @@ Obsidian Sync can carry `data.json` to other devices, so "per device" is a hope,
 About a second and a half after `onLayoutReady` (Obsidian runs that at once when the plugin is switched on in a running session), never while writes are paused:
 
 1. Tour owed (`onboardingSeen` false): show the tour; closing it sets `onboardingSeen` and `lastSeenVersion`. No What's new meanwhile.
-2. Otherwise, with `showWhatsNew` on and notes newer than `lastSeenVersion` and not newer than the running version: record `lastSeenVersion`, wait for the save, then open the popup.
+2. Otherwise, with `showWhatsNew` on and notes newer than `lastSeenVersion` and not newer than the running version (a device with no `lastSeenVersion` gets only the running release's note, never the whole history): record `lastSeenVersion`, wait for the save, then open the popup.
 
 There is no "real start" test and no restart notice. If this code is running, this version is the one that is loaded, and its commands, settings group and views were registered by this same `onload`; a file swap that left old code running cannot run this code at all. The delay is only so the card does not open under the settings window that switched the plugin on. Unverified until a device confirms it: that a BRAT update reloads the plugin so this `onload` runs (otherwise nothing shows until the plugin is next toggled or Obsidian restarts).
 
 A beta counts as its stable version (`0.1.2-beta.9` is `0.1.2`): a tester sees the note once, on the first beta that has it. To see it again on a device: Settings → Help → turn **Show what's new after updates** off and on (this clears `lastSeenVersion`), then restart.
 
-Manual ways in: commands **Show onboarding card** and **Show what's new** (the whole running minor line), and the two buttons under Settings → Help.
+Manual ways in: commands **Show onboarding card** and **Show what's new** (the running release's note only, not the history of the line), and the two buttons under Settings → Help.
 
 ## Writing the note
 

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
 import { ONBOARDING_STEPS } from "../onboarding";
 import { FIGURE_IDS, renderFigure } from "../onboardingFigures";
+import { RELEASE_NOTES } from "../whatsNew/releaseNotes";
 
 installObsidianDom();
 const css = readFileSync("styles.css", "utf8");
@@ -17,7 +18,7 @@ describe("onboarding content and figures", () => {
       if (step.figure) expect(FIGURE_IDS).toContain(step.figure);
     }
     // Every figure is used by some step, so none ships undrawn or unused.
-    expect(new Set(ONBOARDING_STEPS.flatMap(s => s.figure ?? []))).toEqual(new Set(FIGURE_IDS));
+    expect(new Set([...ONBOARDING_STEPS.flatMap(s => s.figure ?? []), ...RELEASE_NOTES.flatMap(n => n.items.flatMap(i => i.figure ?? []))])).toEqual(new Set(FIGURE_IDS));
   });
   it("draws every figure as aria-hidden decoration that uses only styled classes", () => {
     for (const id of FIGURE_IDS) {
