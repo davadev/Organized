@@ -19,6 +19,8 @@ import { isDestructive, normalizeRetire } from "./retire";
 
 /** How long after the layout is ready the first-run card waits, so it does not open under the settings window that switched the plugin on. */
 const FIRST_RUN_DELAY_MS = 1500;
+/** A synced daily note arrives in pieces; how long to wait between looks, and how many looks at most. */
+const SETTLE_MS = 1000; const SETTLE_TRIES = 5;
 const PLANNING_TICK_MS = 60000;
 export default class Organized extends Plugin {
   settings: Settings = { ...DEFAULT_SETTINGS };
@@ -79,7 +81,7 @@ export default class Organized extends Plugin {
       this.app.workspace.onLayoutReady(() => {
         if (!this.loaded) return;
         // Registration happens AFTER Obsidian's initial existing-file create events.
-        this.registerEvent(this.app.vault.on("create", file => { if (file instanceof TFile) { void this.repo.track(file); void this.run(() => this.service.onDailyCreated(file)); void this.service.index(file).catch(report); } }));
+        this.registerEvent(this.app.vault.on("create", file => { if (file instanceof TFile) { void this.repo.track(file); void this.run(async () => { if (this.service.daily.date(file.path)) await this.settle(file); await this.service.onDailyCreated(file); }); void this.service.index(file).catch(report); } }));
         this.registerEvent(this.app.vault.on("modify", file => { if (file instanceof TFile) {
           void this.repo.track(file); const id = this.selectedTaskId; const wasReference = this.service.hasReference(id, file.path);
           void this.service.index(file).then(() => {
@@ -265,6 +267,16 @@ export default class Organized extends Plugin {
     const current = this.activeEditor() ?? this.recentEditor(); if (current) this.lastNoteEditor = current;
     if (this.lastNoteEditor && !this.repo.file(this.lastNoteEditor.file.path)) this.lastNoteEditor = null;
     return this.lastNoteEditor;
+  }
+  /** Waits until a new daily note stops changing, so the repeat lines are not written into the empty file a sync is about to fill, or over its text. */
+  private async settle(file: TFile): Promise<void> {
+    try {
+      let last = await this.repo.readText(file);
+      for (let i = 0; i < SETTLE_TRIES; i++) {
+        await new Promise<void>(done => { window.setTimeout(done, SETTLE_MS); });
+        const now = await this.repo.readText(file); if (now === last) return; last = now;
+      }
+    } catch { /* The note went away; filling it then fails and is reported as before. */ }
   }
   async taskLines(file: TFile): Promise<TaskLine[]> { return parseTasks(await this.repo.readText(file)); }
   current(editor: Editor, file: TFile): Context | null {

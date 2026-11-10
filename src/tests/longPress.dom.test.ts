@@ -93,7 +93,22 @@ describe('long-press marker menu', () => {
     expect(click()).toBe(false);
     touch('touchstart', box); hold(); expect(click()).toBe(true);
     const elsewhere = new Event('click', { bubbles: true, cancelable: true }); view.contentDOM.dispatchEvent(elsewhere); expect(elsewhere.defaultPrevented).toBe(false);
+    Menu.last!.hide(); vi.advanceTimersByTime(700); expect(click()).toBe(false);
+    view.destroy();
+  });
+  it('ignores the click that dismisses the menu by tapping outside it, and not later ones', () => {
+    const { view, boxFor } = setup(); const box = boxFor(2);
+    const click = () => { const e = new Event('click', { bubbles: true, cancelable: true }); box.dispatchEvent(e); return e.defaultPrevented; };
+    touch('touchstart', box); hold(); touch('touchend', box);
+    vi.advanceTimersByTime(5000); expect(click()).toBe(true);
+    Menu.last!.hide(); expect(click()).toBe(true);
     vi.advanceTimersByTime(700); expect(click()).toBe(false);
+    view.destroy();
+  });
+  it('a menu that never reports closing cannot block the checkbox for good', () => {
+    const { view, boxFor } = setup(); const box = boxFor(2);
+    touch('touchstart', box); hold(); vi.advanceTimersByTime(61000);
+    const e = new Event('click', { bubbles: true, cancelable: true }); box.dispatchEvent(e); expect(e.defaultPrevented).toBe(false);
     view.destroy();
   });
   it('keeps the native context menu away from a checkbox and leaves other targets alone', () => {

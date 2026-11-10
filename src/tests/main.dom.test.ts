@@ -61,6 +61,21 @@ describe('plugin lifecycle and user-only editor actions', () => {
     h.raw.workspace.getActiveViewOfType.mockReturnValueOnce({ file, editor, getMode: () => 'preview' } as any); expect(plugin.activeEditor()).toBeNull();
     const task = await plugin.repo.create('Project'); const projects = vi.spyOn(plugin.service, 'projects').mockResolvedValue(); const clean = vi.spyOn(plugin.service, 'clean').mockResolvedValue(); plugin.pickProjects(task); const modal = Modal.instances.at(-1) as ProjectPicker; expect(modal.colorOf('Missing.md')).toBeNull(); await modal.save([]); expect(projects).toHaveBeenCalledWith(task.id, []); expect(clean).not.toHaveBeenCalled(); modal.close();
   });
+  it('waits for a new daily note to stop changing before filling it, so a note a sync is still writing is not overwritten', async () => {
+    vi.useFakeTimers();
+    try {
+      const { h, plugin } = await loaded(); h.layout[0]();
+      const created = vi.spyOn(plugin.service, 'onDailyCreated').mockResolvedValue(); vi.spyOn(plugin.service, 'index').mockResolvedValue();
+      vi.spyOn(plugin.service.daily, 'date').mockImplementation(p => p.startsWith('Daily/') ? '2099-01-01' : null);
+      const file: any = await h.add('Daily/2099-01-01.md', '');
+      h.events.create[0](file); await vi.advanceTimersByTimeAsync(900); expect(created).not.toHaveBeenCalled();
+      h.texts.set(file.path, '- [ ] from the other device'); await vi.advanceTimersByTimeAsync(1000); expect(created).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1000); expect(created).toHaveBeenCalledExactlyOnceWith(file);
+      created.mockClear(); const busy: any = await h.add('Daily/2099-01-02.md', ''); let n = 0; const read = vi.spyOn(plugin.repo, 'readText').mockImplementation(async () => String(n++));
+      h.events.create[0](busy); await vi.advanceTimersByTimeAsync(10000); expect(created).toHaveBeenCalledExactlyOnceWith(busy); expect(read).toHaveBeenCalledTimes(6);
+      created.mockClear(); read.mockRejectedValue(new Error('gone')); h.events.create[0](busy); await vi.advanceTimersByTimeAsync(10); expect(created).toHaveBeenCalledExactlyOnceWith(busy);
+    } finally { vi.useRealTimers(); }
+  });
   it('registers capabilities only, defers vault-create handling and cleans durable crash state', async () => {
     const { h, plugin, stub } = await loaded();
     expect(stub.commands).toHaveLength(15); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();

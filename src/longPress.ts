@@ -19,9 +19,13 @@ const SLOP = 10;
 const SWALLOW_MS = 600;
 const TARGET = "input.task-list-item-checkbox, .organized-glyph";
 interface Point { x: number; y: number }
+/** A menu that never reports closing must not leave the checkbox dead for good. */
+const MENU_MS = 60000;
+/** Asks the host to ignore clicks on its targets for this many milliseconds. */
+type Hold = (ms: number) => void;
 
 /** Watches `host` for a long press on whatever `find` returns for an event. `press` opens the menu and says whether it did; then the trailing click is swallowed and Android gets a short tick. Returns the cleanup. */
-export function watchLongPress(host: Element, find: (event: Event) => Element | null, press: (box: Element, at: Point) => boolean): () => void {
+export function watchLongPress(host: Element, find: (event: Event) => Element | null, press: (box: Element, at: Point, hold: Hold) => boolean): () => void {
   let timer: number | undefined; let origin: Point = { x: 0, y: 0 }; let fired = false; let swallowUntil = 0;
   const cancel = () => { window.clearTimeout(timer); timer = undefined; };
   const listeners: [string, (event: Event) => void, AddEventListenerOptions][] = [
@@ -33,8 +37,8 @@ export function watchLongPress(host: Element, find: (event: Event) => Element | 
       origin = { x: touches[0].clientX, y: touches[0].clientY };
       timer = window.setTimeout(() => {
         timer = undefined;
-        if (!press(box, origin)) return;
-        fired = true; swallowUntil = Date.now() + SWALLOW_MS;
+        if (!press(box, origin, ms => { swallowUntil = Date.now() + ms; })) return;
+        fired = true; swallowUntil = Math.max(swallowUntil, Date.now() + SWALLOW_MS);
         // iOS has no vibration API.
         if ("vibrate" in navigator) navigator.vibrate(10);
       }, HOLD_MS);
@@ -54,13 +58,15 @@ export function watchLongPress(host: Element, find: (event: Event) => Element | 
 }
 
 /** The menu: the current marker is ticked and does nothing; a pick is applied after the sheet has gone, so a picker it opens does not fight it for focus. */
-function showMarkerMenu(at: Point, current: string, allowed: readonly string[], pick: (marker: string) => void): void {
-  const menu = new Menu();
+function showMarkerMenu(at: Point, hold: Hold, current: string, allowed: readonly string[], pick: (marker: string) => void): void {
+  const sheet = new Menu();
+  // Tapping outside closes the menu, and the click that follows would tick the todo under the finger.
+  hold(MENU_MS); sheet.onHide(() => hold(SWALLOW_MS));
   for (const [marker, label, icon] of LONG_PRESS_MARKERS) {
     if (!allowed.includes(marker)) continue;
-    menu.addItem(item => item.setTitle(`[${marker === " " ? " " : marker}] ${label}`).setIcon(icon).setChecked(marker === current).onClick(() => { if (marker !== current) window.setTimeout(() => pick(marker), 0); }));
+    sheet.addItem(item => item.setTitle(`[${marker === " " ? " " : marker}] ${label}`).setIcon(icon).setChecked(marker === current).onClick(() => { if (marker !== current) window.setTimeout(() => pick(marker), 0); }));
   }
-  menu.showAtPosition(at);
+  sheet.showAtPosition(at);
 }
 const ALL_MARKERS = LONG_PRESS_MARKERS.map(([marker]) => marker);
 /** Reading view has no editor to insert a subtask line into. */
@@ -75,16 +81,16 @@ export function longPressMenu(owner: Organized): Extension {
         const box = event.target instanceof Element ? event.target.closest(TARGET) : null;
         // A task list inside a rendered description is not the todo line it hangs under.
         return box?.closest(".organized-projection") ? null : box;
-      }, (box, at) => this.open(box, at));
+      }, (box, at, hold) => this.open(box, at, hold));
     }
     destroy(): void { this.stop(); }
-    private open(box: Element, at: Point): boolean {
+    private open(box: Element, at: Point, hold: Hold): boolean {
       const { view } = this;
       const line = view.state.doc.lineAt(view.posAtDOM(box));
       const task = this.taskAt(line.number); if (!task || !owner.settings.longPressMenu) return false;
       const active = owner.activeEditor();
       if (!active || active.editor.getValue() !== view.state.doc.toString() || owner.service.daily.date(active.file.path) === null) return false;
-      showMarkerMenu(at, task.marker, ALL_MARKERS, marker => this.apply(line.from, line.text, marker));
+      showMarkerMenu(at, hold, task.marker, ALL_MARKERS, marker => this.apply(line.from, line.text, marker));
       return true;
     }
     /** The todo on a line. The whole note is parsed: on its own, an indented subtask reads as a code block. */
@@ -104,9 +110,9 @@ export function longPressMenu(owner: Organized): Extension {
 
 /** The same menu on a Reading view checkbox. There is no typed input to lean on there, so the pick is written with the service and then run as the marker it is. A plain todo can only be ticked, reopened or canceled (typing anything else in Live Preview is what links it). */
 export function readingLongPress(owner: Organized, box: HTMLElement, file: TFile, task: TaskLine): void {
-  watchLongPress(box, () => box, (_box, at) => {
+  watchLongPress(box, () => box, (_box, at, hold) => {
     if (!owner.settings.longPressMenu || owner.service.daily.date(file.path) === null) return false;
-    showMarkerMenu(at, task.marker, task.id ? READING_MARKERS : PLAIN_MARKERS, marker => {
+    showMarkerMenu(at, hold, task.marker, task.id ? READING_MARKERS : PLAIN_MARKERS, marker => {
       void (async () => {
         await owner.run(() => owner.service.clean({ file, line: task }, marker));
         if (task.id) await owner.trigger({ file, line: { ...task, marker } });

@@ -90,6 +90,36 @@ describe("native task, date, source and project modals", () => {
     const filed = new ProjectPicker(h.app, [], [], save, 'Tasks/Projects'); filed.open(); const filedInput = filed.contentEl.querySelector('input[type=search]') as HTMLInputElement; filedInput.value = 'Plan.md'; filedInput.dispatchEvent(new Event('input')); expect(filed.contentEl.textContent).toContain('Plan (create)'); filed.close();
     const failed = new ProjectPicker(h.app, [], [], async () => { throw Error('project failure'); }); failed.open(); failed.contentEl.querySelector('button')!.click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain('project failure');
   });
+  it("is driven from the keyboard: arrows move through the list, Enter ticks, Enter in the search picks the best match, Mod+Enter saves", async () => {
+    const h = harness(); const save = vi.fn(async () => undefined); const modal = new ProjectPicker(h.app, ['Alpha.md', 'Beta.md', 'Gamma.md'], [], save); modal.open();
+    const search = modal.contentEl.querySelector('input[type=search]') as HTMLInputElement; const boxes = () => Array.from(modal.contentEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]'));
+    const key = (el: Element, k: string, extra: KeyboardEventInit = {}) => { const e = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }); el.dispatchEvent(e); return e; };
+    boxes().forEach(box => { box.scrollIntoView = vi.fn(); });
+    expect(key(search, 'ArrowDown').defaultPrevented).toBe(true); expect(document.activeElement).toBe(boxes()[0]);
+    key(boxes()[0], 'ArrowDown'); expect(document.activeElement).toBe(boxes()[1]);
+    key(boxes()[1], 'ArrowDown'); key(boxes()[2], 'ArrowDown'); expect(document.activeElement).toBe(boxes()[2]);
+    key(boxes()[2], 'ArrowUp'); key(boxes()[1], 'ArrowUp'); expect(document.activeElement).toBe(boxes()[0]);
+    key(boxes()[0], 'ArrowUp'); expect(document.activeElement).toBe(search);
+    boxes()[1].dispatchEvent(new Event('focus')); expect(boxes()[1].scrollIntoView).toHaveBeenCalled();
+    key(boxes()[1], 'Enter'); expect(boxes()[1].checked).toBe(true); key(boxes()[1], 'Enter'); expect(boxes()[1].checked).toBe(false); key(boxes()[1], 'Enter'); key(boxes()[1], 'Enter', { ctrlKey: true }); expect(boxes()[1].checked).toBe(true);
+    key(boxes()[1], 'x'); expect(boxes()[1].checked).toBe(true);
+    key(search, 'x'); search.value = 'gam'; search.dispatchEvent(new Event('input')); key(search, 'Enter'); expect(search.value).toBe(''); expect(boxes()).toHaveLength(3); expect(boxes()[2].checked).toBe(true);
+    search.value = 'zzz'; search.dispatchEvent(new Event('input')); key(search, 'Enter');
+    key(search, 'Enter', { metaKey: true }); await flush(); expect(save).toHaveBeenCalledWith(['Beta.md', 'Gamma.md', 'zzz.md']);
+    const empty = new ProjectPicker(h.app, [], [], save); empty.open(); const emptySearch = empty.contentEl.querySelector('input[type=search]') as HTMLInputElement;
+    key(emptySearch, 'ArrowDown'); key(emptySearch, 'Enter'); expect(empty.contentEl.querySelectorAll('input[type=checkbox]')).toHaveLength(0); empty.close();
+  });
+  it("keeps the list above the on-screen keyboard and stops listening when closed", () => {
+    const h = harness(); const listeners = new Map<string, () => void>();
+    const viewport = { height: 400, offsetTop: 0, addEventListener: (t: string, f: () => void) => listeners.set(t, f), removeEventListener: (t: string) => listeners.delete(t) };
+    Object.defineProperty(window, 'visualViewport', { value: viewport, configurable: true });
+    try {
+      const modal = new ProjectPicker(h.app, ['Alpha.md'], [], async () => undefined); modal.open(); const list = modal.contentEl.querySelector<HTMLElement>('.organized-project-results')!;
+      expect(list.style.getPropertyValue('--organized-list-max')).toMatch(/^\d+px$/); const before = list.style.getPropertyValue('--organized-list-max');
+      viewport.height = 200; listeners.get('resize')!(); expect(list.style.getPropertyValue('--organized-list-max')).not.toBe(before); expect(parseInt(list.style.getPropertyValue('--organized-list-max'))).toBeGreaterThanOrEqual(120);
+      expect([...listeners.keys()].sort()).toEqual(['resize', 'scroll']); modal.close(); expect(listeners.size).toBe(0);
+    } finally { Object.defineProperty(window, 'visualViewport', { value: undefined, configurable: true }); }
+  });
   it("adds or edits a session with a live length, refuses a bad range and offers Open task and Delete when editing", async () => {
     const h = harness(); const at = (hour: number, min = 0) => new Date(2026, 2, 4, hour, min).toISOString(); const now = new Date(2026, 2, 4, 18, 0).getTime();
     const save = vi.fn(async () => undefined); const remove = vi.fn(async () => undefined); const open = vi.fn(async () => undefined);
