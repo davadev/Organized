@@ -271,7 +271,8 @@ export class MenuItem {
 }
 export class Menu {
   static last: Menu | null = null;
-  items: MenuItem[] = []; at: { x: number; y: number } | null = null;
+  items: MenuItem[] = []; at: { x: number; y: number } | null = null; hide: () => void = () => {};
+  onHide(callback: () => void): void { this.hide = callback; }
   addItem(build: (item: MenuItem) => void): this { const item = new MenuItem(); build(item); this.items.push(item); return this; }
   showAtPosition(at: { x: number; y: number }): this { this.at = at; Menu.last = this; return this; }
 }

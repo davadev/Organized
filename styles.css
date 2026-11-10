@@ -315,7 +315,7 @@ body.is-mobile .modal-container.organized-modal-host { overflow-y: auto; }
 .organized-modal-window .modal-content button.mod-cta { border-color: var(--interactive-accent); background: var(--interactive-accent); color: var(--text-on-accent); }
 .organized-modal-window .modal-content button.mod-cta:hover { background: var(--interactive-accent-hover, var(--interactive-accent)); }
 .organized-modal-window .modal-content button.mod-warning { border-color: transparent; background: var(--background-modifier-error); color: var(--text-on-accent); }
-.organized-modal-window .organized-project-results { display: flex; flex-direction: column; gap: 2px; margin-block: 10px; max-block-size: 45vh; overflow-y: auto; }
+.organized-modal-window .organized-project-results { display: flex; flex-direction: column; gap: 2px; margin-block: 10px; max-block-size: var(--organized-list-max, 45vh); overflow-y: auto; }
 .organized-modal-window .organized-project-choice { display: flex; align-items: center; gap: var(--size-4-2); min-block-size: 44px; padding-inline: 6px; border-radius: var(--radius-s, 5px); overflow-wrap: anywhere; }
 .organized-modal-window .organized-project-choice:hover { background: var(--background-modifier-hover); }
 .organized-modal-window .organized-suggestion-title { color: var(--text-normal); font-size: 14px; }
@@ -339,6 +339,8 @@ span.organized-projection.organized-align-right { float: inline-end; max-width: 
 .organized-task-line > span.organized-projection.organized-align-right ~ :is(ul, ol) { clear: both; }
 div.organized-projection.organized-align-right { text-align: end; }
 div.organized-projection.organized-align-right .organized-rich-property { text-align: start; }
+/* On a phone the symbols never share the title's line: when they were allowed to drop to a row of their own at the right edge, that row sat next to the following todo and read as belonging to it. They always sit under their own title instead. */
+body.is-mobile span.organized-projection.organized-align-right { float: none; display: block; margin-inline-start: 0; margin-block-start: 2px; text-align: start; }
 .organized-property, .organized-date { display: inline-block; margin-inline-end: var(--size-4-2); max-inline-size: 100%; }
 .organized-rich-property { display: block; margin-block: var(--size-4-1); }
 .organized-glyph, .organized-task-line .organized-checkbox {

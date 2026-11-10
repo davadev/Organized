@@ -145,6 +145,7 @@ export class ConfirmModal extends Modal {
 }
 export class ProjectPicker extends Modal {
   readonly selected: Set<string>;
+  private unfit: () => void = () => undefined;
   constructor(app: App, readonly notes: string[], selected: string[], readonly save: (notes: string[]) => Promise<void>, readonly folder = "", readonly colorOf: (note: string) => string | null = () => null) { super(app); decorate(this); this.selected = new Set(selected); }
   onOpen(): void {
     this.titleEl.setText("Link projects or topics"); this.contentEl.addClass("organized-modal");
@@ -153,6 +154,7 @@ export class ProjectPicker extends Modal {
     // The list is not every note: a person who linked a note with [[...]] or expected their own note here needs to know why it is missing.
     this.contentEl.createEl("p", { cls: "organized-muted organized-project-hint", text: `Only notes with the property organized_type: project are listed. To use an existing note, add that property to it; typing its name here creates a new note${this.folder ? ` in ${this.folder}` : ""}.` });
     const results = this.contentEl.createDiv({ cls: "organized-project-results" });
+    const boxes = () => Array.from(results.querySelectorAll<HTMLInputElement>("input[type=checkbox]"));
     const paint = () => {
       results.empty(); const query = search.value.trim();
       const notes = new Set([...this.notes, ...this.selected].filter(n => n.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
@@ -163,14 +165,38 @@ export class ProjectPicker extends Modal {
         const color = this.colorOf(note); const dot = label.createSpan({ cls: "organized-project-dot", attr: { "aria-hidden": "true" } });
         if (color) { dot.setAttribute("data-project", ""); dot.setCssProps({ "--organized-chip-bg": rgbOf(color) }); }
         label.createSpan({ text: `${projectName(note, [...this.notes, ...this.selected])}${this.notes.includes(note) ? "" : " (create)"}` });
-        input.addEventListener("change", () => { if (input.checked) this.selected.add(note); else this.selected.delete(note); });
+        const toggle = (on: boolean) => { input.checked = on; if (on) this.selected.add(note); else this.selected.delete(note); };
+        input.addEventListener("change", () => toggle(input.checked));
+        input.addEventListener("focus", () => input.scrollIntoView({ block: "nearest" }));
+        input.addEventListener("keydown", event => {
+          const at = boxes().indexOf(input);
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); (boxes()[at + (event.key === "ArrowDown" ? 1 : -1)] ?? (event.key === "ArrowUp" ? search : input)).focus(); }
+          else if (event.key === "Enter" && !event.metaKey && !event.ctrlKey) { event.preventDefault(); toggle(!input.checked); }
+        });
       }
     };
+    const saveLinks = () => { this.close(); void this.save([...this.selected]).catch(report); };
     search.addEventListener("input", paint); paint();
-    new Setting(this.contentEl).addButton(b => b.setButtonText("Save links").setCta().onClick(() => { this.close(); void this.save([...this.selected]).catch(report); }));
+    search.addEventListener("keydown", event => {
+      if (event.key === "ArrowDown") { event.preventDefault(); boxes()[0]?.focus(); }
+      else if (event.key === "Enter") {
+        event.preventDefault();
+        if (event.metaKey || event.ctrlKey) { saveLinks(); return; }
+        // Enter picks the best match, so a name can be typed and chosen without the mouse.
+        const first = boxes()[0]; if (first) { first.click(); search.value = ""; paint(); }
+      }
+    });
+    new Setting(this.contentEl).addButton(b => b.setButtonText("Save links").setCta().onClick(saveLinks));
+    // The on-screen keyboard covers the bottom of the window without shrinking it; keep the list inside what is left so every project can be scrolled to.
+    const viewport = window.visualViewport;
+    if (viewport) {
+      const fit = () => { const top = results.getBoundingClientRect().top - viewport.offsetTop; results.setCssProps({ "--organized-list-max": `${Math.max(120, Math.floor(viewport.height - top - 90))}px` }); };
+      viewport.addEventListener("resize", fit); viewport.addEventListener("scroll", fit); fit();
+      this.unfit = () => { viewport.removeEventListener("resize", fit); viewport.removeEventListener("scroll", fit); };
+    }
     search.focus();
   }
-  onClose(): void { this.contentEl.empty(); }
+  onClose(): void { this.unfit(); this.contentEl.empty(); }
 }
 
 export interface SessionEdit {

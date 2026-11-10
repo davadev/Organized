@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Fixed a todo being ticked by mistake when the long-press menu on a phone is dismissed by tapping outside it: taps on the checkbox are ignored while the menu is open and for a moment after it closes.
+
+- Fixed a todo's properties (project, priority) looking like they belong to the todo below when they did not fit on the title's line on a phone. On a phone the properties now always sit under their own todo, from the left edge; on desktop they stay at the right edge.
+
+- Project picker: the list now stays inside the part of the screen the phone keyboard leaves free, so every project can be scrolled to; on a computer, the arrow keys move through the list, Enter ticks a project, Enter in the search box picks the best match and Ctrl/Cmd+Enter saves.
+
+- A new daily note is now filled with recurring tasks only after it has stopped changing for a second, so a note another device is still syncing is not overwritten or doubled.
+
 - **Follows the Daily Notes plugin.** Organized now takes the daily-note folder, filename format and template from the core Daily Notes plugin (or Periodic Notes, when its daily notes are on) instead of needing them copied into its own settings, so notes made by that plugin, or by another one that uses its setup such as a health-sync plugin, are the ones Organized sees. *Settings → Organized → Daily notes → Daily-note source* switches to custom settings; if neither plugin has a setup, Organized's own are used. An install that already saved a folder or format keeps it as custom, so nothing moves.
 
 - Fixed recurring tasks adding one more copy of their heading to every new daily note when the note's template nests that heading under another one (for example `# Day` then `## Habits`, while the task remembers just `## Habits`): a task whose section is a single heading now goes under that heading wherever it sits in the note. Added tests for daily notes made by other plugins (Periodic Notes, Calendar, Templater-style rewrites, renames, back-filled and look-alike notes, other folder and date formats) and for templates with headings, callouts, code fences and duplicate headings.
