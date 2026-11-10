@@ -318,6 +318,9 @@ body.is-mobile .modal-container.organized-modal-host { overflow-y: auto; }
 .organized-modal-window .organized-project-results { display: flex; flex-direction: column; gap: 2px; margin-block: 10px; max-block-size: var(--organized-list-max, 45vh); overflow-y: auto; }
 .organized-modal-window .organized-project-choice { display: flex; align-items: center; gap: var(--size-4-2); min-block-size: 44px; padding-inline: 6px; border-radius: var(--radius-s, 5px); overflow-wrap: anywhere; }
 .organized-modal-window .organized-project-choice:hover { background: var(--background-modifier-hover); }
+/* Keyboard focus must be visible: the row with focus and the Save button are outlined, so Tab and the arrows show where they are. */
+.organized-modal-window .organized-project-choice:focus-within { background: var(--background-modifier-hover); outline: 2px solid var(--interactive-accent); outline-offset: -2px; }
+.organized-modal-window .organized-modal button:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
 .organized-modal-window .organized-suggestion-title { color: var(--text-normal); font-size: 14px; }
 .organized-modal-window .organized-suggestion-meta { color: var(--text-muted); font-size: 11px; }
 .organized-project-results { max-block-size: 45vh; overflow-y: auto; }
