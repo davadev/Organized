@@ -538,13 +538,19 @@ export class TaskService {
   async applyPlanning(now = Date.now()): Promise<string[]> {
     const tasks = await this.repo.list();
     const ended: string[] = []; const ends = dueEnds(tasks, now); const starts = dueStarts(tasks, now);
+    // A write that loses a race with the person typing (or an editor saving older text over it) leaves the status set but the note unchanged; the next pass puts the marker back, so such a start is never dropped.
+    const lost = (error: unknown) => error instanceof Error && error.message.includes("changed concurrently");
     for (const end of ends) {
       if (end.action === "move") await this.repo.update(end.task.id, t => ({ ...t, auto_started_block: end.block!.start }));
       else if (end.action === "release") await this.repo.update(end.task.id, t => ({ ...t, auto_started_block: null }));
-      else { await this.applyStatus(end.task.id, "open", undefined, undefined, t => ({ ...setStatus(t, "open"), auto_started_block: null })); ended.push(end.task.title); }
+      else {
+        try { await this.applyStatus(end.task.id, "open", undefined, undefined, t => ({ ...setStatus(t, "open"), auto_started_block: null })); ended.push(end.task.title); } catch (error) {
+          if (!lost(error)) throw error;
+          // The todo lines could not be written: give the task its claim back so the next pass ends it again, instead of leaving "[/]" in the note on a task that is open.
+          const before = end.task; await this.repo.update(before.id, t => ({ ...t, status: before.status, closed_at: before.closed_at, auto_started_block: before.auto_started_block }));
+        }
+      }
     }
-    // A write that loses a race with the person typing (or an editor saving older text over it) leaves the status set but the note unchanged; the next pass puts the marker back, so such a start is never dropped.
-    const lost = (error: unknown) => error instanceof Error && error.message.includes("changed concurrently");
     for (const { task, block } of starts) { try { await this.applyStatus(task.id, "in_progress", undefined, undefined, t => startPlanned(t, block)); } catch (error) { if (!lost(error)) throw error; } }
     const moving = new Set([...ends, ...starts].map(item => item.task.id));
     for (const task of tasks) {

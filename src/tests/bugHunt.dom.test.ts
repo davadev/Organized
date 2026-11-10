@@ -8,6 +8,7 @@ import { Notice } from './__mocks__/obsidian';
 import { saveRole } from '../device';
 import { localDate, markerOf, newTask, setStatus } from '../model';
 import { splitNote } from '../repository';
+import { ProjectBudgetModal, ProjectPicker } from '../modals';
 
 installObsidianDom();
 const flush = async () => { for (let i = 0; i < 150; i++) await Promise.resolve(); };
@@ -60,5 +61,35 @@ describe('bug hunt regressions', () => {
     await service.applyPlanning(at(9, 20)); await service.applyPlanning(at(9, 40)); expect((await repo.read(task.id)).status).toBe('open');
     expect(await service.applyPlanning(at(10))).toEqual([]); expect((await repo.read(task.id)).auto_started_block).toBeNull(); expect(splitNote(await repo.readText(repo.taskFile(task.id)!)).frontmatter).not.toHaveProperty('auto_started_block');
     await service.addPlanned(task.id, { start: new Date(at(11)).toISOString(), end: new Date(at(12)).toISOString() }); await service.applyPlanning(at(11, 5)); expect((await repo.read(task.id)).status).toBe('in_progress');
+  });
+  it('a todo line that cannot be written when a planned block ends is retried on the next pass, not left as [/] on an open task', async () => {
+    const { h, plugin } = await loaded(); await ready(h); const { service, repo } = plugin; const task = await repo.create('Focus'); const at = (hh: number, mm = 0) => new Date(2026, 2, 4, hh, mm).getTime();
+    await service.addPlanned(task.id, { start: new Date(at(9)).toISOString(), end: new Date(at(10)).toISOString() });
+    const note = await h.add(service.daily.path(localDate()), `- [ ] Focus <!--organized:${task.id}-->`); await service.applyPlanning(at(9));
+    expect(await repo.readText(note as any)).toContain('- [/] Focus');
+    const write = repo.write.bind(repo); let failures = 1;
+    vi.spyOn(repo, 'write').mockImplementation(async (file: any, before: string, after: string) => { if (file.path === note.path && failures-- > 0) throw new Error(`${file.path} changed concurrently; preserved. Retry the action.`); return write(file, before, after); });
+    await expect(service.applyPlanning(at(10))).resolves.toEqual([]);
+    expect(await repo.read(task.id)).toMatchObject({ status: 'in_progress', auto_started_block: new Date(at(9)).toISOString() }); expect(await repo.readText(note as any)).toContain('- [/] Focus');
+    await expect(service.applyPlanning(at(10, 1))).resolves.toEqual(['Focus']);
+    expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null }); expect(await repo.readText(note as any)).toContain('- [ ] Focus');
+    failures = 1; vi.spyOn(repo, 'write').mockImplementation(async () => { throw new Error('disk full'); });
+    await service.addPlanned(task.id, { start: new Date(at(11)).toISOString(), end: new Date(at(12)).toISOString() }); vi.restoreAllMocks();
+    await service.applyPlanning(at(11)); vi.spyOn(repo, 'write').mockRejectedValue(new Error('disk full')); await expect(service.applyPlanning(at(12))).rejects.toThrow('disk full');
+  });
+  it('a panel brought back to the foreground on a new day repaints, and not on the same day', async () => {
+    const { h, plugin } = await loaded(); await ready(h); const refresh = vi.spyOn(plugin, 'refresh').mockImplementation(() => undefined); const wake = () => (plugin as any).domEvents.filter((d: any) => d.type === 'visibilitychange').forEach((d: any) => d.cb());
+    wake(); expect(refresh).not.toHaveBeenCalled();
+    (plugin as any).paintedDay = '2000-01-01'; wake(); expect(refresh).toHaveBeenCalledOnce();
+    wake(); expect(refresh).toHaveBeenCalledOnce();
+  });
+  it('a tiny project budget is kept as one second, not silently dropped, and Enter on an already picked best match keeps it picked', async () => {
+    const h = harness(); const save = vi.fn().mockResolvedValue(undefined); const modal = new ProjectBudgetModal(h.app, 'P', { total: null, day: null, week: null, month: null }, save); modal.open();
+    const fields = Array.from(modal.contentEl.querySelectorAll<HTMLInputElement>('input')); fields[0].value = '0.0001'; fields[0].dispatchEvent(new Event('input'));
+    Array.from(modal.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Save')!.click(); await flush(); expect(save).toHaveBeenCalledWith({ total: 1, day: null, week: null, month: null });
+    const picker = new ProjectPicker(h.app, ['Alpha.md', 'Beta.md'], ['Alpha.md'], vi.fn().mockResolvedValue(undefined)); picker.open();
+    const search = picker.contentEl.querySelector('input[type=search]') as HTMLInputElement; search.value = 'alp'; search.dispatchEvent(new Event('input'));
+    search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); expect([...picker.selected]).toEqual(['Alpha.md']);
+    search.value = 'bet'; search.dispatchEvent(new Event('input')); search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); expect([...picker.selected].sort()).toEqual(['Alpha.md', 'Beta.md']);
   });
 });

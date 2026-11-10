@@ -114,7 +114,7 @@ export default class Organized extends Plugin {
       this.app.workspace.onLayoutReady(() => {
         if (!this.loaded) return;
         this.planningTick(); this.registerInterval(window.setInterval(() => this.planningTick(), PLANNING_TICK_MS));
-        this.registerDomEvent(document, "visibilitychange", () => { if (!document.hidden) { this.planningTick(); this.newDay(); } });
+        this.registerDomEvent(document, "visibilitychange", () => { if (!document.hidden) { this.planningTick(); this.newDay(); this.refreshAfterMidnight(); } });
       });
       this.registerInterval(window.setTimeout(() => { void writeCrashState(adapter, crashPath, DEFAULT_CRASH_STATE); }, 30000));
     } catch (error) { report(error); throw error; }
@@ -325,6 +325,9 @@ export default class Organized extends Plugin {
       new Notice(added.length ? `Added ${added.length} recurring task${added.length === 1 ? "" : "s"} to ${date}: ${added.join(", ")}.` : `Nothing was missing from ${date}.`);
     }); } finally { this.catchingUp = null; }
   }
+  private paintedDay = localDate();
+  /** A panel left hidden past midnight still shows yesterday as today (calendar highlight, "today" budgets); repaint it when the app comes back to the foreground on a new day. */
+  private refreshAfterMidnight(): void { const today = localDate(); if (today === this.paintedDay) return; this.paintedDay = today; this.refresh(); }
   /** Phone or desktop left open past midnight: the day's carry-forward would otherwise wait for the next note to be opened. */
   private newDay(): void {
     const file = this.app.workspace.getActiveFile();
