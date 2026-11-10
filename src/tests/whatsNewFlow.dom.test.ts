@@ -128,6 +128,11 @@ describe('the popup and its commands', () => {
     const modal = new WhatsNewModal(h.app, shown, () => undefined); modal.open();
     expect(modal.contentEl.textContent).toContain('You are catching up on 2 updates: 0.1.5, then 0.2.0.'); expect([...modal.contentEl.querySelectorAll('h3')].map(n => n.textContent)).toEqual(['One', 'Two']);
   });
+  it('draws a real-GUI shot under an item that has one, and a figure under one that has that', () => {
+    const h = harness(); const note = { version: '0.1.5', title: 'One', intro: '', items: [{ title: 'Plain', text: 'x' }, { title: 'Shot', text: 'y', shot: 'repeat' as const }, { title: 'Figure', text: 'z', figure: 'devices' as const }] };
+    const modal = new WhatsNewModal(h.app, [note], () => undefined); modal.open();
+    expect(modal.contentEl.querySelectorAll('.organized-welcome-shot')).toHaveLength(1); expect(modal.contentEl.querySelectorAll('.organized-welcome-figure')).toHaveLength(1);
+  });
   it('the command reopens the notes for this version at any time and says so when there are none', async () => {
     const s = await start({ data: { schemaVersion: 1, settings: { onboardingSeen: true, lastSeenVersion: '0.1.2' } } }); expect(news()).toHaveLength(0);
     (s.plugin as any).commands.find((c: any) => c.id === 'show-whats-new').callback(); expect(news()).toHaveLength(1);

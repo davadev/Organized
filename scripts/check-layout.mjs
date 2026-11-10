@@ -4,7 +4,7 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const engine = process.argv[2] === 'webkit' ? 'webkit' : 'chromium';
-const bundle = await build({ entryPoints: ['scripts/layout-entry.ts'], bundle: true, write: false, format: 'esm', target: 'es2022', alias: { obsidian: resolve('src/tests/__mocks__/obsidian.ts') } });
+const bundle = await build({ entryPoints: ['scripts/layout-entry.ts'], bundle: true, write: false, loader: { '.png': 'dataurl' }, format: 'esm', target: 'es2022', alias: { obsidian: resolve('src/tests/__mocks__/obsidian.ts') } });
 const browser = await ({ chromium, webkit }[engine]).launch({ headless: true });
 const css = await readFile('styles.css', 'utf8');
 const hostCss = `*, *::before, *::after { box-sizing: border-box; } body { margin: 0; font: 14px system-ui; --text-normal: #222; --text-muted: #666; --text-faint: #777; --background-primary: #fff; --background-secondary: #eee; --background-modifier-border: #ccc; --interactive-accent: #6755c5; --color-green: #2f9e44; --text-on-accent: #fff; --font-ui-small: 13px; --font-ui-smaller: 11px; --size-4-1: 4px; --size-4-2: 8px; --size-4-3: 12px; } body.theme-dark { --text-normal: #ddd; --text-muted: #aaa; --text-faint: #999; --background-primary: #202020; --background-secondary: #303030; --background-modifier-border: #555; background: #202020; color: #ddd; } button, input, select, textarea { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); color: var(--text-normal); font: inherit; } button { cursor: pointer; } .setting-item { display: flex; justify-content: space-between; padding-block: 8px; }`;

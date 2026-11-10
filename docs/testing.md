@@ -148,6 +148,7 @@ Automated tests cover the logic with synthetic touch events; only a device shows
 
 The images in `resources/screenshots/` are rendered, not captured: `scripts/render-screenshots.mjs` bundles the real inspector view and `styles.css`, loads fixture data from `scripts/screenshots/entry.ts` in headless Chromium at 2x, and writes `<scene>-light.png` and `<scene>-dark.png`. The clock is fixed to Wed 4 March 2026, 15:20, so the output does not drift. Obsidian's own chrome is approximated (default theme variables, Lucide icons from `scripts/screenshots/icons.json`, ISC licence); the content is the plugin's.
 
+- The same script also writes the crops the What's new note embeds (`SHOTS` in the script, output in `src/whatsNew/shots/`); commit them with the change that alters the panel.
 - `npm run screenshots` rewrites the images (`npm run screenshots -- day week` for some scenes). Open every changed PNG and look at it; the check below cannot see wrong content.
 - `npm run check:screenshots` renders into a temp folder and fails on a script error, horizontal overflow, an empty scene or an icon without a glyph. CI runs it in the Chromium job.
 - A new icon in the UI makes the check fail with its name; add its Lucide paths to `icons.json`.

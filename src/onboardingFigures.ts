@@ -8,9 +8,9 @@ import { LONG_PRESS_MARKERS } from "./longPress";
  * screenshots: they follow the user's theme and font, add almost nothing to the plugin's size and cannot go stale the way
  * a picture does. They are decoration (aria-hidden, not interactive); the step's text carries the meaning.
  */
-export type FigureId = "settings" | "tabs" | "calendar" | "follow" | "forward" | "card" | "props" | "keys" | "commands" | "press" | "hotkey" | "repeat" | "plan" | "devices";
+export type FigureId = "settings" | "tabs" | "calendar" | "follow" | "forward" | "card" | "props" | "keys" | "commands" | "press" | "hotkey" | "devices" | "repairs";
 /** Every figure id; the tests walk it so a new figure cannot ship undrawn. */
-export const FIGURE_IDS: FigureId[] = ["settings", "tabs", "calendar", "follow", "forward", "card", "props", "keys", "commands", "press", "hotkey", "repeat", "plan", "devices"];
+export const FIGURE_IDS: FigureId[] = ["settings", "tabs", "calendar", "follow", "forward", "card", "props", "keys", "commands", "press", "hotkey", "devices", "repairs"];
 
 const box = (host: HTMLElement, marker: string): void => {
   const b = host.createSpan({ cls: "organized-welcome-fig-box", text: marker === "x" ? "" : marker.trim(), attr: { "data-marker": marker } });
@@ -152,20 +152,37 @@ function hotkeyFigure(fig: HTMLElement): void {
   row.createSpan({ cls: "organized-welcome-fig-pill", text: "Alt + X" });
 }
 
-/** A row of the figure: a label chip and what it does. */
-const chipRows = (fig: HTMLElement, rows: [string, string][]): void => {
+/** Says where in the interface the thing is, above the picture of it. */
+const where = (fig: HTMLElement, path: string): void => { fig.createDiv({ cls: "organized-welcome-fig-caption", text: path }); };
+/** A settings-style row: a name and the field it holds. */
+const settingRow = (host: HTMLElement, name: string, value: string): void => {
+  const row = host.createDiv({ cls: "organized-welcome-fig-row" });
+  row.createSpan({ cls: "organized-welcome-fig-row-name", text: name });
+  row.createSpan({ cls: "organized-welcome-fig-field", text: value });
+};
+
+function devicesFigure(fig: HTMLElement): void {
   const list = fig.createDiv({ cls: "organized-welcome-fig-rows" });
-  for (const [chip, role] of rows) {
+  where(list, "Settings › Organized › This device");
+  settingRow(list, "Role of this device", "Secondary");
+  for (const [chip, role] of [["Main", "Edits and fills daily notes"], ["Secondary", "Edits, never creates daily notes"], ["Mirror", "View only"]]) {
     const row = list.createDiv({ cls: "organized-welcome-fig-row" });
     row.createSpan({ cls: "organized-welcome-fig-pill", text: chip });
     row.createSpan({ cls: "organized-welcome-fig-row-role", text: role });
   }
-};
-const repeatFigure = (fig: HTMLElement): void => chipRows(fig, [["Every day", "One tap"], ["Weekdays", "Monday to Friday"], ["Custom", "Every 3 weeks on Monday and Thursday"]]);
-const planFigure = (fig: HTMLElement): void => chipRows(fig, [["09:00–10:30", "Draft the Q1 review (planned)"], ["10:30–11:00", "Reply to Anna (planned)"], ["Tracked 1h 13min", "of 1h 30min planned"]]);
-const devicesFigure = (fig: HTMLElement): void => chipRows(fig, [["Main", "Edits and fills daily notes"], ["Secondary", "Edits, never creates daily notes"], ["Mirror", "View only"]]);
+}
+/** The two repair commands as they appear in the command palette. */
+function repairsFigure(fig: HTMLElement): void {
+  const list = fig.createDiv({ cls: "organized-welcome-fig-rows" });
+  where(list, "Command palette (Ctrl/Cmd+P)");
+  for (const name of ["Add missing recurring tasks to this daily note", "Remove duplicate recurring lines in this note"]) {
+    const row = list.createDiv({ cls: "organized-welcome-fig-row" });
+    row.createSpan({ cls: "organized-welcome-fig-cap", text: "Organized" });
+    row.createSpan({ cls: "organized-welcome-fig-row-role", text: name });
+  }
+}
 
-const BUILDERS: Record<FigureId, (fig: HTMLElement) => void> = { settings: settingsFigure, tabs: tabsFigure, calendar: calendarFigure, follow: followFigure, forward: forwardFigure, card: cardFigure, props: propsFigure, keys: keysFigure, commands: commandsFigure, press: pressFigure, hotkey: hotkeyFigure, repeat: repeatFigure, plan: planFigure, devices: devicesFigure };
+const BUILDERS: Record<FigureId, (fig: HTMLElement) => void> = { settings: settingsFigure, tabs: tabsFigure, calendar: calendarFigure, follow: followFigure, forward: forwardFigure, card: cardFigure, props: propsFigure, keys: keysFigure, commands: commandsFigure, press: pressFigure, hotkey: hotkeyFigure, devices: devicesFigure, repairs: repairsFigure };
 
 /** Draw the illustration `id` into `parent`. */
 export function renderFigure(parent: HTMLElement, id: FigureId): HTMLElement {

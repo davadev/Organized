@@ -10,6 +10,7 @@ import { BUDGET_KEYS, BudgetPeriod, budgetHours, MAX_BUDGET_HOURS, projectName, 
 import { renderMarkdownLinks } from "./markdown";
 import { ONBOARDING_STEPS, OnboardingStep } from "./onboarding";
 import type { ReleaseNote } from "./whatsNew/releaseNotes";
+import { renderShot } from "./whatsNew/renderShot";
 import { renderFigure } from "./onboardingFigures";
 import { describePreview, losesNote, normalizeRetire, retirePreview, type RetireOptions, type RetireScan } from "./retire";
 
@@ -418,6 +419,7 @@ export class WhatsNewModal extends Modal {
         body.createEl("h4", { cls: "organized-whatsnew-item", text: item.title });
         codeText(body.createEl("p", { cls: "organized-modal-copy organized-welcome-text" }), item.text);
         if (item.figure) renderFigure(body, item.figure);
+        if (item.shot) renderShot(body, item.shot);
       }
     }
     const footer = new Setting(el);

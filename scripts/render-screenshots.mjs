@@ -24,6 +24,12 @@ const SCENES = { month: ['Month calendar', true, PANEL], week: ['Week view', tru
   'day-annotated': annotated('day', 'Day view, numbered', [{ sel: '.organized-day-task', nth: 0 }, { sel: '.organized-day-task', nth: 1, side: 'right' }, { sel: '.organized-day-task', nth: 4 }, { sel: '.organized-head-action', side: 'right', line: false }, { sel: '.organized-day-grid', line: false }, { sel: '.organized-now-line', side: 'right' }]),
   'projects-annotated': annotated('projects', 'Projects, numbered', [{ sel: '.organized-field' }, { sel: '.organized-colors', side: 'right' }, { sel: '.organized-list-card', nth: 0 }, { sel: '.organized-chip', nth: 0, side: 'right' }]),
   ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => [`onboarding-${n}`, [`Onboarding card, step ${n}`, false, '.organized-modal-window']])) };
+/** Crops of the real panel that the What's new note embeds (src/whatsNew/shots): name -> [base scene, the parts to keep, optionally the share of their height to keep as [from, to]]. */
+const SHOTS = {
+  repeat: ['task', [{ sel: '.organized-prop-strip' }]],
+  timer: ['task', [{ sel: '.organized-card', nth: 2 }]],
+  plan: ['day', [{ sel: '.organized-day-grid' }], [0.62, 1]],
+};
 const WIDTH = 400; // CSS px, a typical side-panel width; images are 2x
 const args = process.argv.slice(2);
 const check = args.includes('--check');
@@ -31,18 +37,21 @@ const phone = args.includes('--phone'); // onboarding steps on a 390 x 640 phone
 const outArg = args.indexOf('--out');
 const outDir = outArg >= 0 ? args[outArg + 1] : null;
 const wanted = args.filter((a, i) => !a.startsWith('--') && !(outArg >= 0 && i === outArg + 1));
-for (const w of wanted) if (!SCENES[w]) { console.error(`unknown scene "${w}"; known: ${Object.keys(SCENES).join(', ')}`); process.exit(2); }
-const scenes = wanted.length ? wanted : Object.keys(SCENES).filter(name => check || args.includes('--all') || SCENES[name][1]);
+for (const w of wanted) if (!SCENES[w] && !SHOTS[w]) { console.error(`unknown scene "${w}"; known: ${[...Object.keys(SCENES), ...Object.keys(SHOTS)].join(', ')}`); process.exit(2); }
+const shots = wanted.length ? wanted.filter(w => SHOTS[w]) : Object.keys(SHOTS);
+const scenes = (wanted.length ? wanted.filter(w => SCENES[w]) : Object.keys(SCENES)).filter(name => check || args.includes('--all') || SCENES[name][1]);
 const ANNOTATED_PAD = 44; // side margins that hold the number circles, in CSS px
 const out = check ? await mkdtemp(join(tmpdir(), 'organized-shots-')) : resolve(outDir ?? 'resources/screenshots');
 await mkdir(out, { recursive: true });
+const shotOut = check || outDir ? out : resolve('src/whatsNew/shots');
+await mkdir(shotOut, { recursive: true });
 
 // Obsidian's default light/dark variables (the app without a theme), so the panel reads as it does in the app.
 const light = '--background-primary:#fff;--background-secondary:#f6f6f6;--background-modifier-border:#e0e0e0;--background-modifier-border-hover:#d0d0d0;--background-modifier-hover:rgba(0,0,0,.075);--background-modifier-error:#e93147;--text-normal:#222;--text-muted:#5c5c5c;--text-faint:#ababab;--text-error:#e93147;--text-on-accent:#fff;--interactive-accent:#7b6cd9;--interactive-accent-hover:#8a7fe0;--color-red:#e93147;--color-orange:#ec7500;--color-yellow:#e0ac00;--color-green:#08b94e;--link-color:#705dcf;--shadow-l:0 1.4px 1.6px rgba(0,0,0,.03),0 3.4px 4px rgba(0,0,0,.05),0 6.4px 7.5px rgba(0,0,0,.06),0 11.4px 13.4px rgba(0,0,0,.08),0 21px 25px rgba(0,0,0,.1)';
 const dark = '--background-primary:#1e1e1e;--background-secondary:#262626;--background-modifier-border:#363636;--background-modifier-border-hover:#3f3f3f;--background-modifier-hover:rgba(255,255,255,.075);--background-modifier-error:#fb464c;--text-normal:#dadada;--text-muted:#b3b3b3;--text-faint:#666;--text-error:#fb464c;--text-on-accent:#fff;--interactive-accent:#7b6cd9;--interactive-accent-hover:#8a7fe0;--color-red:#fb464c;--color-orange:#e9973f;--color-yellow:#e0de71;--color-green:#44cf6e;--link-color:#a99ff0;--shadow-l:0 1.4px 1.6px rgba(0,0,0,.2),0 6.4px 7.5px rgba(0,0,0,.35),0 21px 25px rgba(0,0,0,.45)';
 const host = `*,*::before,*::after{box-sizing:border-box}body{margin:0;font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;--font-ui-small:13px;--font-ui-smaller:11px;--font-bold:600;--size-4-1:4px;--size-4-2:8px;--size-4-3:12px;--radius-s:4px;--radius-m:8px;--link-decoration:none;color:var(--text-normal)}body.theme-light{${light}}body.theme-dark{${dark}}#frame{inline-size:${WIDTH + 32}px;padding:16px;background:var(--background-secondary)}#app{inline-size:${WIDTH}px;background:var(--background-primary);border:1px solid var(--background-modifier-border);border-radius:10px;overflow:hidden;padding:4px 0}button,input,select,textarea{font:inherit;color:var(--text-normal);background:var(--background-modifier-hover);border:0;border-radius:var(--radius-s)}body{background:var(--background-secondary)}html.annotated #frame{inline-size:${WIDTH + 2 * ANNOTATED_PAD}px;padding-inline:${ANNOTATED_PAD}px;position:relative}.co-box{position:absolute;border:2px dashed #0d6a00;border-radius:4px;pointer-events:none}.co-line{position:absolute;block-size:2px;background:#349e00;pointer-events:none}.co-circle{position:absolute;inline-size:26px;block-size:26px;border-radius:50%;background:#349e00;border:2px solid #307000;color:#fff;font:700 15px/22px Arial,sans-serif;text-align:center;pointer-events:none}.modal-container{display:flex;justify-content:center;padding:16px}.modal{background:var(--background-primary);border-radius:12px;box-shadow:var(--shadow-l)}button{cursor:pointer}a{color:var(--link-color);text-decoration:var(--link-decoration)}svg.svg-icon{inline-size:1em;block-size:1em;display:block}`;
 
-const bundle = await build({ entryPoints: ['scripts/screenshots/entry.ts'], bundle: true, write: false, format: 'iife', target: 'es2022', alias: { obsidian: resolve('scripts/screenshots/obsidianShim.ts') } });
+const bundle = await build({ entryPoints: ['scripts/screenshots/entry.ts'], bundle: true, write: false, loader: { '.png': 'dataurl' }, format: 'iife', target: 'es2022', alias: { obsidian: resolve('scripts/screenshots/obsidianShim.ts') } });
 const css = await readFile('styles.css', 'utf8');
 const browser = await chromium.launch({ headless: true });
 const problems = [];
@@ -89,6 +98,18 @@ try {
       }
       if (phone) await page.screenshot({ path: join(out, `${scene}-${theme}.png`) }); else await page.locator(SCENES[scene][2]).screenshot({ path: join(out, note ? `${scene}.png` : `${scene}-${theme}.png`) });
     }
+    for (const shot of phone ? [] : shots) {
+      const [base, parts, rows = [0, 1]] = SHOTS[shot];
+      await page.evaluate(async name => { document.querySelector('.co-layer')?.remove(); document.documentElement.classList.remove('annotated'); await window.scene(name); }, base);
+      await page.evaluate(() => document.fonts.ready);
+      await page.setViewportSize({ width: WIDTH + 32, height: 2400 });
+      const clip = await page.evaluate(([parts, rows]) => {
+        const rects = parts.map(({ sel, nth = 0 }) => { const el = document.querySelectorAll(sel)[nth]; if (!el) throw new Error(`crop: nothing matches ${sel} (#${nth})`); return el.getBoundingClientRect(); });
+        const left = Math.min(...rects.map(r => r.left)), right = Math.max(...rects.map(r => r.right)), top = Math.min(...rects.map(r => r.top)), bottom = Math.max(...rects.map(r => r.bottom));
+        const pad = 6; return { x: left - pad, y: top + (bottom - top) * rows[0] - pad, width: right - left + 2 * pad, height: (bottom - top) * (rows[1] - rows[0]) + 2 * pad };
+      }, [parts, rows]);
+      await page.screenshot({ path: join(shotOut, `${shot}-${theme}.png`), clip });
+    }
     await context.close();
   }
 } finally {
@@ -96,4 +117,4 @@ try {
   if (check) await rm(out, { recursive: true, force: true });
 }
 if (problems.length) { console.error(problems.join('\n')); process.exit(1); }
-console.log(check ? `ok: ${scenes.length} scene(s) x 2 themes render cleanly` : `wrote ${scenes.reduce((n, name) => n + (SCENES[name][3] ? 1 : 2), 0)} image(s) to ${out}`);
+console.log(check ? `ok: ${scenes.length} scene(s) and ${shots.length} crop(s) x 2 themes render cleanly` : `wrote ${scenes.reduce((n, name) => n + (SCENES[name][3] ? 1 : 2), 0) + (phone ? 0 : shots.length * 2)} image(s) (${shots.length * 2} of them crops in ${shotOut})`);
