@@ -1,4 +1,4 @@
-import { Component, ItemView, WorkspaceLeaf, TFile, setIcon } from "obsidian";
+import { Component, ItemView, Platform, WorkspaceLeaf, TFile, setIcon } from "obsidian";
 import type { Editor } from "obsidian";
 import { moment } from "./moment";
 import { rgbOf, softTint } from "./colors";
@@ -561,8 +561,9 @@ export class OrganizedInspectorView extends ItemView {
   }
   /** Points the calendar at a day without writing anything; the caller repaints. */
   showDate(date: string): void { this.selectedDate = date; this.month = moment(date, "YYYY-MM-DD").startOf("month"); }
-  /** Opens the day's note when it exists, so the editor shows the day the panel does. A missing note is not created by paging. */
+  /** Opens the day's note when it exists, so the editor shows the day the panel does. A missing note is not created by paging. On a phone opening a note closes the side panel, which would end paging after one day. */
   private async openDay(): Promise<void> {
+    if (Platform.isMobile) return;
     const file = this.owner.repo.file(this.owner.service.daily.path(this.selectedDate));
     if (file && this.app.workspace.getActiveFile()?.path !== file.path) await this.app.workspace.getLeaf(false).openFile(file);
   }
