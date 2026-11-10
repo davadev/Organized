@@ -168,6 +168,7 @@ Obsidian's strength is that your notes are plain files you own. Organized is bui
 - **Daily notes are the home base.** Organized works with your existing daily-note setup, folder, filename format and template. It does not replace them or hide them behind its own screen.
 - **Links, not silos.** A todo can become a note, belong to project notes, and cite sources, all with ordinary wiki links and properties that Search, Graph, Bases and other plugins can use.
 - **Local and quiet.** No account, no server, no tracking. It runs on desktop and mobile.
+- **Several devices.** Two devices writing the same daily note before it has synced is what makes sync conflicts. *Settings → Organized → This device* (kept on that device only, never synced) sets a phone or tablet to *Secondary*, which still edits tasks but never creates or fills daily notes (no recurring tasks, no carrying unfinished tasks forward), or to *Mirror*, which only shows your tasks and refuses every change with a short notice. Leave your main device on *Main device*.
 - **Composable.** Organized adds behaviour to the Markdown you already write; it does not ask you to leave it.
 
 ```mermaid

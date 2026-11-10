@@ -31,6 +31,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     title: "What's new in Organized 0.1.4",
     intro: "Block time for the future, and see estimate next to actual.",
     items: [
+      { title: "Several devices without sync conflicts", text: "Settings → Organized → This device: set a phone or tablet to Secondary (it edits tasks but never creates or fills daily notes) or Mirror (view only; every change is refused with a notice). The choice stays on that device. Use it where a daily note may be opened before your main device has synced it." },
       { title: "Project picker from the keyboard", text: "Arrow keys move through the projects, Enter ticks one, Enter in the search box picks the best match and Ctrl/Cmd+Enter saves. On a phone the list stays above the keyboard so every project can be reached." },
       { title: "Follows your Daily Notes plugin", text: "Organized now uses the folder, filename format and template of the core Daily Notes plugin (or Periodic Notes) automatically, so there is nothing to copy over. Settings → Organized → Daily notes lets you switch back to custom values; installs that already set them keep them." },
       { title: "Repeat rules", text: "Type [r] in a todo, or tap the Recurring pill, to choose how it repeats: one tap for every day, weekday, week, month or year, or set your own, such as every 3 weeks on Monday and Thursday, with a form that says the result in words. The rule is saved in the task note, and the task shows up in the daily notes that match it." },

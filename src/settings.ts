@@ -2,6 +2,7 @@ import { App, PluginSettingTab, Setting, SettingDefinitionItem } from "obsidian"
 import type Organized from "./main";
 import { DISPLAY_PROPERTIES, DisplayProperty, path, RETENTION_DETAILS, RetentionDetail, settingsFrom, visibleFolder } from "./model";
 import { report } from "./service";
+import { loadRole, Role, ROLE_LABELS, saveRole } from "./device";
 
 export const PROPERTY_LABELS: Record<DisplayProperty, string> = {
   status: "Status", priority: "Priority", scheduled: "Scheduled date", created: "Created date",
@@ -102,6 +103,14 @@ export class OrganizedSettingsTab extends PluginSettingTab {
           this.owner.settings.displayProperties = value ? [...this.owner.settings.displayProperties, property] : this.owner.settings.displayProperties.filter(p => p !== property); this.owner.saveSettings();
         }));
       }))] },
+      { type: "group", heading: "This device", items: [
+        row("Role of this device", "Only for this device; it is not synced. Use Secondary or Mirror on a phone or tablet that may open a daily note before your main device has synced it: two devices writing the same note is what makes sync conflicts. Secondary shows and changes tasks as usual but never creates or fills daily notes (recurring tasks, carrying unfinished tasks forward). Mirror only shows your tasks and changes nothing.", setting => {
+          setting.addDropdown(d => {
+            for (const [role, label] of Object.entries(ROLE_LABELS)) d.addOption(role, label);
+            d.setValue(this.owner.role).onChange(value => { const role = value as Role; saveRole(this.app, role); this.owner.role = loadRole(this.app); this.owner.refresh(); });
+          });
+        }),
+      ] },
       { type: "group", heading: "Help", items: [
         row("Retire tasks", "Turn tasks back into ordinary Markdown, or clean up finished ones: links, readable file names, keep or remove properties. Nothing changes until you confirm.", setting => { setting.addButton(b => b.setButtonText("Open").onClick(() => this.owner.retireTasks())); }),
         row("Onboarding card", "A short tour of the idea behind Organized. It appears once on a fresh install.", setting => { setting.addButton(b => b.setButtonText("Show").onClick(() => this.owner.showOnboarding(false))); }),

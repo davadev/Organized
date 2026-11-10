@@ -15,6 +15,7 @@ export function harness(legacyNames = false) {
   const on = (name: string, fn: (...args: any[]) => unknown) => { (events[name] ??= []).push(fn); return { name, fn }; };
   const app = {
     vault: {
+      getName: () => "Vault",
       configDir: ".obsidian",
       adapter: {
         exists: vi.fn(async (p: string) => texts.has(p) || files.has(p)),

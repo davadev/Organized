@@ -8,6 +8,7 @@ import { Repository } from "./repository";
 import { anchorOf, explicitRule, taskRule } from "./recurrence";
 import { Context, report, TaskService } from "./service";
 import { formatMinutes } from "./sessions";
+import { loadRole, MirrorError, Role } from "./device";
 import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RecurrencePicker, RetireModal, SessionModal, TaskPicker, WhatsNewModal } from "./modals";
 import { notesOfLine, notesToShow, ReleaseNote } from "./whatsNew/releaseNotes";
 import { OrganizedInspectorView, VIEW_TYPE } from "./view";
@@ -20,6 +21,7 @@ import { isDestructive, normalizeRetire } from "./retire";
 /** How long after the layout is ready the first-run card waits, so it does not open under the settings window that switched the plugin on. */
 const FIRST_RUN_DELAY_MS = 1500;
 /** A synced daily note arrives in pieces; how long to wait between looks, and how many looks at most. */
+const MIRROR_NOTICE_MS = 5000;
 const SETTLE_MS = 1000; const SETTLE_TRIES = 5;
 const PLANNING_TICK_MS = 60000;
 export default class Organized extends Plugin {
@@ -40,6 +42,9 @@ export default class Organized extends Plugin {
   private settingsRaw: Record<string, unknown> = {};
   private saveTail: Promise<unknown> = Promise.resolve();
   private loaded = false;
+  /** This device's role; see `device.ts`. Read once at load, changed from the settings. */
+  role: Role = "main";
+  private mirrorNoticeAt = 0;
   private unloaded = false;
   async onload(): Promise<void> {
     try {
@@ -49,6 +54,7 @@ export default class Organized extends Plugin {
       if (decision.action === "trip-threshold") { new Notice("Organized detected repeated unsuccessful starts. Features are paused this launch. Disable/re-enable Organized after updating, or report the problem.", 0); return; }
       this.safety = new DataSafety(adapter, this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`, this.manifest.version, message => { new Notice(message, 12000); });
       await this.safety.prepare();
+      this.role = loadRole(this.app);
       this.settingsRaw = object(await this.loadData()); const saved = object(this.settingsRaw.settings ?? this.settingsRaw); this.settings = settingsFrom(saved);
       this.reconcileInstall(Object.keys(this.settingsRaw).length === 0, saved);
       // Disabled while the awaits above were pending: onunload already ran, so registering now would leak handlers and timers into a dead plugin.
@@ -81,21 +87,21 @@ export default class Organized extends Plugin {
       this.app.workspace.onLayoutReady(() => {
         if (!this.loaded) return;
         // Registration happens AFTER Obsidian's initial existing-file create events.
-        this.registerEvent(this.app.vault.on("create", file => { if (file instanceof TFile) { void this.repo.track(file); void this.run(async () => { if (this.service.daily.date(file.path)) await this.settle(file); await this.service.onDailyCreated(file); }); void this.service.index(file).catch(report); } }));
+        this.registerEvent(this.app.vault.on("create", file => { if (file instanceof TFile) { void this.repo.track(file); if (this.role === "main") void this.run(async () => { if (this.service.daily.date(file.path)) await this.settle(file); await this.service.onDailyCreated(file); }); void this.service.index(file).catch(report); } }));
         this.registerEvent(this.app.vault.on("modify", file => { if (file instanceof TFile) {
           void this.repo.track(file); const id = this.selectedTaskId; const wasReference = this.service.hasReference(id, file.path);
           void this.service.index(file).then(() => {
             if (file.path.startsWith(`${this.settings.taskFolder}/`) || this.service.daily.date(file.path) === localDate() || wasReference || this.service.hasReference(id, file.path)) this.refreshSoon();
           }).catch(report);
         } }));
-        this.registerEvent(this.app.vault.on("rename", (file, oldPath) => { this.service.forget(oldPath); if (file instanceof TFile) { this.repo.moved(oldPath, file); void this.service.index(file).then(() => this.refresh()).catch(report); if (this.safety.writable && this.repo.convertedTo(oldPath).length) void this.run(() => this.service.followRename(oldPath, file.path)); if (this.safety.writable && this.repo.isProjectNote(file)) { this.remapKnownProjects([{ from: oldPath, to: file.path }]); void this.run(() => this.service.followProjectRename(oldPath, file.path)); } } }));
+        this.registerEvent(this.app.vault.on("rename", (file, oldPath) => { this.service.forget(oldPath); if (file instanceof TFile) { this.repo.moved(oldPath, file); void this.service.index(file).then(() => this.refresh()).catch(report); if (this.safety.writable && this.repo.convertedTo(oldPath).length) void this.runQuiet(() => this.service.followRename(oldPath, file.path)); if (this.safety.writable && this.repo.isProjectNote(file)) { this.remapKnownProjects([{ from: oldPath, to: file.path }]); void this.runQuiet(() => this.service.followProjectRename(oldPath, file.path)); } } }));
         // The colour is read from the metadata cache, which updates a moment after the note is written.
         this.registerEvent(this.app.metadataCache.on("changed", file => { if (this.repo.isProjectNote(file)) this.refresh(); }));
         this.registerEvent(this.app.vault.on("delete", file => { this.repo.forgetPath(file.path); this.service.forget(file.path); this.refresh(); }));
         // A moment after the layout is ready (immediately so when the plugin is switched on in a running session): the settings window that switched it on may still be closing.
         this.registerInterval(window.setTimeout(() => { void this.maybeShowStartupCard().catch(report); }, FIRST_RUN_DELAY_MS));
-        void this.run(async () => { await this.repo.reindex(); await this.migrateProjects(); await this.markProjectNotes(); await this.migrateTaskNotes(); await this.migrateTaskNoteNames(); await this.nestSubtasks(); });
-        this.registerEvent(this.app.workspace.on("file-open", file => { this.followCursor(); if (file) void this.run(() => this.service.reconcile(file)); }));
+        void this.runQuiet(async () => { await this.repo.reindex(); await this.migrateProjects(); await this.markProjectNotes(); await this.migrateTaskNotes(); await this.migrateTaskNoteNames(); await this.nestSubtasks(); });
+        this.registerEvent(this.app.workspace.on("file-open", file => { this.followCursor(); if (file && this.role === "main") void this.run(() => this.service.reconcile(file)); }));
       });
       this.loaded = true;
       // Planned blocks start and end tasks only while the setting is on; the check catches up on start and when the app comes back to the foreground.
@@ -112,20 +118,27 @@ export default class Organized extends Plugin {
   }
   /** Sets tasks in progress for planned blocks that have begun and reopens the ones whose block is over. Does nothing unless the person switched it on. */
   planningTick(): void {
-    if (this.unloaded || !this.loaded || !this.safety.writable || !this.settings.startAtPlannedTime) return;
+    if (this.unloaded || !this.loaded || !this.safety.writable || this.role === "mirror" || !this.settings.startAtPlannedTime) return;
     void this.run(async () => {
       const ended = await this.service.applyPlanning();
       if (ended.length) new Notice(ended.length === 1 ? `Planned time for “${ended[0]}” is over. Adjust the time if you need longer.` : `Planned time is over for ${ended.length} tasks: ${ended.map(title => `“${title}”`).join(", ")}. Adjust the time if you need longer.`, 10000);
     });
   }
   assertWritable(): void { if (!this.safety.writable) throw new Error("Writes paused to protect newer/unreadable settings. Restore a compatible backup or update Organized."); }
+  /** Like `assertWritable`, and a mirror device may not change anything either. */
+  assertEditable(): void { this.assertWritable(); if (this.role === "mirror") throw new MirrorError(); }
   async run(action: () => Promise<unknown>): Promise<void> {
     this.busy++;
     try {
-      this.assertWritable();
+      this.assertEditable();
       await this.repo.serial(action);
-    } catch (error) { report(error); } finally { this.busy--; }
+    } catch (error) {
+      // Typing in a note on a mirror would repeat the notice for every change.
+      if (error instanceof MirrorError) { if (Date.now() - this.mirrorNoticeAt > MIRROR_NOTICE_MS) { this.mirrorNoticeAt = Date.now(); report(error); } } else report(error);
+    } finally { this.busy--; }
   }
+  /** For background work (migrations, following a rename): nothing at all on a mirror, instead of a notice nobody asked for. */
+  runQuiet(action: () => Promise<unknown>): Promise<void> { return this.role === "mirror" ? Promise.resolve() : this.run(action); }
   saveSettings(refresh = true): void {
     this.saveTail = this.saveTail.then(async () => {
       this.assertWritable(); await this.saveData({ ...this.settingsRaw, schemaVersion: 1, writerVersion: this.manifest.version, settings: { ...object(this.settingsRaw.settings), ...this.settings } }); if (refresh) this.refresh();
@@ -344,7 +357,7 @@ export default class Organized extends Plugin {
     this.refresh();
   }
   async pickTask(editor: Editor, file: TFile, duplicate = false, allowTodo = false): Promise<void> {
-    this.assertWritable(); const context = this.current(editor, file); if (!context) throw new Error("Place the cursor on a Markdown task-list item.");
+    this.assertEditable(); const context = this.current(editor, file); if (!context) throw new Error("Place the cursor on a Markdown task-list item.");
     if (context.line.id && !duplicate && await this.repo.exists(context.line.id)) throw new Error("Task already linked. Use duplicate as new task for a fresh identity.");
     const captured = editor.getValue(); const selection = editor.listSelections(); this.lastNoteEditor = { editor, file };
     this.pickerOpen = true;
@@ -488,7 +501,7 @@ export default class Organized extends Plugin {
   }
   async trigger(context: Context): Promise<void> {
     const marker = context.line.marker; const id = context.line.id; if (!id) return;
-    this.assertWritable(); this.context = context; this.selectedTaskId = id;
+    this.assertEditable(); this.context = context; this.selectedTaskId = id;
     if (marker === "<") { const task = await this.repo.read(id); new DatePicker(this.app, task.scheduled ?? localDate(), date => this.run(() => this.service.schedule(context, date)), task.scheduled ? () => this.run(() => this.service.unschedule(id)) : undefined).open(); }
     else if (marker === "!") new PriorityPicker(this.app, priority => this.run(() => this.service.priority(context, priority))).open();
     else if (marker in SECTION_MARKERS) { await this.openInspector("Task", SECTION_MARKERS[marker]); await this.run(() => this.service.clean(context)); }

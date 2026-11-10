@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **This device (Secondary and Mirror roles).** *Settings → Organized → This device* sets what a device may do with the vault, kept on that device only (it is not in the synced plugin data). *Secondary* edits tasks as usual but never creates or fills daily notes: no recurring tasks, no carrying unfinished tasks forward. *Mirror* only shows tasks: ticking, timers, scheduling and every other change are refused with a notice (shown once in a while, not for every keystroke), migrations and rename-following do not run, and the Day view does not create a day's note that does not exist. Use them on a phone or tablet that may open today's note before your main device has synced it, so two devices never write the same note.
+
 - Fixed the right-align setting being ignored on phones (0.1.4-beta.15 put every todo's properties under its title). Right-aligned properties stay at the right edge again; only a group that finds no room beside its title and would drop to a row of its own, where it looked like part of the next todo, now sits under its own title from the left edge.
 
 - Fixed a todo being ticked by mistake when the long-press menu on a phone is dismissed by tapping outside it: taps on the checkbox are ignored while the menu is open and for a moment after it closes.
