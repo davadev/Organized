@@ -193,8 +193,11 @@ export function sectionNamed(text: string, name: string): Section[] {
 export function moveTask(text: string, id: string, name: string): string {
   const matches = parseTasks(text).filter(t => t.id === id); if (matches.length !== 1) throw new Error("Occurrence is missing or ambiguous; preserved for repair.");
   const target = sectionNamed(text, name); if (JSON.stringify(matches[0].section) === JSON.stringify(target)) return text;
-  const lines = text.split("\n"); const [moved] = lines.splice(matches[0].line, 1);
-  return insertTask(lines.join("\n"), moved.replace(/\r$/, ""), target).text;
+  // What is nested under the line travels with it; left behind it would be indented under nothing, which Markdown reads as code.
+  const lines = text.split("\n"); const [moved, ...nested] = rebase(lines.splice(matches[0].line, blockEnd(lines, matches[0].line) - matches[0].line), "");
+  const placed = insertTask(lines.join("\n"), moved.replace(/\r$/, ""), target).text;
+  if (!nested.length) return placed;
+  const result = placed.split("\n"); result.splice(parseTasks(placed).find(t => t.id === id)!.line + 1, 0, ...nested); return result.join("\n");
 }
 export function removeUnique(text: string, id: string, repeatOnly = false): string {
   const matches = parseTasks(text).filter(t => t.id === id && (!repeatOnly || t.repeat));
