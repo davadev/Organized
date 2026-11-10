@@ -71,7 +71,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
       h.events.create[0](file); await vi.advanceTimersByTimeAsync(900); expect(created).not.toHaveBeenCalled();
       h.texts.set(file.path, '- [ ] from the other device'); await vi.advanceTimersByTimeAsync(1000); expect(created).not.toHaveBeenCalled();
       await vi.advanceTimersByTimeAsync(1000); expect(created).toHaveBeenCalledExactlyOnceWith(file);
-      created.mockClear(); const busy: any = await h.add('Daily/2099-01-02.md', ''); let n = 0; const read = vi.spyOn(plugin.repo, 'readText').mockImplementation(async () => String(n++));
+      created.mockClear(); const queue = vi.spyOn(plugin.repo, 'serial'); const late: any = await h.add('Daily/2099-01-03.md', ''); h.events.create[0](late); await vi.advanceTimersByTimeAsync(500); expect(queue).not.toHaveBeenCalled(); await vi.advanceTimersByTimeAsync(1500); expect(queue).toHaveBeenCalled(); queue.mockRestore(); created.mockClear(); const busy: any = await h.add('Daily/2099-01-02.md', ''); let n = 0; const read = vi.spyOn(plugin.repo, 'readText').mockImplementation(async () => String(n++));
       h.events.create[0](busy); await vi.advanceTimersByTimeAsync(10000); expect(created).toHaveBeenCalledExactlyOnceWith(busy); expect(read).toHaveBeenCalledTimes(6);
       created.mockClear(); read.mockRejectedValue(new Error('gone')); h.events.create[0](busy); await vi.advanceTimersByTimeAsync(10); expect(created).toHaveBeenCalledExactlyOnceWith(busy);
     } finally { vi.useRealTimers(); }

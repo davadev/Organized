@@ -87,7 +87,7 @@ export default class Organized extends Plugin {
       this.app.workspace.onLayoutReady(() => {
         if (!this.loaded) return;
         // Registration happens AFTER Obsidian's initial existing-file create events.
-        this.registerEvent(this.app.vault.on("create", file => { if (file instanceof TFile) { void this.repo.track(file); if (this.role === "main") void this.run(async () => { if (this.service.daily.date(file.path)) await this.settle(file); await this.service.onDailyCreated(file); }); void this.service.index(file).catch(report); } }));
+        this.registerEvent(this.app.vault.on("create", file => { if (file instanceof TFile) { void this.repo.track(file); if (this.role === "main") void this.fillNew(file); void this.service.index(file).catch(report); } }));
         this.registerEvent(this.app.vault.on("modify", file => { if (file instanceof TFile) {
           void this.repo.track(file); const id = this.selectedTaskId; const wasReference = this.service.hasReference(id, file.path);
           void this.service.index(file).then(() => {
@@ -280,6 +280,11 @@ export default class Organized extends Plugin {
     const current = this.activeEditor() ?? this.recentEditor(); if (current) this.lastNoteEditor = current;
     if (this.lastNoteEditor && !this.repo.file(this.lastNoteEditor.file.path)) this.lastNoteEditor = null;
     return this.lastNoteEditor;
+  }
+  /** Fills a new daily note with its recurring tasks. The wait for the note to settle happens before the write queue is taken, so it never holds up other changes. */
+  private async fillNew(file: TFile): Promise<void> {
+    if (this.service.daily.date(file.path)) await this.settle(file);
+    await this.run(() => this.service.onDailyCreated(file));
   }
   /** Waits until a new daily note stops changing, so the repeat lines are not written into the empty file a sync is about to fill, or over its text. */
   private async settle(file: TFile): Promise<void> {
