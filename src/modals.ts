@@ -192,7 +192,7 @@ export class ProjectPicker extends Modal {
         event.preventDefault();
         if (event.metaKey || event.ctrlKey) { saveLinks(); return; }
         // Enter picks the best match, so a name can be typed and chosen without the mouse.
-        const first = boxes()[0]; if (first) { first.click(); search.value = ""; paint(); }
+        const first = boxes()[0]; if (first) { if (!first.checked) first.click(); search.value = ""; paint(); }
       }
     });
     new Setting(this.contentEl).addButton(b => {
@@ -276,7 +276,7 @@ export class ProjectBudgetModal extends Modal {
       for (const [period, input] of fields) {
         if (input.value.trim() === "") continue;
         const hours = Number(input.value); if (!Number.isFinite(hours) || hours <= 0 || hours > MAX_BUDGET_HOURS) return `Use hours above 0 and up to ${MAX_BUDGET_HOURS}, or leave a field blank.`;
-        budgets[period] = Math.round(hours * 3600);
+        budgets[period] = Math.max(1, Math.round(hours * 3600));
       }
       return budgets;
     };
