@@ -124,4 +124,11 @@ describe('bug hunt regressions', () => {
     expect(await service.deleteTask(parent.id)).toBe(true);
     const tasks = parseTasks(h.texts.get(path)!); expect(tasks.map(t => t.title)).toEqual(['Before', 'Child']); expect(tasks[1].parent).toBeNull(); expect(h.texts.get(path)).toContain('\n- [ ] Child');
   });
+  it('turning a task into a note leaves the subtasks of its other copies visible todos, not indented under nothing', async () => {
+    const { h, plugin } = await loaded(); await ready(h); const { service, repo } = plugin; const old = service.daily.path('2026-03-05'); const next = service.daily.path('2026-03-06');
+    const parent = await repo.create('Parent'); const child = await repo.create('Child');
+    await h.add(old, `- [>] Parent <!--organized:${parent.id}-->\n\t- [x] Child <!--organized:${child.id}-->\n`); const file = await h.add(next, `- [ ] Parent <!--organized:${parent.id}-->\n`);
+    await service.convertToNote(parent.id, { folder: 'Notes', tags: [], template: null, clash: 'new' }, { file: file as any, line: parseTasks(h.texts.get(next)!)[0] });
+    const tasks = parseTasks(h.texts.get(old)!); expect(tasks.map(t => t.title)).toEqual(['Child']); expect(tasks[0].parent).toBeNull(); expect(h.texts.get(old)).toBe(`- [x] Child <!--organized:${child.id}-->\n`);
+  });
 });

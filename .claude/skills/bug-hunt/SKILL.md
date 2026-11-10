@@ -86,7 +86,7 @@ Built from the bugs the 0.1.4 betas of this plugin shipped and then fixed, plus 
     - Test: load settings twice and mutate one; disable then re-enable the plugin in the harness and assert no old listener, timer or cache remains.
 
 18. **Structural edits that drop or move a line** (deleting or unscheduling a parent left its subtasks indented under nothing, which Markdown reads as a code block, so the plugin lost them; sorting a CRLF note whose last line has no line break mixed endings).
-    - Grep: `splice(`, `.filter((_, index)`, `join("\n")` on text from a note, `split("\n")` where the code elsewhere uses `split(/\r?\n/)`.
+    - Grep: `splice(`, `.filter((_, index)` / `.filter((_line, index)` (convert-to-note dropped the other copies' lines this way), `join("\n")` on text from a note, `split("\n")` where the code elsewhere uses `split(/\r?\n/)`.
     - Ask: what hangs off the line (children, continuation lines, blank-line separators, `\r`)? Does the result still parse to the same tasks (`parseTasks` before and after)? Can the block you move contain the anchor you move it to?
     - Test: a property check over random notes (CRLF and LF, tabs and spaces, headings, fences, prose between items): run every codec edit and assert the multiset of task ids and the newline style survive and nothing throws. Then a model-based run: random service operations (create, schedule, status, subtask, recurrence, rename) on a harness vault, with the invariants "no `organized:` id without a task note", "no non-recurring id twice in a note", "a scheduled task has a line on its day".
 
