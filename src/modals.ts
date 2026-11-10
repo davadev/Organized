@@ -394,6 +394,7 @@ export class OnboardingModal extends Modal {
     body.createEl("h3", { cls: "organized-welcome-title", text: step.title });
     codeText(body.createEl("p", { cls: "organized-modal-copy organized-welcome-text" }), step.text);
     if (step.figure) renderFigure(body, step.figure);
+    if (step.shot) renderShot(body, step.shot);
     const footer = new Setting(el);
     if (!last) footer.addButton(b => b.setButtonText("Skip").onClick(() => this.close()));
     if (this.index > 0) footer.addButton(b => b.setButtonText("Back").onClick(() => this.go(-1)));
