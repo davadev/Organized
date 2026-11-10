@@ -39,10 +39,10 @@ describe('bug hunt regressions', () => {
     await plugin.repo.update(task.id, t => ({ ...t, recurring: true, recurrence: 'daily', recurrence_periods: [{ start: today, stop: null }] }));
     await plugin.run(() => plugin.service.status(task.id, 'in_progress'));
     const note = await h.add(plugin.service.daily.path(today), `- [ ] Daily run <!--organized:${task.id}-->`);
-    const context = { file: note, line: (await plugin.taskLines(note))[0] } as any;
+    const context = { file: note, line: (await plugin.taskLines(note as any))[0] } as any;
     const sub = vi.spyOn(plugin as any, 'addSubtask').mockResolvedValue(undefined); h.app.workspace.getActiveFile = () => note as any; (plugin as any).lastNoteEditor = { editor: {}, file: note };
     await (plugin as any).addSubtaskFromMarker(await plugin.repo.read(task.id), context);
-    expect(await plugin.repo.readText(note)).toContain('- [/] Daily run');
+    expect(await plugin.repo.readText(note as any)).toContain('- [/] Daily run');
   });
   it('deferred startup work does nothing for a plugin that was disabled before the layout was ready', async () => {
     const { h, plugin } = await loaded(); const interval = vi.spyOn(window, 'setInterval'); const listener = vi.spyOn(document, 'addEventListener');
