@@ -1,6 +1,6 @@
 import { inBatches } from "./batches";
 import { Notice, TFile } from "obsidian";
-import { descendants, fixIndent, insertTask, insertUnder, migrateNote, moveTask, nestUnder, noteSection, parentIds, parseTasks, projectSection, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
+import { descendants, duplicateRepeats, fixIndent, insertTask, insertUnder, migrateNote, moveTask, nestUnder, noteSection, parentIds, parseTasks, projectSection, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, MAX_PLANNED_SESSIONS, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, startPlanned, Status, Task, taskFrom, WorkSession } from "./model";
 import { dueEnds, dueStarts } from "./planning";
@@ -390,6 +390,19 @@ export class TaskService {
     for (const task of again) { try { await this.insert(file, task, " ", true); } catch (error) { failed.push(task); reason = error instanceof Error ? error.message : String(error); } }
     this.changed();
     if (failed.length) throw new Error(`${plural(failed.length, "recurring task")} (${failed.map(t => t.title).join(", ")}) could not be added to ${file.path}: ${reason}`);
+  }
+  /** Adds the recurring tasks that belong on `date` and are missing from its note (made while this plugin was not running, or filled on another device): the same fill a new note gets, run on request. Returns the titles it added. */
+  async catchUp(date: string): Promise<string[]> {
+    const file = await this.daily.ensure(date); const before = new Set(parseTasks(await this.repo.readText(file)).map(t => t.id));
+    await this.onDailyCreated(file);
+    return parseTasks(await this.repo.readText(file)).filter(t => t.id && !before.has(t.id)).map(t => t.title);
+  }
+  /** Removes repeat copies that repeat an earlier copy exactly (see `duplicateRepeats`); returns how many. Undoable. */
+  async removeDuplicateRepeats(file: TFile): Promise<number> {
+    const text = await this.repo.readText(file); const drop = new Set(duplicateRepeats(parseTasks(text)));
+    if (!drop.size) return 0;
+    const changes: Change[] = []; await this.edit(file, text, text.split("\n").filter((_line, index) => !drop.has(index)).join("\n"), changes);
+    this.summarize(changes, "Duplicate recurring lines removed", `${plural(drop.size, "line")} removed from ${file.path}.`); return drop.size;
   }
   async reconcile(file: TFile): Promise<void> {
     const today = localDate(); const settings = this.repo.settings();

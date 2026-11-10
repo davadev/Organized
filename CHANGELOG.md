@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Fewer silent failures.** Task notes that are left out of the list (two notes sharing one id, such as a sync conflict copy, or a note with an id that cannot be read as a task) are now named in one notice per session, since those tasks otherwise just stop repeating. A secondary or mirror device says once per new daily note that it did not add the recurring tasks. Opening a daily note that holds the same recurring line twice (two devices both filled it) says so.
+- **Two new commands.** *Add missing recurring tasks to this daily note* adds what is missing to the open daily note (today's when another note is open), for a note made while the plugin was not running or filled on another device. *Remove duplicate recurring lines in this note* removes the extra copies of a recurring line (open, unchanged, with nothing nested under them); it can be undone.
+- Carrying unfinished tasks forward now also runs when the app comes back to the foreground with today's note open, so an app left open past midnight does not wait for another note to be opened.
+- Project picker: the arrow keys now lead on from the last project to *Save links* and back (Enter saves from there).
+
+- A todo's right-aligned properties that drop to a row of their own under a long title now stay right-aligned there (they were moved to the left edge in beta.16).
+
 - **This device (Secondary and Mirror roles).** *Settings → Organized → This device* sets what a device may do with the vault, kept on that device only (it is not in the synced plugin data). *Secondary* edits tasks as usual but never creates or fills daily notes: no recurring tasks, no carrying unfinished tasks forward. *Mirror* only shows tasks: ticking, timers, scheduling and every other change are refused with a notice (shown once in a while, not for every keystroke), migrations and rename-following do not run, and the Day view does not create a day's note that does not exist. Use them on a phone or tablet that may open today's note before your main device has synced it, so two devices never write the same note.
 
 - Fixed the right-align setting being ignored on phones (0.1.4-beta.15 put every todo's properties under its title). Right-aligned properties stay at the right edge again; only a group that finds no room beside its title and would drop to a row of its own, where it looked like part of the next todo, now sits under its own title from the left edge.

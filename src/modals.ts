@@ -170,15 +170,16 @@ export class ProjectPicker extends Modal {
         input.addEventListener("focus", () => input.scrollIntoView({ block: "nearest" }));
         input.addEventListener("keydown", event => {
           const at = boxes().indexOf(input);
-          if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); (boxes()[at + (event.key === "ArrowDown" ? 1 : -1)] ?? (event.key === "ArrowUp" ? search : input)).focus(); }
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); (boxes()[at + (event.key === "ArrowDown" ? 1 : -1)] ?? (event.key === "ArrowUp" ? search : saveButton)!).focus(); }
           else if (event.key === "Enter" && !event.metaKey && !event.ctrlKey) { event.preventDefault(); toggle(!input.checked); }
         });
       }
     };
     const saveLinks = () => { this.close(); void this.save([...this.selected]).catch(report); };
+    let saveButton: HTMLElement | null = null;
     search.addEventListener("input", paint); paint();
     search.addEventListener("keydown", event => {
-      if (event.key === "ArrowDown") { event.preventDefault(); boxes()[0]?.focus(); }
+      if (event.key === "ArrowDown") { event.preventDefault(); (boxes()[0] ?? saveButton)?.focus(); }
       else if (event.key === "Enter") {
         event.preventDefault();
         if (event.metaKey || event.ctrlKey) { saveLinks(); return; }
@@ -186,7 +187,11 @@ export class ProjectPicker extends Modal {
         const first = boxes()[0]; if (first) { first.click(); search.value = ""; paint(); }
       }
     });
-    new Setting(this.contentEl).addButton(b => b.setButtonText("Save links").setCta().onClick(saveLinks));
+    new Setting(this.contentEl).addButton(b => {
+      b.setButtonText("Save links").setCta().onClick(saveLinks); saveButton = b.buttonEl;
+      // The arrows lead on from the last project to Save, and back.
+      b.buttonEl.addEventListener("keydown", event => { if (event.key === "ArrowUp") { event.preventDefault(); (boxes().at(-1) ?? search).focus(); } });
+    });
     // The on-screen keyboard covers the bottom of the window without shrinking it; keep the list inside what is left so every project can be scrolled to.
     const viewport = window.visualViewport;
     if (viewport) {

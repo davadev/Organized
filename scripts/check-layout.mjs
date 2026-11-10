@@ -187,7 +187,7 @@ try {
         if (await projection.count() !== 1 || !(await projection.locator('[aria-label="Priority: none"]').count())) throw Error('Final-line task properties are missing at EOF');
       }
       if (tab === 'AlignRight') {
-        // Every group of symbols stays inside its own todo line, so it never hangs into the note under it. Beside its title it ends at the right edge (left in RTL); one that found no room there sits under its title from the start edge, so it cannot read as part of the next todo.
+        // Every group of symbols stays inside its own todo line, so it never hangs into the note under it. Beside its title it ends at the right edge (left in RTL); one that found no room there drops to its own row under its title, still at that edge.
         await page.waitForTimeout(150);
         const rows = await page.locator('.cm-line').evaluateAll(lines => lines.map(line => {
           const box = line.getBoundingClientRect(); const group = line.querySelector('.organized-projection'); const symbols = group?.getBoundingClientRect();
@@ -195,7 +195,7 @@ try {
           return symbols ? { wrapped: group.classList.contains('organized-wrapped'), end: rtl ? symbols.left - box.left : box.right - symbols.right, start: rtl ? box.right - symbols.right : symbols.left - box.left, inside: symbols.bottom <= box.bottom + 1 } : null;
         }));
         const shown = rows.filter(Boolean);
-        if (rows.length !== 4 || shown.length !== 3 || shown.some(row => !row.inside || (row.wrapped ? row.start > 40 || row.start < -1 : row.end > 16 || row.end < -1))) throw Error(`Right-aligned properties are misplaced at ${width}: ${JSON.stringify(rows)}`);
+        if (rows.length !== 4 || shown.length !== 3 || shown.some(row => !row.inside || row.end > 16 || row.end < -1)) throw Error(`Right-aligned properties are misplaced at ${width}: ${JSON.stringify(rows)}`);
       }
       if (tab === 'LivePreview' || tab === 'Source') {
         const visible = await page.locator('.cm-content').innerText();

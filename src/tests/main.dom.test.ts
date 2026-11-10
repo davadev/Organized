@@ -71,14 +71,14 @@ describe('plugin lifecycle and user-only editor actions', () => {
       h.events.create[0](file); await vi.advanceTimersByTimeAsync(900); expect(created).not.toHaveBeenCalled();
       h.texts.set(file.path, '- [ ] from the other device'); await vi.advanceTimersByTimeAsync(1000); expect(created).not.toHaveBeenCalled();
       await vi.advanceTimersByTimeAsync(1000); expect(created).toHaveBeenCalledExactlyOnceWith(file);
-      created.mockClear(); const busy: any = await h.add('Daily/2099-01-02.md', ''); let n = 0; const read = vi.spyOn(plugin.repo, 'readText').mockImplementation(async () => String(n++));
+      created.mockClear(); const queue = vi.spyOn(plugin.repo, 'serial'); const late: any = await h.add('Daily/2099-01-03.md', ''); h.events.create[0](late); await vi.advanceTimersByTimeAsync(500); expect(queue).not.toHaveBeenCalled(); await vi.advanceTimersByTimeAsync(1500); expect(queue).toHaveBeenCalled(); queue.mockRestore(); created.mockClear(); const busy: any = await h.add('Daily/2099-01-02.md', ''); let n = 0; const read = vi.spyOn(plugin.repo, 'readText').mockImplementation(async () => String(n++));
       h.events.create[0](busy); await vi.advanceTimersByTimeAsync(10000); expect(created).toHaveBeenCalledExactlyOnceWith(busy); expect(read).toHaveBeenCalledTimes(6);
       created.mockClear(); read.mockRejectedValue(new Error('gone')); h.events.create[0](busy); await vi.advanceTimersByTimeAsync(10); expect(created).toHaveBeenCalledExactlyOnceWith(busy);
     } finally { vi.useRealTimers(); }
   });
   it('registers capabilities only, defers vault-create handling and cleans durable crash state', async () => {
     const { h, plugin, stub } = await loaded();
-    expect(stub.commands).toHaveLength(15); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
+    expect(stub.commands).toHaveLength(17); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
     const factory = stub.views.get(VIEW_TYPE); expect(factory({ app: h.app })).toBeInstanceOf(OrganizedInspectorView);
     h.layout[0](); expect(h.events.create).toHaveLength(1);
     const created = vi.spyOn(plugin.service, 'onDailyCreated').mockResolvedValue(); const index = vi.spyOn(plugin.service, 'index').mockResolvedValue(); const reconcile = vi.spyOn(plugin.service, 'reconcile').mockResolvedValue(); const refresh = vi.spyOn(plugin, 'refresh').mockImplementation(() => undefined);

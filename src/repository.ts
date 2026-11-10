@@ -42,6 +42,8 @@ export function projectTemplate(today = localDate()): string {
 }
 export class Repository {
   private tail: Promise<unknown> = Promise.resolve();
+  /** Told which task notes are left out of the list: copies that share an id, and notes with an id that cannot be read as a task. */
+  onSkipped: ((copies: string[], broken: string[]) => void) | null = null;
   constructor(readonly app: App, readonly settings: () => Settings, readonly activeEditor: () => { file: TFile; editor: Editor } | null) {}
   serial<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.tail.catch(() => undefined).then(fn); this.tail = next; return next;
@@ -255,11 +257,19 @@ export class Repository {
   async list(withConverted = false): Promise<Task[]> {
     const files = this.app.vault.getMarkdownFiles().filter(f => this.isTaskRecord(f.path));
     const read: { task: Task; file: TFile }[] = []; const claims = new Map<string, number>();
+    const broken: string[] = [];
     const parsed = await inBatches(files, async file => {
-      try { const frontmatter = await this.properties(file); const id = this.idOf(file, frontmatter); return { task: taskFrom(frontmatter, id), file }; } catch { return null; } // Invalid task notes remain available for manual repair, never overwritten.
+      let frontmatter: Record<string, unknown> | null = null;
+      try { frontmatter = await this.properties(file); const id = this.idOf(file, frontmatter); return { task: taskFrom(frontmatter, id), file }; } catch {
+        // Invalid task notes remain available for manual repair, never overwritten. One that has an id looks like a task that broke; any other note in the folder is not reported.
+        if (frontmatter && validId(frontmatter.id)) broken.push(file.path);
+        return null;
+      }
     });
     for (const entry of parsed) if (entry) { this.link(entry.file.path, entry.task.id); claims.set(entry.task.id, (claims.get(entry.task.id) ?? 0) + 1); read.push(entry); }
     // A copied note repeats its id: neither copy is listed until the person removes one.
+    const copies = read.filter(({ task }) => claims.get(task.id)! > 1).map(({ file }) => file.path);
+    if (copies.length || broken.length) this.onSkipped?.(copies, broken);
     return read.filter(({ task }) => claims.get(task.id) === 1 && (withConverted || !task.converted_to)).map(({ task }) => task);
   }
   async update(id: string, mutate: (task: Task) => Task): Promise<Task> {
