@@ -187,18 +187,15 @@ try {
         if (await projection.count() !== 1 || !(await projection.locator('[aria-label="Priority: none"]').count())) throw Error('Final-line task properties are missing at EOF');
       }
       if (tab === 'AlignRight') {
-        // Every group of symbols stays inside its own todo line, so it never hangs into the note under it. On a phone it sits under its title, from the start edge; beside a desktop it ends at the right edge (left in RTL).
-        const measure = () => page.locator('.cm-line').evaluateAll(lines => lines.map(line => {
-          const box = line.getBoundingClientRect(); const symbols = line.querySelector('.organized-projection')?.getBoundingClientRect();
+        // Every group of symbols stays inside its own todo line, so it never hangs into the note under it. Beside its title it ends at the right edge (left in RTL); one that found no room there sits under its title from the start edge, so it cannot read as part of the next todo.
+        await page.waitForTimeout(150);
+        const rows = await page.locator('.cm-line').evaluateAll(lines => lines.map(line => {
+          const box = line.getBoundingClientRect(); const group = line.querySelector('.organized-projection'); const symbols = group?.getBoundingClientRect();
           const rtl = getComputedStyle(line).direction === 'rtl';
-          return symbols ? { end: rtl ? symbols.left - box.left : box.right - symbols.right, start: rtl ? box.right - symbols.right : symbols.left - box.left, below: symbols.top - box.top, inside: symbols.bottom <= box.bottom + 1 } : null;
+          return symbols ? { wrapped: group.classList.contains('organized-wrapped'), end: rtl ? symbols.left - box.left : box.right - symbols.right, start: rtl ? box.right - symbols.right : symbols.left - box.left, inside: symbols.bottom <= box.bottom + 1 } : null;
         }));
-        const mobile = await measure(); const shownMobile = mobile.filter(Boolean);
-        if (mobile.length !== 4 || shownMobile.length !== 3 || shownMobile.some(row => row.start > 40 || row.start < -1 || !row.inside)) throw Error(`Phone properties are not under their title at ${width}: ${JSON.stringify(mobile)}`);
-        await page.evaluate(() => document.body.classList.remove('is-mobile'));
-        const rows = await measure(); const shown = rows.filter(Boolean);
-        await page.evaluate(() => document.body.classList.add('is-mobile'));
-        if (rows.length !== 4 || shown.length !== 3 || shown.some(row => row.end > 16 || row.end < -1 || !row.inside)) throw Error(`Right-aligned properties are misplaced at ${width}: ${JSON.stringify(rows)}`);
+        const shown = rows.filter(Boolean);
+        if (rows.length !== 4 || shown.length !== 3 || shown.some(row => !row.inside || (row.wrapped ? row.start > 40 || row.start < -1 : row.end > 16 || row.end < -1))) throw Error(`Right-aligned properties are misplaced at ${width}: ${JSON.stringify(rows)}`);
       }
       if (tab === 'LivePreview' || tab === 'Source') {
         const visible = await page.locator('.cm-content').innerText();

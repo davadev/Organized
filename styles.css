@@ -339,8 +339,8 @@ span.organized-projection.organized-align-right { float: inline-end; max-width: 
 .organized-task-line > span.organized-projection.organized-align-right ~ :is(ul, ol) { clear: both; }
 div.organized-projection.organized-align-right { text-align: end; }
 div.organized-projection.organized-align-right .organized-rich-property { text-align: start; }
-/* On a phone the symbols never share the title's line: when they were allowed to drop to a row of their own at the right edge, that row sat next to the following todo and read as belonging to it. They always sit under their own title instead. */
-body.is-mobile span.organized-projection.organized-align-right { float: none; display: block; margin-inline-start: 0; margin-block-start: 2px; text-align: start; }
+/* Right-aligned symbols that found no room beside the title and dropped to a row of their own sat next to the following todo and read as belonging to it. Such a group (marked by `watchWrap`) sits under its own title, from the start edge, instead. */
+span.organized-projection.organized-align-right.organized-wrapped { float: none; display: block; margin-inline-start: 0; margin-block-start: 2px; text-align: start; }
 .organized-property, .organized-date { display: inline-block; margin-inline-end: var(--size-4-2); max-inline-size: 100%; }
 .organized-rich-property { display: block; margin-block: var(--size-4-1); }
 .organized-glyph, .organized-task-line .organized-checkbox {

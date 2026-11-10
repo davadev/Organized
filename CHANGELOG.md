@@ -2,9 +2,11 @@
 
 ## Unreleased
 
+- Fixed the right-align setting being ignored on phones (0.1.4-beta.15 put every todo's properties under its title). Right-aligned properties stay at the right edge again; only a group that finds no room beside its title and would drop to a row of its own, where it looked like part of the next todo, now sits under its own title from the left edge.
+
 - Fixed a todo being ticked by mistake when the long-press menu on a phone is dismissed by tapping outside it: taps on the checkbox are ignored while the menu is open and for a moment after it closes.
 
-- Fixed a todo's properties (project, priority) looking like they belong to the todo below when they did not fit on the title's line on a phone. On a phone the properties now always sit under their own todo, from the left edge; on desktop they stay at the right edge.
+- Fixed a todo's properties (project, priority) looking like they belong to the todo below when they did not fit on the title's line: such a group now sits under its own todo, from the left edge.
 
 - Project picker: the list now stays inside the part of the screen the phone keyboard leaves free, so every project can be scrolled to; on a computer, the arrow keys move through the list, Enter ticks a project, Enter in the search box picks the best match and Ctrl/Cmd+Enter saves.
 
