@@ -6,6 +6,7 @@ import { harness } from './harness';
 import { installObsidianDom } from './__mocks__/obsidianDom';
 import { Notice } from './__mocks__/obsidian';
 import { saveRole } from '../device';
+import { writeNoteSection } from '../codec';
 import { localDate, markerOf, newTask, setStatus } from '../model';
 import { splitNote } from '../repository';
 import { ProjectBudgetModal, ProjectPicker } from '../modals';
@@ -91,5 +92,20 @@ describe('bug hunt regressions', () => {
     const search = picker.contentEl.querySelector('input[type=search]') as HTMLInputElement; search.value = 'alp'; search.dispatchEvent(new Event('input'));
     search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); expect([...picker.selected]).toEqual(['Alpha.md']);
     search.value = 'bet'; search.dispatchEvent(new Event('input')); search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); expect([...picker.selected].sort()).toEqual(['Alpha.md', 'Beta.md']);
+  });
+  it('an expired task that has no todo line anywhere is still cleaned up (its kept lines have nowhere to go)', async () => {
+    const h = harness(); h.setSettings({ taskRetentionDays: 30, autoForward: false, retentionDetail: 'description' }); const task = await h.repo.create('Lonely');
+    await h.repo.update(task.id, t => ({ ...t, status: 'completed', closed_at: new Date(Date.now() - 40 * 86400000).toISOString() })); const file = h.repo.taskFile(task.id)!; h.texts.set(file.path, writeNoteSection(h.texts.get(file.path)!, 'Description', 'why'));
+    await h.service.reconcile(await h.add(`Daily/${localDate()}.md`) as any);
+    expect(h.repo.taskFile(task.id) ?? null).toBeNull();
+  });
+  it('one task note that cannot be written does not keep the others from following a renamed note or project', async () => {
+    const h = harness(); const a = await h.repo.create('A'); const b = await h.repo.create('B'); const c = await h.repo.create('C');
+    for (const t of [a, b, c]) await h.repo.update(t.id, x => ({ ...x, projects: ['P/Old.md'], converted_to: 'N/Old.md' }));
+    const update = h.repo.update.bind(h.repo); vi.spyOn(h.repo, 'update').mockImplementation(async (id: string, fn: any) => { if (id === a.id) throw new Error('locked'); return update(id, fn); });
+    await expect(h.service.followProjectRename('P/Old.md', 'P/New.md')).rejects.toThrow(`1 task could not follow the renamed project (${a.id})`);
+    expect((await h.repo.read(b.id)).projects).toEqual(['P/New.md']); expect((await h.repo.read(c.id)).projects).toEqual(['P/New.md']);
+    await expect(h.service.followRename('N/Old.md', 'N/New.md')).rejects.toThrow('1 task could not follow the renamed note');
+    expect((await h.repo.read(b.id)).converted_to).toBe('N/New.md'); expect((await h.repo.read(c.id)).converted_to).toBe('N/New.md');
   });
 });
