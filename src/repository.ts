@@ -116,12 +116,12 @@ export class Repository {
     if (!this.names) { this.names = new Map(); for (const notePath of this.idOfPath.keys()) { const name = notePath.slice(notePath.lastIndexOf("/") + 1).replace(/\.md$/i, "").toLowerCase(); this.names.set(name, [...(this.names.get(name) ?? []), notePath]); } }
     const paths = this.names.get(link.slice(2, -2).toLowerCase()); return paths?.length === 1 ? this.file(paths[0]) : null;
   }
-  /** The subtasks of a task that can still be found, in the order of its list. Recurring tasks are never subtasks. */
+  /** The subtasks of a task that can still be found, in the order of its list. Recurring tasks are never subtasks, nor are tasks that became a note and are kept only for their tracked time. */
   async subtasksOf(task: Task): Promise<Task[]> {
     const found: Task[] = [];
     for (const link of task.subtasks) {
       const file = this.fileOfLink(link); if (!file) continue;
-      try { const properties = await this.properties(file); const child = taskFrom(properties, this.idOf(file, properties)); if (!child.recurring && !found.some(t => t.id === child.id)) found.push(child); } catch { /* A note that is not a valid task is not a subtask. */ }
+      try { const properties = await this.properties(file); const child = taskFrom(properties, this.idOf(file, properties)); if (!child.recurring && !child.converted_to && !found.some(t => t.id === child.id)) found.push(child); } catch { /* A note that is not a valid task is not a subtask. */ }
     }
     return found;
   }
@@ -179,9 +179,13 @@ export class Repository {
     const found = await this.lookup(id); if (found.length > 1) throw this.ambiguous(id, found);
     return found.length === 1;
   }
-  /** Whether a candidate task-note path is free: no other note in the vault, anywhere, has the same file name (any case), so `[[Name]]` stays unambiguous. */
+  /** Whether a candidate task-note path is free: no other note in the vault, anywhere, has the same file name (any case), so `[[Name]]` stays unambiguous. A name some task's subtask list links to is taken too, so a link left behind by a note that was deleted by hand never adopts a new task. */
   nameTaken(except: TFile | null = null): (candidate: string) => boolean {
-    const names = new Set(this.app.vault.getMarkdownFiles().filter(f => f !== except).map(f => f.basename.toLowerCase()));
+    const files = this.app.vault.getMarkdownFiles(); const names = new Set(files.filter(f => f !== except).map(f => f.basename.toLowerCase()));
+    for (const file of files.filter(f => this.isTaskRecord(f.path))) {
+      const links: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.subtasks;
+      if (Array.isArray(links)) for (const link of links) names.add(String(link).slice(2, -2).toLowerCase());
+    }
     return candidate => names.has(candidate.slice(candidate.lastIndexOf("/") + 1).replace(/\.md$/i, "").toLowerCase());
   }
   async readText(file: TFile): Promise<string> {

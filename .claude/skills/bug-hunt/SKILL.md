@@ -94,6 +94,11 @@ Built from the bugs the 0.1.4 betas of this plugin shipped and then fixed, plus 
     - Grep: `this.owner.context` in `view.ts`; every use must be guarded by `context?.line.id === id`, or go through `contextFor`.
     - Test: put the cursor context on a different task in a different note, act from the panel, assert only the panel's task changed.
 
+20. **Links by name outlive the note** (a subtask cleaned up after it expired, retired to the trash or turned into a note stayed in its parent's `subtasks` list as `[[Name]]`; the next task with that title got the name and was adopted as the subtask).
+    - Grep: `trashNote`, `converted_to`, every place a task note stops being a task (trash, strip, convert); `nameTaken` / `freePath` for who hands out names. Only `deleteTask` used to drop the parent's link.
+    - Ask: who else refers to this note by name or path (parent lists, project links, `converted_to`)? When the note goes, is each reference removed, and if it cannot be (deleted by hand, sync), can a new note take the name and inherit the reference?
+    - Test: remove the child through every pipeline, create a task with the same title, assert `parentOf` is null and the parent's list no longer holds the link.
+
 ## Method
 1. Scope the diff; list changed behaviours.
 2. For each, walk every class; write the question down only if it could apply.

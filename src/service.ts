@@ -148,7 +148,7 @@ export class TaskService {
     const changes: Change[] = [];
     for (const occurrence of await this.repo.occurrences(id)) {
       const line = occurrence.tasks.find(t => t.marker === "<"); if (!line) continue;
-      await this.edit(occurrence.file, occurrence.text, replaceTask(occurrence.text, line, { marker: " " }), changes);
+      await this.edit(occurrence.file, occurrence.text, replaceTask(occurrence.text, line, { marker: markerOf(task) }), changes);
     }
     await this.cleanupSchedule(id, date, undefined, changes);
     this.changed();
@@ -248,6 +248,10 @@ export class TaskService {
       const parent = await this.repo.read(parentId); if (!parent.subtasks.some(drop)) return false;
       await this.repo.update(parentId, t => ({ ...t, subtasks: t.subtasks.filter(link => !drop(link)) })); return true;
     } catch { return false; }
+  }
+  /** Takes the links to task notes that were just removed (`gone`, lower case) out of every list that held one, so a later note with the same name is not taken for the subtask. */
+  private async dropGone(tasks: Task[], gone: Set<string>): Promise<void> {
+    for (const task of tasks) if (task.subtasks.some(link => gone.has(link.toLowerCase()))) await this.dropLinks(task.id, link => gone.has(link.toLowerCase()));
   }
   /** Adds a task to its parent's `subtasks` list and says what happened: nothing changes for a recurring task, a task that cannot be found, itself, or a parent that is the task's own descendant. A task has one parent, so it leaves the list it was in. */
   private async linkSubtask(parentId: string, childId: string): Promise<"linked" | "already" | "recurring" | "loop" | "missing"> {
@@ -355,7 +359,7 @@ export class TaskService {
       const keep = rule !== null && t.recurring && sameCadence(taskRule(t), rule);
       if (!keep && open) open.stop = today;
       if (rule !== null && !keep) periods.push({ start: today, stop: null });
-      return { ...t, status: "open", recurring: rule !== null, recurrence: rule ? formatRule(rule) : null, recurrence_periods: periods, daily_note_section_path: context?.line.section ?? t.daily_note_section_path };
+      return { ...t, status: "open", closed_at: null, recurring: rule !== null, recurrence: rule ? formatRule(rule) : null, recurrence_periods: periods, daily_note_section_path: context?.line.section ?? t.daily_note_section_path };
     });
     changes.push({ file, before, after: await this.repo.readText(file) });
     // In a project note the line moves between Ongoing and its status heading.
@@ -432,7 +436,8 @@ export class TaskService {
   }
   private async cleanupExpiredTasks(days: number, now: number): Promise<void> {
     const detail = this.repo.settings().retentionDetail; let removed = 0; const failed: string[] = [];
-    for (const task of await this.repo.list()) {
+    const tasks = await this.repo.list(); const gone = new Set<string>();
+    for (const task of tasks) {
       if (task.recurring || !["completed", "canceled"].includes(task.status) || !task.closed_at || now - Date.parse(task.closed_at) < days * 86400000) continue;
       try {
         const taskFile = this.repo.taskFile(task.id);
@@ -451,9 +456,10 @@ export class TaskService {
           }
           await this.edit(occurrence.file, occurrence.text, after);
         }
-        await this.repo.trashNote(taskFile); removed++;
+        await this.repo.trashNote(taskFile); gone.add(this.repo.linkOf(taskFile).toLowerCase()); removed++;
       } catch { failed.push(task.title); }
     }
+    await this.dropGone(tasks, gone);
     if (removed) { this.references = null; this.changed(); }
     if (removed || failed.length) {
       const fragment = createFragment();
@@ -753,7 +759,7 @@ export class TaskService {
     }
     const backupPath = await backup([...saved].map(([path, before]) => ({ path, before })), { renames: [...names].map(([id, to]) => ({ from: this.repo.taskPath(id), to })) });
     const changes: Change[] = []; const renames: { file: TFile; from: string }[] = []; const failed: string[] = [];
-    let renamed = 0, stripped = 0, trashed = 0, done = 0, todos = 0;
+    let renamed = 0, stripped = 0, trashed = 0, done = 0, todos = 0; const gone = new Set<string>();
     const progress = new Notice(`Retiring tasks… 0 of ${chosen.length}`, 0);
     try {
       for (const [index, listed] of chosen.entries()) {
@@ -783,7 +789,7 @@ export class TaskService {
           // A task note that stays must stop repeating, or the next daily note would bring the todo back.
           if (task.recurring && keepsNote(o)) await this.stopRepeating(task.id, note, changes);
           if (o.yaml === "strip") { const text = await this.repo.readText(note); await this.edit(note, text, stripOrganized(text), changes); stripped++; }
-          if (o.notes === "trash") { await this.repo.trashNote(note); trashed++; }
+          if (o.notes === "trash") { await this.repo.trashNote(note); gone.add(this.repo.linkOf(note).toLowerCase()); trashed++; }
           if (from !== null) { renames.push({ file: note, from }); renamed++; }
           done++;
         } catch {
@@ -793,6 +799,7 @@ export class TaskService {
         }
       }
     } finally { progress.hide(); }
+    await this.dropGone(scan.tasks, gone);
     this.references = null;
     const failedNames = failed.slice(0, 3).join(", ");
     const detail = `${done} of ${plural(chosen.length, "task")} retired · ${plural(todos, "todo")} unlinked${renamed ? ` · ${renamed} renamed` : ""}${stripped ? ` · ${stripped} stripped` : ""}${trashed ? ` · ${trashed} moved to Obsidian's trash` : ""}${failed.length ? ` · ${failed.length} left unchanged (${failedNames})` : ""}. Old text saved in note-backups (${backupPath.split("/").pop()}).`;
@@ -860,9 +867,11 @@ export class TaskService {
       await this.edit(occurrence.file, occurrence.text, removeLines(lines.join("\n"), [...ours].filter(index => index !== first?.line)));
     }
     // A running timer is stopped and logged first. Tracked time keeps its task note (hidden from lists) so the calendar still shows it.
-    const stopped = setStatus(task, task.status === "in_progress" ? "open" : task.status);
+    const stopped = setStatus(task, task.status === "in_progress" ? "open" : task.status); const parent = await this.repo.parentOf(task.id);
     if (stopped.work_sessions.length) await this.repo.update(task.id, () => ({ ...stopped, converted_to: note.path }));
     else await this.repo.trashNote(taskFile);
+    // A note is not a subtask: its parent's list lets go of it, so a later task with the same name is not taken for it.
+    if (parent) await this.dropLinks(parent.id, link => link.toLowerCase() === this.repo.linkOf(taskFile).toLowerCase());
     this.references = null; this.changed();
     return note;
   }

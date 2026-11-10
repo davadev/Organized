@@ -131,4 +131,51 @@ describe('bug hunt regressions', () => {
     await service.convertToNote(parent.id, { folder: 'Notes', tags: [], template: null, clash: 'new' }, { file: file as any, line: parseTasks(h.texts.get(next)!)[0] });
     const tasks = parseTasks(h.texts.get(old)!); expect(tasks.map(t => t.title)).toEqual(['Child']); expect(tasks[0].parent).toBeNull(); expect(h.texts.get(old)).toBe(`- [x] Child <!--organized:${child.id}-->\n`);
   });
+  it('a subtask whose note goes away (expired, retired to the trash, turned into a note) leaves its parent\'s list, so a new task with its title is not taken for it', async () => {
+    const convert = { folder: 'Notes', tags: [], template: null, clash: 'new' as const };
+    for (const remove of ['expire', 'retire', 'convert', 'convert with time'] as const) {
+      const h = harness(); const { service, repo } = h;
+      const parent = await repo.create('Parent'); const child = await repo.create('Child'); const kept = await repo.create('Kept');
+      await service.makeSubtask(parent.id, child.id); await service.makeSubtask(parent.id, kept.id);
+      if (remove === 'expire' || remove === 'retire') await repo.update(child.id, t => ({ ...t, status: 'completed', closed_at: '2020-01-01T00:00:00.000Z' }));
+      if (remove === 'expire') await (service as any).cleanupExpiredTasks(30, Date.now());
+      if (remove === 'retire') await service.retireTasks({ which: 'closed', olderThanDays: 7, lines: 'plain', keep: 'title', notes: 'trash', yaml: 'keep' }, async () => 'note-backups/x.json');
+      if (remove === 'convert with time') await service.addSession(child.id, { start: '2026-03-05T09:00:00.000Z', end: '2026-03-05T10:00:00.000Z' });
+      if (remove === 'convert' || remove === 'convert with time') await service.convertToNote(child.id, convert);
+      expect((await repo.read(parent.id)).subtasks, remove).toEqual(['[[Kept]]']);
+      expect((await repo.subtasksOf(await repo.read(parent.id))).map(t => t.title), remove).toEqual(['Kept']);
+      const again = await repo.create('Child'); expect(await repo.parentOf(again.id), remove).toBeNull();
+    }
+  });
+  it('a task kept only for its tracked time after it became a note is not a subtask, and a name a subtask list still links to is not given to a new task note', async () => {
+    const h = harness(); const { service, repo } = h;
+    const parent = await repo.create('Parent'); const child = await repo.create('Child'); await service.makeSubtask(parent.id, child.id);
+    await service.addSession(child.id, { start: '2026-03-05T09:00:00.000Z', end: '2026-03-05T10:00:00.000Z' });
+    await service.convertToNote(child.id, { folder: 'Notes', tags: [], template: null, clash: 'new' });
+    // Data written before the link was dropped on conversion, and a link whose note was deleted by hand.
+    await repo.update(parent.id, t => ({ ...t, subtasks: ['[[Child]]', '[[Ghost]]'] }));
+    const listed = await repo.read(parent.id); expect(await repo.subtasksOf(listed)).toEqual([]); expect(await repo.progress(listed)).toBeNull();
+    await service.scheduleTask(parent.id, '2999-01-05'); expect(parseTasks(h.texts.get(service.daily.path('2999-01-05'))!).map(t => t.title)).toEqual(['Parent']);
+    const ghost = await repo.create('Ghost'); expect(repo.taskFile(ghost.id)!.basename).not.toBe('Ghost'); expect(await repo.parentOf(ghost.id)).toBeNull();
+    const free = await repo.create('Free'); expect(repo.taskFile(free.id)!.basename).toBe('Free');
+  });
+  it('a daily-note template fills in {{time}} and {{time:FORMAT}} like the core Daily Notes plugin does', async () => {
+    const h = harness(); h.setSettings({ dailyTemplate: 'T.md' }); await h.add('T.md', '# {{title}}\n{{date}} {{time}} {{date:YYYY}} {{ TIME:HH }}\n');
+    const file = await h.service.daily.ensure('2026-03-09');
+    expect(h.texts.get(file.path)).toMatch(/^# 2026-03-09\n2026-03-09 \d\d:\d\d 2026 \d\d\n$/);
+  });
+  it('taking the date off a task gives its scheduled-away todo the marker of its status, not always an open box', async () => {
+    const h = harness(); const { service, repo } = h; const task = await repo.create('T');
+    const origin = await h.add('Note.md', `- [ ] T <!--organized:${task.id}-->\n`);
+    await service.status(task.id, 'in_progress'); expect(h.texts.get('Note.md')).toContain('- [/] T');
+    await service.schedule({ file: origin as any, line: parseTasks(h.texts.get('Note.md')!)[0] }, '2999-01-05'); expect(h.texts.get('Note.md')).toContain('- [<] T');
+    await service.unschedule(task.id);
+    expect((await repo.read(task.id)).status).toBe('in_progress'); expect(h.texts.get('Note.md')).toBe(`- [/] T <!--organized:${task.id}-->\n`);
+  });
+  it('a finished task that is made to repeat is open again without a leftover closing time', async () => {
+    const h = harness(); const { service, repo } = h; const task = await repo.create('T'); await service.status(task.id, 'completed');
+    expect((await repo.read(task.id)).closed_at).not.toBeNull();
+    await service.recurrence(task.id, { unit: 'day', every: 1, days: [], monthDay: null } as any);
+    const now = await repo.read(task.id); expect(now.status).toBe('open'); expect(now.closed_at).toBeNull();
+  });
 });

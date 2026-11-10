@@ -58,7 +58,7 @@ export class DailyNotes {
     const file = this.repo.file(configured);
     if (!file) { new Notice(`Organized: daily-note template ${configured} was not found; created a blank note.`); return ""; }
     const day = moment(date, "YYYY-MM-DD", true); const title = day.format(this.setup().dailyFormat).split("/").at(-1)!;
-    return (await this.repo.readText(file)).replace(/\{\{\s*(date|title)\s*(?::([^}]*?))?\s*\}\}/gi, (_match, kind: string, format?: string) => kind.toLowerCase() === "title" ? title : day.format(format || "YYYY-MM-DD"));
+    return (await this.repo.readText(file)).replace(/\{\{\s*(date|time|title)\s*(?::([^}]*?))?\s*\}\}/gi, (_match, kind: string, format?: string) => kind.toLowerCase() === "title" ? title : kind.toLowerCase() === "time" ? moment().format(format || "HH:mm") : day.format(format || "YYYY-MM-DD"));
   }
   async open(date = localDate()): Promise<TFile> {
     const file = await this.ensure(date); await this.repo.app.workspace.getLeaf(false).openFile(file); return file;
