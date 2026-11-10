@@ -857,7 +857,7 @@ export class TaskService {
     for (const occurrence of occurrences) {
       const lines = occurrence.text.split("\n"); const ours = new Set(occurrence.tasks.map(line => line.line)); const first = occurrence === home ? occurrence.tasks[0] : null;
       if (first) { const link = this.repo.app.fileManager.generateMarkdownLink(note, occurrence.file.path); lines[first.line] = `${first.prefix.slice(0, -1)}${link}${first.raw.endsWith("\r") ? "\r" : ""}`; }
-      await this.edit(occurrence.file, occurrence.text, lines.filter((_line, index) => !ours.has(index) || index === first?.line).join("\n"));
+      await this.edit(occurrence.file, occurrence.text, removeLines(lines.join("\n"), [...ours].filter(index => index !== first?.line)));
     }
     // A running timer is stopped and logged first. Tracked time keeps its task note (hidden from lists) so the calendar still shows it.
     const stopped = setStatus(task, task.status === "in_progress" ? "open" : task.status);
