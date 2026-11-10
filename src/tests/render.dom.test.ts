@@ -20,6 +20,35 @@ async function fixture() {
 function widgets(state: EditorState, field: StateField<DecorationSet>) {
   const result: any[] = []; state.field(field).between(0, state.doc.length, (_from, _to, decoration) => { if (decoration.spec.widget) result.push(decoration.spec.widget); }); return result;
 }
+describe('right-aligned symbols that drop below their title', () => {
+  const rect = (top: number, height: number) => ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) });
+  it('are moved under their own title only when they did not fit beside it, and re-checked when the line changes width', async () => {
+    const { owner, task } = await fixture(); owner.settings.propertiesAlign = 'right'; owner.settings.displayProperties = ['priority'];
+    const frames: (() => void)[] = []; vi.spyOn(window, 'requestAnimationFrame').mockImplementation(cb => frames.push(() => cb(0)));
+    const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+    let notify: (entries: any[]) => void = () => undefined; const observed: Element[] = []; const disconnect = vi.fn();
+    vi.stubGlobal('ResizeObserver', class { constructor(cb: (entries: any[]) => void) { notify = cb; } observe(el: Element) { observed.push(el); } disconnect() { disconnect(); } });
+    let titleBottom = 20; vi.spyOn(Range.prototype, 'getBoundingClientRect').mockImplementation(() => rect(0, titleBottom) as DOMRect);
+    const line = createDiv({ cls: 'cm-line' }); line.appendText('A long title '); const host = line.createSpan(); document.body.appendChild(line);
+    let top = 30; vi.spyOn(host, 'getBoundingClientRect').mockImplementation(() => rect(top, 20) as DOMRect);
+    const component = new Component(); await projection(owner, host, task, component as any); expect(frames).toHaveLength(1);
+    frames.shift()!(); expect(observed).toEqual([line]); expect(host.classList.contains('organized-wrapped')).toBe(true);
+    top = 0; notify([{ contentRect: { width: 300 } }]); notify([{ contentRect: { width: 300 } }]); expect(frames).toHaveLength(1); expect(cancel).toHaveBeenCalled(); frames.shift()!(); expect(host.classList.contains('organized-wrapped')).toBe(false);
+    titleBottom = 0; top = 99; notify([{ contentRect: { width: 200 } }]); frames.shift()!(); expect(host.classList.contains('organized-wrapped')).toBe(false);
+    component.unload(); expect(disconnect).toHaveBeenCalled();
+    vi.unstubAllGlobals(); line.remove();
+  });
+  it('are left alone when not drawn into a line yet, in text alignment, or in a block row', async () => {
+    const { owner, task } = await fixture(); owner.settings.displayProperties = ['priority'];
+    const frames: (() => void)[] = []; vi.spyOn(window, 'requestAnimationFrame').mockImplementation(cb => frames.push(() => cb(0))); vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+    vi.stubGlobal('ResizeObserver', class { observe() { throw Error('unexpected'); } disconnect() {} });
+    await projection(owner, createSpan(), task, new Component() as any); expect(frames).toHaveLength(0);
+    owner.settings.propertiesAlign = 'right'; await projection(owner, createDiv(), task, new Component() as any); expect(frames).toHaveLength(0);
+    const lone = createSpan(); await projection(owner, lone, task, new Component() as any); expect(frames).toHaveLength(1); frames.shift()!(); expect(lone.classList.contains('organized-wrapped')).toBe(false);
+    const stale = createSpan(); await projection(owner, stale, task, new Component() as any, () => false); expect(frames).toHaveLength(0);
+    vi.unstubAllGlobals();
+  });
+});
 describe('read-only projections and bundled visual markers', () => {
   it('renders every glyph, all schema-selected properties and full notes/sources without writing', async () => {
     const { owner, task, repo, raw } = await fixture(); const host = createDiv(); icon(host, 'unknown'); expect(host.childElementCount).toBe(0); for (const marker of Object.keys(GLYPHS)) icon(host, marker); expect(host.childElementCount).toBe(Object.keys(GLYPHS).length);

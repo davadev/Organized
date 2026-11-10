@@ -52,6 +52,25 @@ function projectLinks(owner: Organized, host: HTMLElement, task: Task): void {
 }
 /** Properties whose width or presence differs between todos. */
 const VARYING: DisplayProperty[] = ["projects", "movement_history", "time_tracked_seconds", "subtasks"];
+/** Right-aligned symbols float to the end of the title's line; when the title leaves no room they drop to a row of their own, which reads as part of the next todo. Marks such a group so it sits under its own title instead, and checks again whenever the line's width changes. */
+function watchWrap(host: HTMLElement, component: Component): void {
+  const check = () => {
+    const line = host.closest<HTMLElement>(".cm-line, li"); if (!line) return;
+    host.classList.remove("organized-wrapped");
+    const text = document.createRange(); text.setStart(line, 0); text.setEndBefore(host);
+    const above = text.getBoundingClientRect();
+    // No text before the symbols means nothing to wrap under.
+    host.classList.toggle("organized-wrapped", above.height > 0 && host.getBoundingClientRect().top >= above.bottom - 1);
+  };
+  let width = -1; let frame = 0;
+  const observer = new ResizeObserver(entries => {
+    const next = entries[0].contentRect.width; if (next === width) return; width = next;
+    window.cancelAnimationFrame(frame); frame = window.requestAnimationFrame(check);
+  });
+  // The group is in its line only once the note has drawn it.
+  frame = window.requestAnimationFrame(() => { const line = host.closest(".cm-line, li"); if (line) observer.observe(line); check(); });
+  component.register(() => { observer.disconnect(); window.cancelAnimationFrame(frame); });
+}
 /** `live` turns false once a newer draw or a teardown owns `host`, so an older projection stops appending after its awaits. */
 export async function projection(owner: Organized, host: HTMLElement, task: Task, component: Component, live: () => boolean = () => true): Promise<void> {
   host.addClass("organized-projection"); const right = owner.settings.propertiesAlign === "right"; host.classList.toggle("organized-align-right", right);
@@ -75,6 +94,7 @@ export async function projection(owner: Organized, host: HTMLElement, task: Task
       const compact = symbolOf(property, task, property === "subtasks" ? await owner.repo.progress(task) : null); if (!live()) return; if (compact) symbol(host, compact);
     }
   }
+  if (right && host.tagName === "SPAN" && live()) watchWrap(host, component);
 }
 export async function reading(owner: Organized, el: HTMLElement, ctx: MarkdownPostProcessorContext): Promise<void> {
   const info = ctx.getSectionInfo(el); if (!info) return;
