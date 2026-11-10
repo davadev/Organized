@@ -49,7 +49,7 @@ export function harness(legacyNames = false) {
     },
     metadataCache: { on, getFileCache: (file: TFile) => ({ frontmatter: texts.has(file.path) ? splitNote(texts.get(file.path)!).frontmatter : undefined }) },
     workspace: {
-      on, onLayoutReady: (fn: () => void) => layout.push(fn), getActiveFile: vi.fn(() => (active?.file ?? null) as any),
+      rightSplit: { collapsed: false }, on, onLayoutReady: (fn: () => void) => layout.push(fn), getActiveFile: vi.fn(() => (active?.file ?? null) as any),
       getActiveViewOfType: vi.fn((type: unknown) => type === MarkdownView && active ? { file: active.file, editor: active.editor, getMode: () => 'source' } : null),
       getLeaf: vi.fn(() => ({ openFile: vi.fn(async () => undefined) })),
       getMostRecentLeaf: vi.fn(() => null as any), getRightLeaf: vi.fn(() => null as any), getLeavesOfType: vi.fn(() => [] as any[]), revealLeaf: vi.fn(async () => undefined),

@@ -1,4 +1,4 @@
-import { Editor, MarkdownView, Notice, Plugin, TFile, TFolder, WorkspaceLeaf } from "obsidian";
+import { Editor, MarkdownView, Notice, Platform, Plugin, TFile, TFolder, WorkspaceLeaf } from "obsidian";
 import { Transaction } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
 import { ACTION_MARKERS, duplicateRepeats, parentIds, parseTasks, sameNesting, NOTE_MARKER, NoteSection, PROJECT_MARKER, RECURRING_MARKER, SECTION_MARKERS, SUBTASK_MARKER, TaskLine, TIME_MARKER, writeNoteSection } from "./codec";
@@ -32,6 +32,8 @@ export default class Organized extends Plugin {
   context: Context | null = null;
   selectedTaskId: string | null = null;
   private shownNote: string | null = null;
+  /** A day paged to on a phone: its note opens once the side panel is closed, since opening it sooner would close the panel mid-paging. */
+  pendingDay: string | null = null;
   private readonly titleTimers = new Map<string, number>();
   private readonly structure = new Map<string, { before: Map<string, string | null>; timer: number }>();
   private lastNoteEditor: { editor: Editor; file: TFile } | null = null;
@@ -85,7 +87,8 @@ export default class Organized extends Plugin {
       this.registerEditorExtension(editorExtension(this));
       this.registerMarkdownPostProcessor((el, ctx) => reading(this, el, ctx));
       this.registerEvent(this.app.workspace.on("editor-change", () => this.followCursor()));
-      this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.followCursor()));
+      this.registerEvent(this.app.workspace.on("active-leaf-change", () => { this.followCursor(); void this.openPendingDay().catch(report); }));
+      this.registerEvent(this.app.workspace.on("layout-change", () => { void this.openPendingDay().catch(report); }));
       this.loaded = true;
       this.app.workspace.onLayoutReady(() => {
         if (!this.loaded) return;
@@ -341,6 +344,11 @@ export default class Organized extends Plugin {
   current(editor: Editor, file: TFile): Context | null {
     const line = parseTasks(editor.getValue()).find(t => t.line === editor.getCursor().line);
     return line ? { file, line } : null;
+  }
+  private async openPendingDay(): Promise<void> {
+    const day = this.pendingDay; if (!day || !Platform.isMobile || !this.app.workspace.rightSplit.collapsed) return;
+    this.pendingDay = null; const file = this.repo.file(this.service.daily.path(day));
+    if (file && this.app.workspace.getActiveFile()?.path !== file.path) await this.app.workspace.getLeaf(false).openFile(file);
   }
   followCursor(): void {
     // The task list shows the note in the main area, so switching notes must repaint it even when no task is selected on either side.
