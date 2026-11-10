@@ -42,6 +42,7 @@ const colors: Record<string, string> = { [review]: '#7b6cd9', [lisbon]: '#e0852d
 const files = new Set([...Object.keys(dailies).map(d => `Daily/${d}.md`), review, lisbon, workshop, ...tasks.map(t => `Tasks/${t.id}.md`)]);
 const app: any = { workspace: { getLeaf: () => ({ openFile: async () => undefined }) } };
 const owner: any = {
+  role: 'main',
   app, selectedTaskId: null, context: null, settings: { ...DEFAULT_SETTINGS, knownProjects: [review, lisbon, workshop], displayProperties: [] }, revision: 0, rememberProjects: () => undefined,
   setDayTasksCollapsed() {}, saveSettings() {}, onEditorUpdate() {}, deleteTask: async () => undefined, assertWritable() {}, run: async (fn: () => unknown) => fn(), contextFor: () => null, pickProjects() {},
   setHideClosedProjects() {}, saveModule: async () => undefined, refresh() {},

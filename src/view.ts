@@ -14,6 +14,7 @@ import { BUDGET_KEYS, BudgetPeriod, splitNote } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 import { blocksOn, hourRange } from "./timeline";
 import { ruleLabel, taskRule } from "./recurrence";
+import { MirrorError } from "./device";
 
 const sameHeading = (a: Section, b: Section): boolean => a.level === b.level && a.text === b.text && a.ordinal === b.ordinal;
 export const VIEW_TYPE = "organized-inspector";
@@ -559,8 +560,11 @@ export class OrganizedInspectorView extends ItemView {
   }
   async selectDay(date: string): Promise<void> {
     this.owner.assertWritable(); this.selectedDate = date;
+    // A mirror shows the notes that exist and does not create the day's note, which the main device may already have.
+    if (this.owner.role === "mirror" && !this.owner.repo.file(this.owner.service.daily.path(date))) { report(new MirrorError()); await this.render(); return; }
     const file = await this.owner.service.daily.open(date);
-    await this.owner.run(() => this.owner.service.reconcile(file)); await this.render();
+    if (this.owner.role === "main") await this.owner.run(() => this.owner.service.reconcile(file));
+    await this.render();
   }
   async task(host: HTMLElement, generation: number): Promise<void> {
     const id = this.owner.selectedTaskId;
