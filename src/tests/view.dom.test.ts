@@ -232,6 +232,14 @@ describe('compact calendar and contextual task inspector', () => {
     expect(Array.from(picker.options).map(o => o.value)).toEqual(['', 'Project.md']);
     expect(view.contentEl.textContent).toContain('No project links yet.'); owner.rememberProjects(['Project.md']); expect(owner.settings.knownProjects).toEqual(['Project.md', 'Gone.md']);
   });
+  it('the Timer card of a recurring task writes to today\'s occurrence even while the cursor is on another task in another note', async () => {
+    const { owner, view, repo, service, add, texts } = await fixture(); const today = service.daily.path(localDate());
+    const habit = await repo.create('Habit'); await repo.update(habit.id, t => ({ ...t, recurring: true, recurrence: 'daily', recurrence_periods: [{ start: localDate(), stop: null }] }));
+    const other = await repo.create('Other'); const note = await add(today, `- [ ] Habit <!--organized:${habit.id}-->`); const elsewhere = await add('Elsewhere.md', `- [ ] Other <!--organized:${other.id}-->`);
+    owner.context = { file: elsewhere, line: parseTasks(texts.get('Elsewhere.md')!)[0] } as any; owner.selectedTaskId = habit.id; view.tab = 'Task'; view.module = 'Timer'; await view.render(); await flush();
+    button(view.contentEl, 'Start timer').click(); await flush(); expect(texts.get(today)).toContain('- [/] Habit'); expect(texts.get('Elsewhere.md')).toContain('- [ ] Other');
+    await view.render(); await flush(); button(view.contentEl, 'Stop timer').click(); await flush(); expect(texts.get(today)).toContain('- [ ] Habit'); expect(note).toBeTruthy();
+  });
   it('shows a recurring task as done today when today\'s occurrence is ticked, and targets only today when changed', async () => {
     const { owner, view, repo, service, add, texts, files } = await fixture(); const today = service.daily.path(localDate());
     const task = await repo.create('Daily habit'); await repo.update(task.id, t => ({ ...t, recurring: true, starred: true }));

@@ -6,7 +6,7 @@ import { harness } from './harness';
 import { installObsidianDom } from './__mocks__/obsidianDom';
 import { Notice } from './__mocks__/obsidian';
 import { saveRole } from '../device';
-import { writeNoteSection } from '../codec';
+import { parseTasks, writeNoteSection } from '../codec';
 import { localDate, markerOf, newTask, setStatus } from '../model';
 import { splitNote } from '../repository';
 import { ProjectBudgetModal, ProjectPicker } from '../modals';
@@ -107,5 +107,21 @@ describe('bug hunt regressions', () => {
     expect((await h.repo.read(b.id)).projects).toEqual(['P/New.md']); expect((await h.repo.read(c.id)).projects).toEqual(['P/New.md']);
     await expect(h.service.followRename('N/Old.md', 'N/New.md')).rejects.toThrow('1 task could not follow the renamed note');
     expect((await h.repo.read(b.id)).converted_to).toBe('N/New.md'); expect((await h.repo.read(c.id)).converted_to).toBe('N/New.md');
+  });
+  it('taking a parent off its day leaves its subtask a visible todo there, not an indented code block', async () => {
+    const { h, plugin } = await loaded(); await ready(h); const { service, repo } = plugin; const date = '2026-03-06';
+    const parent = await repo.create('Parent'); await service.scheduleTask(parent.id, date); const child = await repo.create('Child'); await service.scheduleTask(child.id, date); await service.makeSubtask(parent.id, child.id);
+    const path = service.daily.path(date); expect(h.texts.get(path)).toContain('\t- [ ] Child');
+    await service.unschedule(parent.id);
+    expect(h.texts.get(path)).not.toContain('Parent'); expect(h.texts.get(path)).toContain('\n- [ ] Child');
+    expect(parseTasks(h.texts.get(path)!).map(t => t.id)).toEqual([child.id]);
+  });
+  it('deleting a parent task leaves its subtasks visible todos where they were, not nested under whatever precedes them or turned into code', async () => {
+    const { h, plugin } = await loaded(); await ready(h); const { service, repo } = plugin; const date = '2026-03-06'; (service as any).confirm = async () => true;
+    const before = await repo.create('Before'); await service.scheduleTask(before.id, date); const parent = await repo.create('Parent'); await service.scheduleTask(parent.id, date);
+    const child = await repo.create('Child'); await service.scheduleTask(child.id, date); await service.makeSubtask(parent.id, child.id);
+    const path = service.daily.path(date); expect(h.texts.get(path)).toContain('\t- [ ] Child');
+    expect(await service.deleteTask(parent.id)).toBe(true);
+    const tasks = parseTasks(h.texts.get(path)!); expect(tasks.map(t => t.title)).toEqual(['Before', 'Child']); expect(tasks[1].parent).toBeNull(); expect(h.texts.get(path)).toContain('\n- [ ] Child');
   });
 });

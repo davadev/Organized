@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { descendants, insertTask, readNote, hasLegacyHeading, migrateNote, noteSection, parseTasks, removeUnique, replaceTask, sortTasks, taskText, writeNoteSection } from "../codec";
+import { removeLines, nestUnder, descendants, insertTask, readNote, hasLegacyHeading, migrateNote, noteSection, parseTasks, removeUnique, replaceTask, sortTasks, taskText, writeNoteSection } from "../codec";
 
 describe("Markdown task codec", () => {
   it('uses real Markdown structure for nested fences, indented code, comments and setext headings', () => {
@@ -135,5 +135,33 @@ describe('inserting under a lone heading', () => {
     const lone = [{ level: 2, text: 'Habits', ordinal: 0 }];
     expect(insertTask('# Day\n', '- [ ] One', lone).missing).toBe(true); expect(insertTask('# Day\n### Habits\n', '- [ ] One', lone).missing).toBe(true);
     const second = insertTask('# A\n## Habits\n# B\n## Habits\n## End\n', '- [ ] One', [{ level: 2, text: 'Habits', ordinal: 1 }]); expect(second.missing).toBe(false); expect(second.text.indexOf('One')).toBeGreaterThan(second.text.lastIndexOf('## Habits')); expect(second.text.indexOf('One')).toBeLessThan(second.text.indexOf('## End'));
+  });
+});
+
+describe("codec edits keep the document intact", () => {
+  it("sorting a CRLF note whose last todo has no line break keeps one newline style", () => {
+    const text = "- [ ] a <!--organized:id000001-->\r\n- [/] b <!--organized:id000002-->";
+    expect(sortTasks(text, 1, "section", new Map())).toBe("- [/] b <!--organized:id000002-->\r\n- [ ] a <!--organized:id000001-->");
+    expect(/[^\r]\n/.test(sortTasks("- [ ] a <!--organized:id000001-->\r\n- [ ] b <!--organized:id000002-->", 0, "first", new Map()))).toBe(false);
+  });
+  it("nesting never moves a parent that sits inside the child's indented block, and never throws", () => {
+    const text = "1. [ ] child <!--organized:id000001-->\n  - [ ] parent <!--organized:id000002-->\n";
+    expect(nestUnder(text, "id000001", "id000002", true)).toBeNull();
+    expect(nestUnder("- [ ] same <!--organized:id000001-->\n", "id000001", "id000001", true)).toBeNull();
+    // Taking the child out turns the parent's line into paragraph text, so there is nothing left to nest under.
+    const lazy = "1. [>] a <!--organized:id000001-->\n  - [-] child <!--organized:id000002-->\nprose\n    1. [x] parent <!--organized:id000003-->\n";
+    expect(nestUnder(lazy, "id000002", "id000003", true)).toBeNull();
+  });
+  it("removing a todo moves what was nested under it out to its level instead of leaving a code block", () => {
+    const text = "# Day\n- [ ] parent <!--organized:id000001-->\n\t- [ ] child <!--organized:id000002-->\n\t\t- [ ] grandchild <!--organized:id000003-->\n- [ ] other\n";
+    const after = removeUnique(text, "id000001");
+    expect(after).toBe("# Day\n- [ ] child <!--organized:id000002-->\n\t- [ ] grandchild <!--organized:id000003-->\n- [ ] other\n");
+    expect(parseTasks(after).map(t => t.id)).toEqual(["id000002", "id000003", null]); expect(parseTasks(after)[1].parent).toBe(1);
+    expect(removeUnique("- [ ] alone <!--organized:id000001-->\n", "id000001")).toBe("");
+  });
+  it("removing several lines at once promotes each one's nested lines", () => {
+    const text = "- [ ] a\n\t- [ ] a1\n- [ ] b\n\t- [ ] b1\n";
+    expect(removeLines(text, [0, 2])).toBe("- [ ] a1\n- [ ] b1\n");
+    expect(removeLines(text, [1])).toBe("- [ ] a\n- [ ] b\n\t- [ ] b1\n");
   });
 });
