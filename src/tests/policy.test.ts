@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const text = (path: string) => readFileSync(path, 'utf8');
@@ -7,6 +9,21 @@ describe('release and privacy wiring', () => {
   it('keeps project attribution and Git metadata pseudonymous', () => {
     expect(JSON.parse(text('manifest.json')).author).toBe('davadev'); expect(text('LICENSE')).toContain('Copyright (c) 2026 davadev');
     const result = spawnSync(process.execPath, ['scripts/check-identity.mjs'], { encoding: 'utf8' }); expect(result.status, result.stderr).toBe(0); expect(result.stdout).toContain('privacy verified');
+  });
+  it('accepts a commit by Dependabot (committed by GitHub) next to the owner\'s, and no other author, address or committer', () => {
+    const owner = ['davadev', '67618972+davadev@users.noreply.github.com']; const github = ['GitHub', 'noreply@github.com']; const bot = ['dependabot[bot]', '49699333+dependabot[bot]@users.noreply.github.com'];
+    const verdict = (author: string[], committer: string[]) => {
+      const dir = mkdtempSync(join(tmpdir(), 'identity-'));
+      try {
+        for (const file of ['manifest.json', 'LICENSE']) copyFileSync(file, join(dir, file));
+        const git = (args: string[], [an, ae]: string[], [cn, ce]: string[]) => execFileSync('git', ['-c', 'commit.gpgsign=false', ...args], { cwd: dir, env: { ...process.env, GIT_AUTHOR_NAME: an, GIT_AUTHOR_EMAIL: ae, GIT_COMMITTER_NAME: cn, GIT_COMMITTER_EMAIL: ce } });
+        git(['init', '-q'], owner, owner); git(['add', '.'], owner, owner); git(['commit', '-q', '-m', 'start'], owner, owner); git(['commit', '-q', '--allow-empty', '-m', 'bump'], author, committer);
+        return spawnSync(process.execPath, [resolve('scripts/check-identity.mjs')], { cwd: dir, encoding: 'utf8' }).status;
+      } finally { rmSync(dir, { recursive: true, force: true }); }
+    };
+    expect(verdict(bot, github)).toBe(0); expect(verdict(owner, github)).toBe(0); expect(verdict(['Dany', owner[1]], owner)).toBe(0);
+    expect(verdict(['dependabot[bot]', 'someone@example.com'], github)).toBe(1); expect(verdict(['Someone', bot[1]], github)).toBe(1);
+    expect(verdict(bot, bot)).toBe(1); expect(verdict(['Someone', 'someone@example.com'], github)).toBe(1); expect(verdict(owner, ['GitHub', 'someone@example.com'])).toBe(1);
   });
   it('pins workflow actions and separates real-browser checks from tag publication', () => {
     const ci = text('.github/workflows/ci.yml'); const release = text('.github/workflows/release.yml');

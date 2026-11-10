@@ -15,4 +15,5 @@ description: Rules for bumping npm dependencies, GitHub Actions, or the bundler 
 - **No runtime `dependencies`** unless unavoidable; `npm audit --omit=dev` must stay clean. Dev advisories are informational and never block a release. `allowScripts` must approve no package.
 - **GitHub Actions pinned to commit SHAs** with a `# vX.Y.Z` comment; bump within the current major (`gh api repos/<owner>/<repo>/git/ref/tags/<tag> --jq .object.sha`, deref annotated tags); majors come as separate Dependabot PRs.
 - Chase version constraints transitively (engines of deps, the npm shipped with each Node); defer high-risk, low-value bumps to Dependabot.
+- **Dependabot PRs merge as they are** once green: `scripts/check-identity.mjs` accepts `dependabot[bot]` commits committed by GitHub. Do not rebase or amend one locally under another committer than davadev; ask Dependabot (`@dependabot rebase`) instead. Review the diff first: only `package.json`, `package-lock.json` or workflow pins may change.
 - After any dependency change: `npm ci && npm run lint && npm run build && npm test && npm run check-release -- --with-build`.
