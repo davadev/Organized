@@ -1,6 +1,6 @@
 import { inBatches } from "./batches";
 import { Notice, TFile } from "obsidian";
-import { descendants, duplicateRepeats, fixIndent, insertTask, insertUnder, migrateNote, moveTask, nestUnder, noteSection, parentIds, parseTasks, projectSection, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
+import { descendants, duplicateRepeats, fixIndent, insertTask, insertUnder, migrateNote, moveTask, nestUnder, noteSection, parentIds, parseTasks, projectSection, removeLines, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, markerOf, MAX_PLANNED_SESSIONS, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, startPlanned, Status, Task, taskFrom, WorkSession } from "./model";
 import { dueEnds, dueStarts } from "./planning";
@@ -830,9 +830,7 @@ export class TaskService {
     if (!(await this.confirm(`Delete “${task.title}”? Its task note moves to Obsidian's trash and every linked occurrence is removed.${kept} This cannot be undone from Organized.`, "Delete task", "Delete"))) return false;
     onConfirmed?.();
     for (const occurrence of await this.repo.occurrences(id)) {
-      const removed = new Set(occurrence.tasks.map(line => line.line));
-      const text = occurrence.text.split("\n").filter((_, index) => !removed.has(index)).join("\n");
-      await this.edit(occurrence.file, occurrence.text, text);
+      await this.edit(occurrence.file, occurrence.text, removeLines(occurrence.text, occurrence.tasks.map(line => line.line)));
     }
     const file = await this.repo.resolve(id, "deleting"); const parent = await this.repo.parentOf(id);
     await this.repo.trashNote(file);

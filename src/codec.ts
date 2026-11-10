@@ -199,7 +199,16 @@ export function moveTask(text: string, id: string, name: string): string {
 export function removeUnique(text: string, id: string, repeatOnly = false): string {
   const matches = parseTasks(text).filter(t => t.id === id && (!repeatOnly || t.repeat));
   if (matches.length !== 1) throw new Error("Occurrence is missing or ambiguous; preserved for repair.");
-  const lines = text.split("\n"); lines.splice(matches[0].line, 1); return lines.join("\n");
+  const lines = text.split("\n"); dropLine(lines, matches[0].line); return lines.join("\n");
+}
+/** Removes the line at index `at`. What was nested under it moves out to its level: left where it was, an indented line with no list above it is a code block (or joins the list above it), and the task on it is lost. */
+function dropLine(lines: string[], at: number): void {
+  const nested = lines.slice(at + 1, blockEnd(lines, at));
+  lines.splice(at, nested.length + 1, ...(nested.length ? rebase(nested, /^\s*/.exec(lines[at])![0]) : []));
+}
+/** Removes the given zero-based lines, each with the nesting kept as `removeUnique` keeps it. */
+export function removeLines(text: string, at: number[]): string {
+  const lines = text.split("\n"); for (const line of [...at].sort((a, b) => b - a)) dropLine(lines, line); return lines.join("\n");
 }
 /** Zero-based lines of repeat copies that say exactly what an earlier open copy of the same task says: what two devices that both filled a note leave behind once a sync merges them. A line with something nested under it stays. */
 export function duplicateRepeats(tasks: TaskLine[]): number[] {
@@ -239,8 +248,11 @@ export function nestUnder(text: string, childId: string, parentId: string, force
   const [child] = children; const [parent] = parents;
   if (descendants(tasks, child.line).includes(parent) || descendants(tasks, parent.line).includes(child) || (!force && child.parent !== null)) return null;
   const newline = text.includes("\r\n") ? "\r\n" : "\n"; const lines = text.split(/\r?\n/);
-  const block = lines.splice(child.line, blockEnd(lines, child.line) - child.line);
-  const moved = parseTasks(lines.join("\n")).find(t => t.id === parentId)!;
+  // Indentation alone can put the parent inside the child's block (a numbered item with a two-space child) without the Markdown tree agreeing; moving the block would take the parent with it.
+  const end = blockEnd(lines, child.line); if (parent.line > child.line && parent.line < end) return null;
+  const block = lines.splice(child.line, end - child.line);
+  // Taking the block out can change how the rest parses (a paragraph that was inside it), and the parent may stop being a todo.
+  const moved = parseTasks(lines.join("\n")).find(t => t.id === parentId); if (!moved) return null;
   lines.splice(blockEnd(lines, moved.line), 0, ...rebase(block, `${/^\s*/.exec(lines[moved.line])![0]}${unit}`)); return lines.join(newline);
 }
 /** Re-indents a subtask that is already directly under its parent but not by one `unit` (for example two spaces where Obsidian's Tab inserts a tab); null when it is right or is not a direct subtask. */
@@ -254,7 +266,7 @@ export function fixIndent(text: string, childId: string, parentId: string, unit 
 export function sortTasks(text: string, line: number, scope: Settings["sortScope"], priorities: Map<string, Priority>): string {
   if (scope === "none") return text;
   const tasks = parseTasks(text); const target = tasks.find(t => t.line === line); if (!target) return text;
-  const lines = text.split("\n");
+  const newline = text.includes("\r\n") ? "\r\n" : "\n"; const lines = text.split(/\r?\n/);
   const indent = indentation(target.raw);
   let group = tasks.filter(t => JSON.stringify(t.section) === JSON.stringify(target.section) && indentation(t.raw) === indent && t.parent === target.parent);
   const endOfBlock = (task: TaskLine) => {
@@ -279,5 +291,5 @@ export function sortTasks(text: string, line: number, scope: Settings["sortScope
   }
   const blocks = sorted.map(t => lines.slice(t.line, endOfBlock(t)));
   for (let i = group.length - 1; i >= 0; i--) lines.splice(group[i].line, endOfBlock(group[i]) - group[i].line, ...blocks[i]);
-  return lines.join("\n");
+  return lines.join(newline);
 }

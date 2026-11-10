@@ -163,6 +163,10 @@ export class OrganizedInspectorView extends ItemView {
     const lines = parseTasks(await this.owner.repo.readText(note)).filter(t => t.id === id);
     return lines.length === 1 ? { file: note, line: lines[0] } : undefined;
   }
+  /** The todo line a change from the panel should write to: the one the cursor is on when it is this task's, else today's occurrence of a recurring task. Another task's line is never used. */
+  private async contextFor(task: Task): Promise<{ file: TFile; line: TaskLine } | undefined> {
+    return this.owner.context?.line.id === task.id ? this.owner.context : task.recurring ? await this.todayContext(task.id) : undefined;
+  }
   private shownStatus(task: Task): Task["status"] { return task.recurring && task.status === "open" && this.doneToday.has(task.id) ? "completed" : task.status; }
   private taskRow(host: HTMLElement, task: Task, action: () => Promise<unknown> | void): HTMLElement {
     const row = host.createDiv({ cls: "organized-list-card", attr: { "data-status": this.shownStatus(task) } }); 
@@ -607,7 +611,7 @@ export class OrganizedInspectorView extends ItemView {
     const toolbar = hero.createDiv({ cls: "organized-task-toolbar" });
     const status = toolbar.createDiv({ cls: "organized-status-field" });
     const shown = this.shownStatus(task); setIcon(status.createSpan({ cls: "organized-status-icon", attr: { "data-status": shown, "aria-hidden": "true" } }), task.recurring && shown === "completed" ? "calendar-check" : STATUS_ICONS[task.status]);
-    const statusSelect = this.select(status, "Status", this.shownStatus(task), STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(async () => this.owner.service.status(id, value as Task["status"], this.owner.context?.line.id === id ? this.owner.context : task.recurring ? await this.todayContext(id) : undefined)); });
+    const statusSelect = this.select(status, "Status", this.shownStatus(task), STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(async () => this.owner.service.status(id, value as Task["status"], await this.contextFor(task))); });
     if (task.recurring) statusSelect.options[STATUSES.indexOf("completed")].text = "done · today";
     const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Subtasks", "Description", "Sources"], value => { this.module = value; if (FOLDABLE_CARDS.includes(value) && this.owner.settings.collapsedTaskSections.includes(value)) this.owner.setTaskSectionCollapsed(value, false); this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
     const file = await this.owner.repo.resolve(id, "showing the task"); const body = splitNote(await this.owner.repo.readText(file)).body;
@@ -621,7 +625,7 @@ export class OrganizedInspectorView extends ItemView {
       const summary = `${formatMinutes(Math.floor(elapsed(task) / 60))} tracked${running ? " · running" : ""}${planned ? ` · ${formatMinutes(Math.floor(planned / 60))} planned` : ""}`;
       const timer = this.card(details, "Timer", "timer", { summary, always: true, actions: head => {
         const actions = head.createDiv({ cls: "organized-card-actions" });
-        this.iconButton(actions, running ? "Stop timer" : "Start timer", running ? "square" : "play", () => this.owner.run(() => this.owner.service.status(id, running ? "open" : "in_progress", this.owner.context ?? undefined))).setAttribute("aria-pressed", String(running));
+        this.iconButton(actions, running ? "Stop timer" : "Start timer", running ? "square" : "play", () => this.owner.run(async () => this.owner.service.status(id, running ? "open" : "in_progress", await this.contextFor(task)))).setAttribute("aria-pressed", String(running));
         this.iconButton(actions, "Add time", "plus", () => this.editSession(task, null, localDate(), null));
         this.iconButton(actions, task.time_budget_seconds === null ? "Set budget" : "Edit budget", "target", () => new BudgetModal(this.app, task.title, task.time_budget_seconds, seconds => this.owner.run(() => this.owner.service.setBudget(id, seconds))).open());
       } });

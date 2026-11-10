@@ -85,6 +85,15 @@ Built from the bugs the 0.1.4 betas of this plugin shipped and then fixed, plus 
     - Grep: spread of an object containing arrays/objects (`{ ...DEFAULT }`), module-level `let`/`Map`/`Set` that survives plugin disable/enable.
     - Test: load settings twice and mutate one; disable then re-enable the plugin in the harness and assert no old listener, timer or cache remains.
 
+18. **Structural edits that drop or move a line** (deleting or unscheduling a parent left its subtasks indented under nothing, which Markdown reads as a code block, so the plugin lost them; sorting a CRLF note whose last line has no line break mixed endings).
+    - Grep: `splice(`, `.filter((_, index)`, `join("\n")` on text from a note, `split("\n")` where the code elsewhere uses `split(/\r?\n/)`.
+    - Ask: what hangs off the line (children, continuation lines, blank-line separators, `\r`)? Does the result still parse to the same tasks (`parseTasks` before and after)? Can the block you move contain the anchor you move it to?
+    - Test: a property check over random notes (CRLF and LF, tabs and spaces, headings, fences, prose between items): run every codec edit and assert the multiset of task ids and the newline style survive and nothing throws. Then a model-based run: random service operations (create, schedule, status, subtask, recurrence, rename) on a harness vault, with the invariants "no `organized:` id without a task note", "no non-recurring id twice in a note", "a scheduled task has a line on its day".
+
+19. **Panel actions use the panel's task, not the cursor's** (the Timer card passed the editor cursor's todo, which can be another task in another note, to the status change of a recurring task).
+    - Grep: `this.owner.context` in `view.ts`; every use must be guarded by `context?.line.id === id`, or go through `contextFor`.
+    - Test: put the cursor context on a different task in a different note, act from the panel, assert only the panel's task changed.
+
 ## Method
 1. Scope the diff; list changed behaviours.
 2. For each, walk every class; write the question down only if it could apply.
