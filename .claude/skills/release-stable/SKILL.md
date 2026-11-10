@@ -12,6 +12,7 @@ description: Promote a tested beta to stable X.Y.Z. ONLY on the user's explicit 
 Only run after the user explicitly says so. The stable release must be **published before `main` advertises it**.
 
 ## Steps
+0. Run the `bug-hunt` skill on the diff since the last stable tag. Every reproduced bug is fixed with its regression test (a test that failed before the fix) and released in a beta first; do not promote with a known bug that lacks one.
 1. `git checkout -b release/X.Y.Z main`.
 2. Bump `manifest.json`, `package.json`, `versions.json` (`"X.Y.Z": "<minAppVersion>"`) to `X.Y.Z`; `npm install --package-lock-only` (else CI's version-skew check fails).
 3. Public notes finished: a What's new entry (`src/whatsNew/releaseNotes.ts`) for a minor release, and any release-notes doc your repo keeps.

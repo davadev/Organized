@@ -20,6 +20,7 @@ Read the applicable `.claude/skills/<name>/SKILL.md` before its task.
 | Coding and design | `plugin-design-rules` |
 | Dependencies and action pins | `dependency-update` |
 | Before a PR | `feature-done` |
+| Bug audit, before stable | `bug-hunt` |
 | Beta / tag / ship | `release-beta` |
 | Explicit stable promotion only | `release-stable` |
 | Issue triage | `triage-issue` |

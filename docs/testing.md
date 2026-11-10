@@ -193,3 +193,9 @@ On a **copy** of a vault: open **Retire tasks…** and try each combination (lin
 14. Link a task that sits at the top of the list in a daily note with **Link existing task…** (parent in the same note): its line moves under the parent, indented, with everything that was under it; the notice's **Undo** puts it back.
 15. On a copy of a vault written by beta 72 to 75 with panel-made relations: after updating, those todos are indented once, `note-backups/subtask-indent-*.json` holds the old text, Undo restores it, and a second restart changes nothing. **Indent subtasks under their parents** reports that everything is in order.
 16. Press **Add subtask** (or link a task from the panel): the new line is indented exactly like one made with Tab, shows the nested list's guide line in Live Preview, and Shift-Tab undoes it. With *Use tabs* off in Obsidian's Editor settings the line uses the spaces of the *Indent* setting. Subtasks written by beta 76 or earlier with two spaces are re-indented once after updating.
+
+## Bug hunt before every stable release
+
+A passing suite at 100 % coverage only covers what the harness models. Before promoting a beta to stable, run the `bug-hunt` skill (`.claude/skills/bug-hunt/SKILL.md`; method and classes in the playbook's `BUG-HUNT.md`) on the diff since the last stable tag. It lists the gaps the harness hides: ordering and races, stale caches, lifecycle gaps for new metadata, host and platform differences, focus, overflow, batch failures, date boundaries and hidden views.
+
+Every bug it finds, and every bug a tester reports, is fixed together with a regression test that failed on the old code (revert the fix once to prove it), kept in the permanent suite, and covering the neighbouring states, not only the input that bit. `feature-done` and `release-stable` check for this.

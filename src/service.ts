@@ -2,7 +2,7 @@ import { inBatches } from "./batches";
 import { Notice, TFile } from "obsidian";
 import { descendants, duplicateRepeats, fixIndent, insertTask, insertUnder, migrateNote, moveTask, nestUnder, noteSection, parentIds, parseTasks, projectSection, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
-import { localDate, makeId, MAX_PLANNED_SESSIONS, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, startPlanned, Status, Task, taskFrom, WorkSession } from "./model";
+import { localDate, makeId, markerOf, MAX_PLANNED_SESSIONS, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, startPlanned, Status, Task, taskFrom, WorkSession } from "./model";
 import { dueEnds, dueStarts } from "./planning";
 import { formatRule, repeatsOn, Rule, sameCadence, taskRule } from "./recurrence";
 import { seconds } from "./sessions";
@@ -200,7 +200,7 @@ export class TaskService {
   }
   /** Writes the marker of a task's status into its todo lines (today's and later daily notes, undated notes, project notes; see the rules below). */
   private async syncLines(task: Task, status: Status, occurrences: { file: TFile; text: string; tasks: TaskLine[] }[], context?: Context, changes?: Change[]): Promise<void> {
-    const marker = task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.status === "in_progress" ? "/" : " ";
+    const marker = markerOf(task);
     const today = localDate();
     // Earlier daily notes are history, except for a todo that only ever lived in one of them (never carried forward): that line is the task's only one, so it follows the status.
     const dated = (o: { file: TFile }) => this.daily.date(o.file.path); const live = occurrences.some(o => { const d = dated(o); return !d || d >= today; });
@@ -468,7 +468,7 @@ export class TaskService {
       const file = await this.repo.ensure(notePath, projectTemplate()); await this.repo.markProject(file);
       // A linked task lands under the heading for its status, so the project reads as open / in progress / done.
       const section = sectionNamed(await this.repo.readText(file), projectSection(task));
-      await this.insert(file, { ...task, daily_note_section_path: section }, task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.status === "in_progress" ? "/" : " ", false);
+      await this.insert(file, { ...task, daily_note_section_path: section }, markerOf(task), false);
     }
     for (const removed of task.projects.filter(p => !projects.includes(p))) {
       const file = this.repo.file(removed);
@@ -541,7 +541,7 @@ export class TaskService {
     for (const end of ends) {
       if (end.action === "move") await this.repo.update(end.task.id, t => ({ ...t, auto_started_block: end.block!.start }));
       else if (end.action === "release") await this.repo.update(end.task.id, t => ({ ...t, auto_started_block: null }));
-      else { await this.applyStatus(end.task.id, "open"); ended.push(end.task.title); }
+      else { await this.applyStatus(end.task.id, "open", undefined, undefined, t => ({ ...setStatus(t, "open"), auto_started_block: null })); ended.push(end.task.title); }
     }
     // A write that loses a race with the person typing (or an editor saving older text over it) leaves the status set but the note unchanged; the next pass puts the marker back, so such a start is never dropped.
     const lost = (error: unknown) => error instanceof Error && error.message.includes("changed concurrently");

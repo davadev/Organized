@@ -14,7 +14,7 @@ export const plannable = (task: Task): boolean => (task.status === "open" || tas
 export function dueStarts(tasks: Task[], now: number): { task: Task; block: WorkSession }[] {
   return tasks.flatMap(task => {
     const block = blockAt(task, now);
-    return block && task.status === "open" && !task.recurring && !task.converted_to && task.time_tracking_started_at === null ? [{ task, block }] : [];
+    return block && block.start !== task.auto_started_block && task.status === "open" && !task.recurring && !task.converted_to && task.time_tracking_started_at === null ? [{ task, block }] : [];
   });
 }
 export interface DueEnd { task: Task; action: "reopen" | "release" | "move"; block?: WorkSession }
