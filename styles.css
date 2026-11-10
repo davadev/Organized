@@ -404,6 +404,10 @@ span.organized-projection.organized-align-right.organized-wrapped { float: none;
 .organized-welcome-fig-action { display: inline-flex; align-items: center; gap: 6px; min-inline-size: 0; }
 .organized-welcome-fig-action-icon { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; inline-size: 26px; block-size: 26px; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s, 5px); color: var(--text-normal); }
 .organized-welcome-fig-action-icon svg { inline-size: 15px; block-size: 15px; }
+.organized-welcome-shot { margin-block: 4px 0; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m, 8px); overflow: hidden; }
+.organized-welcome-shot img { display: block; inline-size: 100%; block-size: auto; }
+.organized-welcome-shot .organized-shot-dark, .theme-dark .organized-welcome-shot .organized-shot-light { display: none; }
+.theme-dark .organized-welcome-shot .organized-shot-dark { display: block; }
 .organized-welcome-fig-caption { color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .organized-welcome-figure .organized-list-open { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-inline-start: 3px solid var(--organized-edge-done); }
 .organized-welcome-figure .organized-list-priority.priority-high { color: var(--color-red, #d64545); }

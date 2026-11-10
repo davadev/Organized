@@ -38,7 +38,7 @@ Manual ways in: commands **Show onboarding card** and **Show what's new** (the r
 `src/whatsNew/releaseNotes.ts`, newest first, versions plain `X.Y.Z` (the release gate reads them with a regex).
 
 - Every change a person can see or must relearn adds an item to the entry for the **next base version** in the same PR. Create the entry if it does not exist.
-- Keep items short and benefit-led; longer text belongs in the README. Backticks show as code. A `figure` is drawn from real interface elements (`src/onboardingFigures.ts`), never a screenshot.
+- Keep items short and benefit-led; longer text belongs in the README. Backticks show as code. A `figure` is drawn from real interface elements (`src/onboardingFigures.ts`) and says in words where to find the thing (use it for Obsidian's own Settings and command palette, which cannot be rendered truthfully). A `shot` is a real crop of the plugin's own panel (`src/whatsNew/shots.ts`), light and dark, rendered by `npm run screenshots` from the real view code and bundled as data URLs (about 150 KB in `main.js`); add one in the `SHOTS` table of `scripts/render-screenshots.mjs`.
 - Notes stack within a minor line: never delete an entry of the line you are in. `npm run check-release` fails if one is missing compared with the latest stable tag, and warns when a minor release has no entry.
 - `CHANGELOG.md` stays the full human log; the popup is the short version.
 

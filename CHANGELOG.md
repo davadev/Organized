@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The What's new note now shows real crops of the plugin's own panel (the Recurring pill row, the Timer card with its budget bar, a planned block on the Day grid), in light and dark, instead of drawn sketches; the pictures for Settings and the command palette say where to find the thing in words. `npm run screenshots` renders the crops into `src/whatsNew/shots/` and they are bundled into `main.js` (about 150 KB).
 - The pictures in the What's new note now say where each thing lives (the `[r]` marker and Recurring pill, the Day grid and Timer card, Settings › Organized › This device, the command palette) instead of only listing options; budgets and the repair commands got pictures too.
 - **What's new** now shows the note of the running release only (what changed since the last stable one), both in the popup after an update and from *Show what's new*, instead of the history of the whole minor line. The 0.1.4 note is reorganised by benefit, with pictures for repeat rules, planned time and device roles. README screenshots show a repeating task, a time budget and a planned block.
 - A subtask with a long title now wraps inside its row in the Task tab instead of running over the unlink button.

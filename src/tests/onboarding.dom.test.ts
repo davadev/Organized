@@ -5,6 +5,8 @@ import { installObsidianDom } from "./__mocks__/obsidianDom";
 import { ONBOARDING_STEPS } from "../onboarding";
 import { FIGURE_IDS, renderFigure } from "../onboardingFigures";
 import { RELEASE_NOTES } from "../whatsNew/releaseNotes";
+import { renderShot } from "../whatsNew/renderShot";
+import { SHOTS, type ShotId } from "../whatsNew/shots";
 
 installObsidianDom();
 const css = readFileSync("styles.css", "utf8");
@@ -47,5 +49,14 @@ describe("onboarding content and figures", () => {
     const names = [...renderFigure(createDiv(), "tabs").querySelectorAll(".organized-welcome-fig-tab-name")].map(n => n.textContent);
     expect(names).toEqual(["Calendar", "Task", "Projects", "Favorites"]);
     const view = readFileSync("src/view.ts", "utf8"); for (const name of names) expect(view).toContain(`["${name}", "`);
+  });
+  const SHOT_IDS = Object.keys(SHOTS) as ShotId[]; // every shot the bundle carries; the tests walk it so a new shot cannot ship unused
+  it("draws every real-GUI shot as a light and a dark picture, and the notes use each one", () => {
+    expect(new Set(RELEASE_NOTES.flatMap(n => n.items.flatMap(i => i.shot ?? [])))).toEqual(new Set(SHOT_IDS));
+    for (const id of SHOT_IDS) {
+      const shot = renderShot(document.createElement("div"), id); const images = Array.from(shot.querySelectorAll("img"));
+      expect(images.map(i => i.className)).toEqual(["organized-shot-light", "organized-shot-dark"]); expect(images[0].getAttribute("src")).toBe(SHOTS[id].light); expect(images[1].getAttribute("src")).toBe(SHOTS[id].dark);
+      expect(SHOTS[id].alt.length).toBeGreaterThan(20); expect(images[1].getAttribute("alt")).toBe("");
+    }
   });
 });
