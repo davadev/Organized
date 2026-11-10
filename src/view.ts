@@ -487,8 +487,8 @@ export class OrganizedInspectorView extends ItemView {
       save: (next, saved) => this.owner.run(async () => {
         if (!session) await (saved === "planned" ? service.addPlanned(task.id, next) : service.addSession(task.id, next));
         else await (type === "planned" ? service.changePlanned(task.id, session, next) : service.changeSession(task.id, session, next));
-      }),
-      remove: session ? () => this.owner.run(() => type === "planned" ? service.changePlanned(task.id, session, null) : service.changeSession(task.id, session, null)) : undefined,
+      }).then(() => this.owner.planningTick()),
+      remove: session ? () => this.owner.run(() => type === "planned" ? service.changePlanned(task.id, session, null) : service.changeSession(task.id, session, null)).then(() => this.owner.planningTick()) : undefined,
       openTask: session ? () => this.openCalendarTask(task) : undefined,
       logWorked: session && type === "planned" && Date.parse(session.end) <= Date.now() ? () => this.owner.run(() => service.logPlanned(task.id, session)) : undefined,
     }).open();
