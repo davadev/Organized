@@ -458,6 +458,8 @@ export interface SessionEdit {
   save: (session: WorkSession, kind: SessionKind) => Promise<void>; remove?: () => Promise<void>; openTask?: () => Promise<void>;
   /** For a planned block that is over: turns it into worked time. */
   logWorked?: () => Promise<void>;
+  /** What planning this block comes to against the task's and its projects' budgets (see `budgetHint`), shown while the block is planned time. */
+  budget?: (block: WorkSession) => string;
 }
 /** Adds or edits one block of time, worked or planned: the task, a start and an end, with the length shown as you type. */
 export class SessionModal extends Modal {
@@ -479,7 +481,8 @@ export class SessionModal extends Modal {
     const kind = (): SessionKind => this.edit.kind ?? kindOf(read().end, this.now());
     const paint = () => {
       const { start: from, end: to } = read(); const problem = sessionProblem(from, to, this.now(), kind());
-      note.setText(problem ?? `Length: ${lengthOf({ start: from!, end: to! })}${this.edit.kind ? "" : kind() === "planned" ? " · saved as planned time" : " · saved as time worked"}`); note.toggleClass("organized-session-problem", problem !== null);
+      const budget = !problem && kind() === "planned" && this.edit.budget ? this.edit.budget({ start: from!, end: to! }) : "";
+      note.setText(problem ?? `Length: ${lengthOf({ start: from!, end: to! })}${this.edit.kind ? "" : kind() === "planned" ? " · saved as planned time" : " · saved as time worked"}${budget ? `\n${budget}` : ""}`); note.toggleClass("organized-session-problem", problem !== null);
     };
     for (const input of [...start.inputs, ...end.inputs]) input.addEventListener("input", paint);
     paint();

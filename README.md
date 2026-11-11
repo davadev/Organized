@@ -132,7 +132,7 @@ That is all a todo costs until it needs more: a title and a status. No empty for
 
 #### Project time budgets
 
-A project can have time budgets, all optional, kept as hours in the project note's properties (**Projects** tab → *Project budgets* edits them, or write them yourself):
+A project can have time budgets, all optional, kept as hours in the project note's properties (**Projects** tab → *Project budgets* edits them, or write them yourself). While you plan, the Schedule dialog and the dialog for a block of time say what the planned time leaves of each budget of the task's projects. A subtask counts toward its parent's projects unless it has its own:
 
 ```yaml
 organized_budget: 120          # the whole project

@@ -200,12 +200,12 @@ describe('bug hunt regressions', () => {
     // Added while already under way: the timer runs from now, the half hour before the block existed was not worked.
     expect(await repo.read(typed.id)).toMatchObject({ status: 'in_progress', auto_started_block: covering.start }); expect(Date.parse((await repo.read(typed.id)).time_tracking_started_at!)).toBeGreaterThanOrEqual(now); expect(h.texts.get(file.path)).toContain('[/] Typed');
     // From the side panel: adding, moving the block away, moving it back, removing it.
-    const leaf: any = { app: h.app }; const view = new OrganizedInspectorView(leaf, plugin); const task = await repo.create('Panel'); const edit = (session: typeof covering | null) => { (view as any).editSession(task, session, localDate(), session ? 'planned' : null); return last().edit; };
-    await edit(null).save(covering, 'planned'); await flush(); expect((await repo.read(task.id)).status).toBe('in_progress');
+    const leaf: any = { app: h.app }; const view = new OrganizedInspectorView(leaf, plugin); const task = await repo.create('Panel'); const edit = async (session: typeof covering | null) => { await (view as any).editSession(task, session, localDate(), session ? 'planned' : null); return last().edit; };
+    await (await edit(null)).save(covering, 'planned'); await flush(); expect((await repo.read(task.id)).status).toBe('in_progress');
     // Moved away or removed while its timer runs: the timer stops now and the time so far counts; moved back, it runs again from now, never over that time.
-    await edit(covering).save(later, 'planned'); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null, time_tracking_started_at: null });
-    const stopped = Date.now(); await edit(later).save(covering, 'planned'); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'in_progress', auto_started_block: covering.start }); expect(Date.parse((await repo.read(task.id)).time_tracking_started_at!)).toBeGreaterThanOrEqual(stopped);
-    await edit(covering).remove!(); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null, time_tracking_started_at: null, planned_sessions: [] });
+    await (await edit(covering)).save(later, 'planned'); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null, time_tracking_started_at: null });
+    const stopped = Date.now(); await (await edit(later)).save(covering, 'planned'); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'in_progress', auto_started_block: covering.start }); expect(Date.parse((await repo.read(task.id)).time_tracking_started_at!)).toBeGreaterThanOrEqual(stopped);
+    await (await edit(covering)).remove!(); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null, time_tracking_started_at: null, planned_sessions: [] });
   });
   it('a todo ticked in a note while another action is still running reaches its task, and what the plugin itself writes is still not taken for a tick', async () => {
     const { h, plugin } = await loaded(); await ready(h); const { repo } = plugin; const tasks = [await repo.create('First'), await repo.create('Second'), await repo.create('Third')]; const [first, second, third] = tasks;

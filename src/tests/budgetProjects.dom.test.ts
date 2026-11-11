@@ -4,7 +4,9 @@ import Organized from '../main';
 import { OrganizedInspectorView } from '../view';
 import { harness } from './harness';
 import { installObsidianDom } from './__mocks__/obsidianDom';
-import { Notice } from './__mocks__/obsidian';
+import { Modal, Notice } from './__mocks__/obsidian';
+import { parseTasks } from '../codec';
+import type { ScheduleModal, SessionModal } from '../modals';
 import { taskFrom } from '../model';
 import { projectUse } from '../planning';
 
@@ -93,5 +95,40 @@ describe('renaming or moving a project note', () => {
     expect(f.owner.settings.knownProjects).toEqual([old]); f.events.rename[0](renamed, old); expect(f.owner.settings.knownProjects).toEqual([renamed.path]); expect(f.view.selectedProject).toBe(renamed.path); await vi.advanceTimersByTimeAsync(0); await flush(); await flush();
     expect((await f.repo.read(task.id)).projects).toEqual([renamed.path]); expect(f.owner.settings.knownProjects).toEqual([renamed.path]);
     const before = await f.repo.read(task.id); f.events.rename[0](plain, 'Notes/Moved.md'); await vi.advanceTimersByTimeAsync(0); await flush(); expect(await f.repo.read(task.id)).toEqual(before);
+  });
+});
+
+describe('time blocking against project budgets', () => {
+  it('the Schedule dialog and the time dialog say what planned time does to the task\'s and its projects\' budgets before it is saved', async () => {
+    const f = await fixture(); const alpha = (await f.project('Alpha', { weekly: 10, total: 20 })).path; const beta = (await f.project('Beta')).path;
+    const a = await f.repo.create('Spec'); const b = await f.repo.create('Review');
+    // Monday of this week: an hour worked on the spec, two on the review.
+    const mon = (h: number) => new Date(2026, 2, 9, h).toISOString();
+    await f.repo.update(a.id, t => ({ ...t, projects: [alpha, beta], time_budget_seconds: 3 * 3600, time_tracked_seconds: 3600, work_sessions: [{ start: mon(9), end: mon(10) }] }));
+    await f.repo.update(b.id, t => ({ ...t, projects: [alpha], time_tracked_seconds: 7200, work_sessions: [{ start: mon(10), end: mon(12) }] }));
+    const thu = (h: number) => new Date(2026, 2, 12, h).toISOString(); const two = { start: thu(9), end: thu(11) };
+    await f.owner.pickSchedule(await f.repo.read(a.id)); const schedule = Modal.instances.at(-1) as unknown as ScheduleModal;
+    expect(schedule.setup.budget([two]).split('\n')).toEqual(['Planned 2h · 0 min of 3h left', 'Alpha · all time: 15h of 20h left', 'Alpha · this week: 5h of 10h left']);
+    expect(schedule.setup.budget([{ start: thu(9), end: thu(18) }]).split('\n')).toContain('Alpha · this week: 2h over the 10h budget'); schedule.close();
+    // The day view's time dialog: planned time shows the same lines; a block being changed is not counted twice; time worked shows none.
+    await f.repo.update(a.id, t => ({ ...t, planned_sessions: [two] })); const task = await f.repo.read(a.id);
+    await (f.view as any).editSession(task, two, '2026-03-12', 'planned'); let modal = Modal.instances.at(-1) as unknown as SessionModal; const note = () => (modal as any).contentEl.querySelector('.organized-session-note')!.textContent as string;
+    expect(note()).toBe('Length: 2h\nPlanned 2h · 0 min of 3h left\nAlpha · all time: 15h of 20h left\nAlpha · this week: 5h of 10h left'); modal.close();
+    await (f.view as any).editSession(task, { start: mon(9), end: mon(10) }, '2026-03-09', 'worked'); modal = Modal.instances.at(-1) as unknown as SessionModal; expect(note()).toBe('Length: 1h'); modal.close();
+    await (f.view as any).editSession(task, null, '2026-03-12', null, thu(14)); modal = Modal.instances.at(-1) as unknown as SessionModal; expect(note()).toContain('saved as planned time\nPlanned 3h · 1h over the 3h budget'); modal.close();
+    // `[t]` on the todo opens the same dialog with the same lines.
+    const file: any = await f.add(f.service.daily.path('2026-03-11'), `- [t] Spec <!--organized:${a.id}-->`); const context = { file, line: parseTasks(await f.repo.readText(file))[0] };
+    await (f.owner as any).addTime(task, context); modal = Modal.instances.at(-1) as unknown as SessionModal; expect(modal.edit.budget!({ start: thu(14), end: thu(15) })).toContain('Alpha · this week: 4h of 10h left'); modal.close();
+    // A task in no budgeted project, with no budget of its own, shows nothing.
+    const free = await f.repo.create('Free'); await f.owner.pickSchedule(free); expect((Modal.instances.at(-1) as unknown as ScheduleModal).setup.budget([two])).toBe('');
+    // Time kept under a retired todo still counts toward its project.
+    vi.spyOn(f.service, 'retiredWork').mockResolvedValue([{ task: { ...(await f.repo.read(b.id)), id: 'retired', work_sessions: [{ start: mon(13), end: mon(14) }], time_tracked_seconds: 3600 }, path: 'Daily.md' }]);
+    expect((await f.owner.budgetHint(await f.repo.read(a.id)))([two])).toContain('Alpha · this week: 4h of 10h left');
+  });
+  it('a task made a subtask of a project task works for that project, unless it has projects of its own', async () => {
+    const f = await fixture(); const alpha = (await f.project('Alpha', { weekly: 10 })).path; const parent = await f.repo.create('Launch'); await f.repo.update(parent.id, t => ({ ...t, projects: [alpha] }));
+    const child = await f.repo.create('Copy'); await f.service.makeSubtask(parent.id, child.id); expect((await f.repo.read(child.id)).projects).toEqual([alpha]);
+    const own = await f.repo.create('Own'); await f.repo.update(own.id, t => ({ ...t, projects: ['Other.md'] })); await f.service.makeSubtask(parent.id, own.id); expect((await f.repo.read(own.id)).projects).toEqual(['Other.md']);
+    const bare = await f.repo.create('Bare'); const kid = await f.repo.create('Kid'); await f.service.makeSubtask(bare.id, kid.id); expect((await f.repo.read(kid.id)).projects).toEqual([]);
   });
 });
