@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **A todo created in a project note belongs to that project.** Attaching a new task to a todo written in a project note did not link it, so it was missing from the Projects tab and its budgets; it is linked now (with its parent's projects, as before).
+- **Scheduling from a project note leaves the project's headings in the project.** Scheduling, forwarding or making a task repeat from its todo in a project note made the daily note grow a `## Open` (or `## In progress`) heading for it, and turned the project's todo into `[<]`, hiding its status there. The todo goes where an unsorted one goes, and the project note keeps showing its status.
+- **The Projects tab follows the project you chose.** With a project picked, *N done or canceled tasks hidden* and the Canceled list counted canceled tasks of every project; they count that project's only. The chosen project's budgets show right under the filter, with *Open project note*, and the filter follows the project note when it is renamed.
+- **The calendar shows the days you planned ahead.** In the week view a later day whose daily note is not made yet showed `–` even with tasks scheduled for it; it shows how many. The month view marks such days with the dot and says how many are scheduled.
+- **Enter saves, Escape cancels.** The task title in the side panel, the time budget, project budget and time dialogs now save with Enter in a field, as their Save button does.
 - **Clearing a schedule keeps the todo you wrote.** A todo written in today's note and scheduled for today from the side panel was deleted when the schedule was cleared or the day removed, leaving the task with no line anywhere. A task's only line in today's or an earlier note now stays; a later day's copy still goes.
 - **Reopening a task scheduled away gives back its `[<]`.** Ticking done and then reopening a task scheduled for a later day turned the line it was scheduled from into `[ ]`, so it showed as open twice (there and on its day). That line is `[<]` again.
 - **The Schedule dialog adds only today and later days.** A day that is over could be added or picked for a day's date, which made that day's daily note after the fact and left the task looking overdue; earlier days stay as they were.

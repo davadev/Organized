@@ -12,6 +12,7 @@ import { taskFrom } from '../model';
 import { splitNote } from '../repository';
 import { editorExtension } from '../render';
 import { ScheduleModal } from '../modals';
+import { DAILY } from '../recurrence';
 
 installObsidianDom();
 const flush = async () => { for (let i = 0; i < 100; i++) await Promise.resolve(); };
@@ -197,5 +198,21 @@ describe('hunt 3: reopen', () => {
     await service.saveSchedule(task.id, [{ date: day(6), blocks: [] }], context); expect(texts.get(note(4))).toContain('- [<] Away');
     await service.status(task.id, 'completed'); expect(texts.get(note(4))).toContain('- [x] Away'); expect(texts.get(note(6))).toContain('- [x] Away');
     await service.status(task.id, 'open'); expect(texts.get(note(6))).toContain('- [ ] Away'); expect(texts.get(note(4))).toContain('- [<] Away');
+  });
+});
+
+describe('hunt 4: a project note is a board', () => {
+  it('scheduling, forwarding or repeating from a project note neither copies its status heading into daily notes nor hides its status', async () => {
+    const { owner, service, repo, add, texts, note } = await fixture(); const path = `${repo.projectFolder()}/Launch.md`;
+    const line = async (id: string) => ({ file: repo.file(path)!, line: parseTasks(texts.get(path)!).find(t => t.id === id)! });
+    const brief = await repo.create('Brief'); await service.projects(brief.id, [path]); await add(note(4), '# Day\n\n## Tasks\n- [ ] Other\n'); await add(note(5), '## Tasks\n');
+    await service.schedule(await line(brief.id), day(4)); expect(texts.get(note(4))).not.toContain('## Open'); expect(texts.get(path)).toContain('- [ ] Brief'); expect(texts.get(path)).not.toContain('[<]');
+    const deck = await repo.create('Deck'); await service.projects(deck.id, [path]); await service.saveSchedule(deck.id, [{ date: day(5), blocks: [] }], await line(deck.id));
+    expect(texts.get(note(5))).toContain(`- [ ] Deck <!--organized:${deck.id}-->`); expect(texts.get(note(5))).not.toContain('## Open'); expect(texts.get(path)).toContain('- [ ] Deck');
+    const sync = await repo.create('Sync'); await service.projects(sync.id, [path]); await service.recurrence(sync.id, DAILY, await line(sync.id));
+    expect((await repo.read(sync.id)).daily_note_section_path).toEqual([]); expect(owner).toBeTruthy();
+    // From a daily note the section still goes along, and the line there says the task moved.
+    const daily = await repo.create('Daily'); await add(note(6), `## Work\n- [ ] Daily <!--organized:${daily.id}-->`);
+    await service.schedule({ file: repo.file(note(6))!, line: parseTasks(texts.get(note(6))!)[0] }, day(5)); expect(texts.get(note(5))).toMatch(/## Work\n+- \[ \] Daily/); expect(texts.get(note(6))).toContain('- [<] Daily');
   });
 });

@@ -444,6 +444,13 @@ export class ProjectPicker extends Modal {
   onClose(): void { this.unfit(); this.contentEl.empty(); }
 }
 
+/** Enter in one of the dialog's fields does what its Save button does. */
+function enterSaves(host: HTMLElement): void {
+  host.addEventListener("keydown", event => {
+    if (event.key !== "Enter" || !(event.target instanceof HTMLInputElement)) return;
+    event.preventDefault(); host.querySelector<HTMLButtonElement>("button.mod-cta")!.click();
+  });
+}
 export interface SessionEdit {
   heading: string; taskTitle: string; start: string; end: string;
   /** What the block is. An existing block keeps its kind; a new one (null) is worked or planned by its times, as the person types them. */
@@ -484,6 +491,7 @@ export class SessionModal extends Modal {
     if (this.edit.logWorked) { const log = this.edit.logWorked; actions.addButton(b => b.setButtonText("Log as worked").onClick(() => { this.close(); void log().catch(report); })); }
     if (this.edit.openTask) { const open = this.edit.openTask; actions.addButton(b => b.setButtonText("Open task").onClick(() => { this.close(); void open().catch(report); })); }
     if (this.edit.remove) { const remove = this.edit.remove; actions.addButton(b => { b.setButtonText("Delete").onClick(() => { this.close(); void remove().catch(report); }); b.buttonEl.addClass("mod-warning"); }); }
+    enterSaves(this.contentEl);
   }
   onClose(): void { this.contentEl.empty(); }
 }
@@ -518,6 +526,7 @@ export class ProjectBudgetModal extends Modal {
       const value = read(); if (typeof value === "string") { paint(); return; }
       this.close(); void this.save(value).catch(report);
     }));
+    enterSaves(this.contentEl);
   }
   onClose(): void { this.contentEl.empty(); }
 }
@@ -550,6 +559,7 @@ export class BudgetModal extends Modal {
       this.close(); void this.save(value).catch(report);
     }));
     if (this.current !== null) actions.addButton(b => { b.setButtonText("Remove budget").onClick(() => { this.close(); void this.save(null).catch(report); }); b.buttonEl.addClass("mod-warning"); });
+    enterSaves(this.contentEl);
   }
   onClose(): void { this.contentEl.empty(); }
 }

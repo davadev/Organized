@@ -240,6 +240,14 @@ describe("Retire window", () => {
     const edit = new BudgetModal(h.app, 'Report', 8100, save); edit.open(); const fields = Array.from(edit.contentEl.querySelectorAll<HTMLInputElement>('input')); expect([fields[0].value, fields[1].value]).toEqual(['2', '15']);
     Array.from(edit.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Remove budget')!.click(); await flush(); expect(save).toHaveBeenLastCalledWith(null); edit.close(); expect(edit.contentEl.childElementCount).toBe(0);
   });
+  it('saves the budget and time dialogs with Enter in a field, as Save does', async () => {
+    const h = harness(); const save = vi.fn().mockResolvedValue(undefined); const enter = (el: HTMLElement, key = 'Enter') => el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    const budget = new BudgetModal(h.app, 'Report', null, save); budget.open(); const [hours] = Array.from(budget.contentEl.querySelectorAll<HTMLInputElement>('input'));
+    enter(hours); await flush(); expect(save).not.toHaveBeenCalled(); hours.value = '3'; enter(hours, 'a'); enter(budget.contentEl.querySelector('button')!); await flush(); expect(save).not.toHaveBeenCalled(); enter(hours); await flush(); expect(save).toHaveBeenCalledWith(10800);
+    const project = new ProjectBudgetModal(h.app, 'Website', { total: null, day: null, week: null, month: null }, save); project.open(); const total = project.contentEl.querySelector<HTMLInputElement>('input')!; total.value = '40'; enter(total); await flush(); expect(save).toHaveBeenLastCalledWith({ total: 144000, day: null, week: null, month: null });
+    const session = new SessionModal(h.app, { heading: 'Add time', taskTitle: 'T', start: new Date(2026, 2, 4, 9).toISOString(), end: new Date(2026, 2, 4, 10).toISOString(), kind: 'worked', save }, () => new Date(2026, 2, 5).getTime()); session.open();
+    enter(session.contentEl.querySelector('input')!); await flush(); expect(save).toHaveBeenLastCalledWith({ start: new Date(2026, 2, 4, 9).toISOString(), end: new Date(2026, 2, 4, 10).toISOString() }, 'worked');
+  });
   it('asks for a project budget per period in hours, leaves blanks out and rejects bad values', async () => {
     const h = harness(); const save = vi.fn().mockResolvedValue(undefined);
     const modal = new ProjectBudgetModal(h.app, 'Website', { total: null, day: null, week: 36000, month: 5400 }, save); modal.open();

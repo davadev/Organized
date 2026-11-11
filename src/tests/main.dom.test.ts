@@ -164,6 +164,16 @@ describe('plugin lifecycle and user-only editor actions', () => {
     await plugin.pickTask(other as any, file, false, true); (Modal.instances.at(-1) as TaskPicker).onChooseSuggestion('Nested'); await flush(); expect((await plugin.repo.list()).find(t => t.title === 'Nested')!.projects).toEqual([]);
     other.setValue('- [ ] Plain\n    - [ ] Third'); other.setCursor({ line: 1, ch: 0 }); await plugin.pickTask(other as any, file, false, true); const lone = (await plugin.repo.create('NoProjects')); (Modal.instances.at(-1) as TaskPicker).onChooseSuggestion(lone); await flush(); expect((await plugin.repo.read(lone.id)).projects).toEqual([]);
   });
+  it('links a task created in a project note to that project, with its parent\'s projects too', async () => {
+    const { h, plugin } = await loaded(); const path = `${plugin.repo.projectFolder()}/Launch.md`; const parent = await plugin.repo.create('Parent'); await plugin.repo.update(parent.id, t => ({ ...t, projects: ['Family.md'] }));
+    const file: any = await h.add(path, `- [ ] Brief\n- [ ] Parent <!--organized:${parent.id}-->\n    - [ ] Child`); const editor = h.setActive(file); editor.setCursor({ line: 0, ch: 0 });
+    await plugin.pickTask(editor as any, file); (Modal.instances.at(-1) as TaskPicker).onChooseSuggestion('Brief'); await flush();
+    expect((await plugin.repo.list()).find(t => t.title === 'Brief')!.projects).toEqual([path]); expect(plugin.settings.knownProjects).toContain(path);
+    editor.setCursor({ line: 2, ch: 0 }); await plugin.pickTask(editor as any, file); (Modal.instances.at(-1) as TaskPicker).onChooseSuggestion('Child'); await flush();
+    expect((await plugin.repo.list()).find(t => t.title === 'Child')!.projects).toEqual([path, 'Family.md']);
+    const marked: any = await h.add('Notes/Side.md', '- [ ] Marked'); vi.spyOn(plugin.repo, 'isProjectNote').mockImplementation(f => f.path === 'Notes/Side.md'); const side = h.setActive(marked); side.setCursor({ line: 0, ch: 0 });
+    await plugin.pickTask(side as any, marked); (Modal.instances.at(-1) as TaskPicker).onChooseSuggestion('Marked'); await flush(); expect((await plugin.repo.list()).find(t => t.title === 'Marked')!.projects).toEqual(['Notes/Side.md']);
+  });
   it('closes the automatic picker while preserving a plain checkbox todo', async () => {
     const { h, plugin } = await loaded(); const file: any = await h.add('Todo.md', '- [ ] Keep ordinary'); const editor = h.setActive(file);
     await plugin.pickTask(editor as any, file, false, true);

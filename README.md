@@ -125,7 +125,7 @@ That is all a todo costs until it needs more: a title and a status. No empty for
 
 <img src="resources/screenshots/projects-annotated.png" alt="The Projects tab: a project filter, project colours and task cards with their project chips." width="360">
 
-- **1** · Filter the tasks by project.
+- **1** · Filter the tasks by project. With a project chosen, its budgets show under the filter, with *Open project note*. A todo you turn into a task inside a project note belongs to that project.
 - **2** · Give each project a colour; it follows the task everywhere (the week bars, the day blocks, the chips).
 - **3** · A task card with status, priority, date and star.
 - **4** · The project chip, in the project's colour; it opens the project note.

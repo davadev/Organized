@@ -38,6 +38,13 @@ describe('compact calendar and contextual task inspector', () => {
      button(view.contentEl, 'Task').click(); await flush(); expect(view.contentEl.textContent).toContain('Open a Markdown note'); button(view.contentEl, 'Projects').click(); await flush(); expect(view.tab).toBe('Projects');
     await view.onClose(); await view.onClose(); expect(view.contentEl.childElementCount).toBe(0); expect((view as any).children).toHaveLength(0);
   });
+  it('marks later days in the month that have scheduled tasks but no note yet', async () => {
+    const { view, repo } = await fixture(); vi.setSystemTime(new Date(2026, 2, 4, 9)); view.month = moment('2026-03-01').startOf('month');
+    const task = await repo.create('Plan'); await repo.update(task.id, t => ({ ...t, scheduled_dates: ['2026-03-02', '2026-03-10'] })); await view.render(); await flush();
+    const dayButton = (n: number) => Array.from(view.contentEl.querySelectorAll<HTMLButtonElement>('.organized-day')).find(b => b.textContent === String(n) && !b.classList.contains('organized-muted'))!;
+    expect(dayButton(10).classList.contains('organized-has-note')).toBe(true); expect(dayButton(10).getAttribute('aria-label')).toContain(', 1 scheduled');
+    expect(dayButton(2).classList.contains('organized-has-note')).toBe(false); expect(dayButton(11).classList.contains('organized-has-note')).toBe(false);
+  });
   it('renders a small statistics strip and reports action/read errors', async () => {
     const { view, owner, repo, add } = await fixture(); const task = await repo.create('Running'); await repo.update(task.id, t => ({ ...t, time_tracking_started_at: new Date().toISOString() })); await add(owner.service.daily.path(localDate()), '- [x] Done'); await view.render(); await flush();
     expect(Array.from(view.contentEl.querySelectorAll('.organized-stat strong')).map(el => el.textContent)).toEqual(['1', '1', '1']);
@@ -71,6 +78,10 @@ describe('compact calendar and contextual task inspector', () => {
     const change = vi.spyOn(owner.service, 'title').mockResolvedValue(); button(view.contentEl, 'Edit title').click(); await flush();
     const title = view.contentEl.querySelector<HTMLInputElement>('.organized-title-input')!; expect(document.activeElement).toBe(title); title.value = 'Edited'; button(view.contentEl, 'Save').click(); await flush(); expect(change).toHaveBeenCalledWith(task.id, 'Edited'); expect(view.editingTitle).toBe(false);
     await view.render(); button(view.contentEl, 'Edit title').click(); await flush(); button(view.contentEl, 'Cancel').click(); await flush(); expect(view.editingTitle).toBe(false); expect(view.contentEl.querySelector('.organized-title-input')).toBeNull();
+    // Enter saves and Escape cancels, as in a note; other keys type.
+    const key = (k: string) => view.contentEl.querySelector<HTMLInputElement>('.organized-title-input')!.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+    button(view.contentEl, 'Edit title').click(); await flush(); view.contentEl.querySelector<HTMLInputElement>('.organized-title-input')!.value = 'By key'; key('a'); expect(view.editingTitle).toBe(true); key('Enter'); await flush(); expect(change).toHaveBeenLastCalledWith(task.id, 'By key'); expect(view.editingTitle).toBe(false);
+    await view.render(); button(view.contentEl, 'Edit title').click(); await flush(); key('Escape'); await flush(); expect(change).toHaveBeenCalledTimes(2); expect(view.contentEl.querySelector('.organized-title-input')).toBeNull();
     button(view.contentEl, 'Open task note').click(); await flush(); expect(owner.app.workspace.getLeaf).toHaveBeenCalled();
   });
   it('makes optional controls available on demand and persists only deliberate actions', async () => {
@@ -121,7 +132,7 @@ describe('compact calendar and contextual task inspector', () => {
     const picker = view.contentEl.querySelector<HTMLSelectElement>('[aria-label="Choose project"]')!; picker.value = 'Project.md'; picker.dispatchEvent(new Event('change')); await flush(); expect(view.selectedProject).toBe('Project.md'); view.module = 'Description'; openCard(view, 'High').click(); await flush(); expect(owner.selectedTaskId).toBe(high.id); expect(view.module).toBe(''); expect(view.origin).toBe('Projects');
     button(view.contentEl, 'Back to projects').click(); await flush(); view.tab = 'Favorites'; await view.render(); await flush(); expect(Array.from(view.contentEl.querySelectorAll('.organized-section-title')).map(el => el.textContent)).toEqual(['Favorites']); expect(view.contentEl.querySelector('.organized-count')?.textContent).toBe('2'); expect(listed(view).indexOf('High')).toBeLessThan(listed(view).indexOf('Low'));
     openCard(view, 'Low').click(); await flush(); expect(view.origin).toBe('Favorites'); expect(view.contentEl.textContent).toContain('From favorites'); button(view.contentEl, 'Back to favorites').click(); await flush(); expect(view.tab).toBe('Favorites'); view.tab = 'Projects'; await view.render(); await flush(); openCard(view, 'High').click(); await flush();
-    button(view.contentEl, 'Back to projects').click(); await flush(); openCard(view, 'Canceled').click(); await flush(); expect(owner.selectedTaskId).toBe(canceled.id);
+    button(view.contentEl, 'Back to projects').click(); await flush(); expect(card(view, 'Canceled')).toBeUndefined(); view.selectedProject = ''; await view.render(); openCard(view, 'Canceled').click(); await flush(); expect(owner.selectedTaskId).toBe(canceled.id);
     view.tab = 'Projects'; await view.render(); button(view.contentEl, 'Restore').click(); await flush(); expect((await repo.read(canceled.id)).status).toBe('open');
     view.tab = 'Projects'; view.selectedProject = ''; await view.render(); openCard(view, 'Low').click(); await flush(); expect(owner.selectedTaskId).toBe(low.id);
     view.tab = 'Projects'; await view.render(); openCard(view, 'Plain').click(); await flush(); expect(owner.selectedTaskId).toBe(plain.id);
@@ -328,6 +339,10 @@ describe('compact calendar and contextual task inspector', () => {
     const rows = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-week-row')); expect(rows).toHaveLength(7);
     expect(rows.map(row => row.querySelector('.organized-week-weekday')!.textContent)).toEqual(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']); expect(view.contentEl.querySelector('h3')!.textContent).toBe('Mar 1 – Mar 7, 2026');
     expect(rows[2].querySelector('.organized-week-count')!.textContent).toBe('1/3'); expect(rows[1].querySelector('.organized-week-count')!.textContent).toBe('–');
+    // A later day whose note is not made yet counts the tasks scheduled for it; a past one without a note stays empty.
+    expect(rows[5].querySelector('.organized-week-count')!.textContent).toBe('–'); const later = await repo.create('Later'); await repo.update(later.id, t => ({ ...t, scheduled_dates: ['2026-03-06', '2026-03-02'] })); await view.render();
+    let again = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-week-row')); expect(again[5].querySelector('.organized-week-count')!.textContent).toBe('0/1'); expect(again[1].querySelector('.organized-week-count')!.textContent).toBe('–');
+    await repo.update(later.id, t => ({ ...t, status: 'completed' })); await view.render(); again = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-week-row')); expect(again[5].querySelector('.organized-week-count')!.textContent).toBe('–');
     expect(rows[2].querySelectorAll('.organized-week-block')).toHaveLength(2); expect(rows[3].querySelectorAll('.organized-week-block')).toHaveLength(2); expect(rows[3].getAttribute('aria-pressed')).toBe('true'); expect(rows[2].querySelector('.organized-week-block[data-status="completed"]')).toBeTruthy();
     const running = rows[3].querySelectorAll<HTMLElement>('.organized-week-block')[1]; expect(Number(running.style.getPropertyValue('--organized-width'))).toBeGreaterThan(0); expect(rows[3].getAttribute('aria-label')).toContain('2 tracked blocks');
     rows[4].click(); await flush(); expect(view.calendarMode).toBe('Day'); expect(view.selectedDate).toBe('2026-03-05');
@@ -512,7 +527,7 @@ describe('compact calendar and contextual task inspector', () => {
     const none = await repo.create('Fresh'); await repo.update(none.id, t => ({ ...t, time_tracked_seconds: 60 })); owner.selectedTaskId = none.id; await view.render(); await flush(); expect(view.contentEl.querySelector('details.organized-sessions')).toBeNull();
   });
   it('hides done and canceled tasks in the Projects tab by default, shows them on request and remembers the choice', async () => {
-    const { owner, view, repo } = await fixture(); const open = await repo.create('Still open'); const done = await repo.create('Finished'); const gone = await repo.create('Dropped'); const habit = await repo.create('Habit');
+    const { owner, view, repo, add, raw } = await fixture(); const open = await repo.create('Still open'); const done = await repo.create('Finished'); const gone = await repo.create('Dropped'); const habit = await repo.create('Habit');
     await repo.update(open.id, t => ({ ...t, projects: ['P.md'] })); await repo.update(done.id, t => ({ ...t, status: 'completed', projects: ['P.md'] })); await repo.update(gone.id, t => ({ ...t, status: 'canceled', projects: ['P.md'] }));
     const titlesNow = () => Array.from(view.contentEl.querySelectorAll('.organized-list-title')).map(el => el.textContent); const toggle = () => view.contentEl.querySelector<HTMLButtonElement>('.organized-hide-done')!; const sections = () => Array.from(view.contentEl.querySelectorAll('.organized-section-title')).map(el => el.textContent);
     expect(owner.settings.hideClosedProjects).toBe(true); view.tab = 'Projects'; await view.render(); await flush();
@@ -520,8 +535,12 @@ describe('compact calendar and contextual task inspector', () => {
     toggle().click(); await flush(); await flush(); expect(owner.settings.hideClosedProjects).toBe(false); expect(titlesNow().sort()).toEqual(['Dropped', 'Finished', 'Still open']); expect(sections()).toEqual(['Projects', 'Canceled']); expect(toggle().getAttribute('aria-pressed')).toBe('false'); expect(toggle().getAttribute('data-icon')).toBe('eye'); expect(view.contentEl.textContent).not.toContain('hidden.');
     toggle().click(); await flush(); await flush(); expect(owner.settings.hideClosedProjects).toBe(true);
     await repo.update(open.id, t => ({ ...t, status: 'completed' })); await view.render(); await flush(); expect(titlesNow()).toEqual([]); expect(view.contentEl.textContent).toContain('3 done or canceled tasks hidden.'); expect(view.contentEl.textContent).not.toContain('No tasks linked');
-    await repo.update(habit.id, t => ({ ...t, projects: ['Q.md'], status: 'completed' })); view.selectedProject = 'Q.md'; await view.render(); await flush(); expect(view.contentEl.textContent).toContain('2 done or canceled tasks hidden.'); await repo.update(habit.id, t => ({ ...t, status: 'open' })); await view.render(); await flush(); expect(titlesNow()).toEqual(['Habit']);
+    await repo.update(habit.id, t => ({ ...t, projects: ['Q.md'], status: 'completed' })); view.selectedProject = 'Q.md'; await view.render(); await flush(); expect(view.contentEl.textContent).toContain('1 done or canceled task hidden.'); await repo.update(habit.id, t => ({ ...t, status: 'open' })); await view.render(); await flush(); expect(titlesNow()).toEqual(['Habit']);
     for (const id of [open.id, done.id, gone.id, habit.id]) await repo.update(id, t => ({ ...t, status: 'completed' })); await repo.update(gone.id, t => ({ ...t, status: 'canceled' })); view.selectedProject = ''; await view.render(); await flush(); expect(view.contentEl.textContent).toContain('4 done or canceled tasks hidden.');
+    owner.settings.hideClosedProjects = false; view.selectedProject = 'Q.md'; await view.render(); await flush(); expect(sections()).toEqual(['Projects', 'Canceled']); expect(view.contentEl.textContent).toContain('No canceled tasks.'); view.selectedProject = 'P.md'; await view.render(); await flush(); expect(titlesNow()).toContain('Dropped');
+    vi.spyOn(repo, 'projectBudgets').mockImplementation(p => ({ total: p === 'P.md' ? 7200 : null, day: null, week: null, month: null })); await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-project-bars .organized-budget-text')!.textContent).toBe('0 min tracked · 2h left of 2h');
+    expect(button(view.contentEl, 'Open project note')).toBeUndefined(); const note = await add('P.md', 'x'); await view.render(); await flush(); button(view.contentEl, 'Open project note').click(); await flush(); expect(raw.workspace.getLeaf.mock.results.at(-1)!.value.openFile).toHaveBeenCalledWith(note);
+    view.selectedProject = ''; await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-project-bars')).toBeNull();
     const solo = await fixture(); const one = await solo.repo.create('One hidden'); await solo.repo.update(one.id, t => ({ ...t, status: 'canceled' })); solo.view.tab = 'Projects'; await solo.view.render(); await flush(); expect(solo.view.contentEl.textContent).toContain('1 done or canceled task hidden.');
   });
   it('stops long Projects lists at a page and shows the rest on request', async () => {
