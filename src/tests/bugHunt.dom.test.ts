@@ -285,4 +285,41 @@ describe('bug hunt regressions', () => {
     const child = await h.repo.create('Child'); const solo: any = await h.add('Solo.md', `${line(other)}\n${line(other)}\n${line(child)}`); const alone = h.texts.get(solo.path);
     await h.service.makeSubtask(other.id, child.id); expect(Notice.instances.at(-1)?.message).toBe('“Other” is on 2 lines in Solo.md. Delete one copy, then make it a subtask again.'); expect(h.texts.get(solo.path)).toBe(alone);
   });
+  it('a copy of a subtask or of its parent pasted into the note keeps the subtask linked, and deleting a copy settles the link from where the one left sits', async () => {
+    const { h, plugin } = await loaded(); const { repo, service } = plugin;
+    const parent = await repo.create('Parent'); const kid = await repo.create('Kid'); const other = await repo.create('Other');
+    const line = (indent: number, t: { title: string; id: string }) => `${' '.repeat(indent)}- [ ] ${t.title} <!--organized:${t.id}-->`;
+    const start = [line(0, parent), line(2, kid), line(2, other), '## Elsewhere'].join('\n'); const file: any = await h.add('Note.md', start);
+    await service.syncSubtasks(new Map(), new Map([[kid.id, parent.id], [other.id, parent.id]]));
+    let text = start; const edit = async (after: string, userEvent: string | null = null) => { const before = text; text = after; h.setActive(file, after); h.texts.set(file.path, after); plugin.onEditorUpdate(changed(before, 0, before.length, after, userEvent)); await vi.advanceTimersByTimeAsync(900); };
+    const subtasks = async () => (await repo.read(parent.id)).subtasks;
+    await edit(`${start}\n${line(0, kid)}`, 'input.paste'); expect(await subtasks()).toEqual(['[[Kid]]', '[[Other]]']);
+    await edit(start); expect(await subtasks()).toEqual(['[[Kid]]', '[[Other]]']);
+    // Copied under another heading, then the original deleted: the todo left is no longer under the parent.
+    await edit(`${start}\n${line(0, kid)}`, 'input.paste'); await edit([line(0, parent), line(2, other), '## Elsewhere', line(0, kid)].join('\n')); expect(await subtasks()).toEqual(['[[Other]]']);
+    await edit(`${text}\n${line(0, parent)}`, 'input.paste'); expect(await subtasks()).toEqual(['[[Other]]']);
+    // The original parent deleted together with what was under it: that subtask's line is gone.
+    await edit(['## Elsewhere', line(0, kid), line(0, parent)].join('\n')); expect(await subtasks()).toEqual([]);
+  });
+  it('making a task that a planned block set in progress recurring puts its todos back to open, and a running timer keeps its marker', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 2, 4, 9, 30));
+    const { plugin, h } = await loaded(); vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 2, 4, 9, 30)); plugin.settings.startAtPlannedTime = true; const { service, repo } = plugin;
+    const at = (hour: number, minute = 0) => new Date(2026, 2, 4, hour, minute);
+    const task = await repo.create('Focus'); const line = (marker: string) => `- [${marker}] Focus <!--organized:${task.id}-->`;
+    const note = service.daily.path(localDate()); await h.add(note, line(' ')); const project = `${repo.projectFolder()}/Plan.md`; await h.add(project, line(' ')); const past = service.daily.path('2026-03-03'); await h.add(past, line('/'));
+    await service.addPlanned(task.id, { start: at(9).toISOString(), end: at(10).toISOString() }); await service.applyPlanning(at(9, 30).getTime());
+    expect(h.texts.get(note)).toContain(line('/')); expect(h.texts.get(project)).toContain(line('/'));
+    // A line the person set to something else since is theirs.
+    await h.add('Notes/Done.md', line('x'));
+    await service.recurrence(task.id, { every: 1, unit: 'week', days: [1, 2, 3, 4, 5], monthDay: null } as any);
+    expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null, recurring: true });
+    expect(h.texts.get(note)).toContain(line(' ')); expect(h.texts.get(note)).not.toContain('[/]'); expect(h.texts.get(project)).not.toContain('[/]'); expect(h.texts.get(past)).toBe(line('/')); expect(h.texts.get('Notes/Done.md')).toBe(line('x'));
+    await service.applyPlanning(at(10, 1).getTime()); expect(h.texts.get(note)).not.toContain('[/]');
+    // With a timer running, `[/]` is still true; a note that cannot be written is named.
+    const timed = await repo.create('Timed'); const timedLine = `- [/] Timed <!--organized:${timed.id}-->`; await h.add(`Notes/Timed.md`, timedLine); await repo.update(timed.id, t => ({ ...t, status: 'in_progress', time_tracking_started_at: at(9).toISOString() }));
+    await service.recurrence(timed.id, null); expect(h.texts.get('Notes/Timed.md')).toBe(timedLine);
+    const stuck = await repo.create('Stuck'); await h.add('Notes/Stuck.md', `- [/] Stuck <!--organized:${stuck.id}-->`); await repo.update(stuck.id, t => ({ ...t, status: 'in_progress' }));
+    vi.spyOn(repo, 'write').mockImplementation(async (file: any) => { if (file.path === 'Notes/Stuck.md') throw new Error('locked'); });
+    await service.recurrence(stuck.id, null); expect((Notice.instances.at(-1)?.message as DocumentFragment).textContent).toContain('Notes/Stuck.md');
+  });
 });
