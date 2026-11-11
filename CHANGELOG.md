@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **A todo copied or cut from Live Preview stays the task.** Selecting a todo from its checkbox to the end of its title (with the handles on a phone, or a mouse drag) left out the hidden task ID after the title, so the todo pasted under another heading was a plain todo and the task lost its line. Copy and cut now take the ID along whenever the selection includes the checkbox; selecting only words of the title still copies just those words. Copy (not cut) means two lines share the task until you delete the original, as a whole-line copy already did.
+
 ## 0.1.4
 
 - **A todo ticked in a note always reaches the side panel.** A checkbox ticked while Organized was still busy with something else (saving the tick before it, the once-a-minute planned-time check, a title you had just edited) was silently ignored: the note showed it done and the task stayed open. Every tick is now handled, in order. Clicking the checkbox of a todo that is in progress `[/]`, canceled `[-]` or carries any other marker (Obsidian turns it into `[ ]`) now opens the task again instead of leaving the task and the note disagreeing; a running timer stops when you click its checkbox.
