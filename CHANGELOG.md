@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Retire keeps a todo's planned times.** A scheduled day's todo turned into plain text lost its `· 10:00–11:00`; it now keeps it as text, so the note still says when after Organized is gone.
+- **A planned block typed by hand with a mistake is kept.** A line in `planned_sessions` that cannot be read (say `2026-11-18 10:00-11:0`) was deleted the next time the task changed; it now stays as you typed it, for you to fix.
+- **Cancelling Repeat after a typed `[<]` gives the todo its marker back.** Typing `<` on a repeating task's todo, choosing *Repeat settings…* and then cancelling left the todo `[<]`.
+- **A secondary device says scheduled tasks too.** Its notice for a new daily note it does not fill, and the repair command (now *Add missing recurring and scheduled tasks to this daily note*), named only recurring tasks, though scheduled ones are left for the main device as well.
 - **A planned block moved to a later day schedules that day.** Changing a block's date in the day view to a day the task was not scheduled for left that day without the todo; it is now scheduled for it too (the todo goes in that day's note), with one Undo for both.
 - **A todo linked to another task shows that task's times.** Linking a todo with times to a different task, or duplicating it as a new task, kept the first task's times after the title.
 - **Deleting a todo's title down to its times no longer renames the task.** A pause with only `· 10:00–11:00` left on the line renamed the task (and its note) to those times.

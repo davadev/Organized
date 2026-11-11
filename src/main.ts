@@ -78,7 +78,7 @@ export default class Organized extends Plugin {
       this.addCommand({ id: "unlink-note-tasks", name: "Convert tasks in this note back to todos", editorCallback: (_editor, view) => { if (view.file) void this.run(() => this.service.unlinkTasks([view.file!], "this note")).catch(report); } });
       this.addCommand({ id: "add-subtask", name: "Add subtask", editorCallback: (editor, view) => { if (view.file) void this.addSubtask(editor, view.file).catch(report); } });
       this.addCommand({ id: "repair-subtasks", name: "Repair subtask links in this note", editorCallback: (_editor, view) => { const file = view.file; if (file) void this.run(() => this.service.repairSubtasks(file)).catch(report); } });
-      this.addCommand({ id: "add-recurring-today", name: "Add missing recurring tasks to this daily note", callback: () => { void this.addMissingRecurring(); } });
+      this.addCommand({ id: "add-recurring-today", name: "Add missing recurring and scheduled tasks to this daily note", callback: () => { void this.addMissingRecurring(); } });
       this.addCommand({ id: "remove-duplicate-repeats", name: "Remove duplicate recurring lines in this note", editorCallback: (_editor, view) => { if (view.file) void this.removeDuplicates(view.file); } });
       this.addCommand({ id: "nest-subtasks", name: "Indent subtasks under their parents", callback: () => { void this.run(() => this.nestSubtasks(true)).catch(report); } });
       this.addCommand({ id: "retire-tasks", name: "Retire tasks…", callback: () => { this.retireTasks(); } });
@@ -295,7 +295,7 @@ export default class Organized extends Plugin {
     return this.lastNoteEditor;
   }
   private told = new Set<string>();
-  /** The day whose note "Add missing recurring tasks" is creating and filling, so the no-fill notice stays quiet for it. */
+  /** The day whose note "Add missing recurring and scheduled tasks" is creating and filling, so the no-fill notice stays quiet for it. */
   private catchingUp: string | null = null;
   /** A notice that is shown once per distinct text in a session. */
   private tellOnce(message: string): void { if (this.told.has(message)) return; this.told.add(message); new Notice(message, 12000); }
@@ -304,10 +304,10 @@ export default class Organized extends Plugin {
     const parts = [copies.length ? `share a task id with another note (${copies.join(", ")}): delete or change the id of one` : "", broken.length ? `cannot be read as tasks (${broken.join(", ")}): check their properties` : ""].filter(Boolean);
     this.tellOnce(`Organized left out task notes that ${parts.join("; and ")}. Until then those tasks are not listed and do not repeat.`);
   }
-  /** A secondary or mirror device does not fill new daily notes; say so, once per note, so a day without its recurring tasks is not a mystery. */
+  /** A secondary or mirror device does not fill new daily notes; say so, once per note, so a day without its recurring or scheduled tasks is not a mystery. */
   private explainNoFill(file: TFile): void {
     const date = this.service.daily.date(file.path); if (!date || date < localDate() || date === this.catchingUp) return;
-    this.tellOnce(`This device is ${this.role === "mirror" ? "a mirror" : "secondary"}, so it did not add recurring tasks to ${file.path}. Let your main device add them and sync, or run "Add missing recurring tasks to this daily note".`);
+    this.tellOnce(`This device is ${this.role === "mirror" ? "a mirror" : "secondary"}, so it did not add recurring or scheduled tasks to ${file.path}. Let your main device add them and sync, or run "Add missing recurring and scheduled tasks to this daily note".`);
   }
   /** Tells, without changing anything, when a daily note holds the same recurring line twice. */
   private async warnDuplicates(file: TFile): Promise<void> {
@@ -328,7 +328,7 @@ export default class Organized extends Plugin {
     this.catchingUp = date;
     try { await this.run(async () => {
       const added = await this.service.catchUp(date);
-      new Notice(added.length ? `Added ${added.length} recurring task${added.length === 1 ? "" : "s"} to ${date}: ${added.join(", ")}.` : `Nothing was missing from ${date}.`);
+      new Notice(added.length ? `Added ${added.length} task${added.length === 1 ? "" : "s"} to ${date}: ${added.join(", ")}.` : `Nothing was missing from ${date}.`);
     }); } finally { this.catchingUp = null; }
   }
   private paintedDay = localDate();
@@ -637,7 +637,8 @@ export default class Organized extends Plugin {
       state: task.recurring ? "recurring" : task.status === "completed" || task.status === "canceled" ? "closed" : "open",
       save: draft => this.run(() => this.service.saveSchedule(task.id, draft, context)).then(() => this.planningTick()), cancelled: back,
       reopen: () => { void this.run(() => this.service.status(task.id, "open", context)).then(async () => this.pickSchedule(await this.repo.read(task.id), context)).catch(report); },
-      repeat: () => this.pickRecurrence(task, context),
+      // From a typed `<`, cancelling Repeat also gives the todo its marker back.
+      repeat: () => this.pickRecurrence(task, context, typed),
     }).open();
   }
   /** Asks how the task repeats. From a typed `[r]` (`typed`), cancelling puts the todo's own marker back; from the panel there is no marker to put back. */

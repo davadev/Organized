@@ -175,7 +175,7 @@ function devicesFigure(fig: HTMLElement): void {
 function repairsFigure(fig: HTMLElement): void {
   const list = fig.createDiv({ cls: "organized-welcome-fig-rows" });
   where(list, "Command palette (Ctrl/Cmd+P)");
-  for (const name of ["Add missing recurring tasks to this daily note", "Remove duplicate recurring lines in this note"]) {
+  for (const name of ["Add missing recurring and scheduled tasks to this daily note", "Remove duplicate recurring lines in this note"]) {
     const row = list.createDiv({ cls: "organized-welcome-fig-row" });
     row.createSpan({ cls: "organized-welcome-fig-cap", text: "Organized" });
     row.createSpan({ cls: "organized-welcome-fig-row-role", text: name });

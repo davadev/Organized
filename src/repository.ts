@@ -3,7 +3,7 @@ import { App, Editor, normalizePath, TFile, parseYaml, stringifyYaml } from "obs
 import { validColor } from "./colors";
 import { localDate, makeId, newTask, object, OPTIONAL_KEYS, path, settleDays, Task, taskFrom, Settings, validDate, validId } from "./model";
 import { freePath, readableName } from "./names";
-import { plannedText } from "./plans";
+import { plannedFrom, plannedText } from "./plans";
 import { parseTasks, PROJECT_ONGOING, PROJECT_SECTIONS, TaskLine } from "./codec";
 
 export function splitNote(text: string): { frontmatter: Record<string, unknown>; body: string } {
@@ -283,12 +283,14 @@ export class Repository {
     const file = await this.resolve(id);
     let result: Task | null = null;
     await this.app.fileManager.processFrontMatter(file, (raw: Record<string, unknown>) => {
+      // A planned block typed into the note by hand that cannot be read is kept as it was typed, for the person to fix, not dropped by the next change.
+      const unread = (Array.isArray(raw.planned_sessions) ? raw.planned_sessions as unknown[] : []).filter((item): item is string => typeof item === "string" && !plannedFrom(item));
       const before = taskFrom(raw, id); result = taskFrom(settleDays(before, mutate(before)), id); Object.assign(raw, result);
       // Object.assign never removes a key, and a task that plans nothing should not carry empty ones. One scheduled day is `scheduled` alone, as older versions write it.
       for (const key of OPTIONAL_KEYS) if (isEmpty(result[key])) delete raw[key];
       if (result.scheduled_dates.length < 2) delete raw.scheduled_dates;
       // Planned blocks are written as local text a person can read and fix (`2026-11-18 10:00–11:00`).
-      if (result.planned_sessions.length) raw.planned_sessions = result.planned_sessions.map(plannedText);
+      if (result.planned_sessions.length || unread.length) raw.planned_sessions = [...result.planned_sessions.map(plannedText), ...unread];
     });
     this.parsed.delete(file.path);
     if (!result) throw new Error("The frontmatter update did not complete."); return result;

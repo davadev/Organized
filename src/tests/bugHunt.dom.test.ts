@@ -39,7 +39,7 @@ describe('bug hunt regressions', () => {
     const { h, plugin } = await loaded('secondary'); await ready(h); emitCreate(h);
     const task = await plugin.repo.create('Gym'); await plugin.repo.update(task.id, t => ({ ...t, recurring: true, recurrence: 'daily', recurrence_periods: [{ start: localDate(), stop: null }] }));
     await (plugin as any).addMissingRecurring(); await flush();
-    expect(Notice.instances.map(n => n.message)).toEqual(['Added 1 recurring task to ' + localDate() + ': Gym.']);
+    expect(Notice.instances.map(n => n.message)).toEqual(['Added 1 task to ' + localDate() + ': Gym.']);
     expect((plugin as any).catchingUp).toBeNull();
     await h.app.vault.create(plugin.service.daily.path('2999-01-01'), ''); await flush();
     expect(Notice.instances.at(-1)!.message).toContain('This device is secondary');
