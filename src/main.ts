@@ -85,7 +85,7 @@ export default class Organized extends Plugin {
       this.addCommand({ id: "rename-task-notes", name: "Rename task notes to their titles", callback: () => { void this.run(() => this.migrateTaskNoteNames(true)).catch(report); } });
       this.addCommand({ id: "show-onboarding", name: "Show onboarding card", callback: () => { this.showOnboarding(false); } });
       this.addCommand({ id: "show-whats-new", name: "Show what's new", callback: () => { this.showWhatsNew(); } });
-      this.addCommand({ id: "undo", name: "Undo last recurrence/auto-forward batch", callback: () => { void this.service.undo().catch(report); } });
+      this.addCommand({ id: "undo", name: "Undo the last change shown in a notice", callback: () => { void this.service.undo().catch(report); } });
       this.addCommand({ id: "restore-settings", name: "Restore compatible settings backup (restart required)", callback: () => { void this.confirm("Queue the newest compatible settings backup for restoration on next restart? Task Markdown will not change.").then(yes => yes ? this.safety.queueCompatibleRestore() : undefined).catch(report); } });
       this.addCommand({ id: "schedule-task", name: "Schedule task…", editorCallback: (editor, view) => { const context = view.file ? this.current(editor, view.file) : null; if (context?.line.id) void this.repo.read(context.line.id).then(task => this.pickSchedule(task, context)).catch(report); } });
       this.addCommand({ id: "clear-schedule", name: "Clear schedule", editorCallback: (editor, view) => { const id = view.file ? this.current(editor, view.file)?.line.id : undefined; if (id) void this.run(() => this.service.unschedule(id)).catch(report); } });
