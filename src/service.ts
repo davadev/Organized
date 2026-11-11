@@ -425,7 +425,10 @@ export class TaskService {
       for (let up: Task | null = parent, depth = 0; up && depth < 64; depth++) { up = await this.repo.parentOf(up.id); if (up?.id === childId) return "loop"; }
       const current = await this.repo.parentOf(childId); if (current && current.id !== parentId) await this.dropLinks(current.id, link => this.repo.fileOfLink(link) === file);
       const link = this.repo.linkOf(file); if (parent.subtasks.includes(link)) return "already";
-      await this.repo.update(parentId, t => ({ ...t, subtasks: [...t.subtasks, link] })); return "linked";
+      await this.repo.update(parentId, t => ({ ...t, subtasks: [...t.subtasks, link] }));
+      // A subtask with no project of its own works for its parent's, as one created under it does: its time counts toward their budgets.
+      if (!child.projects.length && parent.projects.length) await this.repo.update(childId, t => ({ ...t, projects: parent.projects }));
+      return "linked";
     } catch { return "missing"; }
   }
   /** Makes `childId` a subtask of `parentId` from the panel, without moving any todo line (the nesting in a note is only read when the person changes it). */

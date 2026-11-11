@@ -139,7 +139,7 @@ describe('found by the bug hunt of beta.11 and beta.12', () => {
     vi.setSystemTime(new Date(at(4, 12))); await repo.update(task.id, t => ({ ...t, planned_sessions: [block(4, 9, 10), { start: iso(4, 11), end: iso(4, 11, 30) }] }));
     view.tab = 'Calendar'; view.selectedDate = '2026-03-04'; view.calendarMode = 'Day'; await view.render(); await flush();
     const planned = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-block[data-planned="true"]'));
-    planned[0].click(); expect((Modal.instances.at(-1) as unknown as SessionModal).edit.logWorked).toBeUndefined(); planned[1].click(); expect((Modal.instances.at(-1) as unknown as SessionModal).edit.logWorked).toBeDefined();
+    planned[0].click(); await flush(); expect((Modal.instances.at(-1) as unknown as SessionModal).edit.logWorked).toBeUndefined(); planned[1].click(); await flush(); expect((Modal.instances.at(-1) as unknown as SessionModal).edit.logWorked).toBeDefined();
   });
   it('a day whose daily note cannot be written keeps its todo and its blocks', async () => {
     const { repo, service, add } = await viewed(); const task = await repo.create('Keep'); await repo.update(task.id, t => ({ ...t, scheduled: '2026-03-05', planned_sessions: [block(5, 10, 11)] })); await add(service.daily.path('2026-03-06'), '');

@@ -736,3 +736,5 @@ body.is-mobile .markdown-preview-view .task-list-item-checkbox {
 .organized-modal-window .organized-repeat-summary { margin-block: 4px 12px; padding-block-start: 10px; border-block-start: 1px solid var(--background-modifier-border); color: var(--text-normal); font-weight: 600; }
 .organized-modal .organized-hidden { display: none; }
 .organized-line-times { color: var(--text-muted); font-size: var(--font-smaller, 0.9em); cursor: pointer; }
+/* Budget lines under the length and in the Schedule dialog, one per budget. */
+.organized-session-note, .organized-schedule-budget { white-space: pre-line; }

@@ -498,11 +498,14 @@ export class OrganizedInspectorView extends ItemView {
     }
   }
   /** Adds a block of time to a task, or edits/deletes a recorded or planned one. A new block on a later day starts as a plan. */
-  private editSession(task: Task, session: WorkSession | null, date: string, kind: SessionKind | null, startAt?: string): void {
+  private async editSession(task: Task, session: WorkSession | null, date: string, kind: SessionKind | null, startAt?: string): Promise<void> {
     const at = (time: string) => new Date(`${date}T${time}:00`).toISOString();
     const start = session?.start ?? startAt ?? at("09:00"); const end = session?.end ?? (startAt ? new Date(Date.parse(startAt) + 3600000).toISOString() : at("10:00"));
     const type = kind; const service = this.owner.service;
+    // Planned time is seen against the budgets it counts toward; the block being changed is replaced, not counted twice.
+    const hint = await this.owner.budgetHint(task); const others = task.planned_sessions.filter(b => !(type === "planned" && session && b.start === session.start && b.end === session.end));
     new SessionModal(this.app, {
+      budget: block => hint([...others, block]),
       heading: session ? (type === "planned" ? "Edit planned time" : "Edit time worked") : "Add time", taskTitle: task.title, start, end, kind: type,
       save: (next, saved) => this.owner.run(async () => {
         if (!session) await (saved === "planned" ? service.addPlanned(task.id, next) : service.addSession(task.id, next));
@@ -533,12 +536,12 @@ export class OrganizedInspectorView extends ItemView {
   /** Picks a task, then asks to plan an hour from `start` (a spot tapped on the day grid). */
   private async planAt(start: string, date: string): Promise<void> {
     const tasks = (await this.owner.repo.list()).filter(t => t.status === "open" || t.status === "in_progress");
-    new TaskPicker(this.app, tasks, async choice => { if (typeof choice === "object" && "id" in choice) this.editSession(choice, null, date, null, start); }, "", false, false).open();
+    new TaskPicker(this.app, tasks, async choice => { if (typeof choice === "object" && "id" in choice) await this.editSession(choice, null, date, null, start); }, "", false, false).open();
   }
   /** Picks an existing task, then asks for the time to log on it. */
   private async addTime(date: string): Promise<void> {
     const tasks = (await this.owner.repo.list()).filter(t => t.status !== "canceled");
-    new TaskPicker(this.app, tasks, async choice => { if (typeof choice === "object" && "id" in choice) this.editSession(choice, null, date, null); }, "", false, false).open();
+    new TaskPicker(this.app, tasks, async choice => { if (typeof choice === "object" && "id" in choice) await this.editSession(choice, null, date, null); }, "", false, false).open();
   }
   private async openNote(notePath: string): Promise<void> {
     const note = this.owner.repo.file(notePath); if (!note) throw new Error("The note that kept this time was renamed or removed.");
@@ -603,7 +606,7 @@ export class OrganizedInspectorView extends ItemView {
       // A retired task has no task note: open the daily note that kept its time instead.
       const kept = retired.get(block.task.id);
       // A stored session opens for editing (with an Open task button); a running timer has nothing to edit yet.
-      part.addEventListener("click", () => { if (block.repeating) { this.editRepeating(block.task, block.session!); return; } if (!kept && block.session) { this.editSession(block.task, block.session, date, block.planned ? "planned" : "worked"); return; } void (kept ? this.openNote(kept.path) : this.openCalendarTask(block.task)).catch(report); });
+      part.addEventListener("click", () => { if (block.repeating) { this.editRepeating(block.task, block.session!); return; } if (!kept && block.session) { void this.editSession(block.task, block.session, date, block.planned ? "planned" : "worked").catch(report); return; } void (kept ? this.openNote(kept.path) : this.openCalendarTask(block.task)).catch(report); });
     }
     const minutes = new Date(now).getHours() * 60 + new Date(now).getMinutes();
     if (date === localDate() && minutes >= from * 60 && minutes <= to * 60) { const nowLine = grid.createDiv({ cls: "organized-now-line", attr: { "aria-hidden": "true" } }); nowLine.setCssProps({ "--organized-at": String((minutes - from * 60) / span * 100) }); }

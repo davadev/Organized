@@ -4,12 +4,12 @@ import { EditorView, ViewUpdate } from "@codemirror/view";
 import { ACTION_MARKERS, duplicateRepeats, parentIds, parseTasks, sameNesting, unclearIds, NOTE_MARKER, NoteSection, PROJECT_MARKER, RECURRING_MARKER, SECTION_MARKERS, SUBTASK_MARKER, TaskLine, TIME_MARKER, writeNoteSection } from "./codec";
 import { DEFAULT_SETTINGS, elapsed, localDate, markerOf, object, Settings, Status, Task, WorkSession } from "./model";
 import { settingsFrom } from "./model";
-import { Repository } from "./repository";
+import { BUDGET_KEYS, BudgetPeriod, projectName, Repository } from "./repository";
 import { anchorOf, explicitRule, taskRule } from "./recurrence";
 import { Context, report, TaskService } from "./service";
 import { formatMinutes } from "./sessions";
 import { plansIn } from "./plans";
-import { budgetUse, overlap, plannable } from "./planning";
+import { budgetUse, overlap, PERIOD_LABELS, plannable, projectUse } from "./planning";
 import { loadRole, MirrorError, Role } from "./device";
 import { ConfirmModal, isKeepAsTodo, ScheduleModal, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RecurrencePicker, RetireModal, SessionModal, TaskPicker, WhatsNewModal } from "./modals";
 import { notesOfLine, notesToShow, ReleaseNote } from "./whatsNew/releaseNotes";
@@ -604,7 +604,7 @@ export default class Organized extends Plugin {
     else if (marker === PROJECT_MARKER) this.pickProjects(await this.repo.read(id), context);
     else if (marker === NOTE_MARKER) this.convertToNote(await this.repo.read(id), context);
     else if (marker === RECURRING_MARKER) this.pickRecurrence(await this.repo.read(id), context, true);
-    else if (marker === TIME_MARKER) this.addTime(await this.repo.read(id), context);
+    else if (marker === TIME_MARKER) await this.addTime(await this.repo.read(id), context);
     else if (marker === SUBTASK_MARKER) await this.addSubtaskFromMarker(await this.repo.read(id), context);
     else await this.run(() => this.service.marker(context, marker));
   }
@@ -628,10 +628,7 @@ export default class Organized extends Plugin {
       const clash = theirs.find(o => blocks.some(b => Date.parse(b.start) < Date.parse(o.b.end) && Date.parse(o.b.start) < Date.parse(b.end)))?.title ?? null;
       return { seconds: [...theirs.map(o => o.b), ...blocks].reduce((sum, b) => sum + overlap([b], [from, to]), 0), clash };
     };
-    const budget = (blocks: WorkSession[]) => {
-      const use = budgetUse({ ...task, planned_sessions: [...task.planned_sessions.filter(b => begun(b) || !ahead.includes(dayOf(b))), ...blocks] }, now); if (!use) return "";
-      return `Planned ${formatMinutes(Math.round(use.planned / 60))} · ${use.left >= 0 ? `${formatMinutes(Math.round(use.left / 60))} of ${formatMinutes(Math.round(use.budget / 60))} left` : `${formatMinutes(Math.round(-use.left / 60))} over the ${formatMinutes(Math.round(use.budget / 60))} budget`}`;
-    };
+    const hint = await this.budgetHint(task); const budget = (blocks: WorkSession[]) => hint([...task.planned_sessions.filter(b => begun(b) || !ahead.includes(dayOf(b))), ...blocks]);
     const back = typed && context ? () => {
       const marker = task.scheduled_dates.length && !(own && task.scheduled_dates.includes(own)) ? "<" : markerOf(task);
       if (marker !== "<") void this.run(() => this.service.clean(context, marker));
@@ -644,6 +641,25 @@ export default class Organized extends Plugin {
       // From a typed `<`, cancelling Repeat also gives the todo its marker back.
       repeat: () => this.pickRecurrence(task, context, typed),
     }).open();
+  }
+  /**
+   * What a task's planned time comes to against its own budget and each budget of its projects, one line each ("" with none), for dialogs that change the plan: time blocked for a project
+   * is seen against the project's day, week, month and whole budget before it is saved. Given the task's whole list of planned blocks as it would be.
+   */
+  async budgetHint(task: Task): Promise<(planned: WorkSession[]) => string> {
+    const budgeted = task.projects.map(project => [project, this.repo.projectBudgets(project)] as const).filter(([, budgets]) => Object.values(budgets).some(value => value !== null));
+    // Time kept under retired todos still counts toward its project, as in the side panel.
+    const others = budgeted.length ? [...(await this.repo.list(true)).filter(t => t.id !== task.id), ...(await this.service.retiredWork("1970-01-01", "2999-12-31")).map(item => item.task)] : [];
+    const time = (value: number) => formatMinutes(Math.round(value / 60));
+    const words = (left: number, budget: number) => left >= 0 ? `${time(left)} of ${time(budget)} left` : `${time(-left)} over the ${time(budget)} budget`;
+    return planned => {
+      const now = Date.now(); const draft = { ...task, planned_sessions: planned }; const own = budgetUse(draft, now);
+      const projects = budgeted.flatMap(([project, budgets]) => (Object.keys(BUDGET_KEYS) as BudgetPeriod[]).flatMap(period => {
+        const budget = budgets[period]; if (budget === null) return [];
+        const use = projectUse([...others, draft], project, period, budget, now); return [`${projectName(project)} · ${PERIOD_LABELS[period]}: ${words(use.left, use.budget)}`];
+      }));
+      return [...(own ? [`Planned ${time(own.planned)} · ${words(own.left, own.budget)}`] : []), ...projects].join("\n");
+    };
   }
   /** Asks how the task repeats. From a typed `[r]` (`typed`), cancelling puts the todo's own marker back; from the panel there is no marker to put back. */
   pickRecurrence(task: Task, context?: Context, typed = false): void {
@@ -659,11 +675,11 @@ export default class Organized extends Plugin {
     await this.addSubtask(active.editor, active.file);
   }
   /** Asks for a block of time on the todo, worked or planned (on the day of its daily note, or today), then puts the todo's own marker back. Cancelling leaves the `[t]` in place. */
-  private addTime(task: Task, context: Context): void {
+  private async addTime(task: Task, context: Context): Promise<void> {
     const at = (time: string) => new Date(`${this.service.daily.date(context.file.path) ?? localDate()}T${time}:00`).toISOString();
     const marker = markerOf(task);
     // One dialog for both: a block that has ended is time worked, one still to come is planned.
-    new SessionModal(this.app, { heading: "Add time", taskTitle: task.title, start: at("09:00"), end: at("10:00"), kind: null, save: async (next, kind) => { await this.run(() => kind === "planned" ? this.service.addPlanned(task.id, next) : this.service.addSession(task.id, next)); await this.run(() => this.service.clean(context, marker)); this.planningTick(); } }).open();
+    new SessionModal(this.app, { heading: "Add time", taskTitle: task.title, start: at("09:00"), end: at("10:00"), kind: null, budget: (hint => (block: WorkSession) => hint([...task.planned_sessions, block]))(await this.budgetHint(task)), save: async (next, kind) => { await this.run(() => kind === "planned" ? this.service.addPlanned(task.id, next) : this.service.addSession(task.id, next)); await this.run(() => this.service.clean(context, marker)); this.planningTick(); } }).open();
   }
   /** Folders offered for a standalone note. */
   noteFolders(): string[] { return this.app.vault.getAllLoadedFiles().filter(f => f instanceof TFolder && f.path !== "/").map(f => f.path).sort(); }
