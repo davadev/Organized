@@ -76,7 +76,9 @@ export class TaskService {
   async attach(context: Context, task: Task, duplicate = false): Promise<Context> {
     const { text, line } = await this.resolve(context);
     if (line.id && !duplicate) throw new Error("This task is already linked. Use duplicate as new task for independent copies.");
-    await this.edit(context.file, text, replaceTask(text, line, { title: task.title, id: task.id, repeat: false }));
+    // The times shown are the linked task's own (a todo linked to another task does not keep the first one's).
+    const date = this.daily.date(context.file.path); const times = date && !task.recurring ? dayTimes(task, date) : null;
+    await this.edit(context.file, text, replaceTask(text, line, { title: task.title, id: task.id, repeat: false, times }));
     const written = await this.repo.readText(context.file); const fresh = parseTasks(written).find(t => t.line === line.line)!;
     // A todo linked while nested under another becomes its subtask.
     await this.syncSubtasks(parentIds(text), parentIds(written));
@@ -712,23 +714,29 @@ export class TaskService {
   async addPlanned(id: string, block: WorkSession, changes?: Change[]): Promise<void> {
     const before = await this.repo.read(id); const own = changes ?? [];
     await this.recorded(id, own, () => this.repo.update(id, t => t.planned_sessions.some(b => b.start === block.start && b.end === block.end) ? t : { ...t, planned_sessions: [...t.planned_sessions, block].slice(-MAX_PLANNED_SESSIONS) }));
-    // A block on a later day schedules the task for that day too, so its todo is in that day's note. Recurring tasks have no days; a block today leaves the todo where it already is,
-    // and one in the past is an estimate, not a plan.
-    const day = localDate(new Date(block.start));
-    if (!before.recurring && plannable(before) && day > localDate() && !before.scheduled_dates.includes(day)) {
-      if (before.scheduled_dates.length) await this.addDay(id, day, own); else await this.scheduleTask(id, day, undefined, undefined, own);
-      this.summarize(own, "Scheduled", `“${before.title}” is ${before.scheduled_dates.length ? "also " : ""}scheduled for ${day}, the day of its planned block.`);
-    }
+    await this.scheduleBlockDay(before, block, own);
     // Recorded with the rest, so Undo also takes back a timer this started (an Undo whose note changed after it was recorded would refuse).
     await this.syncTimes(id, own); await this.planEdited(id, before, own); this.changed();
   }
-  /** Replaces one planned block, or removes it when `to` is null. */
+  /** Replaces one planned block, or removes it when `to` is null. A block moved to a later day schedules the task for that day (see `scheduleBlockDay`); the day it left stays scheduled. */
   async changePlanned(id: string, from: WorkSession, to: WorkSession | null): Promise<void> {
-    const before = await this.repo.read(id);
-    await this.repo.update(id, t => {
+    const before = await this.repo.read(id); const own: Change[] = [];
+    await this.recorded(id, own, () => this.repo.update(id, t => {
       const at = t.planned_sessions.findIndex(s => s.start === from.start && s.end === from.end); if (at < 0) throw new Error("That planned block no longer exists; it may have been changed elsewhere.");
       return { ...t, planned_sessions: to ? t.planned_sessions.map((s, n) => n === at ? to : s) : t.planned_sessions.filter((_s, n) => n !== at) };
-    }); await this.syncTimes(id); await this.planEdited(id, before); this.changed();
+    }));
+    if (to) await this.scheduleBlockDay(before, to, own);
+    await this.syncTimes(id, own); await this.planEdited(id, before, own); this.changed();
+  }
+  /**
+   * A block on a later day schedules the task for that day too, so its todo is in that day's note. Recurring tasks have no days; a block today leaves the todo where it already is,
+   * and one in the past is an estimate, not a plan.
+   */
+  private async scheduleBlockDay(before: Task, block: WorkSession, changes: Change[]): Promise<void> {
+    const day = localDate(new Date(block.start));
+    if (before.recurring || !plannable(before) || day <= localDate() || before.scheduled_dates.includes(day)) return;
+    if (before.scheduled_dates.length) await this.addDay(before.id, day, changes); else await this.scheduleTask(before.id, day, undefined, undefined, changes);
+    this.summarize(changes, "Scheduled", `“${before.title}” is ${before.scheduled_dates.length ? "also " : ""}scheduled for ${day}, the day of its planned block.`);
   }
   /**
    * Changes one day of a recurring task's repeating times on its own ("this day"): that day's repeating blocks become blocks of its own, `from` among them replaced by `to` (or left out when

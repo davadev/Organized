@@ -558,8 +558,8 @@ export class OrganizedInspectorView extends ItemView {
     const linked = new Map(tasks.map(task => [task.id, task]));
     if (generation !== this.renderId) return;
     const collapsed = this.owner.settings.dayTasksCollapsed;
-    // A later day's note is made when its day comes; until then the tasks scheduled for it are listed from their task notes.
-    const due = note ? [] : tasks.filter(task => !task.recurring && task.converted_to === null && task.scheduled_dates.includes(date));
+    // A later day's note is made when its day comes; until then the tasks that will go in it (open and in progress, see `onDailyCreated`) are listed from their task notes.
+    const due = note || date < localDate(new Date(now)) ? [] : tasks.filter(task => !task.recurring && task.converted_to === null && (task.status === "open" || task.status === "in_progress") && task.scheduled_dates.includes(date));
     const list = this.section(host, "Tasks", note ? lines.length : due.length, { collapsed, toggle: () => { this.owner.setDayTasksCollapsed(!collapsed); void this.render().catch(report); } }); list.addClass("organized-grouped");
     if (!note) {
       for (const task of collapsed ? [] : due) this.taskRow(list, task, () => this.openFromCalendar(task.id)).addClass("organized-day-task");

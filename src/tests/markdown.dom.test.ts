@@ -115,3 +115,39 @@ describe('the times in Live Preview', () => {
     view.destroy();
   });
 });
+
+describe('hunt: times and days', () => {
+  it('a planned block moved to a later day schedules the task for that day', async () => {
+    const { service, repo, add, texts, note } = await fixture(); const task = await repo.create('Move'); await add(note(5), ''); await add(note(6), '');
+    await service.saveSchedule(task.id, [{ date: day(5), blocks: [block(5, 9, 10)] }]);
+    await service.changePlanned(task.id, block(5, 9, 10), block(6, 9, 10));
+    expect((await repo.read(task.id)).scheduled_dates).toEqual([day(5), day(6)]); expect(texts.get(note(6))).toContain(`Move · 09:00–10:00 <!--organized:${task.id}-->`);
+    expect(texts.get(note(5))).toContain(`- [ ] Move <!--organized:${task.id}-->`); expect(Notice.instances.at(-1)!.message).toBeInstanceOf(DocumentFragment);
+    // One Undo takes back the move and the day it scheduled.
+    await service.undo(); expect((await repo.read(task.id)).planned_sessions).toEqual([block(5, 9, 10)]); expect((await repo.read(task.id)).scheduled_dates).toEqual([day(5)]); expect(texts.get(note(6))).toBe('');
+    // A block moved within its days, or to today, schedules nothing more.
+    await service.changePlanned(task.id, block(5, 9, 10), block(5, 11, 12)); await service.changePlanned(task.id, block(5, 11, 12), block(4, 11, 12)); expect((await repo.read(task.id)).scheduled_dates).toEqual([day(5)]);
+  });
+  it('a todo linked to another task shows that task\'s times, not the old one\'s', async () => {
+    const { service, repo, add, texts, note } = await fixture(); const task = await repo.create('Old'); await add(note(5), ''); await service.saveSchedule(task.id, [{ date: day(5), blocks: [block(5, 9, 10)] }]);
+    const other = await repo.create('Other'); const context = { file: repo.file(note(5))!, line: parseTasks(texts.get(note(5))!)[0] };
+    await service.attach(context, other, true); expect(texts.get(note(5))).toContain(`- [ ] Other <!--organized:${other.id}-->`);
+    await service.addPlanned(other.id, block(5, 13, 14)); await add('Inbox.md', `- [ ] Third · 13:00–14:00 <!--organized:${other.id}-->`); const third = await repo.create('Third');
+    await service.attach({ file: repo.file(note(5))!, line: parseTasks(texts.get(note(5))!)[0] }, (await repo.read(other.id)), true); expect(texts.get(note(5))).toContain(`- [ ] Other · 13:00–14:00 <!--organized:${other.id}-->`);
+    await service.attach({ file: repo.file('Inbox.md')!, line: parseTasks(texts.get('Inbox.md')!)[0] }, third, true); expect(texts.get('Inbox.md')).toBe(`- [ ] Third <!--organized:${third.id}-->`);
+  });
+  it('a todo whose title was deleted reads no title, not its times', () => {
+    expect(parseTasks('- [ ]  · 10:00–11:00 <!--organized:abcdefgh12-->').map(t => [t.title, t.times])).toEqual([['', '10:00–11:00']]);
+  });
+  it('the title sync waits while a title is deleted down to its times', async () => {
+    const { owner, service, repo, add } = await fixture(); const task = await repo.create('Gone'); await add('Inbox.md', `- [ ]  · 10:00–11:00 <!--organized:${task.id}-->`); const rename = vi.spyOn(service, 'title');
+    await (owner as any).syncEditedTitle(repo.file('Inbox.md')!, task.id); expect(rename).not.toHaveBeenCalled(); expect((await repo.read(task.id)).title).toBe('Gone');
+  });
+  it('the chip marks the times, not a title that ends like them', async () => {
+    const { owner, repo } = await fixture(); const task = await repo.create('Call · 09:00–10:00');
+    const doc = `- [ ] Call · 09:00–10:00 · 09:00–10:00 <!--organized:${task.id}-->\nplain text`;
+    const view = new EditorView({ state: EditorState.create({ doc, selection: { anchor: doc.length }, extensions: [editorLivePreviewField, editorExtension(owner)] }), parent: document.body.createDiv() });
+    const chip = view.dom.querySelector<HTMLElement>('.organized-line-times')!; expect(chip.textContent).toBe(' · 09:00–10:00'); const range = document.createRange(); range.setStart(chip.closest('.cm-line')!, 0); range.setEndBefore(chip); expect(range.toString()).toBe('- [ ] Call · 09:00–10:00');
+    view.destroy();
+  });
+});

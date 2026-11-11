@@ -5,8 +5,8 @@ import { parser } from "@lezer/markdown";
 /** `parent` is the line of the nearest todo this one is nested under (through plain bullets too), or null for a todo at the top of its list. */
 /** `times` are the planned times a scheduled day's todo shows after its title (`Report · 10:00–11:00, 14:00–15:00`): written by the plugin from the task note, never read back into it. */
 export interface TaskLine { line: number; raw: string; prefix: string; marker: string; title: string; id: string | null; repeat: boolean; section: Section[]; parent: number | null; times: string | null }
-/** The planned times at the end of a todo's text, as `taskText` writes them. */
-const TIMES = / · ((?:[0-2]\d:[0-5]\d–[0-2]\d:[0-5]\d)(?:, [0-2]\d:[0-5]\d–[0-2]\d:[0-5]\d)*)$/;
+/** The planned times at the end of a todo's text, as `taskText` writes them (also all there is, once the title has been deleted). */
+const TIMES = /(?:^| )· ((?:[0-2]\d:[0-5]\d–[0-2]\d:[0-5]\d)(?:, [0-2]\d:[0-5]\d–[0-2]\d:[0-5]\d)*)$/;
 export const ID = /<!--organized:([a-zA-Z0-9_-]{8,80})-->/g;
 const TASK = /^(\s*(?:[-+*]|\d+[.)]) \[)([^\]])(\] )(.*)$/;
 /** The two parts of a task note's body: the description (the text itself, no heading) and an optional `## Sources` block. */
