@@ -1,12 +1,13 @@
 import { App, Component, Modal, Setting, SuggestModal } from "obsidian";
-import { MAX_BUDGET_SECONDS, path, PRIORITIES, Priority, Task, validDate, WorkSession } from "./model";
-import { isoFromInput, kindOf, lengthOf, localInput, SessionKind, sessionProblem } from "./sessions";
+import { localDate, MAX_BUDGET_SECONDS, MAX_DAYS, path, PRIORITIES, Priority, Task, validDate, WorkSession } from "./model";
+import { isoFromInput, kindOf, lengthOf, lengthOfSeconds, localInput, SessionKind, sessionProblem } from "./sessions";
 import { cleanTags } from "./notes";
 import { freePath, noteName } from "./names";
-import { report } from "./service";
+import { report, type DraftDay } from "./service";
 import { rgbOf } from "./colors";
 import { formatRule, presetRules, Rule, ruleLabel, Unit } from "./recurrence";
-import { ClockSpan, MAX_TIMES, timeLabel, timesProblem } from "./plans";
+import { ClockSpan, MAX_TIMES, minutesOf, timeLabel, timesProblem } from "./plans";
+import { moment } from "./moment";
 import { BUDGET_KEYS, BudgetPeriod, budgetHours, MAX_BUDGET_HOURS, projectName, ProjectBudgets } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 import { ONBOARDING_STEPS, OnboardingStep } from "./onboarding";
@@ -151,55 +152,216 @@ export class RecurrencePicker extends Modal {
   }
   onClose(): void { this.contentEl.empty(); queueMicrotask(() => { if (!this.picked) this.cancelled?.(); }); }
 }
-export class DatePicker extends Modal {
-  /**
-   * `clear`, when given, adds a button that removes the date again. `time` fills the optional From and To fields; with both filled, `choose` also gets that block of the day
-   * (an end at or before the start is the next morning). `hint` is a line under the fields (say, other blocks that move with the date).
-   */
-  constructor(app: App, readonly initial: string, readonly choose: (date: string, time: WorkSession | null) => Promise<void>, readonly clear?: () => Promise<void>, readonly time: { start: string; end: string } | null = null, readonly hint = "", readonly now = () => Date.now()) { super(app); decorate(this); }
-  onOpen(): void {
-    this.titleEl.setText("Schedule task"); this.contentEl.addClass("organized-modal");
-    this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Scheduled date" });
-    const input = this.contentEl.createEl("input", { type: "date", attr: { "aria-label": "Scheduled date" } }); input.value = this.initial;
-    this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Time (optional)" });
-    const row = this.contentEl.createDiv({ cls: "organized-datetime organized-time-range" });
-    const from = row.createEl("input", { type: "time", attr: { "aria-label": "From" } }); const to = row.createEl("input", { type: "time", attr: { "aria-label": "To" } });
-    from.value = this.time?.start ?? ""; to.value = this.time?.end ?? "";
-    const note = this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-note", attr: { role: "status" } });
-    // The block as instants: an end at or before the start runs past midnight. Null for a date alone; a string says what is wrong.
-    const read = (): WorkSession | null | string => {
-      if (!from.value && !to.value) return null;
-      if (!from.value || !to.value) return "Add both times, or neither for a date alone.";
-      const start = isoFromInput(`${input.value}T${from.value}`); let end = isoFromInput(`${input.value}T${to.value}`);
-      if (start && end && Date.parse(end) <= Date.parse(start)) end = new Date(new Date(end).setDate(new Date(end).getDate() + 1)).toISOString();
-      return sessionProblem(start, end, this.now(), "planned") ?? { start: start!, end: end! };
-    };
-    const paint = () => {
-      const block = read(); note.toggleClass("organized-session-problem", typeof block === "string");
-      note.setText(typeof block === "string" ? block : block ? `Planned time: ${lengthOf(block)}${localInput(block.end).slice(0, 10) !== input.value ? " · ends the next day" : ""}${this.hint ? ` · ${this.hint}` : ""}` : this.hint);
-    };
-    for (const field of [input, from, to]) field.addEventListener("input", paint);
-    paint();
-    const actions = new Setting(this.contentEl);
-    actions.addButton(b => b.setButtonText("Schedule").setCta().onClick(() => {
-      if (!validDate(input.value)) { input.setCustomValidity("Choose a valid date."); input.reportValidity(); return; }
-      const block = read(); if (typeof block === "string") { paint(); return; }
-      this.close(); void this.choose(input.value, block).catch(report);
-    }));
-    if (this.clear) { const clear = this.clear; actions.addButton(b => b.setButtonText("Clear date").onClick(() => { this.close(); void clear().catch(report); })); }
+/** What the Schedule dialog shows of a task (see `ScheduleModal`). */
+export interface ScheduleSetup {
+  title: string;
+  /** Its days from today on: the blocks that have not begun (editable), those that have (shown, kept), and whether the day's note exists without its todo. */
+  days: { date: string; blocks: WorkSession[]; locked: WorkSession[]; missing?: boolean }[];
+  /** Days that are over; kept as they are. */
+  earlier: string[];
+  state: "open" | "closed" | "recurring";
+  /** The day of the todo the dialog was opened from, shown highlighted. */
+  highlight?: string;
+  /** Planned time of all tasks on a day (seconds), and the other task one of these blocks overlaps, for each day's line. */
+  load: (day: string, blocks: WorkSession[]) => { seconds: number; clash: string | null };
+  /** The task budget measured with these blocks, or "" when it has none. */
+  budget: (blocks: WorkSession[]) => string;
+  save: (draft: DraftDay[]) => Promise<void>;
+  /** Closed with nothing saved (a typed `<` is put back). */
+  cancelled?: () => void;
+  reopen?: () => void;
+  repeat?: () => void;
+  now?: () => number;
+}
+interface ScheduleRow { date: string; from?: string; times: ClockSpan[]; locked: WorkSession[]; missing: boolean; restore: boolean }
+const DURATIONS: [string, number][] = [["30 m", 30], ["1 h", 60], ["2 h", 120], ["4 h", 240]];
+const clockOf = (minutes: number): string => { const m = ((minutes % 1440) + 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
+/** A time of day on a date as a block; an end at or before the start is the next morning. */
+export function blockOn(date: string, time: ClockSpan): WorkSession {
+  const start = isoFromInput(`${date}T${time.start}`)!; let end = isoFromInput(`${date}T${time.end}`)!;
+  if (Date.parse(end) <= Date.parse(start)) end = new Date(new Date(end).setDate(new Date(end).getDate() + 1)).toISOString();
+  return { start, end };
+}
+/** A day as people read it fast: Today, Tomorrow, else weekday and date (`Wed 18 Nov`). */
+export function dayLabel(date: string, now = Date.now()): string {
+  const today = new Date(now); const tomorrow = localDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1));
+  return date === localDate(today) ? "Today" : date === tomorrow ? "Tomorrow" : moment(date, "YYYY-MM-DD").format("ddd D MMM");
+}
+export const spanOf = (block: WorkSession): ClockSpan => ({ start: localInput(block.start).slice(11), end: localInput(block.end).slice(11) });
+/**
+ * The one place to plan a task: the days it is scheduled for, each with optional times. Changes are a draft until Save, which writes them as one change with one Undo;
+ * closing with unsaved changes asks first. Blocks that have begun are shown and kept, never edited.
+ */
+export class ScheduleModal extends Modal {
+  private rows: ScheduleRow[];
+  private readonly initial: string;
+  private settled = false;
+  private list!: HTMLElement;
+  private budgetLine!: HTMLElement;
+  constructor(app: App, readonly setup: ScheduleSetup, draft?: ScheduleRow[]) {
+    super(app); decorate(this);
+    const start = setup.days.map(d => ({ date: d.date, from: d.date, times: d.blocks.map(spanOf), locked: d.locked, missing: d.missing === true, restore: false }));
+    this.initial = JSON.stringify(start); this.rows = draft ?? start;
   }
-  onClose(): void { this.contentEl.empty(); }
+  private get now(): number { return (this.setup.now ?? Date.now)(); }
+  private get today(): string { return localDate(new Date(this.now)); }
+  private dirty(): boolean { return JSON.stringify(this.rows) !== this.initial; }
+  private label(date: string): string { return dayLabel(date, this.now); }
+  onOpen(): void {
+    this.titleEl.setText("Schedule"); this.contentEl.addClass("organized-modal", "organized-schedule");
+    this.contentEl.createEl("p", { cls: "organized-modal-copy organized-schedule-task", text: this.setup.title });
+    if (this.setup.state === "recurring") {
+      this.contentEl.createEl("p", { cls: "organized-modal-copy", text: "This task repeats, so its planned times are set with its repeat rule." });
+      new Setting(this.contentEl).addButton(b => b.setButtonText("Repeat settings…").setCta().onClick(() => { this.settled = true; this.close(); this.setup.repeat?.(); }));
+      return;
+    }
+    if (this.setup.state === "closed") {
+      this.contentEl.createEl("p", { cls: "organized-modal-copy", text: this.rows.length ? `Done. It was scheduled for ${this.rows.map(r => this.label(r.date)).join(", ")}.` : "Done, and not scheduled." });
+      new Setting(this.contentEl).addButton(b => b.setButtonText("Reopen to schedule").setCta().onClick(() => { this.settled = true; this.close(); this.setup.reopen?.(); }));
+      return;
+    }
+    this.quickAdd();
+    this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Scheduled days" });
+    this.list = this.contentEl.createDiv({ cls: "organized-schedule-days", attr: { role: "list", "aria-label": "Scheduled days" } });
+    if (this.setup.earlier.length) {
+      const fold = this.contentEl.createEl("details", { cls: "organized-schedule-earlier" }); fold.createEl("summary", { text: `Earlier (${this.setup.earlier.length})` });
+      fold.createDiv({ cls: "organized-muted", text: this.setup.earlier.map(d => this.label(d)).join(", ") });
+    }
+    this.budgetLine = this.contentEl.createDiv({ cls: "organized-modal-copy organized-schedule-budget", attr: { role: "status" } });
+    this.contentEl.createDiv({ cls: "organized-muted organized-schedule-hint", text: "The todo appears in each day's daily note (a later day's when its note is made)." });
+    const actions = new Setting(this.contentEl);
+    actions.addButton(b => b.setButtonText("Save").setCta().onClick(() => this.save()));
+    actions.addButton(b => b.setButtonText("Cancel").onClick(() => this.close()));
+    if (this.rows.length || this.setup.earlier.length) actions.addButton(b => { b.setButtonText("Clear schedule").onClick(() => { this.settled = true; this.close(); void this.setup.save([]).catch(report); }); b.buttonEl.addClass("mod-warning"); });
+    this.paint();
+  }
+  /** Today, Tomorrow and Next week add a day at once; a date with an optional time adds that. */
+  private quickAdd(): void {
+    this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Add a day" });
+    const chips = this.contentEl.createDiv({ cls: "organized-repeat-presets organized-schedule-quick", attr: { role: "group", "aria-label": "Add a day" } });
+    const base = new Date(this.now); const nextWeek = moment(this.now).add(1, "week").startOf("week").format("YYYY-MM-DD");
+    for (const [name, date] of [["Today", this.today], ["Tomorrow", localDate(new Date(base.setDate(base.getDate() + 1)))], ["Next week", nextWeek]] as const) {
+      const chip = chips.createEl("button", { cls: "organized-repeat-preset", text: name, attr: { "aria-label": `Add ${name.toLowerCase()}` } });
+      chip.addEventListener("click", () => this.addDay(date));
+    }
+    if (!this.rows.length) chips.querySelector("button")!.addClass("organized-schedule-first");
+    const row = this.contentEl.createDiv({ cls: "organized-datetime organized-schedule-add" });
+    const date = row.createEl("input", { type: "date", attr: { "aria-label": "Day to add" } }); date.value = this.today;
+    const times = this.contentEl.createDiv({ cls: "organized-datetime organized-time-range" });
+    const from = times.createEl("input", { type: "time", attr: { "aria-label": "From (optional)" } }); const to = times.createEl("input", { type: "time", attr: { "aria-label": "To (optional)" } });
+    const lengths = this.contentEl.createDiv({ cls: "organized-schedule-durations", attr: { role: "group", "aria-label": "Length" } });
+    for (const [name, minutes] of DURATIONS) {
+      const chip = lengths.createEl("button", { cls: "organized-repeat-day", text: name, attr: { "aria-label": `Length ${name}` } });
+      chip.addEventListener("click", () => { if (!from.value) from.value = this.freeSlot(date.value); to.value = clockOf(minutesOf(from.value)! + minutes); });
+    }
+    const note = this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-note", attr: { role: "status" } });
+    const add = this.contentEl.createEl("button", { cls: "organized-repeat-add mod-cta", text: "Add" });
+    const submit = () => {
+      if (!validDate(date.value)) { note.setText("Choose a valid date."); note.addClass("organized-session-problem"); return; }
+      if (!from.value !== !to.value) { note.setText("Add both times, or neither for a day alone."); note.addClass("organized-session-problem"); return; }
+      note.setText(""); note.removeClass("organized-session-problem");
+      this.addDay(date.value, from.value ? { start: from.value, end: to.value } : undefined); from.value = ""; to.value = "";
+    };
+    add.addEventListener("click", submit);
+    for (const input of [date, from, to]) input.addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); submit(); } });
+  }
+  /** The next free half hour on a day for this task: from now on today, from 09:00 on a later day, after the times the day already has. */
+  private freeSlot(date: string): string {
+    const row = this.rows.find(r => r.date === date); const taken = [...(row?.times ?? []), ...(row?.locked.map(spanOf) ?? [])];
+    const clock = new Date(this.now); let at = date === this.today ? Math.ceil((clock.getHours() * 60 + clock.getMinutes()) / 30) * 30 : 9 * 60;
+    while (at < 1440 && taken.some(t => { const s = minutesOf(t.start)!, e = minutesOf(t.end)!; return at < (e > s ? e : 1440) && s < at + 60; })) at += 30;
+    return clockOf(Math.min(at, 1410));
+  }
+  private addDay(date: string, time?: ClockSpan): void {
+    let row = this.rows.find(r => r.date === date);
+    if (!row) { row = { date, times: [], locked: [], missing: false, restore: false }; this.rows.push(row); }
+    if (time) row.times.push(time);
+    this.paint(date);
+  }
+  private problem(row: ScheduleRow): string | null { return timesProblem(row.times); }
+  /** Draws the days, each with its times, and the budget line; `focus` is the day whose first control gets the focus. */
+  private paint(focus?: string): void {
+    this.rows.sort((a, b) => a.date.localeCompare(b.date)); this.list.empty();
+    if (!this.rows.length) this.list.createDiv({ cls: "organized-muted organized-schedule-empty", text: "Not scheduled yet. Pick a day; a time is optional." });
+    for (const row of this.rows) {
+      const card = this.list.createDiv({ cls: "organized-schedule-day", attr: { role: "listitem" } }); card.toggleClass("organized-schedule-highlight", row.date === this.setup.highlight);
+      const head = card.createDiv({ cls: "organized-schedule-head" });
+      head.createSpan({ cls: "organized-schedule-label", text: this.label(row.date) });
+      const day = head.createEl("input", { type: "date", attr: { "aria-label": `Day of ${this.label(row.date)}` } }); day.value = row.date;
+      day.addEventListener("change", () => {
+        if (!validDate(day.value) || day.value === row.date) { day.value = row.date; return; }
+        const other = this.rows.find(r => r.date === day.value);
+        // Onto a day that is already scheduled: the two become one.
+        if (other) { other.times.push(...row.times); this.rows.splice(this.rows.indexOf(row), 1); } else row.date = day.value;
+        this.paint(day.value);
+      });
+      const remove = head.createEl("button", { cls: "organized-repeat-remove", text: "×", attr: { "aria-label": `Remove ${this.label(row.date)}`, title: "Remove day" } });
+      remove.addEventListener("click", () => { const at = this.rows.indexOf(row); this.rows.splice(at, 1); this.paint(this.rows[Math.min(at, this.rows.length - 1)]?.date); });
+      const blocks = row.times.filter(t => minutesOf(t.start) !== null && minutesOf(t.end) !== null && t.start !== t.end).map(t => blockOn(row.date, t));
+      const load = this.setup.load(row.date, [...blocks, ...row.locked]);
+      const meta = card.createDiv({ cls: "organized-muted organized-schedule-meta" });
+      meta.setText(`${row.times.length || row.locked.length ? "" : "Any time · "}${load.seconds ? `${lengthOfSeconds(load.seconds)} planned that day` : "Nothing else planned"}`);
+      if (row.missing) {
+        const missing = card.createDiv({ cls: "organized-schedule-missing" }); missing.createSpan({ text: row.restore ? "The todo goes back in the daily note." : "Not in the daily note. " });
+        if (!row.restore) { const back = missing.createEl("button", { cls: "organized-repeat-add", text: "Add back" }); back.addEventListener("click", () => { row.restore = true; this.paint(row.date); }); }
+      }
+      for (const block of row.locked) card.createDiv({ cls: "organized-schedule-locked", text: `${timeLabel(spanOf(block))} · ${Date.parse(block.end) <= this.now ? "done" : "started"}` });
+      const times = card.createDiv({ cls: "organized-repeat-times", attr: { role: "group", "aria-label": `Times on ${this.label(row.date)}` } });
+      for (const time of row.times) {
+        const line = times.createDiv({ cls: "organized-repeat-time" });
+        const from = line.createEl("input", { type: "time", attr: { "aria-label": "From" } }); const to = line.createEl("input", { type: "time", attr: { "aria-label": "To" } }); from.value = time.start; to.value = time.end;
+        from.addEventListener("input", () => { time.start = from.value; this.check(card, row); }); to.addEventListener("input", () => { time.end = to.value; this.check(card, row); });
+        const drop = line.createEl("button", { cls: "organized-repeat-remove", text: "×", attr: { "aria-label": `Remove ${time.start}–${time.end}`, title: "Remove time" } });
+        drop.addEventListener("click", () => { row.times.splice(row.times.indexOf(time), 1); this.paint(row.date); });
+      }
+      const more = card.createEl("button", { cls: "organized-repeat-add", text: "+ time", attr: { "aria-label": `Add a time on ${this.label(row.date)}` } }); more.disabled = row.times.length >= MAX_TIMES;
+      more.addEventListener("click", () => { const start = this.freeSlot(row.date); row.times.push({ start, end: clockOf(minutesOf(start)! + 60) }); this.paint(row.date); });
+      card.createDiv({ cls: "organized-modal-copy organized-session-note organized-schedule-note", attr: { role: "status" } });
+      this.check(card, row, load.clash);
+      if (row.date === focus) window.setTimeout(() => day.focus(), 0);
+    }
+    this.paintBudget();
+  }
+  /** What is wrong with a day's times, or a warning about them: past, or over another task's. */
+  private check(card: HTMLElement, row: ScheduleRow, clash: string | null = null): boolean {
+    const note = card.querySelector<HTMLElement>(".organized-schedule-note")!; const problem = this.problem(row);
+    const past = !problem && row.times.some(t => Date.parse(blockOn(row.date, t).start) <= this.now);
+    note.setText(problem ?? (clash ? `Overlaps “${clash}”.` : past ? "A time already past won't start a timer." : "")); note.toggleClass("organized-session-problem", problem !== null);
+    if (!problem) this.paintBudget(); return problem === null;
+  }
+  private draft(): DraftDay[] {
+    return this.rows.map(r => ({ date: r.date, ...(r.from && r.from !== r.date ? { from: r.from } : {}), blocks: r.times.map(t => blockOn(r.date, t)), ...(r.restore ? { restore: true } : {}) }));
+  }
+  private paintBudget(): void { if (this.rows.every(r => this.problem(r) === null)) this.budgetLine.setText(this.setup.budget(this.draft().flatMap(d => d.blocks))); }
+  private save(): void {
+    if (!this.rows.every(r => this.problem(r) === null)) { this.paint(); return; }
+    if (this.rows.length + this.setup.earlier.length > MAX_DAYS) { this.budgetLine.setText(`A task can be scheduled for at most ${MAX_DAYS} days.`); return; }
+    if (!this.dirty()) { this.close(); return; }
+    this.settled = true; this.close(); void this.setup.save([...this.setup.earlier.map(date => ({ date, blocks: [] })), ...this.draft()]).catch(report);
+  }
+  onClose(): void {
+    this.contentEl.empty(); if (this.settled) return; this.settled = true;
+    if (this.setup.state !== "open" || !this.dirty()) { this.setup.cancelled?.(); return; }
+    // Unsaved changes are never dropped without asking.
+    const rows = this.rows;
+    new ChoiceModal(this.app, "Discard changes?", "The schedule has changes that are not saved.", [
+      { label: "Keep editing", run: () => new ScheduleModal(this.app, this.setup, rows).open() },
+      { label: "Discard", run: () => this.setup.cancelled?.() },
+    ], () => this.setup.cancelled?.()).open();
+  }
 }
 /** A question with a few answers as buttons; closing it answers nothing. */
 export class ChoiceModal extends Modal {
-  constructor(app: App, readonly heading: string, readonly message: string, readonly choices: { label: string; run: () => void }[]) { super(app); decorate(this); }
+  private chosen = false;
+  /** `dismissed` runs when it closes with no answer. */
+  constructor(app: App, readonly heading: string, readonly message: string, readonly choices: { label: string; run: () => void }[], readonly dismissed?: () => void) { super(app); decorate(this); }
   onOpen(): void {
     this.titleEl.setText(this.heading); this.contentEl.addClass("organized-modal");
     this.contentEl.createEl("p", { cls: "organized-modal-copy", text: this.message });
     const actions = new Setting(this.contentEl);
-    for (const [n, choice] of this.choices.entries()) actions.addButton(b => { b.setButtonText(choice.label).onClick(() => { this.close(); choice.run(); }); if (n === 0) b.setCta(); });
+    for (const [n, choice] of this.choices.entries()) actions.addButton(b => { b.setButtonText(choice.label).onClick(() => { this.chosen = true; this.close(); choice.run(); }); if (n === 0) b.setCta(); });
   }
-  onClose(): void { this.contentEl.empty(); }
+  onClose(): void { this.contentEl.empty(); if (!this.chosen) this.dismissed?.(); }
 }
 export class ConfirmModal extends Modal {
   private settled = false;

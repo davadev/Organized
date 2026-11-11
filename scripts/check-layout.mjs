@@ -168,10 +168,11 @@ try {
         const box = await window.boundingBox(); if (!box) throw Error('Schedule modal is not visible');
         if (box.y > 96) throw Error(`Schedule modal is not top-aligned: ${box.y}`);
         if (box.width > width - 8) throw Error(`Schedule modal overflows its ${width}px host: ${box.width}`);
-        const title = await page.locator('.organized-modal-window .modal-title').innerText(); if (title !== 'Schedule task') throw Error(`Schedule modal title regressed: ${title}`);
-        const buttons = page.locator('.organized-modal-window .modal-content button'); if ((await buttons.allTextContents()).join(',') !== 'Schedule,Clear date' || !(await buttons.first().isVisible()) || !(await buttons.last().isVisible())) throw Error('Schedule modal actions are missing or hidden');
-        const times = await page.evaluate(() => { const w = document.querySelector('.organized-modal-window').getBoundingClientRect(); return Array.from(document.querySelectorAll('.organized-modal-window input[type=time]')).map(input => { const b = input.getBoundingClientRect(); return b.width > 60 && b.left >= w.left - 1 && b.right <= w.right + 1; }); });
-        if (times.length !== 2 || times.some(inside => !inside)) throw Error(`Schedule time fields are missing, too narrow or leave the modal: ${times}`);
+        const title = await page.locator('.organized-modal-window .modal-title').innerText(); if (title !== 'Schedule') throw Error(`Schedule modal title regressed: ${title}`);
+        const actions = await page.locator('.organized-modal-window .setting-item button').allTextContents(); if (actions.join(',') !== 'Save,Cancel,Clear schedule') throw Error(`Schedule modal actions regressed: ${actions}`);
+        // Every control of every day stays inside the dialog and is wide enough to use; text wraps instead of running out.
+        const fit = await page.evaluate(() => { const w = document.querySelector('.organized-modal-window').getBoundingClientRect(); const out = []; for (const el of document.querySelectorAll('.organized-modal-window input, .organized-modal-window button, .organized-schedule-day, .organized-schedule-meta, .organized-schedule-note, .organized-schedule-task')) { const b = el.getBoundingClientRect(); if (b.width && (b.left < w.left - 1 || b.right > w.right + 1)) out.push(el.className || el.getAttribute('aria-label')); if (el.matches("input[type=time], input[type=date]") && b.width < 60) out.push(`narrow ${el.getAttribute("aria-label")} ${Math.round(b.width)}`); } return { out, days: document.querySelectorAll('.organized-schedule-day').length, times: document.querySelectorAll('.organized-schedule-day input[type=time]').length }; });
+        if (fit.out.length || fit.days !== 5 || fit.times !== 10) throw Error(`Schedule modal controls leave the dialog or are missing: ${JSON.stringify(fit)}`);
       }
       if (tab === 'RepeatModal') {
         const box = await page.locator('.organized-modal-window').boundingBox(); if (!box || box.width > width - 8) throw Error(`Repeat modal overflows its ${width}px host: ${JSON.stringify(box)}`);

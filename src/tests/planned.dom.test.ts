@@ -5,7 +5,7 @@ import { harness, sessionFields } from './harness';
 import { installObsidianDom } from './__mocks__/obsidianDom';
 import { Notice, Modal } from './__mocks__/obsidian';
 import { localDate, taskFrom } from '../model';
-import { DatePicker, SessionModal } from '../modals';
+import { ScheduleModal, SessionModal } from '../modals';
 import { kindOf } from '../sessions';
 import { splitNote } from '../repository';
 
@@ -161,7 +161,8 @@ describe('planned time', () => {
       for (const [where, put] of [['today', (p: any) => p.put(4, '- [ ] Old line <!--organized:ID-->')], ['future', (p: any) => p.put(9, '- [ ] Old line <!--organized:ID-->')], ['undated', (p: any) => p.add('Notes/Topic.md', `- [ ] Old line <!--organized:${p.task.id}-->`)]] as const) {
         const p: any = await setup(); await p.put(1, '- [ ] Old line <!--organized:ID-->'); await put(p);
         await p.service.applyPlanning(new Date(2026, 2, 4, 9, 0).getTime()); expect(p.read(1), where).toBe(`- [ ] Old line <!--organized:${p.task.id}-->`);
-        const other = where === 'today' ? p.read(4) : where === 'future' ? p.read(9) : p.texts.get('Notes/Topic.md'); expect(other, where).toContain('- [/] Old line');
+        // A later day's copy keeps its marker while the timer runs: the work is today's.
+        const other = where === 'today' ? p.read(4) : where === 'future' ? p.read(9) : p.texts.get('Notes/Topic.md'); expect(other, where).toContain(where === 'future' ? '- [ ] Old line' : '- [/] Old line');
       }
     });
     it('keeps forwarded history lines and changes only the most recent earlier note', async () => {
@@ -206,13 +207,13 @@ describe('scheduling with a time', () => {
     expect((await repo.read(task.id)).planned_sessions).toEqual([on(6, 10, 11), on(6, 15, 16)]); expect((await repo.read(child.id)).planned_sessions).toEqual([on(6, 12, 13)]);
     expect(notices().at(-1)).toContain('1 planned block of “Line” moved');
   });
-  it('the date dialog shows the one block of the day and replaces it with what is saved; several blocks just move along', async () => {
+  it('the Schedule dialog shows each day with its blocks, and a day moved there takes the times it was given', async () => {
     const { owner, repo } = await today8(); const task = await repo.create('Dialog'); await repo.update(task.id, t => ({ ...t, scheduled: '2026-03-05', planned_sessions: [on(5, 10, 11)] }));
-    owner.pickSchedule(await repo.read(task.id)); let modal = Modal.instances.at(-1) as unknown as DatePicker; expect([modal.initial, modal.time, modal.hint]).toEqual(['2026-03-05', { start: '10:00', end: '11:00' }, '']);
-    await modal.choose('2026-03-06', on(6, 14, 15)); await flush(); expect(await repo.read(task.id)).toMatchObject({ scheduled: '2026-03-06', planned_sessions: [on(6, 14, 15)] });
-    await repo.update(task.id, t => ({ ...t, planned_sessions: [on(6, 9, 10), on(6, 14, 15)] })); owner.pickSchedule(await repo.read(task.id)); modal = Modal.instances.at(-1) as unknown as DatePicker;
-    expect([modal.time, modal.hint]).toEqual([null, '2 planned blocks on 2026-03-06 move with the date.']); await modal.choose('2026-03-07', null); await flush(); expect((await repo.read(task.id)).planned_sessions).toEqual([on(7, 9, 10), on(7, 14, 15)]);
-    const loose = await repo.create('Undated'); owner.pickSchedule(loose); modal = Modal.instances.at(-1) as unknown as DatePicker; expect([modal.initial, modal.time]).toEqual(['2026-03-04', null]); expect(modal.clear).toBeUndefined();
+    await owner.pickSchedule(await repo.read(task.id)); let modal = Modal.instances.at(-1) as unknown as ScheduleModal; expect(modal.setup.days).toEqual([{ date: '2026-03-05', blocks: [on(5, 10, 11)], locked: [], missing: false }]);
+    await modal.setup.save([{ date: '2026-03-06', from: '2026-03-05', blocks: [on(6, 14, 15)] }]); await flush(); expect(await repo.read(task.id)).toMatchObject({ scheduled: '2026-03-06', planned_sessions: [on(6, 14, 15)] }); modal.close();
+    await repo.update(task.id, t => ({ ...t, planned_sessions: [on(6, 9, 10), on(6, 14, 15)] })); await owner.pickSchedule(await repo.read(task.id)); modal = Modal.instances.at(-1) as unknown as ScheduleModal;
+    await modal.setup.save([{ date: '2026-03-07', from: '2026-03-06', blocks: [on(7, 9, 10), on(7, 14, 15)] }]); await flush(); expect((await repo.read(task.id)).planned_sessions).toEqual([on(7, 9, 10), on(7, 14, 15)]); modal.close();
+    const loose = await repo.create('Undated'); await owner.pickSchedule(loose); modal = Modal.instances.at(-1) as unknown as ScheduleModal; expect([modal.setup.days, modal.setup.earlier]).toEqual([[], []]); modal.close();
   });
   it('a change of planned time follows at once from now: a block added under way starts now, one cut under a running timer stops it now, never earlier', async () => {
     const { service, repo } = await today8(); vi.setSystemTime(new Date(2026, 2, 4, 13, 0)); const task = await repo.create('Shift');

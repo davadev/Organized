@@ -56,7 +56,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "Type a letter in the checkbox",
-    text: "No menus needed: a letter between the brackets does what the panel does. Set priority, schedule or clear a date, start a timer, log time worked, link projects, repeat, favorite. `[n]` gives a todo its own note, `[+]` adds a subtask. Eight are below; the README lists them all.",
+    text: "No menus needed: a letter between the brackets does what the panel does. Set priority, schedule days and times, start a timer, log time worked, link projects, repeat, favorite. `[n]` gives a todo its own note, `[+]` adds a subtask. Eight are below; the README lists them all.",
     figure: "keys",
   },
   {

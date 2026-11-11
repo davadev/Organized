@@ -167,7 +167,7 @@ describe('bug hunt regressions', () => {
     // Data written before the link was dropped on conversion, and a link whose note was deleted by hand.
     await repo.update(parent.id, t => ({ ...t, subtasks: ['[[Child]]', '[[Ghost]]'] }));
     const listed = await repo.read(parent.id); expect(await repo.subtasksOf(listed)).toEqual([]); expect(await repo.progress(listed)).toBeNull();
-    await service.scheduleTask(parent.id, '2999-01-05'); expect(parseTasks(h.texts.get(service.daily.path('2999-01-05'))!).map(t => t.title)).toEqual(['Parent']);
+    await h.add(service.daily.path('2999-01-05'), ''); await service.scheduleTask(parent.id, '2999-01-05'); expect(parseTasks(h.texts.get(service.daily.path('2999-01-05'))!).map(t => t.title)).toEqual(['Parent']);
     const ghost = await repo.create('Ghost'); expect(repo.taskFile(ghost.id)!.basename).not.toBe('Ghost'); expect(await repo.parentOf(ghost.id)).toBeNull();
     const free = await repo.create('Free'); expect(repo.taskFile(free.id)!.basename).toBe('Free');
   });

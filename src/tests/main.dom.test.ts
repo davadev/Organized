@@ -5,7 +5,7 @@ import Organized from "../main";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
 import { harness, sessionFields } from "./harness";
 import { MarkdownView, Modal, Notice, Platform, TFolder } from "./__mocks__/obsidian";
-import { ConfirmModal, DatePicker, KEEP_AS_TODO, SessionModal, NoteConversionModal, OnboardingModal, RetireModal, PriorityPicker, ProjectPicker, TaskPicker } from "../modals";
+import { ConfirmModal, ScheduleModal, KEEP_AS_TODO, SessionModal, NoteConversionModal, OnboardingModal, RetireModal, PriorityPicker, ProjectPicker, TaskPicker } from "../modals";
 import { parseTasks } from "../codec";
 import { OrganizedInspectorView, VIEW_TYPE } from "../view";
 import { localDate } from '../model';
@@ -78,7 +78,7 @@ describe('plugin lifecycle and user-only editor actions', () => {
   });
   it('registers capabilities only, defers vault-create handling and cleans durable crash state', async () => {
     const { h, plugin, stub } = await loaded();
-    expect(stub.commands).toHaveLength(17); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
+    expect(stub.commands).toHaveLength(19); expect(stub.extensions).toHaveLength(1); expect(stub.processors).toHaveLength(1); expect(stub.settingTabs).toHaveLength(1); expect(stub.views.has(VIEW_TYPE)).toBe(true); expect(h.raw.vault.read).not.toHaveBeenCalled(); expect(h.raw.vault.create).not.toHaveBeenCalled(); expect(h.events.create).toBeUndefined();
     const factory = stub.views.get(VIEW_TYPE); expect(factory({ app: h.app })).toBeInstanceOf(OrganizedInspectorView);
     h.layout[0](); expect(h.events.create).toHaveLength(1);
     const created = vi.spyOn(plugin.service, 'onDailyCreated').mockResolvedValue(); const index = vi.spyOn(plugin.service, 'index').mockResolvedValue(); const reconcile = vi.spyOn(plugin.service, 'reconcile').mockResolvedValue(); const refresh = vi.spyOn(plugin, 'refresh').mockImplementation(() => undefined);
@@ -189,8 +189,10 @@ describe('plugin lifecycle and user-only editor actions', () => {
   it('routes date, priority, description, source and project markers with cancellation preserving markers', async () => {
     const { h, plugin } = await loaded(); const task = await plugin.repo.create('Task'); const file: any = await h.add('Note.md', '');
     const context = (marker: string) => { const text = `- [${marker}] Task <!--organized:${task.id}-->`; h.texts.set(file.path, text); return { file, line: parseTasks(text)[0] }; };
-    const schedule = vi.spyOn(plugin.service, 'schedule').mockResolvedValue(); await plugin.trigger(context('<')); let modal = Modal.instances.at(-1) as DatePicker; expect(modal).toBeInstanceOf(DatePicker); await modal.choose('2026-01-01', null); expect(schedule).toHaveBeenCalled(); modal.close(); expect(modal.clear).toBeUndefined();
-    const unschedule = vi.spyOn(plugin.service, 'unschedule').mockResolvedValue(); await plugin.repo.update(context('<').line.id!, t => ({ ...t, scheduled: '2026-01-05' })); await plugin.trigger(context('<')); modal = Modal.instances.at(-1) as DatePicker; await modal.clear!(); expect(unschedule).toHaveBeenCalledWith(context('<').line.id); modal.close();
+    const save = vi.spyOn(plugin.service, 'saveSchedule').mockResolvedValue(); await plugin.trigger(context('<')); let modal = Modal.instances.at(-1) as ScheduleModal; expect(modal).toBeInstanceOf(ScheduleModal);
+    await modal.setup.save([{ date: '2026-01-01', blocks: [] }]); expect(save).toHaveBeenCalledWith(task.id, [{ date: '2026-01-01', blocks: [] }], expect.objectContaining({ file })); modal.close();
+    await plugin.repo.update(task.id, t => ({ ...t, scheduled: '2026-01-05' })); await plugin.trigger(context('<')); modal = Modal.instances.at(-1) as ScheduleModal; expect(modal.setup.earlier).toEqual(['2026-01-05']); await modal.setup.save([]); expect(save).toHaveBeenLastCalledWith(task.id, [], expect.objectContaining({ file })); modal.close();
+    await plugin.repo.update(task.id, t => ({ ...t, scheduled: null }));
     const priority = vi.spyOn(plugin.service, 'priority').mockResolvedValue(); await plugin.trigger(context('!')); const picker = Modal.instances.at(-1) as PriorityPicker; await picker.choose('high'); expect(priority).toHaveBeenCalled(); picker.close();
     const open = vi.spyOn(plugin, 'openInspector').mockResolvedValue(); const clean = vi.spyOn(plugin.service, 'clean').mockResolvedValue(); for (const marker of ['a', 's']) await plugin.trigger(context(marker)); expect(open.mock.calls.map(c => c[1])).toEqual(['Description', 'Sources']); expect(clean).toHaveBeenCalledTimes(2);
     await plugin.trigger(context('s')); expect(open).toHaveBeenLastCalledWith('Task', 'Sources'); expect(clean).toHaveBeenCalledTimes(3);

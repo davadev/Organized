@@ -78,7 +78,9 @@ export async function projection(owner: Organized, host: HTMLElement, task: Task
   const selected = right ? [...owner.settings.displayProperties.filter(p => VARYING.includes(p)), ...owner.settings.displayProperties.filter(p => !VARYING.includes(p))] : owner.settings.displayProperties;
   if (task.scheduled && owner.settings.showScheduledDate) {
     const scheduled = task.scheduled;
-    const link = host.createEl("a", { text: scheduled, cls: "organized-date", href: "#", attr: { "aria-label": `Open daily note for ${scheduled}` } });
+    // The next day, and how many more it is scheduled for.
+    const more = task.scheduled_dates.length > 1 ? ` +${task.scheduled_dates.length - 1}` : "";
+    const link = host.createEl("a", { text: `${scheduled}${more}`, cls: "organized-date", href: "#", attr: { "aria-label": `Open daily note for ${scheduled}` } });
     link.addEventListener("click", event => { event.preventDefault(); void owner.run(() => owner.service.daily.open(scheduled)); });
   }
   for (const property of selected) {

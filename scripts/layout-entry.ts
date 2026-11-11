@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS, newTask } from '../src/model';
 import { editorExtension } from '../src/render';
 import { Setting, editorLivePreviewField } from '../src/tests/__mocks__/obsidian';
 import { OrganizedSettingsTab } from '../src/settings';
-import { DatePicker, NoteConversionModal, OnboardingModal, RecurrencePicker, RetireModal, SessionModal, WhatsNewModal } from '../src/modals';
+import { NoteConversionModal, ScheduleModal, OnboardingModal, RecurrencePicker, RetireModal, SessionModal, WhatsNewModal } from '../src/modals';
 import { RELEASE_NOTES } from '../src/whatsNew/releaseNotes';
 import { parseTasks } from '../src/codec';
 import { EditorState } from '@codemirror/state';
@@ -39,7 +39,7 @@ const owner: any = {
 const view = new OrganizedInspectorView({ app } as any, owner);
 const root = document.querySelector('#app')!; root.appendChild(view.contentEl);
 let editor: EditorView | null = null;
-let modal: DatePicker | SessionModal | NoteConversionModal | OnboardingModal | RetireModal | WhatsNewModal | null = null;
+let modal: ScheduleModal | SessionModal | NoteConversionModal | OnboardingModal | RetireModal | WhatsNewModal | null = null;
 // The check reads the note text back after typing into the real editor.
 (window as any).editorText = () => editor?.state.doc.toString();
 // Stand-in for Obsidian's list continuation, which handles Enter in a real note (on iOS CodeMirror relies on such a command to drop the native line break).
@@ -63,7 +63,13 @@ const continueList = Prec.low(keymap.of([{ key: 'Enter', run: view => { const at
     const doc = tab === 'Eof' ? 'intro\n- [ ] Test task <!--organized:task1234-->' : tab === 'AlignRight' ? '- [ ] Short <!--organized:task1234-->\n- [ ] A much longer task title that wraps onto a second line on a phone screen <!--organized:task1234-->\n- [ ] Romeo Schmerzmittel <!--organized:task1234-->\n    - Proverbs 4_18' : '- [ ] Test task <!--organized:task1234--> <!--organized:repeat-->';
     editor = new EditorView({ state: EditorState.create({ doc, selection: { anchor: 0 }, extensions: [EditorView.lineWrapping, ...(tab === 'Source' ? [] : [editorLivePreviewField]), editorExtension(owner), continueList] }), parent: root });
   } else if (tab === 'ScheduleModal') {
-    modal = new DatePicker(app, '2026-01-01', async () => undefined, async () => undefined);
+    // Five days, one with three times and one block that has begun, under a long title: the dialog must stay inside a phone screen.
+    const day = (d: number) => `2026-03-${String(d).padStart(2, '0')}`; const block = (d: number, h: number) => ({ start: at(d, h), end: at(d, h + 1) });
+    modal = new ScheduleModal(app, {
+      title: 'A task title that stays readable at phone widths, even when it is very long indeed', earlier: ['2026-03-01'], state: 'open', now: () => new Date(2026, 2, 4, 10).getTime(),
+      days: [{ date: day(4), blocks: [block(4, 11), block(4, 14), block(4, 16)], locked: [block(4, 9)], missing: true }, { date: day(5), blocks: [], locked: [] }, { date: day(6), blocks: [block(6, 9)], locked: [] }, { date: day(9), blocks: [], locked: [] }, { date: day(12), blocks: [block(12, 13)], locked: [] }],
+      load: d => ({ seconds: d === day(4) ? 5 * 3600 : 0, clash: d === day(6) ? 'A meeting with a long name that overlaps' : null }), budget: () => 'Planned 6h · 1h 30min of 7h 30min left', save: async () => undefined,
+    });
     modal.open();
   } else if (tab === 'RepeatModal') {
     modal = new RecurrencePicker(app, '2026-03-04', { every: 1, unit: 'week', days: [0, 1, 2, 3, 4], monthDay: null }, async () => undefined, undefined, [{ start: '08:00', end: '12:00' }, { start: '13:00', end: '17:00' }, { start: '22:00', end: '02:00' }]);
