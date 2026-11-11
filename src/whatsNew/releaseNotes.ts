@@ -35,7 +35,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     intro: "Moving todos between headings keeps their task. These are the changes since 0.1.4.",
     items: [
       { title: "Copy or cut a todo and it stays the task", text: "Select a todo from its checkbox to the end of its title (with the handles on a phone, or a drag on a computer) and copy or cut it: pasted under another heading it is still the same task, with its status, time and projects. Selecting only words of the title copies just those words." },
-      { title: "One task, one line in each note", text: "When a paste puts a task on a second line of the same note, Organized says so at once. Until you delete one copy, its status does not change: a ticked copy is unticked again and a notice names the note. For a separate task, use Duplicate as new task." },
+      { title: "One task, one line in each note", text: "When a paste puts a task on a second line of the same note, Organized says so at once. Until you delete one copy, its status does not change: a ticked copy is unticked again and a notice names the note. For a separate task, use Duplicate as new task. If you keep the same task on two lines of one note on purpose, tell us in an issue on GitHub." },
     ],
   },
   {
