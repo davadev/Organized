@@ -126,12 +126,12 @@ export default class Organized extends Plugin {
     this.loaded = false; this.unloaded = true; for (const timer of this.titleTimers.values()) window.clearTimeout(timer); this.titleTimers.clear(); for (const { timer } of this.structure.values()) window.clearTimeout(timer); this.structure.clear(); if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer); this.refreshTimer = null;
     void writeCrashState(this.app.vault.adapter, crashStatePath(this.manifest, this.app.vault.configDir), DEFAULT_CRASH_STATE);
   }
-  /** Sets tasks in progress for planned blocks that have begun and reopens the ones whose block is over. Does nothing unless the person switched it on. Also called right after a block is added, changed or removed, so a block that is already under way does not wait for the minute check. */
+  /** Starts the timers of tasks whose planned block has begun and stops the ones whose planned time is over. Does nothing unless the person switched it on. Also called right after a block is added, changed or removed, so a block that is already under way does not wait for the minute check. */
   planningTick(): void {
     if (this.unloaded || !this.loaded || !this.safety.writable || this.role === "mirror" || !this.settings.startAtPlannedTime) return;
     void this.run(async () => {
       const ended = await this.service.applyPlanning();
-      if (ended.length) new Notice(ended.length === 1 ? `Planned time for “${ended[0]}” is over. Adjust the time if you need longer.` : `Planned time is over for ${ended.length} tasks: ${ended.map(title => `“${title}”`).join(", ")}. Adjust the time if you need longer.`, 10000);
+      if (ended.length) new Notice(ended.length === 1 ? `Planned time for “${ended[0]}” is over: its timer stopped at the end of the block. Start it again if you need longer.` : `Planned time is over for ${ended.length} tasks: ${ended.map(title => `“${title}”`).join(", ")}. Their timers stopped at the end of the block; start one again if you need longer.`, 10000);
     });
   }
   assertWritable(): void { if (!this.safety.writable) throw new Error("Writes paused to protect newer/unreadable settings. Restore a compatible backup or update Organized."); }

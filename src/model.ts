@@ -191,9 +191,10 @@ export function elapsed(task: Task, now = Date.now()): number {
   return task.time_tracked_seconds + (task.time_tracking_started_at ? Math.max(0, Math.floor((now - Date.parse(task.time_tracking_started_at)) / 1000)) : 0);
 }
 export function setStatus(task: Task, status: Status, now = new Date()): Task {
-  // Any status change made through here is the person's (or a marker's), so a flip made by a planned block no longer applies.
-  // A manual start ends the claim of a planned block; any other change keeps it, so a task the person put back is not started again by the block that is still under way (it is released when the block ends).
-  const next = { ...task, status: task.recurring ? "open" as const : status, auto_started_block: status === "in_progress" ? null : task.auto_started_block };
+  // A change made while a planned block is under way marks that block as handled: a task the person stopped is not started again by it (see `dueStarts`), and a timer started in it stops when it ends.
+  // A timer started outside planned time is the person's alone: nothing stops it.
+  const at = now.getTime(); const covering = task.planned_sessions.find(block => Date.parse(block.start) <= at && at < Date.parse(block.end));
+  const next = { ...task, status: task.recurring ? "open" as const : status, auto_started_block: covering?.start ?? (status === "in_progress" ? null : task.auto_started_block) };
   if (next.status === "completed" || next.status === "canceled") next.closed_at = task.status === next.status && task.closed_at ? task.closed_at : now.toISOString();
   else next.closed_at = null;
   if (status === "in_progress") next.time_tracking_started_at = task.time_tracking_started_at ?? now.toISOString();
@@ -205,11 +206,13 @@ export function setStatus(task: Task, status: Status, now = new Date()): Task {
   }
   return next;
 }
-/** A planned block has begun: the task is in progress but nothing is timed, and the block is remembered so only this flip is undone. */
+/** A planned block has begun: the task's timer runs, as if the person had started it, and the block is remembered so it starts the task once. */
 /** The checkbox marker a task shows. A recurring task keeps the status "open" while its timer runs, so the timer counts too. */
 /** The status a todo's marker stands for; `[ ]` and every action marker mean open. */
 export function statusOfMarker(marker: string): Status { return marker.toLowerCase() === "x" ? "completed" : marker === "-" ? "canceled" : marker === "/" ? "in_progress" : "open"; }
 export function markerOf(task: Task): string { return task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.status === "in_progress" || task.time_tracking_started_at !== null ? "/" : " "; }
 export function startPlanned(task: Task, block: WorkSession): Task {
-  return { ...task, status: "in_progress", closed_at: null, auto_started_block: block.start };
+  // Timed from the block's start (the plugin may notice only later, after the phone woke), but never over time already worked.
+  const start = Math.max(Date.parse(block.start), ...task.work_sessions.map(s => Date.parse(s.end)));
+  return { ...setStatus(task, "in_progress", new Date(start)), auto_started_block: block.start };
 }

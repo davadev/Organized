@@ -158,14 +158,9 @@ export class OrganizedInspectorView extends ItemView {
     this.doneToday = new Set(note ? parseTasks(await this.owner.repo.readText(note)).filter(t => t.id && t.marker.toLowerCase() === "x").map(t => t.id!) : []);
   }
   /** Today's occurrence of a recurring task, so changing status from the inspector targets only today. */
-  private async todayContext(id: string): Promise<{ file: TFile; line: TaskLine } | undefined> {
-    const note = this.owner.repo.file(this.owner.service.daily.path(localDate())); if (!note) return undefined;
-    const lines = parseTasks(await this.owner.repo.readText(note)).filter(t => t.id === id);
-    return lines.length === 1 ? { file: note, line: lines[0] } : undefined;
-  }
   /** The todo line a change from the panel should write to: the one the cursor is on when it is this task's, else today's occurrence of a recurring task. Another task's line is never used. */
   private async contextFor(task: Task): Promise<{ file: TFile; line: TaskLine } | undefined> {
-    return this.owner.context?.line.id === task.id ? this.owner.context : task.recurring ? await this.todayContext(task.id) : undefined;
+    return this.owner.context?.line.id === task.id ? this.owner.context : await this.owner.service.todayContext(task);
   }
   /** A recurring task keeps `status: open` (each day's todo holds that day's state), so the panel shows today's: done when today's todo is ticked, in progress while its timer runs. */
   private shownStatus(task: Task): Task["status"] { return !task.recurring || task.status !== "open" ? task.status : this.doneToday.has(task.id) ? "completed" : task.time_tracking_started_at ? "in_progress" : "open"; }

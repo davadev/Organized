@@ -3,7 +3,7 @@ import { Notice, TFile } from "obsidian";
 import { descendants, duplicateRepeats, fixIndent, insertTask, insertUnder, migrateNote, moveTask, nestUnder, noteSection, parentIds, parseTasks, projectSection, removeLines, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, markerOf, MAX_PLANNED_SESSIONS, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, startPlanned, Status, Task, taskFrom, WorkSession } from "./model";
-import { dueEnds, dueStarts } from "./planning";
+import { claimHolds, dueStarts, dueStops } from "./planning";
 import { formatRule, repeatsOn, Rule, sameCadence, taskRule } from "./recurrence";
 import { seconds } from "./sessions";
 import { ProjectBudgets, projectTemplate, Repository, splitNote } from "./repository";
@@ -560,41 +560,47 @@ export class TaskService {
     }); this.changed();
   }
   /**
-   * Sets tasks in progress while a planned block is under way and puts them back to open when it is over (only when this set them in progress and nothing since changed them).
-   * Returns the titles of tasks whose block ended, so the caller can tell the person to adjust the time.
+   * Starts the timer of each task whose planned block has begun and stops each timer whose planned time is over, at the block's end (see `dueStarts`, `dueStops`).
+   * Returns the titles of tasks whose timer it stopped, so the caller can say so.
    */
   async applyPlanning(now = Date.now()): Promise<string[]> {
-    const tasks = await this.repo.list();
-    const ended: string[] = []; const ends = dueEnds(tasks, now); const starts = dueStarts(tasks, now);
-    // A write that loses a race with the person typing (or an editor saving older text over it) leaves the status set but the note unchanged; the next pass puts the marker back, so such a start is never dropped.
+    const tasks = await this.repo.list(); const stopped: string[] = [];
+    // A write that loses a race with the person typing (or an editor saving older text over it) leaves the task changed but the note not: a stop is undone so the next pass makes it again, a start is put right by the heal below.
     const lost = (error: unknown) => error instanceof Error && error.message.includes("changed concurrently");
-    for (const end of ends) {
-      if (end.action === "move") await this.repo.update(end.task.id, t => ({ ...t, auto_started_block: end.block!.start }));
-      else if (end.action === "release") await this.repo.update(end.task.id, t => ({ ...t, auto_started_block: null }));
-      else {
-        try { await this.applyStatus(end.task.id, "open", undefined, undefined, t => ({ ...setStatus(t, "open"), auto_started_block: null })); ended.push(end.task.title); } catch (error) {
-          if (!lost(error)) throw error;
-          // The todo lines could not be written: give the task its claim back so the next pass ends it again, instead of leaving "[/]" in the note on a task that is open.
-          const before = end.task; await this.repo.update(before.id, t => ({ ...t, status: before.status, closed_at: before.closed_at, auto_started_block: before.auto_started_block }));
-        }
+    // A task is never in both: a start needs its timer stopped, a stop needs it running (a later block starts it on the next pass).
+    const stops = dueStops(tasks, now); const starts = dueStarts(tasks, now);
+    for (const { task, end } of stops) {
+      try { await this.applyStatus(task.id, "open", await this.todayContext(task), undefined, t => ({ ...setStatus(t, "open", new Date(end)), auto_started_block: null })); stopped.push(task.title); } catch (error) {
+        if (!lost(error)) throw error;
+        await this.repo.update(task.id, t => ({ ...t, status: task.status, closed_at: task.closed_at, time_tracking_started_at: task.time_tracking_started_at, time_tracked_seconds: task.time_tracked_seconds, work_sessions: task.work_sessions, auto_started_block: task.auto_started_block }));
       }
     }
-    for (const { task, block } of starts) { try { await this.applyStatus(task.id, "in_progress", undefined, undefined, t => startPlanned(t, block)); } catch (error) { if (!lost(error)) throw error; } }
-    const moving = new Set([...ends, ...starts].map(item => item.task.id));
+    for (const { task, block } of starts) { try { await this.applyStatus(task.id, "in_progress", await this.todayContext(task), undefined, t => startPlanned(t, block)); } catch (error) { if (!lost(error)) throw error; } }
+    const moving = new Set([...stops, ...starts].map(item => item.task.id));
     for (const task of tasks) {
-      if (task.auto_started_block === null || task.status !== "in_progress" || task.time_tracking_started_at !== null || moving.has(task.id)) continue;
+      if (moving.has(task.id)) continue;
+      // Planned time that is over leaves nothing behind in the task note.
+      if (task.time_tracking_started_at === null) { if (task.auto_started_block !== null && !claimHolds(task, now)) await this.repo.update(task.id, t => ({ ...t, auto_started_block: null })); continue; }
+      // Only a timer of the planned time under way; one the person started outside it is theirs to fix.
+      if (!claimHolds(task, now)) continue;
       try { await this.healStarted(task); } catch (error) { if (!lost(error)) throw error; }
     }
-    if (ends.length || starts.length) this.changed();
-    return ended;
+    if (stops.length || starts.length) this.changed();
+    return stopped;
   }
-  /** Writes the in-progress marker on the todo lines of a task a planned block started, wherever its lines are; lines that already show it are not written. */
+  /** Today's todo of a recurring task, the one line its status is written to in daily notes (a status change elsewhere leaves other days' todos alone). */
+  async todayContext(task: Pick<Task, "id" | "recurring">): Promise<Context | undefined> {
+    const note = task.recurring ? this.repo.file(this.daily.path(localDate())) : null; if (!note) return undefined;
+    const lines = parseTasks(await this.repo.readText(note)).filter(t => t.id === task.id);
+    return lines.length === 1 ? { file: note, line: lines[0] } : undefined;
+  }
+  /** Writes the in-progress marker on the todo lines of a task whose timer a planned block runs, wherever its lines are; lines that already show it are not written. */
   private async healStarted(task: Task): Promise<void> {
     const found: { file: TFile; text: string; tasks: TaskLine[] }[] = [];
     for (const notePath of await this.refs(task.id)) {
       const file = this.repo.file(notePath)!; const text = await this.repo.readText(file); const tasks = parseTasks(text).filter(t => t.id === task.id); if (tasks.length) found.push({ file, text, tasks });
     }
-    await this.syncLines(task, "in_progress", found);
+    await this.syncLines(task, "in_progress", found, await this.todayContext(task));
   }
   async setProjectColor(notePath: string, color: string | null): Promise<void> {
     const file = this.repo.file(notePath); if (!file) throw new Error("The project note was renamed or removed.");

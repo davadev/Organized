@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { moment } from "../moment";
 import { newTask, setStatus, startPlanned, Task } from "../model";
-import { blockAt, budgetUse, fillOf, dueEnds, overlap, periodRange, projectUse, dueStarts, plannable, plannedNotWorked, plannedSeconds } from "../planning";
+import { blockAt, budgetUse, fillOf, dueStops, overlap, periodRange, projectUse, dueStarts, plannable, plannedNotWorked, plannedSeconds } from "../planning";
 
 const at = (time: string) => new Date(`2026-03-09T${time}:00Z`).getTime();
 const block = (from: string, to: string) => ({ start: new Date(at(from)).toISOString(), end: new Date(at(to)).toISOString() });
@@ -17,52 +17,56 @@ describe("planning", () => {
     expect(plannable(task())).toBe(true); expect(plannable(task({ status: "in_progress" }))).toBe(true);
     expect(plannable(task({ status: "completed" }))).toBe(false); expect(plannable(task({ status: "canceled" }))).toBe(false); expect(plannable(task({ converted_to: "N.md" }))).toBe(false);
   });
-  it("starts open, untimed, non-recurring tasks whose block has begun", () => {
+  it("starts the timer of a task still to do, recurring or not, whose block has begun and that nothing is timing", () => {
     const planned = [block("09:00", "10:00")];
-    expect(dueStarts([task({ planned_sessions: planned })], at("09:30")).map(d => d.block)).toEqual(planned);
+    for (const kind of [{}, { recurring: true }, { status: "in_progress" as const }]) expect(dueStarts([task({ planned_sessions: planned, ...kind })], at("09:30")).map(d => d.block)).toEqual(planned);
     expect(dueStarts([task({ planned_sessions: planned })], at("08:00"))).toEqual([]);
-    for (const other of [{ status: "in_progress" as const }, { status: "completed" as const }, { recurring: true }, { converted_to: "N.md" }, { time_tracking_started_at: "2026-03-09T09:10:00.000Z" }]) {
+    for (const other of [{ status: "completed" as const }, { converted_to: "N.md" }, { time_tracking_started_at: "2026-03-09T09:10:00.000Z" }]) {
       expect(dueStarts([task({ planned_sessions: planned, ...other })], at("09:30"))).toEqual([]);
     }
   });
-  it("does not start a task again for the block that already started it and was put back", () => {
-    const planned = block("09:00", "10:00"); const put = setStatus(startPlanned(task({ planned_sessions: [planned] }), planned), "open");
-    expect(dueStarts([put], at("09:30"))).toEqual([]);
-    const next = block("10:00", "11:00"); expect(dueStarts([{ ...put, planned_sessions: [planned, next] }], at("10:30")).map(d => d.block)).toEqual([next]);
+  it("times a block from its start, never over time already worked, and starts a task once per block: stopped during the block, it stays stopped", () => {
+    const planned = block("09:00", "10:00"); const started = startPlanned(task({ status: "completed", closed_at: "2026-03-01T00:00:00.000Z", planned_sessions: [planned] }), planned);
+    expect(started).toMatchObject({ status: "in_progress", closed_at: null, auto_started_block: planned.start, time_tracking_started_at: planned.start });
+    const after = startPlanned(task({ planned_sessions: [planned], work_sessions: [block("08:30", "09:20")] }), planned); expect(after.time_tracking_started_at).toBe(block("09:20", "09:20").start);
+    // Stopped (or restarted and stopped again) during the block: that block does not start it again; the next one does.
+    const stopped = setStatus(setStatus(setStatus(started, "open", new Date(at("09:20"))), "in_progress", new Date(at("09:30"))), "open", new Date(at("09:40")));
+    expect(stopped.auto_started_block).toBe(planned.start); expect(dueStarts([stopped], at("09:50"))).toEqual([]);
+    const next = block("11:00", "12:00"); expect(dueStarts([{ ...stopped, planned_sessions: [planned, next] }], at("11:30")).map(d => d.block)).toEqual([next]);
+    // A timer the person started before any block, then stopped during one, also stays stopped there.
+    const early = setStatus(setStatus(task({ planned_sessions: [planned] }), "in_progress", new Date(at("08:30"))), "open", new Date(at("09:15"))); expect(dueStarts([early], at("09:30"))).toEqual([]);
+    expect(setStatus(task(), "open", new Date(at("09:30"))).auto_started_block).toBeNull();
   });
-  it("sets a task in progress without timing it, and a manual start drops the claim, other changes keep it", () => {
-    const started = startPlanned(task({ status: "completed", closed_at: "2026-03-01T00:00:00.000Z" }), block("09:00", "10:00"));
-    expect(started).toMatchObject({ status: "in_progress", closed_at: null, auto_started_block: block("09:00", "10:00").start, time_tracking_started_at: null });
-    expect(setStatus(started, "in_progress").auto_started_block).toBeNull();
-    // Putting the task back (or finishing it) keeps the claim, so the block that is still under way does not start it again.
-    expect(setStatus(started, "completed").auto_started_block).toBe(started.auto_started_block); expect(setStatus(started, "open").auto_started_block).toBe(started.auto_started_block);
-  });
-  it("ends a claim: reopen when the block is over, release when the person changed the task, move to a back-to-back block", () => {
-    const first = block("09:00", "10:00"); const planned = [first, block("10:00", "11:00")];
-    const claimed = startPlanned(task({ planned_sessions: planned }), first);
-    expect(dueEnds([claimed], at("09:30"))).toEqual([]); expect(dueEnds([task()], at("12:00"))).toEqual([]);
-    expect(dueEnds([claimed], at("10:00"))).toEqual([{ task: claimed, action: "move", block: planned[1] }]);
-    expect(dueEnds([claimed], at("11:00"))).toEqual([{ task: claimed, action: "reopen" }]);
-    const done = { ...claimed, status: "completed" as const }; const timed = { ...claimed, time_tracking_started_at: "2026-03-09T09:40:00.000Z" };
-    expect(dueEnds([done, timed], at("11:00"))).toEqual([{ task: done, action: "release" }, { task: timed, action: "release" }]);
+  it("stops a running timer where the planned time it ran in ends, however it was started, with back-to-back blocks as one", () => {
+    const first = block("09:00", "10:00"); const planned = [first, block("10:00", "11:00"), block("14:00", "15:00")];
+    const running = (from: string) => task({ planned_sessions: planned, time_tracking_started_at: new Date(at(from)).toISOString() });
+    expect(dueStops([running("09:00")], at("10:30"))).toEqual([]); expect(dueStops([task({ planned_sessions: planned })], at("12:00"))).toEqual([]);
+    expect(dueStops([running("09:00")], at("11:00"))).toEqual([{ task: running("09:00"), end: at("11:00") }]);
+    // Noticed late (the phone slept), started before the block, or restarted inside it: it stops at the end all the same.
+    expect(dueStops([running("09:30")], at("13:00"))[0].end).toBe(at("11:00")); expect(dueStops([running("08:15")], at("11:05"))[0].end).toBe(at("11:00"));
+    // A timer started after the blocks it could belong to keeps running until the next one it runs into ends.
+    expect(dueStops([running("12:00")], at("13:00"))).toEqual([]); expect(dueStops([running("12:00")], at("15:00"))[0].end).toBe(at("15:00"));
   });
   it("measures tracked plus planned time against a budget and extends the bar when over", () => {
     expect(budgetUse(task())).toBeNull();
     const base = { time_budget_seconds: 3600, time_tracked_seconds: 900, planned_sessions: [block("09:00", "09:30")] };
-    expect(budgetUse(task(base))).toEqual({ budget: 3600, tracked: 900, planned: 1800, left: 900, trackedPct: 25, plannedPct: 50, overPct: 0 });
-    expect(budgetUse(task({ ...base, planned_sessions: [block("09:00", "09:45")] }))).toMatchObject({ left: 0, trackedPct: 25, plannedPct: 75, overPct: 0 });
-    expect(budgetUse(task({ ...base, planned_sessions: [block("09:00", "10:00")] }))).toMatchObject({ left: -900, trackedPct: 20, plannedPct: 60, overPct: 20 });
+    expect(budgetUse(task(base), at("08:00"))).toEqual({ budget: 3600, tracked: 900, planned: 1800, left: 900, trackedPct: 25, plannedPct: 50, overPct: 0 });
+    expect(budgetUse(task({ ...base, planned_sessions: [block("09:00", "09:45")] }), at("08:00"))).toMatchObject({ left: 0, trackedPct: 25, plannedPct: 75, overPct: 0 });
+    expect(budgetUse(task({ ...base, planned_sessions: [block("09:00", "10:00")] }), at("08:00"))).toMatchObject({ left: -900, trackedPct: 20, plannedPct: 60, overPct: 20 });
     expect(budgetUse(task({ ...base, time_tracked_seconds: 5400, planned_sessions: [] }))).toMatchObject({ left: -1800, plannedPct: 0 })
     expect(budgetUse(task({ ...base, time_tracked_seconds: 5400, planned_sessions: [] }))!.overPct).toBeCloseTo(100 / 3);
     const running = task({ ...base, planned_sessions: [], time_tracking_started_at: new Date(at("09:00")).toISOString() });
     expect(budgetUse(running, at("09:10"))?.tracked).toBe(1500);
   });
   it("counts a minute that was both planned and worked once, as worked, in the task's budget and the project's", () => {
-    // The case from a phone: planned 08:00-15:00, the timer started inside it at 10:50, now 11:00.
+    // The case from a phone: planned 08:00-15:00, the timer started inside it at 10:50, now 11:00. The plan counts from now on; what went by unworked is not counted.
     const work = task({ planned_sessions: [block("08:00", "15:00")], time_budget_seconds: 8 * 3600, time_tracking_started_at: new Date(at("10:50")).toISOString(), projects: ["P.md"] });
-    expect(budgetUse(work, at("11:00"))).toMatchObject({ tracked: 600, planned: 7 * 3600 - 600, left: 3600 });
-    expect(projectUse([work], "P.md", "total", 8 * 3600, at("11:00"))).toMatchObject({ tracked: 600, planned: 7 * 3600 - 600 });
-    expect(projectUse([work], "P.md", "day", 8 * 3600, at("11:00"))).toMatchObject({ tracked: 600, planned: 7 * 3600 - 600 });
+    expect(budgetUse(work, at("11:00"))).toMatchObject({ tracked: 600, planned: 4 * 3600, left: 4 * 3600 - 600 });
+    expect(projectUse([work], "P.md", "total", 8 * 3600, at("11:00"))).toMatchObject({ tracked: 600, planned: 4 * 3600 });
+    expect(projectUse([work], "P.md", "day", 8 * 3600, at("11:00"))).toMatchObject({ tracked: 600, planned: 4 * 3600 });
+    // Planned time that is ahead and was already worked (a session put there by hand) counts once; once the block is over only the work remains.
+    const ahead = { ...work, time_tracking_started_at: null, work_sessions: [block("12:00", "13:00")], time_tracked_seconds: 3600 };
+    expect(budgetUse(ahead, at("11:00"))).toMatchObject({ tracked: 3600, planned: 3 * 3600 }); expect(budgetUse(ahead, at("16:00"))).toMatchObject({ tracked: 3600, planned: 0 });
     // Worked past the plan's end and before it, in overlapping sessions: the plan is used up, the extra is worked time.
     expect(plannedNotWorked([block("09:00", "10:00")], [block("08:30", "09:20"), block("09:10", "09:40"), block("09:50", "11:00")])).toBe(600); expect(plannedNotWorked([block("09:00", "10:00")], [block("09:10", "09:40"), block("09:15", "09:30")])).toBe(1800);
     // Planned and not worked (ahead or skipped) still counts; work outside the plan does not reduce it; only the part inside a period counts.
@@ -113,7 +117,7 @@ describe("planning", () => {
     it("ignores plans of a task that is done, canceled or has become a note", () => {
       const plans = [block("09:00", "10:00")];
       for (const other of [{ status: "completed" as const }, { status: "canceled" as const }, { converted_to: "N.md" }]) expect(budgetUse(task({ time_budget_seconds: 7200, planned_sessions: plans, ...other }))!.planned).toBe(0);
-      expect(budgetUse(task({ time_budget_seconds: 7200, planned_sessions: plans, status: "in_progress" }))!.planned).toBe(3600);
+      expect(budgetUse(task({ time_budget_seconds: 7200, planned_sessions: plans, status: "in_progress" }), at("08:00"))!.planned).toBe(3600);
     });
     it("counts a running timer in the task budget, and a timer started in the future (clock skew) as nothing", () => {
       expect(budgetUse(task({ time_budget_seconds: 7200, time_tracking_started_at: new Date(at("09:00")).toISOString() }), at("09:30"))!.tracked).toBe(1800);
@@ -154,7 +158,8 @@ describe("planning", () => {
     it("counts planned blocks that are partly in the period, but never for done, canceled or converted tasks", () => {
       const now = new Date(2026, 2, 11, 9, 0).getTime();
       const plans = [span(L(11, 23, 30), L(12, 0, 30)), span(L(10, 23, 30), L(11, 0, 30))];
-      expect(projectUse([task({ projects: [P], planned_sessions: plans })], P, "day", 36000, now).planned).toBe(3600);
+      // The block across the start of the day is over by 09:00, so only the half hour still ahead counts.
+      expect(projectUse([task({ projects: [P], planned_sessions: plans })], P, "day", 36000, now).planned).toBe(1800);
       for (const other of [{ status: "completed" as const }, { status: "canceled" as const }, { converted_to: "N.md" }]) expect(projectUse([task({ projects: [P], planned_sessions: plans, ...other })], P, "day", 36000, now).planned).toBe(0);
     });
     it("counts worked time of done and canceled tasks, and of every task for a project that shares its name with another", () => {
