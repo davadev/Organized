@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Screenshots, What's new, the tour and the docs match this version.** The Timer card screenshot shows a project's weekly budget (a repeating task has no budget of its own now), What's new has an item for planning against project budgets, and the README and docs describe the project-note, calendar and budget changes of the last betas.
 - **A task 0.1.4 set in progress for its planned time goes back to open.** Version 0.1.4 set a task in progress, without a timer, while a block planned for it ran, and put it back when the block ended. A task left that way at the update stayed `[/]` in progress for good; it is now put back to open when its block is over, as 0.1.4 would have.
 - **What's new and the tour describe the plugin as it is.** What's new described the old date dialog with *From* and *To* fields, which the Schedule dialog replaced, and said recurring tasks' planned times start the timer without saying that *Start tasks at their planned time* must be on. The tour said planned blocks never count as worked, which is no longer so once a timer runs in them.
 - **The Undo command is named for what it does:** *Undo the last change shown in a notice* (was *Undo last recurrence/auto-forward batch*, though it undoes any change whose notice offers Undo, such as a saved schedule). Hotkeys keep working.
