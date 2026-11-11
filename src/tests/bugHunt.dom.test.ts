@@ -197,13 +197,14 @@ describe('bug hunt regressions', () => {
     // From the `[t]` marker on a todo line.
     const typed = await repo.create('Typed'); const file: any = await h.add(plugin.service.daily.path(localDate()), ''); const text = `- [t] Typed <!--organized:${typed.id}-->`; h.texts.set(file.path, text);
     await plugin.trigger({ file, line: parseTasks(text)[0] }); await last().edit.save(covering, 'planned'); await flush();
-    expect(await repo.read(typed.id)).toMatchObject({ status: 'in_progress', auto_started_block: covering.start, time_tracking_started_at: covering.start }); expect(h.texts.get(file.path)).toContain('[/] Typed');
+    // Added while already under way: the timer runs from now, the half hour before the block existed was not worked.
+    expect(await repo.read(typed.id)).toMatchObject({ status: 'in_progress', auto_started_block: covering.start }); expect(Date.parse((await repo.read(typed.id)).time_tracking_started_at!)).toBeGreaterThanOrEqual(now); expect(h.texts.get(file.path)).toContain('[/] Typed');
     // From the side panel: adding, moving the block away, moving it back, removing it.
     const leaf: any = { app: h.app }; const view = new OrganizedInspectorView(leaf, plugin); const task = await repo.create('Panel'); const edit = (session: typeof covering | null) => { (view as any).editSession(task, session, localDate(), session ? 'planned' : null); return last().edit; };
     await edit(null).save(covering, 'planned'); await flush(); expect((await repo.read(task.id)).status).toBe('in_progress');
     // Moved away or removed while its timer runs: the timer stops now and the time so far counts; moved back, it runs again from now, never over that time.
-    await edit(covering).save(later, 'planned'); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null, time_tracking_started_at: null }); expect((await repo.read(task.id)).time_tracked_seconds).toBeGreaterThanOrEqual(1800);
-    const worked = (await repo.read(task.id)).work_sessions; await edit(later).save(covering, 'planned'); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'in_progress', time_tracking_started_at: worked.at(-1)!.end });
+    await edit(covering).save(later, 'planned'); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null, time_tracking_started_at: null });
+    const stopped = Date.now(); await edit(later).save(covering, 'planned'); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'in_progress', auto_started_block: covering.start }); expect(Date.parse((await repo.read(task.id)).time_tracking_started_at!)).toBeGreaterThanOrEqual(stopped);
     await edit(covering).remove!(); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null, time_tracking_started_at: null, planned_sessions: [] });
   });
   it('a todo ticked in a note while another action is still running reaches its task, and what the plugin itself writes is still not taken for a tick', async () => {

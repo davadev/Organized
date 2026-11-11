@@ -170,6 +170,8 @@ try {
         if (box.width > width - 8) throw Error(`Schedule modal overflows its ${width}px host: ${box.width}`);
         const title = await page.locator('.organized-modal-window .modal-title').innerText(); if (title !== 'Schedule task') throw Error(`Schedule modal title regressed: ${title}`);
         const buttons = page.locator('.organized-modal-window .modal-content button'); if ((await buttons.allTextContents()).join(',') !== 'Schedule,Clear date' || !(await buttons.first().isVisible()) || !(await buttons.last().isVisible())) throw Error('Schedule modal actions are missing or hidden');
+        const times = await page.evaluate(() => { const w = document.querySelector('.organized-modal-window').getBoundingClientRect(); return Array.from(document.querySelectorAll('.organized-modal-window input[type=time]')).map(input => { const b = input.getBoundingClientRect(); return b.width > 60 && b.left >= w.left - 1 && b.right <= w.right + 1; }); });
+        if (times.length !== 2 || times.some(inside => !inside)) throw Error(`Schedule time fields are missing, too narrow or leave the modal: ${times}`);
       }
       if (tab === 'SessionModal') {
         const window = page.locator('.organized-modal-window'); const box = await window.boundingBox(); if (!box) throw Error('Session modal is not visible');

@@ -6,7 +6,7 @@ import type Organized from "./main";
 import { elapsed, FOLDABLE_CARDS, localDate, PRIORITIES, Section, STATUS_ICONS, STATUSES, statusOfMarker, Task, WorkSession } from "./model";
 import { byPriority, report } from "./service";
 import { cells, HeatScale, MAX_CELLS, scaleFor, slider } from "./movement";
-import { BudgetModal, DatePicker, ProjectBudgetModal, SessionModal, TaskPicker } from "./modals";
+import { BudgetModal, ProjectBudgetModal, SessionModal, TaskPicker } from "./modals";
 import { formatMinutes, lengthOf, lengthOfSeconds, seconds, SessionKind } from "./sessions";
 import { budgetUse, BudgetUse, PERIOD_LABELS, plannedSeconds, projectUse } from "./planning";
 import { descendants, NoteSection, NOTE_SECTIONS, noteSection, parseTasks, TaskLine } from "./codec";
@@ -324,7 +324,7 @@ export class OrganizedInspectorView extends ItemView {
       if (this.module === module) b.addClass("organized-selected-module"); return b;
     };
     if (showPriority) this.select(pill(strip, "div", "flag", "Priority", "Priority"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.service.setPriority(id, value as Task["priority"], this.owner.context?.line.id === id ? this.owner.context : undefined); this.owner.refresh(); }); });
-    if (showSchedule) action("calendar", task.scheduled ? `Schedule: ${task.scheduled}` : "Schedule", task.scheduled ?? "Choose date", "Schedule", () => { new DatePicker(this.app, task.scheduled ?? localDate(), date => this.owner.run(() => this.owner.service.scheduleTask(id, date, this.owner.context ?? undefined)), task.scheduled ? () => this.owner.run(() => this.owner.service.unschedule(id)) : undefined).open(); });
+    if (showSchedule) action("calendar", task.scheduled ? `Schedule: ${task.scheduled}` : "Schedule", task.scheduled ?? "Choose date", "Schedule", () => this.owner.pickSchedule(task, this.owner.context ?? undefined));
     if (showRecurring) {
       const span = task.recurrence_periods.length ? `: ${task.recurrence_periods[0].start} → ${task.recurring ? "active" : task.recurrence_periods[task.recurrence_periods.length - 1].stop}` : "";
       const rule = task.recurring ? ruleLabel(taskRule(task)) : "Off";

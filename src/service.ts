@@ -3,7 +3,7 @@ import { Notice, TFile } from "obsidian";
 import { descendants, duplicateRepeats, fixIndent, insertTask, insertUnder, migrateNote, moveTask, nestUnder, noteSection, parentIds, parseTasks, projectSection, removeLines, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, markerOf, MAX_PLANNED_SESSIONS, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, startPlanned, Status, Task, taskFrom, WorkSession } from "./model";
-import { claimHolds, dueStarts, dueStops } from "./planning";
+import { claimHolds, dueStarts, dueStops, plannable } from "./planning";
 import { formatRule, repeatsOn, Rule, sameCadence, taskRule } from "./recurrence";
 import { seconds } from "./sessions";
 import { ProjectBudgets, projectTemplate, Repository, splitNote } from "./repository";
@@ -90,9 +90,9 @@ export class TaskService {
    * Forwards or schedules the todo of `context`. Its subtasks that are still open or in progress travel with it, indented under it in the target note; done and canceled
    * ones stay behind as the record. A subtask moved on its own goes under its parent when the target note has the parent, and at the end of the section otherwise.
    */
-  async schedule(context: Context, date: string, kind: Movement["kind"] = "schedule", source: Movement["source"] = "manual", changes: Change[] = [], options: { cascade?: boolean; under?: string | null } = {}): Promise<void> {
+  async schedule(context: Context, date: string, kind: Movement["kind"] = "schedule", source: Movement["source"] = "manual", changes: Change[] = [], options: { cascade?: boolean; under?: string | null; time?: WorkSession } = {}): Promise<void> {
     const { text: originText, line } = await this.resolve(context); if (!line.id) throw new Error("Attach the task first.");
-    const task = await this.repo.read(line.id); const oldDate = task.scheduled;
+    const task = await this.repo.read(line.id); const oldDate = task.scheduled; let moved = 0;
     const target = await this.daily.ensure(date);
     const from = this.daily.date(context.file.path) ?? context.file.path;
     const event: Movement = { id: makeId(), kind: kind === "schedule" && oldDate && oldDate !== date ? "reschedule" : kind, source, from, to: date, at: new Date().toISOString() };
@@ -109,8 +109,11 @@ export class TaskService {
     }
     if (oldDate && oldDate !== date && kind !== "forward") {
       await this.cleanupSchedule(task.id, oldDate, context.file.path, changes);
+      moved = await this.movePlans(task, oldDate, date, changes);
     }
+    if (options.time) await this.addPlanned(task.id, options.time, changes);
     if (options.cascade !== false) await this.carrySubtasks(context.file, originText, line, date, kind, source, changes);
+    if (moved && options.cascade !== false) this.summarize(changes, "Planned time moved", `${plural(moved, "planned block")} of “${task.title}” moved from ${oldDate} to ${date}.`);
     this.changed();
   }
   /** Moves the subtasks nested under `parent` in `originText` that are still open or in progress (and not already forwarded or scheduled), each under its nearest moved ancestor. */
@@ -129,36 +132,65 @@ export class TaskService {
     if (failed.length) new Notice(`Could not move ${plural(failed.length, "subtask")} with “${parent.title}”: ${failed.join(", ")}. Their lines were preserved.`);
     if (count && source === "manual") this.summarize(changes, `${kind === "forward" ? "Forwarded" : "Scheduled"} with subtasks`, `“${parent.title}” and ${plural(count, "open subtask")} moved to ${date}.`);
   }
-  async scheduleTask(id: string, date: string, context?: Context, nested?: { under: string | null }): Promise<void> {
-    if (context?.line.id === id) { await this.schedule(context, date); return; }
+  /** Schedules a task by id. `time`, when given, also sets that block aside on the day (see `addPlanned`). */
+  async scheduleTask(id: string, date: string, context?: Context, nested?: { under: string | null }, changes?: Change[], time?: WorkSession): Promise<void> {
+    if (context?.line.id === id) { await this.schedule(context, date, "schedule", "manual", changes, { time }); return; }
+    const own = changes ?? []; let moved = 0;
     const task = await this.repo.read(id); const target = await this.daily.ensure(date);
     const event: Movement = { id: makeId(), kind: task.scheduled && task.scheduled !== date ? "reschedule" : "schedule", source: "manual", from: this.repo.taskPath(id), to: date, at: new Date().toISOString() };
-    const next = await this.repo.update(id, t => ({ ...t, scheduled: date, movement_history: t.scheduled === date ? t.movement_history : [...t.movement_history, event] }));
-    await this.insert(target, next, " ", false, undefined, nested ? nested.under : (await this.repo.parentOf(id))?.id ?? null);
+    const next = await this.recorded(id, own, () => this.repo.update(id, t => ({ ...t, scheduled: date, movement_history: t.scheduled === date ? t.movement_history : [...t.movement_history, event] })));
+    await this.insert(target, next, " ", false, own, nested ? nested.under : (await this.repo.parentOf(id))?.id ?? null);
     if (task.scheduled && task.scheduled !== date) {
-      await this.cleanupSchedule(id, task.scheduled);
+      await this.cleanupSchedule(id, task.scheduled, undefined, own);
+      moved = await this.movePlans(task, task.scheduled, date, own);
     }
-    if (!nested) await this.scheduleOpenSubtasks(task, date);
+    if (time) await this.addPlanned(id, time, own);
+    if (!nested) await this.scheduleOpenSubtasks(task, date, own);
+    if (moved && !changes) this.summarize(own, "Planned time moved", `${plural(moved, "planned block")} of “${task.title}” moved from ${task.scheduled} to ${date}.`);
     this.changed();
   }
-  /** Takes the date off a task: a todo that was scheduled away (`[<]`) is open again where it stands and the copy on the scheduled day is removed. The movement history keeps the record. */
+  /**
+   * Planned blocks on the day a task was scheduled for that have not begun go with it to its new day, at the same clock times; one that has begun (or is over) stays, it is
+   * the record of that day. With `to` null (the date is cleared) they are removed. A block the new day already has is not added twice. Returns how many moved or went.
+   */
+  private async movePlans(task: Task, from: string, to: string | null, changes: Change[]): Promise<number> {
+    const now = Date.now(); const moving = (b: WorkSession) => localDate(new Date(b.start)) === from && Date.parse(b.start) > now;
+    const count = task.planned_sessions.filter(moving).length; if (!count) return 0;
+    const shift = (b: WorkSession): WorkSession => {
+      const start = new Date(b.start); const [y, m, d] = to!.split("-").map(Number); const moved = new Date(y, m - 1, d, start.getHours(), start.getMinutes(), start.getSeconds());
+      return { start: moved.toISOString(), end: new Date(moved.getTime() + Date.parse(b.end) - start.getTime()).toISOString() };
+    };
+    await this.recorded(task.id, changes, () => this.repo.update(task.id, t => {
+      const kept = t.planned_sessions.filter(b => !moving(b)); const same = (a: WorkSession, b: WorkSession) => a.start === b.start && a.end === b.end;
+      const moved = to === null ? [] : t.planned_sessions.filter(moving).map(shift).filter((b, n, all) => !kept.some(k => same(k, b)) && all.findIndex(o => same(o, b)) === n);
+      return { ...t, planned_sessions: [...kept, ...moved] };
+    }));
+    await this.planEdited(task.id, task);
+    return count;
+  }
+  /**
+   * Takes the date off a task: a todo that was scheduled away (`[<]`) is open again where it stands and the copy on the scheduled day is removed. The movement history keeps the record.
+   * Planned blocks on that day that have not begun go too (see `movePlans`); the notice says so and offers Undo.
+   */
   async unschedule(id: string): Promise<void> {
     const task = await this.repo.read(id); const date = task.scheduled; if (!date) return;
-    await this.repo.update(id, t => ({ ...t, scheduled: null }));
     const changes: Change[] = [];
+    await this.recorded(id, changes, () => this.repo.update(id, t => ({ ...t, scheduled: null })));
     for (const occurrence of await this.repo.occurrences(id)) {
       const line = occurrence.tasks.find(t => t.marker === "<"); if (!line) continue;
       await this.edit(occurrence.file, occurrence.text, replaceTask(occurrence.text, line, { marker: markerOf(task) }), changes);
     }
     await this.cleanupSchedule(id, date, undefined, changes);
+    const removed = await this.movePlans(task, date, null, changes);
+    if (removed) this.summarize(changes, "Date cleared", `“${task.title}” is no longer scheduled; ${plural(removed, "planned block")} on ${date} removed with it.`);
     this.changed();
   }
   /** Schedules the open and in-progress subtasks of a task that is scheduled from the panel (there is no todo line to read their nesting from), each under its own parent. */
-  private async scheduleOpenSubtasks(parent: Task, date: string, seen = new Set([parent.id])): Promise<void> {
+  private async scheduleOpenSubtasks(parent: Task, date: string, changes?: Change[], seen = new Set([parent.id])): Promise<void> {
     for (const child of await this.repo.subtasksOf(parent)) {
       if (seen.has(child.id)) continue; seen.add(child.id);
-      if (child.status === "open" || child.status === "in_progress") await this.scheduleTask(child.id, date, undefined, { under: parent.id });
-      if (child.status !== "canceled") await this.scheduleOpenSubtasks(child, date, seen);
+      if (child.status === "open" || child.status === "in_progress") await this.scheduleTask(child.id, date, undefined, { under: parent.id }, changes);
+      if (child.status !== "canceled") await this.scheduleOpenSubtasks(child, date, changes, seen);
     }
   }
   private async cleanupSchedule(id: string, oldDate: string, originPath?: string, changes?: Change[]): Promise<void> {
@@ -542,15 +574,46 @@ export class TaskService {
   /** Sets or removes (null) the time a task is allowed to take. */
   async setBudget(id: string, seconds: number | null): Promise<void> { await this.repo.update(id, t => ({ ...t, time_budget_seconds: seconds })); this.changed(); }
   /** Sets time aside for a task: a block that never counts as worked. */
-  async addPlanned(id: string, block: WorkSession): Promise<void> {
-    await this.repo.update(id, t => ({ ...t, planned_sessions: [...t.planned_sessions, block].slice(-MAX_PLANNED_SESSIONS) })); this.changed();
+  async addPlanned(id: string, block: WorkSession, changes?: Change[]): Promise<void> {
+    const before = await this.repo.read(id); const own = changes ?? [];
+    await this.recorded(id, own, () => this.repo.update(id, t => ({ ...t, planned_sessions: [...t.planned_sessions, block].slice(-MAX_PLANNED_SESSIONS) })));
+    // The first block on a later day dates a task that has none, so its todo is in that day's note. Recurring tasks have no date; a block today leaves the todo where it already is,
+    // and one in the past is an estimate, not a plan.
+    const day = localDate(new Date(block.start));
+    if (!before.scheduled && !before.recurring && plannable(before) && day > localDate()) {
+      await this.scheduleTask(id, day, undefined, undefined, own);
+      this.summarize(own, "Scheduled", `“${before.title}” is scheduled for ${day}, the day of its planned block.`);
+    }
+    await this.planEdited(id, before); this.changed();
   }
   /** Replaces one planned block, or removes it when `to` is null. */
   async changePlanned(id: string, from: WorkSession, to: WorkSession | null): Promise<void> {
+    const before = await this.repo.read(id);
     await this.repo.update(id, t => {
       const at = t.planned_sessions.findIndex(s => s.start === from.start && s.end === from.end); if (at < 0) throw new Error("That planned block no longer exists; it may have been changed elsewhere.");
       return { ...t, planned_sessions: to ? t.planned_sessions.map((s, n) => n === at ? to : s) : t.planned_sessions.filter((_s, n) => n !== at) };
-    }); this.changed();
+    }); await this.planEdited(id, before); this.changed();
+  }
+  /** Runs a write of the task note and records it in `changes` for Undo. */
+  private async recorded<T>(id: string, changes: Change[], write: () => Promise<T>): Promise<T> {
+    const note = await this.repo.resolve(id); const before = await this.repo.readText(note);
+    const result = await write(); const after = await this.repo.readText(note); if (after !== before) changes.push({ file: note, before, after });
+    return result;
+  }
+  /**
+   * After the person changed a task's planned time, the timer follows at once, from now (inside the same queued action, so the minute check cannot come between):
+   * - a block that now covers this moment, and did not before, starts the timer now: time before the block existed was not worked;
+   * - planned time cut short or moved away under a running timer stops it now, not at the new end: time already tracked is never taken away.
+   * The minute check still handles everything else, including a block that began while Obsidian was closed.
+   */
+  private async planEdited(id: string, before: Task, now = Date.now()): Promise<void> {
+    if (!this.repo.settings().startAtPlannedTime) return;
+    const after = await this.repo.read(id); const context = await this.todayContext(after);
+    if (dueStops([after], now).some(stop => stop.end < now) && !dueStops([before], now).length) {
+      await this.applyStatus(id, "open", context, undefined, t => ({ ...setStatus(t, "open", new Date(now)), auto_started_block: null })); return;
+    }
+    const start = dueStarts([after], now)[0];
+    if (start && !dueStarts([before], now).length) await this.applyStatus(id, "in_progress", context, undefined, t => startPlanned(t, { ...start.block, start: new Date(now).toISOString() }, start.block.start));
   }
   /** The block turned out as planned: it becomes worked time and leaves the plan. */
   async logPlanned(id: string, block: WorkSession): Promise<void> {

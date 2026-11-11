@@ -211,8 +211,8 @@ export function setStatus(task: Task, status: Status, now = new Date()): Task {
 /** The status a todo's marker stands for; `[ ]` and every action marker mean open. */
 export function statusOfMarker(marker: string): Status { return marker.toLowerCase() === "x" ? "completed" : marker === "-" ? "canceled" : marker === "/" ? "in_progress" : "open"; }
 export function markerOf(task: Task): string { return task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.status === "in_progress" || task.time_tracking_started_at !== null ? "/" : " "; }
-export function startPlanned(task: Task, block: WorkSession): Task {
+export function startPlanned(task: Task, block: WorkSession, claim = block.start): Task {
   // Timed from the block's start (the plugin may notice only later, after the phone woke), but never over time already worked.
   const start = Math.max(Date.parse(block.start), ...task.work_sessions.map(s => Date.parse(s.end)));
-  return { ...setStatus(task, "in_progress", new Date(start)), auto_started_block: block.start };
+  return { ...setStatus(task, "in_progress", new Date(start)), auto_started_block: claim };
 }
