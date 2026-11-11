@@ -3,7 +3,10 @@ import { PRIORITIES } from "./model";
 import { parser } from "@lezer/markdown";
 
 /** `parent` is the line of the nearest todo this one is nested under (through plain bullets too), or null for a todo at the top of its list. */
-export interface TaskLine { line: number; raw: string; prefix: string; marker: string; title: string; id: string | null; repeat: boolean; section: Section[]; parent: number | null }
+/** `times` are the planned times a scheduled day's todo shows after its title (`Report · 10:00–11:00, 14:00–15:00`): written by the plugin from the task note, never read back into it. */
+export interface TaskLine { line: number; raw: string; prefix: string; marker: string; title: string; id: string | null; repeat: boolean; section: Section[]; parent: number | null; times: string | null }
+/** The planned times at the end of a todo's text, as `taskText` writes them. */
+const TIMES = / · ((?:[0-2]\d:[0-5]\d–[0-2]\d:[0-5]\d)(?:, [0-2]\d:[0-5]\d–[0-2]\d:[0-5]\d)*)$/;
 export const ID = /<!--organized:([a-zA-Z0-9_-]{8,80})-->/g;
 const TASK = /^(\s*(?:[-+*]|\d+[.)]) \[)([^\]])(\] )(.*)$/;
 /** The two parts of a task note's body: the description (the text itself, no heading) and an optional `## Sources` block. */
@@ -109,7 +112,8 @@ export function parseTasks(text: string, onHeading?: (line: number, section: Sec
     const parent = [...enclosing].reverse().find(item => item.task !== null)?.task ?? null;
     enclosing.push({ to: node.to, task: match && ids.length <= 1 ? line : null });
     if (!match || ids.length > 1) return;
-    tasks.push({ line, raw, prefix: match[1], marker: match[2], title: match[4].replace(ID, "").replace(/<!--organized:repeat-->/g, "").trim(), id: ids[0]?.[1] ?? null, repeat: match[4].includes("<!--organized:repeat-->"), section: section.map(s => ({ ...s })), parent });
+    const text = match[4].replace(ID, "").replace(/<!--organized:repeat-->/g, "").trim(); const times = ids.length ? TIMES.exec(text) : null;
+    tasks.push({ line, raw, prefix: match[1], marker: match[2], title: times ? text.slice(0, times.index).trim() : text, id: ids[0]?.[1] ?? null, repeat: match[4].includes("<!--organized:repeat-->"), section: section.map(s => ({ ...s })), parent, times: times?.[1] ?? null });
   } });
   cache.set(text, { tasks, headings }); if (cache.size > 4) cache.delete(cache.keys().next().value!);
   for (const h of headings) onHeading?.(h.line, h.section);
@@ -134,9 +138,10 @@ export function unclearIds(text: string): Set<string> {
 }
 /** Whether two maps from `parentIds` describe the same nesting. */
 export const sameNesting = (a: Map<string, string | null>, b: Map<string, string | null>): boolean => [...new Set([...a.keys(), ...b.keys()])].every(id => (a.get(id) ?? null) === (b.get(id) ?? null));
-export function taskText(task: TaskLine, updates: { title?: string; marker?: string; id?: string | null; repeat?: boolean }): string {
+export function taskText(task: TaskLine, updates: { title?: string; marker?: string; id?: string | null; repeat?: boolean; times?: string | null }): string {
   const id = Object.prototype.hasOwnProperty.call(updates, "id") ? updates.id : task.id; const repeat = updates.repeat ?? task.repeat;
-  return `${task.prefix}${updates.marker ?? task.marker}] ${updates.title ?? task.title}${id ? ` <!--organized:${id}-->` : ""}${repeat ? " <!--organized:repeat-->" : ""}${task.raw.endsWith("\r") ? "\r" : ""}`;
+  const times = Object.prototype.hasOwnProperty.call(updates, "times") ? updates.times : task.times;
+  return `${task.prefix}${updates.marker ?? task.marker}] ${updates.title ?? task.title}${times && id ? ` · ${times}` : ""}${id ? ` <!--organized:${id}-->` : ""}${repeat ? " <!--organized:repeat-->" : ""}${task.raw.endsWith("\r") ? "\r" : ""}`;
 }
 export function replaceTask(text: string, task: TaskLine, updates: Parameters<typeof taskText>[1]): string {
   const lines = text.split("\n"); if (lines[task.line] !== task.raw) throw new Error("Task line changed. Retry from its current position.");

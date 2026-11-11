@@ -182,6 +182,9 @@ export function editorExtension(owner: Organized): Extension {
           const editing = view.state.selection.main.head >= line.from && view.state.selection.main.head <= line.to;
           if (!editing && task.marker === ">") builder.add(line.from, line.from, Decoration.line({ class: "organized-forwarded" }));
           if (!editing && GLYPHS[task.marker]) builder.add(line.from + task.prefix.length - 1, line.from + task.prefix.length + 2, Decoration.replace({ widget: new IconWidget(task.marker) }));
+          // The planned times the plugin writes after the title read as a quiet chip; a tap opens the Schedule dialog, where they are changed.
+          const times = task.times ? line.text.indexOf(` · ${task.times}`, task.prefix.length) : -1;
+          if (times >= 0) builder.add(line.from + times, line.from + times + task.times!.length + 3, Decoration.mark({ class: "organized-line-times", attributes: { title: "Planned times: tap to change them in Schedule" } }));
         }
         // Live Preview used to reveal the whole ID whenever its line had the
         // caret. Identity is implementation metadata, not editable preview UI.
@@ -194,9 +197,16 @@ export function editorExtension(owner: Organized): Extension {
     }
     update(update: ViewUpdate): void { if (update.docChanged || update.viewportChanged || update.selectionSet || update.transactions.some(t => t.effects.some(e => e.is(refreshEffect)))) this.decorations = this.build(update.view); }
   }, { decorations: value => value.decorations, provide: plugin => EditorView.atomicRanges.of(view => view.plugin(plugin)?.decorations ?? Decoration.none) });
-  return [field, icons, Prec.highest(keymap.of([{ key: "Enter", run: stepPastComments }])), EditorView.domEventHandlers({ copy: copyWholeTodos, cut: copyWholeTodos }), EditorView.updateListener.of(update => owner.onEditorUpdate(update)), ...(Platform.isMobile ? [longPressMenu(owner)] : [])];
+  return [field, icons, Prec.highest(keymap.of([{ key: "Enter", run: stepPastComments }])), EditorView.domEventHandlers({ copy: copyWholeTodos, cut: copyWholeTodos, click: (event, view) => openTimes(owner, event, view) }), EditorView.updateListener.of(update => owner.onEditorUpdate(update)), ...(Platform.isMobile ? [longPressMenu(owner)] : [])];
 }
 const TRAILING_COMMENTS = /^(?:\s*<!--organized:(?:[a-zA-Z0-9_-]{8,80}|repeat)-->)+\s*$/;
+/** A tap on a todo's planned times opens its Schedule dialog. */
+function openTimes(owner: Organized, event: MouseEvent, view: EditorView): boolean {
+  const chip = (event.target as HTMLElement).closest(".organized-line-times"); if (!chip) return false;
+  const line = view.state.doc.lineAt(view.posAtDOM(chip)); const id = parseTasks(view.state.doc.toString()).find(t => t.line === line.number - 1)?.id;
+  if (!id) return false;
+  void owner.repo.read(id).then(task => owner.pickSchedule(task)).catch(report); return true;
+}
 /** A selection that takes a todo's checkbox and ends where its visible text ends stops before the hidden ID comments, so the copy (or cut) pasted elsewhere was a plain todo and the task lost its line. Before CodeMirror copies, such a selection is stretched over the comments. A selection of title text alone (no checkbox) is left as it is. */
 function copyWholeTodos(_event: Event, view: EditorView): boolean {
   const { state } = view; let stretched = false;

@@ -4,7 +4,7 @@ import { descendants, duplicateRepeats, fixIndent, insertTask, insertUnder, migr
 import { DailyNotes } from "./daily";
 import { localDate, makeId, markerOf, MAX_DAYS, MAX_PLANNED_SESSIONS, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, startPlanned, Status, Task, taskFrom, WorkSession } from "./model";
 import { blockAt, claimHolds, dueStarts, dueStops, plannable } from "./planning";
-import { ClockSpan, MAX_SKIPS, repeatingBlocks, shiftTo, stored, unworkedParts } from "./plans";
+import { ClockSpan, dayTimes, MAX_SKIPS, repeatingBlocks, shiftTo, stored, unworkedParts } from "./plans";
 import { formatRule, repeatsOn, Rule, sameCadence, taskRule } from "./recurrence";
 import { lengthOfSeconds, seconds } from "./sessions";
 import { ProjectBudgets, projectTemplate, Repository, splitNote } from "./repository";
@@ -18,6 +18,8 @@ export interface Context { file: TFile; line: TaskLine }
 /** A scheduled day as the Schedule dialog leaves it: the day, its blocks, and the day it was before when the person moved it. Blocks that have begun are kept whatever the draft says. */
 export interface DraftDay { date: string; blocks: WorkSession[]; from?: string; restore?: boolean }
 /** Adds nested lines under one todo, indented to sit inside its list item. */
+/** The planned times a todo shows; none when what reads as times is the end of the task's own title (`Call · 10:00–11:00`). */
+const shownTimes = (task: Task, line: TaskLine): string | null => line.times !== null && `${line.title} · ${line.times}` === task.title ? null : line.times;
 function insertBelow(text: string, line: number, extra: string[], prefix: string, crlf: boolean): string {
   const bullet = /^(\s*)([-+*]|\d+[.)]) /.exec(prefix)!; const indent = `${bullet[1]}${" ".repeat(bullet[2].length + 1)}`;
   const lines = text.split("\n"); lines.splice(line + 1, 0, ...extra.map(item => `${indent}${item}${crlf ? "\r" : ""}`)); return lines.join("\n");
@@ -64,8 +66,10 @@ export class TaskService {
   }
   async resolve(context: Context): Promise<{ text: string; line: TaskLine }> {
     const text = await this.repo.readText(context.file);
+    // A line whose planned times this plugin rewrote since (see `syncTimes`) is still the same line.
+    const same = (t: TaskLine) => t.raw === context.line.raw || (t.id !== null && t.times !== context.line.times && taskText(t, { times: context.line.times }) === context.line.raw);
     const matches = parseTasks(text).filter(t => context.line.id ? t.id === context.line.id : t.line === context.line.line && t.raw === context.line.raw);
-    const line = matches.find(t => t.line === context.line.line && t.raw === context.line.raw) ?? (matches.length === 1 && matches[0].raw === context.line.raw ? matches[0] : null);
+    const line = matches.find(t => t.line === context.line.line && same(t)) ?? (matches.length === 1 && same(matches[0]) ? matches[0] : null);
     if (!line) throw new Error("Task context changed; select the line again and retry.");
     return { text, line };
   }
@@ -85,7 +89,9 @@ export class TaskService {
   async insert(file: TFile, task: Task, marker: string, repeat: boolean, changes?: Change[], under: string | null = null): Promise<void> {
     const text = await this.repo.readText(file);
     if (parseTasks(text).some(t => t.id === task.id)) return;
-    const line = `- [${marker}] ${task.title} <!--organized:${task.id}-->${repeat ? " <!--organized:repeat-->" : ""}`;
+    // A scheduled day's todo shows that day's planned times after its title (see `syncTimes`).
+    const date = this.daily.date(file.path); const times = date && !repeat && !task.recurring ? dayTimes(task, date) : null;
+    const line = `- [${marker}] ${task.title}${times ? ` · ${times}` : ""} <!--organized:${task.id}-->${repeat ? " <!--organized:repeat-->" : ""}`;
     const nested = under ? insertUnder(text, under, line, await this.repo.indentUnit()) : null;
     const result = nested === null ? insertTask(text, line, task.daily_note_section_path) : { text: nested, missing: false };
     if (result.missing && this.repo.settings().missingSection === "ask" && !(await this.recreate(file))) throw new Error("Insertion canceled; no task occurrence was written.");
@@ -169,7 +175,7 @@ export class TaskService {
       const moved = to === null ? [] : t.planned_sessions.filter(moving).map(shift).filter((b, n, all) => !kept.some(k => same(k, b)) && all.findIndex(o => same(o, b)) === n);
       return { ...t, planned_sessions: [...kept, ...moved] };
     }));
-    await this.planEdited(task.id, task, changes);
+    await this.syncTimes(task.id, changes); await this.planEdited(task.id, task, changes);
     return count;
   }
   /**
@@ -212,7 +218,7 @@ export class TaskService {
     if (new Set(draft.map(d => d.date)).size > MAX_DAYS) throw new Error(`A task can be scheduled for at most ${MAX_DAYS} days.`);
     const changes: Change[] = []; const failed: string[] = []; this.askOnce = { answer: null };
     try { await this.applySchedule(before, draft, context, changes, failed); } finally { this.askOnce = null; }
-    await this.planEdited(id, before, changes);
+    await this.syncTimes(id, changes); await this.planEdited(id, before, changes);
     const after = await this.repo.read(id); const now = Date.now(); const ahead = after.scheduled_dates.filter(day => day >= localDate());
     const planned = after.planned_sessions.filter(b => Date.parse(b.end) > now).reduce((sum, b) => sum + seconds(b), 0);
     const when = ahead.length ? `scheduled for ${ahead.slice(0, 3).join(", ")}${ahead.length > 3 ? ` and ${ahead.length - 3} more` : ""}${planned ? ` · ${lengthOfSeconds(planned)} planned` : ""}` : after.scheduled_dates.length ? `scheduled only for days that are over` : "no longer scheduled";
@@ -277,6 +283,18 @@ export class TaskService {
       await this.moveSubtaskDays(child, from, to, changes, seen);
     }
     if (failed.length) new Notice(`Could not move ${plural(failed.length, "subtask")} to ${to}: ${failed.join(", ")}. They keep ${from}.`);
+  }
+  /**
+   * Writes each day's planned times after the task's todo in that day's note, today's and later (earlier days are history), so the note reads right without the plugin. Only
+   * how the todo looks: one that cannot be written now is put right by the next change.
+   */
+  private async syncTimes(id: string, changes?: Change[]): Promise<void> {
+    const task = await this.repo.read(id); if (task.recurring) return; const today = localDate();
+    for (const occurrence of await this.repo.occurrences(id)) {
+      const date = this.daily.date(occurrence.file.path); if (!date || date < today) continue;
+      const times = dayTimes(task, date); const after = occurrence.tasks.reduce((text, line) => shownTimes(task, line) === times ? text : replaceTask(text, line, { title: task.title, times }), occurrence.text);
+      try { await this.edit(occurrence.file, occurrence.text, after, changes); } catch { /* Shown again by the next change of its times. */ }
+    }
   }
   /** Adds one day to a task's schedule; its todo goes in that day's note when there is one (see `dayNote`). */
   private async addDay(id: string, day: string, changes: Change[]): Promise<void> {
@@ -360,10 +378,10 @@ export class TaskService {
   }
   async title(id: string, title: string): Promise<void> {
     if (!title.trim() || /[\r\n]/.test(title)) throw new Error("Use a nonempty, single-line title.");
-    await this.repo.update(id, t => ({ ...t, title: title.trim() }));
+    const old = await this.repo.read(id); await this.repo.update(id, t => ({ ...t, title: title.trim() }));
     for (const occurrence of await this.repo.occurrences(id)) {
       if (occurrence.tasks.length > 1) { new Notice(onTwoLines(title.trim(), occurrence.file.path, occurrence.tasks.length, "Delete one copy, then rename the task again.")); continue; }
-      await this.edit(occurrence.file, occurrence.text, replaceTask(occurrence.text, occurrence.tasks[0], { title: title.trim() }));
+      await this.edit(occurrence.file, occurrence.text, replaceTask(occurrence.text, occurrence.tasks[0], { title: title.trim(), times: shownTimes(old, occurrence.tasks[0]) }));
     }
     await this.nameNote(id);
     this.changed();
@@ -702,7 +720,7 @@ export class TaskService {
       this.summarize(own, "Scheduled", `“${before.title}” is ${before.scheduled_dates.length ? "also " : ""}scheduled for ${day}, the day of its planned block.`);
     }
     // Recorded with the rest, so Undo also takes back a timer this started (an Undo whose note changed after it was recorded would refuse).
-    await this.planEdited(id, before, own); this.changed();
+    await this.syncTimes(id, own); await this.planEdited(id, before, own); this.changed();
   }
   /** Replaces one planned block, or removes it when `to` is null. */
   async changePlanned(id: string, from: WorkSession, to: WorkSession | null): Promise<void> {
@@ -710,7 +728,7 @@ export class TaskService {
     await this.repo.update(id, t => {
       const at = t.planned_sessions.findIndex(s => s.start === from.start && s.end === from.end); if (at < 0) throw new Error("That planned block no longer exists; it may have been changed elsewhere.");
       return { ...t, planned_sessions: to ? t.planned_sessions.map((s, n) => n === at ? to : s) : t.planned_sessions.filter((_s, n) => n !== at) };
-    }); await this.planEdited(id, before); this.changed();
+    }); await this.syncTimes(id); await this.planEdited(id, before); this.changed();
   }
   /**
    * Changes one day of a recurring task's repeating times on its own ("this day"): that day's repeating blocks become blocks of its own, `from` among them replaced by `to` (or left out when
@@ -753,7 +771,7 @@ export class TaskService {
       if (!t.planned_sessions.some(s => s.start === block.start && s.end === block.end)) throw new Error("That planned block no longer exists; it may have been changed elsewhere.");
       const parts = unworkedParts(block, t.work_sessions);
       return { ...t, planned_sessions: t.planned_sessions.filter(s => s.start !== block.start || s.end !== block.end), work_sessions: [...t.work_sessions, ...parts].sort((a, b) => Date.parse(a.start) - Date.parse(b.start)).slice(-MAX_WORK_SESSIONS), time_tracked_seconds: t.time_tracked_seconds + parts.reduce((sum, part) => sum + seconds(part), 0) };
-    }); this.changed();
+    }); await this.syncTimes(id); this.changed();
   }
   /**
    * Starts the timer of each task whose planned block has begun and stops each timer whose planned time is over, at the block's end (see `dueStarts`, `dueStops`).
