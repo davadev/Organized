@@ -31,6 +31,20 @@ describe("timeline", () => {
     expect(assignLanes([])).toEqual([]);
     const same = blocksOn([task("p", [["2026-03-02", "09:00:00", "2026-03-02", "10:00:00"]]), task("q", [["2026-03-02", "09:00:00", "2026-03-02", "09:30:00"]])], "2026-03-02", 0); expect(same.map(b => b.task.title)).toEqual(["q", "p"]);
   });
+  it("draws a task's worked or running time inside its own planned block, not as a second copy beside it, and keeps that column for an early start or an overrun", () => {
+    const plan = (t: ReturnType<typeof task>, from: string, to: string) => ({ ...t, planned_sessions: [...t.planned_sessions, { start: local("2026-03-02", from), end: local("2026-03-02", to) }] });
+    const row = (blocks: ReturnType<typeof blocksOn>) => blocks.map(b => [b.task.title, b.planned ? "plan" : b.running ? "run" : "work", b.lane, b.lanes]);
+    // The case from a phone: planned 08:00-15:00, the timer started inside it.
+    const work = plan(task("work", [], local("2026-03-02", "10:50:00")), "08:00:00", "15:00:00");
+    expect(row(blocksOn([work], "2026-03-02", at(local("2026-03-02", "11:00:00"))))).toEqual([["work", "plan", 0, 1], ["work", "run", 0, 1]]);
+    // Started early and ran over: one column for plan and work; another task's block beside them, also where only the overrun is.
+    const early = plan(task("early", [["2026-03-02", "08:30:00", "2026-03-02", "09:30:00"], ["2026-03-02", "09:40:00", "2026-03-02", "10:40:00"]]), "09:00:00", "10:00:00");
+    const other = task("other", [["2026-03-02", "10:15:00", "2026-03-02", "10:45:00"]]);
+    expect(row(blocksOn([early, other], "2026-03-02", 0))).toEqual([["early", "work", 0, 2], ["early", "plan", 0, 2], ["early", "work", 0, 2], ["other", "work", 1, 2]]);
+    // Another task's time over the plan, or this task's time outside it, keeps its own column.
+    const apart = plan(task("apart", [["2026-03-02", "12:00:00", "2026-03-02", "13:00:00"]]), "09:00:00", "10:00:00");
+    expect(row(blocksOn([apart, task("busy", [["2026-03-02", "09:00:00", "2026-03-02", "09:45:00"]])], "2026-03-02", 0))).toEqual([["busy", "work", 0, 2], ["apart", "plan", 1, 2], ["apart", "work", 0, 1]]);
+  });
   it("keeps the working day and widens it only when a block falls outside", () => {
     expect(hourRange([])).toEqual([8, 18]); const block = (startMin: number, endMin: number) => ({ task: task("t"), startMin, endMin, running: false, planned: false, lane: 0, lanes: 1 });
     expect(hourRange([block(600, 660)])).toEqual([8, 18]); expect(hourRange([block(330, 400), block(1100, 1250)])).toEqual([5, 21]); expect(hourRange([block(0, 1440)])).toEqual([0, 24]); expect(hourRange([], [6, 20])).toEqual([6, 20]);
