@@ -364,16 +364,24 @@ export class TaskService {
   async recurrence(id: string, rule: Rule | null, context?: Context): Promise<void> {
     const today = localDate(); const changes: Change[] = []; const skipped: string[] = [];
     const file = await this.repo.resolve(id); const before = await this.repo.readText(file);
+    let started = false;
     const task = await this.repo.update(id, t => {
+      started = t.status === "in_progress" && t.time_tracking_started_at === null;
       const periods = t.recurrence_periods.map(p => ({ ...p }));
       const open = [...periods].reverse().find(p => p.stop === null);
       // A new interval or unit starts a new count; a change of weekday keeps it.
       const keep = rule !== null && t.recurring && sameCadence(taskRule(t), rule);
       if (!keep && open) open.stop = today;
       if (rule !== null && !keep) periods.push({ start: today, stop: null });
-      return { ...t, status: "open", closed_at: null, recurring: rule !== null, recurrence: rule ? formatRule(rule) : null, recurrence_periods: periods, daily_note_section_path: context?.line.section ?? t.daily_note_section_path };
+      return { ...t, status: "open", closed_at: null, auto_started_block: null, recurring: rule !== null, recurrence: rule ? formatRule(rule) : null, recurrence_periods: periods, daily_note_section_path: context?.line.section ?? t.daily_note_section_path };
     });
     changes.push({ file, before, after: await this.repo.readText(file) });
+    // The task is open now: a todo a planned block had set in progress (`[/]`) would keep saying so for good. A running timer keeps its marker.
+    if (started) for (const o of await this.repo.occurrences(id)) {
+      const date = this.daily.date(o.file.path); if (date && date < today) continue;
+      let after = o.text; for (const line of o.tasks) if (line.marker === "/") after = replaceTask(after, line, { marker: " " });
+      if (after !== o.text) try { await this.edit(o.file, o.text, after, changes); } catch { skipped.push(o.file.path); }
+    }
     // In a project note the line moves between Ongoing and its status heading.
     for (const notePath of task.projects) {
       const project = this.repo.file(notePath); if (!project) continue;

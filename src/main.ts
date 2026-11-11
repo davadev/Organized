@@ -1,7 +1,7 @@
 import { Editor, MarkdownView, Notice, Platform, Plugin, TFile, TFolder, WorkspaceLeaf } from "obsidian";
 import { Transaction } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
-import { ACTION_MARKERS, duplicateRepeats, parentIds, parseTasks, sameNesting, NOTE_MARKER, NoteSection, PROJECT_MARKER, RECURRING_MARKER, SECTION_MARKERS, SUBTASK_MARKER, TaskLine, TIME_MARKER, writeNoteSection } from "./codec";
+import { ACTION_MARKERS, duplicateRepeats, parentIds, parseTasks, sameNesting, unclearIds, NOTE_MARKER, NoteSection, PROJECT_MARKER, RECURRING_MARKER, SECTION_MARKERS, SUBTASK_MARKER, TaskLine, TIME_MARKER, writeNoteSection } from "./codec";
 import { DEFAULT_SETTINGS, elapsed, localDate, markerOf, object, Settings, Status, Task } from "./model";
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
@@ -36,7 +36,7 @@ export default class Organized extends Plugin {
   /** A day paged to on a phone: its note opens once the side panel is closed, since opening it sooner would close the panel mid-paging. */
   pendingDay: string | null = null;
   private readonly titleTimers = new Map<string, number>();
-  private readonly structure = new Map<string, { before: Map<string, string | null>; timer: number }>();
+  private readonly structure = new Map<string, { before: Map<string, string | null>; unclear: Set<string>; timer: number }>();
   private lastNoteEditor: { editor: Editor; file: TFile } | null = null;
   revision = 0;
   readonly projectionListeners = new Set<() => void>();
@@ -462,15 +462,19 @@ export default class Organized extends Plugin {
     if (update.transactions.every(t => t.annotation(Transaction.userEvent)?.startsWith("input.organized"))) return;
     const active = this.activeEditor(); if (!active || this.repo.isTaskRecord(active.file.path) || active.editor.getValue() !== update.state.doc.toString()) return;
     const key = active.file.path; const pending = this.structure.get(key); window.clearTimeout(pending?.timer);
-    const before = pending?.before ?? parentIds(update.startState.doc.toString());
+    const start = update.startState.doc.toString(); const before = pending?.before ?? parentIds(start); const unclear = pending?.unclear ?? unclearIds(start);
     const timer = window.setTimeout(() => {
       this.structure.delete(key);
       void (async () => {
-        const after = parentIds(await this.repo.readText(active.file)); if (sameNesting(before, after)) return;
+        const text = await this.repo.readText(active.file); const after = parentIds(text); const unsure = unclearIds(text);
+        // A task on two lines has no clear parent here, so its link stays as it is (pasting a copy unlinked it); once one copy is gone, where it was is read from the link itself.
+        for (const id of unsure) { before.delete(id); after.delete(id); }
+        for (const id of unclear) if (!unsure.has(id)) before.set(id, (await this.repo.parentOf(id))?.id ?? null);
+        if (sameNesting(before, after)) return;
         await this.run(() => this.service.syncSubtasks(before, after));
       })().catch(report);
     }, 800);
-    this.structure.set(key, { before, timer });
+    this.structure.set(key, { before, unclear, timer });
   }
   /** Adds an empty todo one level in under the todo at the cursor (after everything already nested under it) and asks which task it is. */
   /** Puts the caret on the marker of the todo line it is on (`[ ]` -> the space selected), so the next letter typed replaces it exactly as if the person had clicked into the checkbox. Bind a key to it in Obsidian's Hotkeys settings. */

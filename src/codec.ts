@@ -126,6 +126,12 @@ export function parentIds(text: string): Map<string, string | null> {
   const unique = (t: TaskLine | undefined): string | null => t?.id && seen.get(t.id) === 1 ? t.id : null;
   return new Map(tasks.flatMap(t => unique(t) ? [[t.id!, unique(tasks.find(p => p.line === t.parent)) ] as const] : []));
 }
+/** Linked todos whose parent this note cannot tell: a task on more than one line (a todo copied and pasted), and the todos right under such a line. */
+export function unclearIds(text: string): Set<string> {
+  const tasks = parseTasks(text); const seen = new Map<string, number>(); for (const t of tasks) if (t.id) seen.set(t.id, (seen.get(t.id) ?? 0) + 1);
+  const twice = (t: TaskLine | undefined) => !!t?.id && seen.get(t.id)! > 1;
+  return new Set(tasks.flatMap(t => t.id && (twice(t) || twice(tasks.find(p => p.line === t.parent))) ? [t.id] : []));
+}
 /** Whether two maps from `parentIds` describe the same nesting. */
 export const sameNesting = (a: Map<string, string | null>, b: Map<string, string | null>): boolean => [...new Set([...a.keys(), ...b.keys()])].every(id => (a.get(id) ?? null) === (b.get(id) ?? null));
 export function taskText(task: TaskLine, updates: { title?: string; marker?: string; id?: string | null; repeat?: boolean }): string {

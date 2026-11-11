@@ -28,6 +28,7 @@ Built from the bugs the 0.1.4 betas of this plugin shipped and then fixed, plus 
    - Test: change the source without changing the key; change it from another code path (rename, undo, sync).
 
 4. **New metadata lifecycle gaps** (recurring/budget/plan fields not handled on retire, forward, convert, rename, copy, undo). Every new frontmatter key or line format is a column in a matrix of pipelines.
+   - Found on 0.1.5: making a task recurring forced `status: open` but left `auto_started_block` and the `[/]` todo a planned block had written; nothing ever put the line back. Ask, for every action that sets a status by spreading a new object (not `setStatus` + `syncLines`): which markers and claims did the old status leave behind?
    - Build the matrix: rows = each new key/line (`recurring`, `recurrence_periods`, `time_budget_seconds`, `planned_sessions`, project links, worked lines); columns = create, edit, complete, cancel, forward to next day, retire/strip/trash, convert note, project rename, Undo, sync conflict copy, parser round-trip (`codec`).
    - Grep: the key name across `src/`; any pipeline that does not mention it either handles it implicitly (derived from `newTask`/`ORGANIZED_KEYS`, fine) or forgot it.
    - Test: property round-trip (write then parse equals input), and an end-to-end "task with every field set goes through the lifecycle and nothing is lost or resurrected".
@@ -75,6 +76,7 @@ Built from the bugs the 0.1.4 betas of this plugin shipped and then fixed, plus 
     - Test: change data while the view is hidden, then reveal; focus an input, trigger a refresh, assert the element and caret survive.
 
 15. **Clocks, zones and "empty" vs "failed"** (mtime gates skipped a remote version forever; UTC dates off by a day in the evening; failed sync reported as "no data"; progress marked before data was stored).
+   - Same shape for "unclear" vs "gone": `parentIds` leaves out a task on two lines, and the nesting watcher read the missing entry as a deleted line, so pasting a copy of a subtask or its parent unlinked it. Test: paste a copy, delete either copy, delete the whole block; assert the parent's list after each.
     - Grep: `mtime`, `ctime`, `toISOString().slice(0, 10)`, `Date.parse` on date-only strings, `catch { return [] }`, "mark done" before the write has resolved.
     - Ask: does a skipped, failed or partial read look identical to a legitimate empty result? Is anything marked done before the data it describes is durable? Do dates shown to a person come from local fields?
     - Test: run the date suite under three `TZ` values (e.g. `UTC`, `Pacific/Auckland`, `America/Los_Angeles`) at 23:30 and 00:30 local; make the read fail and assert the UI says failed, not empty.
