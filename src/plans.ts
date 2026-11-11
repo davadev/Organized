@@ -95,3 +95,22 @@ export function unworkedParts(block: WorkSession, worked: WorkSession[]): WorkSe
   if (to > from) parts.push({ start: new Date(from).toISOString(), end: new Date(to).toISOString() });
   return parts;
 }
+const clockAt = (iso: string): string => { const d = new Date(iso); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+/** The planned times of a task on one day, as its todo in that day's note shows them (`10:00–11:00, 14:00–15:00`), or null with none. */
+export function dayTimes(task: Pick<Task, "planned_sessions">, day: string): string | null {
+  const times = task.planned_sessions.filter(b => localDay(Date.parse(b.start)) === day).sort((a, b) => Date.parse(a.start) - Date.parse(b.start)).map(b => `${clockAt(b.start)}–${clockAt(b.end)}`);
+  return times.length ? times.join(", ") : null;
+}
+/** A planned block as a task note keeps it: `2026-11-18 10:00–11:00` in local time (an end at or before the start is the next day), or the exact times when that text cannot say it (seconds, more than a day, a clock change). */
+export function plannedText(block: WorkSession): string | WorkSession {
+  const text = `${localDay(Date.parse(block.start))} ${clockAt(block.start)}–${clockAt(block.end)}`; const back = plannedFrom(text);
+  return back && back.start === block.start && back.end === block.end ? text : { start: block.start, end: block.end };
+}
+/** A planned block from a task note: the local text `plannedText` writes (a hyphen works as well as the dash), or null when it is not one. */
+export function plannedFrom(value: string): WorkSession | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{1,2}):(\d{2})\s*[–-]\s*(\d{1,2}):(\d{2})$/.exec(value.trim()); if (!match) return null;
+  const [y, m, d, sh, sm, eh, em] = match.slice(1).map(Number); if (sh > 23 || eh > 23 || sm > 59 || em > 59) return null;
+  const start = new Date(y, m - 1, d, sh, sm); if (start.getDate() !== d || start.getMonth() !== m - 1) return null;
+  const sameDay = eh * 60 + em > sh * 60 + sm; const end = new Date(y, m - 1, sameDay ? d : d + 1, eh, em);
+  return end > start ? { start: start.toISOString(), end: end.toISOString() } : null;
+}

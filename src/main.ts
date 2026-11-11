@@ -499,7 +499,8 @@ export default class Organized extends Plugin {
   }
   private async syncEditedTitle(file: TFile, id: string): Promise<void> {
     const lines = parseTasks(await this.repo.readText(file)).filter(t => t.id === id); if (lines.length !== 1 || !lines[0].title) return;
-    const title = lines[0].title; const task = await this.repo.read(id); if (task.title === title) return;
+    // A title that itself ends like planned times (`Call · 10:00–11:00`) reads as title and times; it is still the same title.
+    const title = lines[0].title; const task = await this.repo.read(id); if (task.title === title || task.title === `${title} · ${lines[0].times}`) return;
     await this.run(() => this.service.title(id, title));
   }
   /** A running timer stops when its `[/]` line is removed or its marker is changed, wherever the cursor is and even while another action runs (the stop queues behind it). Only the person's own edits count: a note reloaded after a sync or rewritten by another plugin must not stop a timer. */

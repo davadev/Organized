@@ -1,4 +1,4 @@
-import { ClockSpan, MAX_SKIPS, plansIn, timesFrom } from "./plans";
+import { ClockSpan, MAX_SKIPS, plannedFrom, plansIn, timesFrom } from "./plans";
 import { normalizePath } from "obsidian";
 
 export const STATUSES = ["open", "in_progress", "completed", "canceled"] as const;
@@ -169,7 +169,8 @@ export function taskFrom(value: unknown, expectedId: string): Task {
   const periods = Array.isArray(v.recurrence_periods) ? v.recurrence_periods.map(object).filter(p => validDate(p.start) && (p.stop === null || validDate(p.stop))) : [];
   const history = Array.isArray(v.movement_history) ? v.movement_history.map(object).filter(m => typeof m.id === "string" && ["schedule", "reschedule", "forward"].includes(String(m.kind)) && ["manual", "automatic"].includes(String(m.source)) && typeof m.from === "string" && validDate(m.to) && typeof m.at === "string" && Number.isFinite(Date.parse(m.at))) : [];
   const sections = Array.isArray(v.daily_note_section_path) ? v.daily_note_section_path.map(object).filter(s => Number.isInteger(s.level) && Number(s.level) >= 1 && Number(s.level) <= 6 && typeof s.text === "string" && Number.isInteger(s.ordinal) && Number(s.ordinal) >= 0) : [];
-  const sessionsOf = (value: unknown, cap: number): WorkSession[] => (Array.isArray(value) ? value.map(object) : []).flatMap(w => typeof w.start === "string" && typeof w.end === "string" && Date.parse(w.start) < Date.parse(w.end) ? [{ start: w.start, end: w.end }] : [])
+  // Planned blocks may also be the readable local text `plannedText` writes (`2026-11-18 10:00–11:00`).
+  const sessionsOf = (value: unknown, cap: number, text = false): WorkSession[] => (Array.isArray(value) ? value.map(item => text && typeof item === "string" ? plannedFrom(item) ?? {} : object(item)) : []).flatMap(w => typeof w.start === "string" && typeof w.end === "string" && Date.parse(w.start) < Date.parse(w.end) ? [{ start: w.start, end: w.end }] : [])
     .sort((a, b) => Date.parse(a.start) - Date.parse(b.start)).slice(-cap);
   const sessions = sessionsOf(v.work_sessions, MAX_WORK_SESSIONS);
   return {
@@ -182,7 +183,7 @@ export function taskFrom(value: unknown, expectedId: string): Task {
     recurring: v.recurring === true, recurrence: typeof v.recurrence === "string" && v.recurrence.trim() ? v.recurrence.trim() : null, recurrence_periods: periods as unknown as Task["recurrence_periods"], starred: v.starred === true,
     projects: [...new Set(strings(v.projects).filter(p => { try { return path(p) === p && p.endsWith(".md"); } catch { return false; } }))],
     movement_history: history as unknown as Movement[], daily_note_section_path: sections as unknown as Section[], work_sessions: sessions,
-    planned_sessions: sessionsOf(v.planned_sessions, MAX_PLANNED_SESSIONS),
+    planned_sessions: sessionsOf(v.planned_sessions, MAX_PLANNED_SESSIONS, true),
     recurrence_times: timesFrom(v.recurrence_times), recurrence_skips: [...new Set(strings(v.recurrence_skips).filter(validDate))].sort().slice(-MAX_SKIPS),
     auto_started_block: typeof v.auto_started_block === "string" && Number.isFinite(Date.parse(v.auto_started_block)) ? v.auto_started_block : null,
     time_budget_seconds: Number.isInteger(v.time_budget_seconds) && Number(v.time_budget_seconds) > 0 && Number(v.time_budget_seconds) <= MAX_BUDGET_SECONDS ? Number(v.time_budget_seconds) : null,
