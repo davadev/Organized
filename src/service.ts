@@ -112,14 +112,16 @@ export class TaskService {
     const taskFile = await this.repo.resolve(task.id); const beforeTask = await this.repo.readText(taskFile);
     // Forwarding moves the day of the note it leaves; scheduling moves the day the task is shown under (its next one).
     const leaving = kind === "forward" ? this.daily.date(context.file.path) ?? oldDate : oldDate;
-    const next = await this.repo.update(task.id, current => ({ ...current, scheduled_dates: [...current.scheduled_dates.filter(day => day !== leaving), date], daily_note_section_path: line.section,
+    // A project note is the project's board: its headings are statuses, not where the todo goes in a day, and its todo keeps showing the status.
+    const board = this.isProjectFile(context.file);
+    const next = await this.repo.update(task.id, current => ({ ...current, scheduled_dates: [...current.scheduled_dates.filter(day => day !== leaving), date], daily_note_section_path: board ? current.daily_note_section_path : line.section,
       movement_history: current.scheduled === date ? current.movement_history : [...current.movement_history, event] }));
     changes.push({ file: taskFile, before: beforeTask, after: await this.repo.readText(taskFile) });
     const under = options.under !== undefined ? options.under : (await this.repo.parentOf(task.id))?.id ?? null;
     if (target) await this.insert(target, next, task.status === "in_progress" && kind === "forward" ? "/" : " ", false, changes, under);
     if (target?.path !== context.file.path) {
       const current = await this.resolve(context);
-      await this.edit(context.file, current.text, replaceTask(current.text, current.line, { marker: kind === "forward" ? (this.daily.date(context.file.path) ? ">" : " ") : "<" }), changes);
+      await this.edit(context.file, current.text, replaceTask(current.text, current.line, { marker: board ? markerOf(task) : kind === "forward" ? (this.daily.date(context.file.path) ? ">" : " ") : "<" }), changes);
       await this.resortAfter(context.file, next, changes);
     }
     if (oldDate && oldDate !== date && kind !== "forward") await this.cleanupSchedule(task.id, oldDate, context.file.path, changes);
@@ -233,7 +235,7 @@ export class TaskService {
     const moves = draft.filter(d => d.from !== undefined && d.from !== d.date && had.includes(d.from));
     const wanted = new Set(draft.map(d => d.date)); const sources = new Set(moves.map(m => m.from!));
     const added = [...wanted].filter(day => !had.includes(day) && !moves.some(m => m.date === day));
-    const placed = context ? { ...before, daily_note_section_path: context.line.section } : before; const under = (await this.repo.parentOf(id))?.id ?? null;
+    const board = context !== undefined && this.isProjectFile(context.file); const placed = context && !board ? { ...before, daily_note_section_path: context.line.section } : before; const under = (await this.repo.parentOf(id))?.id ?? null;
     const put = async (day: string) => { const file = await this.dayNote(day); if (file) await this.insert(file, placed, day === localDate() ? markerOf(before) : " ", false, changes, under); };
     // The daily notes first: a day whose note cannot be written stays as it was, todo and blocks.
     const days = new Set(had); const stuck = new Set<string>(); const at = new Date().toISOString(); const events: Movement[] = [];
@@ -259,7 +261,7 @@ export class TaskService {
     // The todo the person scheduled from says where the task went: `<` while it is scheduled away from this note, its own marker once it is not (also for a `<` typed and then not used).
     const after = await this.repo.read(id); const own = context ? this.daily.date(context.file.path) : null;
     if (context) {
-      const fresh = await this.resolve(context); const marker = days.size && !(own && days.has(own)) ? "<" : markerOf(after);
+      const fresh = await this.resolve(context); const marker = days.size && !board && !(own && days.has(own)) ? "<" : markerOf(after);
       if (fresh.line.marker !== marker) { await this.edit(context.file, fresh.text, replaceTask(fresh.text, fresh.line, { marker }), changes); await this.resortAfter(context.file, after, changes); }
     }
     if (had.length && !days.size) for (const occurrence of await this.repo.occurrences(id)) {
@@ -527,7 +529,7 @@ export class TaskService {
       if (!keep && open) open.stop = today;
       if (rule !== null && !keep) periods.push({ start: today, stop: null });
       // A running timer keeps its claim, so the planned time it runs for still stops it (now, when that time went with the change).
-      return { ...t, status: "open", closed_at: null, auto_started_block: t.time_tracking_started_at ? t.auto_started_block : null, recurrence_times: times ?? t.recurrence_times, recurring: rule !== null, recurrence: rule ? formatRule(rule) : null, recurrence_periods: periods, daily_note_section_path: context?.line.section ?? t.daily_note_section_path };
+      return { ...t, status: "open", closed_at: null, auto_started_block: t.time_tracking_started_at ? t.auto_started_block : null, recurrence_times: times ?? t.recurrence_times, recurring: rule !== null, recurrence: rule ? formatRule(rule) : null, recurrence_periods: periods, daily_note_section_path: context && !this.isProjectFile(context.file) ? context.line.section : t.daily_note_section_path };
     });
     changes.push({ file, before, after: await this.repo.readText(file) });
     // The task is open now: a todo a planned block had set in progress (`[/]`) would keep saying so for good. A running timer keeps its marker.

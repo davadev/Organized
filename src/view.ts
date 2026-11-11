@@ -55,8 +55,8 @@ export class OrganizedInspectorView extends ItemView {
   private budgeted(project: string): boolean { return Object.values(this.owner.repo.projectBudgets(project)).some(seconds => seconds !== null); }
   private hasProjectBudget(task: Task): boolean { return task.projects.some(project => this.budgeted(project)); }
   /** One bar per budget set on the task's projects, each counting the time of every task in that project over the day, week, month or the whole project. */
-  private async projectBars(host: HTMLElement, task: Task): Promise<void> {
-    const budgeted = task.projects.filter(project => this.budgeted(project)); if (!budgeted.length) return;
+  private async projectBars(host: HTMLElement, projects: string[]): Promise<void> {
+    const budgeted = projects.filter(project => this.budgeted(project)); if (!budgeted.length) return;
     // Time kept under retired todos (see retention.ts) still counts toward the project it was worked for.
     const tasks = this.withDoneToday([...await this.owner.repo.list(true), ...(await this.owner.service.retiredWork(RETIRED_FROM, RETIRED_TO)).map(item => item.task)]); const now = Date.now();
     for (const project of budgeted) {
@@ -397,7 +397,7 @@ export class OrganizedInspectorView extends ItemView {
     this.iconButton(nav, "Next month", "chevron-right", () => { this.month.add(1, "month"); return this.render(); });
     this.button(nav, "Today", () => { this.month = moment().startOf("month"); return this.selectDay(localDate()); }).addClass("organized-today-button");
     const grid = host.createDiv({ cls: "organized-calendar", attr: { role: "group", "aria-label": this.month.format("MMMM YYYY") } });
-    const start = this.month.clone().startOf("week");
+    const start = this.month.clone().startOf("week"); const later: [string, HTMLButtonElement][] = [];
     for (let i = 0; i < 7; i++) grid.createDiv({ cls: "organized-weekday", text: start.clone().add(i, "days").format("dd") });
     for (let i = 0; i < 42; i++) {
       const date = start.clone().add(i, "days"); const key = date.format("YYYY-MM-DD");
@@ -406,7 +406,7 @@ export class OrganizedInspectorView extends ItemView {
       b.setAttribute("aria-label", date.format("dddd, LL")); b.setAttribute("aria-pressed", String(key === this.selectedDate));
       if (key === localDate()) b.setAttribute("aria-current", "date");
       if (date.month() !== this.month.month()) b.addClass("organized-muted");
-      if (this.owner.repo.file(this.owner.service.daily.path(key))) b.addClass("organized-has-note");
+      if (this.owner.repo.file(this.owner.service.daily.path(key))) b.addClass("organized-has-note"); else if (key >= localDate()) later.push([key, b]);
       b.addEventListener("keydown", event => {
         const shift = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : event.key === "ArrowDown" ? 7 : event.key === "ArrowUp" ? -7 : 0;
         if (shift) { event.preventDefault(); const buttons = grid.querySelectorAll("button"); const index = Math.max(0, Math.min(41, i + shift)); buttons[index].focus(); }
@@ -417,6 +417,8 @@ export class OrganizedInspectorView extends ItemView {
       const today = this.owner.repo.file(this.owner.service.daily.path(localDate()));
       const completed = today ? (await this.owner.taskLines(today)).filter(t => t.marker.toLowerCase() === "x").length : 0;
       stats.empty();
+      // A later day without its note yet is marked too when tasks are scheduled for it.
+      for (const [key, b] of later) { const due = this.dueOn(tasks, key).length; if (due) { b.addClass("organized-has-note"); b.setAttribute("aria-label", `${b.getAttribute("aria-label")!}, ${due} scheduled`); } }
       for (const [value, label] of [[tasks.filter(t => ["open", "in_progress"].includes(t.status)).length, "Active"], [completed, "Done today"], [tasks.filter(t => t.time_tracking_started_at).length, "Timers"]]) {
         const stat = stats.createDiv({ cls: "organized-stat" }); stat.createEl("strong", { text: String(value) }); stat.createSpan({ text: String(label) });
       }
@@ -447,7 +449,9 @@ export class OrganizedInspectorView extends ItemView {
     const retired = (await this.owner.service.retiredWork(days[0].format("YYYY-MM-DD"), days[6].format("YYYY-MM-DD"))).map(item => item.task);
     const blocks = days.map(day => blocksOn(this.withDoneToday([...tasks, ...retired]), day.format("YYYY-MM-DD"), now)); const [from, to] = hourRange(blocks.flat());
     const counts = await Promise.all(days.map(async day => {
-      const note = this.owner.repo.file(this.owner.service.daily.path(day.format("YYYY-MM-DD"))); const lines = note ? await this.owner.taskLines(note) : [];
+      const key = day.format("YYYY-MM-DD"); const note = this.owner.repo.file(this.owner.service.daily.path(key)); const lines = note ? await this.owner.taskLines(note) : [];
+      // A later day without its note yet counts the tasks that will go in it, as the day view lists them.
+      if (!note && key >= localDate(new Date(now))) return { done: 0, total: this.dueOn(tasks, key).length };
       return { done: lines.filter(line => line.marker.toLowerCase() === "x").length, total: lines.length };
     }));
     if (generation !== this.renderId) return;
@@ -540,6 +544,8 @@ export class OrganizedInspectorView extends ItemView {
     const note = this.owner.repo.file(notePath); if (!note) throw new Error("The note that kept this time was renamed or removed.");
     await this.app.workspace.getLeaf(false).openFile(note);
   }
+  /** The tasks a day's note gets when it is made (see `onDailyCreated`). */
+  private dueOn(tasks: Task[], date: string): Task[] { return tasks.filter(task => !task.recurring && task.converted_to === null && (task.status === "open" || task.status === "in_progress") && task.scheduled_dates.includes(date)); }
   private plainTaskRow(host: HTMLElement, line: TaskLine, path: string): void {
     const status = statusOfMarker(line.marker);
     const row = host.createDiv({ cls: "organized-list-card organized-day-task", attr: { "data-status": status } });
@@ -559,7 +565,7 @@ export class OrganizedInspectorView extends ItemView {
     if (generation !== this.renderId) return;
     const collapsed = this.owner.settings.dayTasksCollapsed;
     // A later day's note is made when its day comes; until then the tasks that will go in it (open and in progress, see `onDailyCreated`) are listed from their task notes.
-    const due = note || date < localDate(new Date(now)) ? [] : tasks.filter(task => !task.recurring && task.converted_to === null && (task.status === "open" || task.status === "in_progress") && task.scheduled_dates.includes(date));
+    const due = note || date < localDate(new Date(now)) ? [] : this.dueOn(tasks, date);
     const list = this.section(host, "Tasks", note ? lines.length : due.length, { collapsed, toggle: () => { this.owner.setDayTasksCollapsed(!collapsed); void this.render().catch(report); } }); list.addClass("organized-grouped");
     if (!note) {
       for (const task of collapsed ? [] : due) this.taskRow(list, task, () => this.openFromCalendar(task.id)).addClass("organized-day-task");
@@ -635,8 +641,9 @@ export class OrganizedInspectorView extends ItemView {
     if (this.editingTitle) {
       const input = header.createEl("input", { cls: "organized-title-input", type: "text", attr: { "aria-label": "Task title" } }); input.value = task.title;
       const actions = header.createDiv({ cls: "organized-title-actions" });
-      this.button(actions, "Save", () => { input.blur(); this.editingTitle = false; return this.owner.run(() => this.owner.service.title(id, input.value)); }).addClass("organized-save");
-      this.button(actions, "Cancel", () => { input.blur(); this.editingTitle = false; return this.render(); });
+      const save = this.button(actions, "Save", () => { input.blur(); this.editingTitle = false; return this.owner.run(() => this.owner.service.title(id, input.value)); }); save.addClass("organized-save");
+      const cancel = this.button(actions, "Cancel", () => { input.blur(); this.editingTitle = false; return this.render(); });
+      input.addEventListener("keydown", event => { if (event.key !== "Enter" && event.key !== "Escape") return; event.preventDefault(); (event.key === "Enter" ? save : cancel).click(); });
       input.focus(); input.select();
     } else {
       const title = header.createDiv({ cls: "organized-task-title", attr: { role: "heading", "aria-level": "2" } });
@@ -668,7 +675,7 @@ export class OrganizedInspectorView extends ItemView {
         if (!task.recurring) this.iconButton(actions, task.time_budget_seconds === null ? "Set budget" : "Edit budget", "target", () => new BudgetModal(this.app, task.title, task.time_budget_seconds, seconds => this.owner.run(() => this.owner.service.setBudget(id, seconds))).open());
       } });
       const own = budgetUse(task); if (own) this.budgetBar(timer, own, "Time budget", false);
-      await this.projectBars(timer, task);
+      await this.projectBars(timer, task.projects);
       if (task.work_sessions.length) this.sessionList(timer, task);
       if (repeating) this.button(timer, `${ruleLabel(taskRule(task))} · ${task.recurrence_times.map(timeLabel).join(", ")}`, () => this.owner.pickRecurrence(task, this.owner.context?.line.id === id ? this.owner.context : undefined)).addClass("organized-session-row", "organized-repeat-times-row");
       // One place to plan: a task's days and their times open the Schedule dialog. A recurring task's one-off blocks keep their own list (it has no days).
@@ -784,6 +791,12 @@ export class OrganizedInspectorView extends ItemView {
     for (const project of projects) picker.createEl("option", { text: this.projectLabel(project), value: project }); picker.value = this.selectedProject;
     picker.addEventListener("change", () => { this.selectedProject = picker.value; picker.blur(); void this.render().catch(report); });
     if (projects.length) { this.colorPickers(projectSection, projects); this.budgetEditors(projectSection, projects); }
+    // The chosen project's budgets, so its time is seen without opening one of its tasks.
+    if (this.selectedProject) {
+      const bars = projectSection.createDiv({ cls: "organized-project-bars" }); const note = this.owner.repo.file(this.selectedProject);
+      if (note) this.button(bars, "Open project note", () => this.app.workspace.getLeaf(false).openFile(note)).addClass("organized-note-link");
+      await this.projectBars(bars, [this.selectedProject]);
+    }
     // The lists cover every task ever linked, so done and canceled ones are hidden unless asked for, and long lists stop at a page until expanded.
     const hide = this.owner.settings.hideClosedProjects;
     const head = projectSection.querySelector<HTMLElement>(".organized-section-head")!;
@@ -791,7 +804,8 @@ export class OrganizedInspectorView extends ItemView {
     toggle.setAttribute("aria-pressed", String(hide)); toggle.addClass("organized-hide-done"); head.insertBefore(toggle, head.querySelector(".organized-count"));
     const linkedTasks = tasks.filter(t => t.status !== "canceled" && t.projects.length && (!this.selectedProject || t.projects.includes(this.selectedProject)));
     const shown = hide ? linkedTasks.filter(t => this.shownStatus(t) !== "completed") : linkedTasks;
-    const canceled = tasks.filter(t => t.status === "canceled"); const hidden = linkedTasks.length - shown.length + (hide ? canceled.length : 0);
+    // With a project chosen, its canceled tasks only; otherwise every canceled task, linked or not.
+    const canceled = tasks.filter(t => t.status === "canceled" && (!this.selectedProject || t.projects.includes(this.selectedProject))); const hidden = linkedTasks.length - shown.length + (hide ? canceled.length : 0);
     if (!linkedTasks.length) projectSection.createDiv({ cls: "organized-empty", text: this.selectedProject ? `No tasks linked to ${this.projectLabel(this.selectedProject)}.` : "No project links yet. Use [j] on a task to link its project or topic note." });
     this.limited(projectSection, shown, "projects", task => { this.taskRow(projectSection, task, () => choose(task)); });
     if (hide && hidden) projectSection.createDiv({ cls: "organized-empty", text: `${hidden} done or canceled task${hidden === 1 ? "" : "s"} hidden.` });

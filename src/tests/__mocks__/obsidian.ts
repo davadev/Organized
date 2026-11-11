@@ -139,7 +139,7 @@ class FakeButton extends FakeComponent {
     if (isNode(parent)) parent.appendChild(this.buttonEl);
   }
   setButtonText(t: string) { this.buttonEl.textContent = t; return this; }
-  setCta() { this.cta = true; return this; }
+  setCta() { this.cta = true; this.buttonEl.classList?.add("mod-cta"); return this; }
   setWarning() { this.warning = true; return this; }
   onClick(fn: (evt: MouseEvent) => unknown) { this.buttonEl.addEventListener?.("click", fn as EventListener); return this; }
 }

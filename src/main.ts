@@ -275,6 +275,8 @@ export default class Organized extends Plugin {
   private remapKnownProjects(moved: { from: string; to: string }[]): void {
     const target = new Map(moved.map(m => [m.from, m.to]));
     this.settings.knownProjects = [...new Set(this.settings.knownProjects.map(p => target.get(p) ?? p))]; this.saveSettings(false);
+    // The Projects tab keeps showing a project it was filtered to under its new name.
+    this.eachView(view => { view.selectedProject = target.get(view.selectedProject) ?? view.selectedProject; });
   }
   /** Remembers project notes so they stay listed after their last task is deleted. */
   rememberProjects(projects: string[]): void {
@@ -441,8 +443,10 @@ export default class Organized extends Plugin {
         if (this.taskSourceEditor()?.editor !== editor || editor.getValue() !== captured || JSON.stringify(editor.listSelections()) !== JSON.stringify(selection)) throw new Error("Editor changed while the picker was open. Line preserved; invoke attach/create to retry.");
         let task = typeof choice === "string" ? await this.repo.create(choice) : choice;
         // A task created for a todo nested under a linked todo belongs to the same projects as its parent.
+        // One created in a project note belongs to that project.
         const parent = typeof choice === "string" ? parseTasks(captured).find(t => t.line === context.line.parent)?.id : undefined;
-        if (parent) { const { projects } = await this.repo.read(parent); if (projects.length) task = await this.repo.update(task.id, t => ({ ...t, projects })); }
+        const projects = [...new Set([...(typeof choice === "string" && (this.repo.isProjectNote(file) || file.path.startsWith(`${this.repo.projectFolder()}/`)) ? [file.path] : []), ...(parent ? (await this.repo.read(parent)).projects : [])])];
+        if (projects.length) { task = await this.repo.update(task.id, t => ({ ...t, projects })); this.rememberProjects(projects); }
         await this.service.attach(context, task, duplicate || !!context.line.id);
       });
     }, context.line.title, allowTodo);

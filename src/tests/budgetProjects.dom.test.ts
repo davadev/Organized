@@ -89,8 +89,8 @@ describe('renaming or moving a project note', () => {
   });
   it('is triggered by Obsidian renaming a project note, and ignores other notes', async () => {
     const f = await fixture(); f.layout[0](); const old = (await f.project('Alpha')).path; const renamed = await f.project('Renamed', { weekly: 3 }); const plain: any = await f.add('Notes/Plain.md', 'x');
-    f.owner.settings.knownProjects = [old]; const task = await f.repo.create('Linked'); await f.repo.update(task.id, t => ({ ...t, projects: [old] }));
-    expect(f.owner.settings.knownProjects).toEqual([old]); f.events.rename[0](renamed, old); expect(f.owner.settings.knownProjects).toEqual([renamed.path]); await vi.advanceTimersByTimeAsync(0); await flush(); await flush();
+    f.owner.settings.knownProjects = [old]; f.view.selectedProject = old; const task = await f.repo.create('Linked'); await f.repo.update(task.id, t => ({ ...t, projects: [old] }));
+    expect(f.owner.settings.knownProjects).toEqual([old]); f.events.rename[0](renamed, old); expect(f.owner.settings.knownProjects).toEqual([renamed.path]); expect(f.view.selectedProject).toBe(renamed.path); await vi.advanceTimersByTimeAsync(0); await flush(); await flush();
     expect((await f.repo.read(task.id)).projects).toEqual([renamed.path]); expect(f.owner.settings.knownProjects).toEqual([renamed.path]);
     const before = await f.repo.read(task.id); f.events.rename[0](plain, 'Notes/Moved.md'); await vi.advanceTimersByTimeAsync(0); await flush(); expect(await f.repo.read(task.id)).toEqual(before);
   });
