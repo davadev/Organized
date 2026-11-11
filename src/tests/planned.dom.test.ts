@@ -42,34 +42,42 @@ describe('planned time', () => {
     const task = taskFrom(raw, 'abcdefgh'); expect(task.planned_sessions).toEqual([block(11, 12)]); expect(task.auto_started_block).toBeNull();
     expect(taskFrom({ ...raw, planned_sessions: 'x', auto_started_block: iso(11) }, 'abcdefgh')).toMatchObject({ planned_sessions: [], auto_started_block: iso(11) });
   });
-  it('sets a task in progress without a timer when its block begins, and back to open with a notice when it ends', async () => {
+  it('starts the timer when its block begins and stops it at the block\'s end, so the whole block is worked, also when noticed late', async () => {
     vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 2, 4, 8, 0)); const { service, repo, add } = await fixture(); const task = await repo.create('Focus'); await service.addPlanned(task.id, block(9, 10));
     const note = service.daily.path(localDate(new Date(2026, 2, 4))); await add(note, `- [ ] Focus <!--organized:${task.id}-->`);
     expect(await service.applyPlanning(new Date(2026, 2, 4, 8, 59).getTime())).toEqual([]); expect((await repo.read(task.id)).status).toBe('open');
     expect(await service.applyPlanning(new Date(2026, 2, 4, 9, 0).getTime())).toEqual([]);
-    let saved = await repo.read(task.id); expect(saved).toMatchObject({ status: 'in_progress', time_tracking_started_at: null, auto_started_block: iso(9) }); expect(await repo.readText(repo.file(note)!)).toContain('- [/] Focus');
+    expect(await repo.read(task.id)).toMatchObject({ status: 'in_progress', time_tracking_started_at: iso(9), auto_started_block: iso(9) }); expect(await repo.readText(repo.file(note)!)).toContain('- [/] Focus');
     expect(await service.applyPlanning(new Date(2026, 2, 4, 9, 30).getTime())).toEqual([]); expect((await repo.read(task.id)).status).toBe('in_progress');
     expect(await service.applyPlanning(new Date(2026, 2, 4, 10, 0).getTime())).toEqual(['Focus']);
-    saved = await repo.read(task.id); expect(saved).toMatchObject({ status: 'open', auto_started_block: null, time_tracked_seconds: 0, work_sessions: [] }); expect(await repo.readText(repo.file(note)!)).toContain('- [ ] Focus');
+    expect(await repo.read(task.id)).toMatchObject({ status: 'open', time_tracking_started_at: null, auto_started_block: null, time_tracked_seconds: 3600, work_sessions: [block(9, 10)] }); expect(await repo.readText(repo.file(note)!)).toContain('- [ ] Focus');
     expect(splitNote(await repo.readText(repo.taskFile(task.id)!)).frontmatter).not.toHaveProperty('auto_started_block');
+    // The phone slept through the start and the end: timed from the block's start, stopped at its end.
+    const late = await repo.create('Late'); await service.addPlanned(late.id, block(11, 12)); await service.applyPlanning(new Date(2026, 2, 4, 11, 40).getTime()); expect((await repo.read(late.id)).time_tracking_started_at).toBe(iso(11));
+    expect(await service.applyPlanning(new Date(2026, 2, 4, 15, 0).getTime())).toEqual(['Late']); expect(await repo.read(late.id)).toMatchObject({ time_tracked_seconds: 3600, work_sessions: [block(11, 12)] });
   });
-  it('hands the claim to a back-to-back block and never undoes a status the person chose', async () => {
-    const { service, repo } = await fixture(); const a = await repo.create('Back to back'); const b = await repo.create('Done early'); const c = await repo.create('Timed');
-    for (const t of [a, b, c]) { await service.addPlanned(t.id, block(9, 10)); if (t === a) await service.addPlanned(t.id, block(10, 11)); }
-    await service.applyPlanning(new Date(2026, 2, 4, 9, 0).getTime());
-    await service.status(b.id, 'completed'); await service.status(c.id, 'in_progress');
-    expect(await service.applyPlanning(new Date(2026, 2, 4, 10, 0).getTime())).toEqual([]);
-    expect(await repo.read(a.id)).toMatchObject({ status: 'in_progress', auto_started_block: iso(10) }); expect(await repo.read(b.id)).toMatchObject({ status: 'completed', auto_started_block: null }); expect(await repo.read(c.id)).toMatchObject({ status: 'in_progress', auto_started_block: null });
-    expect(await service.applyPlanning(new Date(2026, 2, 4, 11, 0).getTime())).toEqual(['Back to back']); expect((await repo.read(c.id)).status).toBe('in_progress');
-    const released = await repo.create('Released'); await service.addPlanned(released.id, block(9, 10)); await service.applyPlanning(new Date(2026, 2, 4, 9, 0).getTime());
-    await repo.update(released.id, t => ({ ...t, time_tracking_started_at: iso(9, 5) })); expect(await service.applyPlanning(new Date(2026, 2, 4, 10, 0).getTime())).toEqual([]); expect(await repo.read(released.id)).toMatchObject({ status: 'in_progress', auto_started_block: null });
+  it('counts only the time in progress: stopped and restarted inside the block, started before it, run over back-to-back blocks, finished early, recurring', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); const { service, repo, add } = await fixture(); const at = (h: number, m = 0) => { vi.setSystemTime(new Date(2026, 2, 4, h, m)); return new Date(2026, 2, 4, h, m).getTime(); };
+    at(8, 0); const paused = await repo.create('Paused'); const early = await repo.create('Early'); const long = await repo.create('Back to back'); const done = await repo.create('Done early'); const habit = await repo.create('Habit');
+    await repo.update(habit.id, t => ({ ...t, recurring: true })); const today = service.daily.path(localDate(new Date(2026, 2, 4))); await add(today, `- [ ] Habit <!--organized:${habit.id}--> <!--organized:repeat-->`);
+    for (const t of [paused, early, long, done, habit]) await service.addPlanned(t.id, block(9, 10)); await service.addPlanned(long.id, block(10, 11));
+    at(8, 30); await service.status(early.id, 'in_progress');
+    await service.applyPlanning(at(9, 0)); expect((await repo.read(habit.id)).status).toBe('open'); expect((await repo.read(habit.id)).time_tracking_started_at).toBe(iso(9)); expect(await repo.readText(repo.file(today)!)).toContain('- [/] Habit');
+    at(9, 20); await service.status(paused.id, 'open'); await service.status(done.id, 'completed');
+    expect(await service.applyPlanning(at(9, 30))).toEqual([]); expect((await repo.read(paused.id)).time_tracking_started_at).toBeNull();
+    at(9, 40); await service.status(paused.id, 'in_progress');
+    expect((await service.applyPlanning(at(10, 0))).sort()).toEqual(['Early', 'Habit', 'Paused']);
+    expect(await repo.read(paused.id)).toMatchObject({ status: 'open', time_tracked_seconds: 2400, work_sessions: [{ start: iso(9), end: iso(9, 20) }, { start: iso(9, 40), end: iso(10) }] });
+    expect((await repo.read(early.id)).time_tracked_seconds).toBe(5400); expect((await repo.read(done.id))).toMatchObject({ status: 'completed', time_tracked_seconds: 1200 });
+    expect(await repo.read(habit.id)).toMatchObject({ status: 'open', time_tracked_seconds: 3600 }); expect(await repo.readText(repo.file(today)!)).toContain('- [ ] Habit');
+    expect((await repo.read(long.id)).time_tracking_started_at).toBe(iso(9)); expect(await service.applyPlanning(at(11, 0))).toEqual(['Back to back']); expect((await repo.read(long.id)).time_tracked_seconds).toBe(7200);
   });
   it('checks for due blocks only when the setting is on, once a minute and when the app returns', async () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 2, 4, 9, 30)); const { owner, service, repo } = await fixture(); const task = await repo.create('Ticking'); await service.addPlanned(task.id, block(9, 10));
     owner.settings.startAtPlannedTime = false; owner.planningTick(); await flush(); expect((await repo.read(task.id)).status).toBe('open');
     owner.settings.startAtPlannedTime = true; owner.planningTick(); await flush(); expect((await repo.read(task.id)).status).toBe('in_progress');
-    vi.setSystemTime(new Date(2026, 2, 4, 10, 1)); owner.planningTick(); await flush(); expect((await repo.read(task.id)).status).toBe('open'); expect(Notice.instances.at(-1)?.message).toContain('Planned time for “Ticking” is over');
-    const second = await repo.create('Also'); const third = await repo.create('And also'); for (const t of [second, third]) await repo.update(t.id, x => ({ ...x, status: 'in_progress', auto_started_block: iso(9), planned_sessions: [block(9, 10)] }));
+    vi.setSystemTime(new Date(2026, 2, 4, 10, 1)); owner.planningTick(); await flush(); expect((await repo.read(task.id)).status).toBe('open'); expect(Notice.instances.at(-1)?.message).toContain('Planned time for “Ticking” is over: its timer stopped');
+    const second = await repo.create('Also'); const third = await repo.create('And also'); for (const t of [second, third]) await repo.update(t.id, x => ({ ...x, status: 'in_progress', time_tracking_started_at: iso(9), planned_sessions: [block(9, 10)] }));
     owner.planningTick(); await flush(); expect(Notice.instances.at(-1)?.message).toContain('over for 2 tasks'); (owner as any).unloaded = true; owner.planningTick(); await flush();
   });
   it('registers the minute check and the return-to-foreground catch-up once the layout is ready', async () => {

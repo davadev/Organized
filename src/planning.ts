@@ -10,27 +10,36 @@ export const blockAt = (task: Task, now: number): WorkSession | undefined => tas
 /** Planned blocks only matter for a task that is still to be done and still has its own note. */
 export const plannable = (task: Task): boolean => (task.status === "open" || task.status === "in_progress") && !task.converted_to;
 
-/** Open tasks whose planned block has begun and that nothing is timing: they are set in progress, without a timer. Recurring tasks stay open. */
+/** Where a run of planned blocks that follow each other without a gap ends, from `block` on. */
+function runEnd(task: Task, block: WorkSession): number {
+  let end = Date.parse(block.end);
+  for (let next = task.planned_sessions.find(b => covers(b, end)); next; next = task.planned_sessions.find(b => covers(b, end))) end = Date.parse(next.end);
+  return end;
+}
+/** Whether the planned time the task's block was marked handled for (`auto_started_block`, see `setStatus`) is still under way: that block, or one right after it, covers `now`. */
+export function claimHolds(task: Task, now: number): boolean {
+  const claimed = task.planned_sessions.find(b => b.start === task.auto_started_block);
+  return !!claimed && Date.parse(claimed.start) <= now && now < runEnd(task, claimed);
+}
+/** Tasks still to do whose planned block has begun and whose timer is not running: their timer starts, recurring or not. Planned time starts its task once; a task the person stopped during it stays stopped (blocks back to back count as one). */
 export function dueStarts(tasks: Task[], now: number): { task: Task; block: WorkSession }[] {
   return tasks.flatMap(task => {
     const block = blockAt(task, now);
-    return block && block.start !== task.auto_started_block && task.status === "open" && !task.recurring && !task.converted_to && task.time_tracking_started_at === null ? [{ task, block }] : [];
+    return block && !claimHolds(task, now) && plannable(task) && task.time_tracking_started_at === null ? [{ task, block }] : [];
   });
 }
-export interface DueEnd { task: Task; action: "reopen" | "release" | "move"; block?: WorkSession }
 /**
- * Tasks this feature set in progress whose block is over. `reopen` puts the task back to open; `release` only ends the claim (the person changed the task or started a timer, so their status stays); `move` hands the claim to the next block when blocks run back to back.
+ * Running timers whose planned time is over: a timer that ran in one of its task's planned blocks stops where that block ends (blocks back to back count as one), however and whenever it was started, also when this is noticed only later.
+ * A timer that runs for planned time that was moved away or deleted stops now. `end` is when it stops; the time after it is not counted.
  */
-export function dueEnds(tasks: Task[], now: number): DueEnd[] {
-  const ends: DueEnd[] = [];
-  for (const task of tasks) {
-    if (task.auto_started_block === null) continue;
-    const current = blockAt(task, now);
-    if (current?.start === task.auto_started_block) continue;
-    if (task.status !== "in_progress" || task.time_tracking_started_at !== null) ends.push({ task, action: "release" });
-    else ends.push(current ? { task, action: "move", block: current } : { task, action: "reopen" });
-  }
-  return ends;
+export function dueStops(tasks: Task[], now: number): { task: Task; end: number }[] {
+  return tasks.flatMap(task => {
+    if (task.time_tracking_started_at === null) return [];
+    const started = Date.parse(task.time_tracking_started_at);
+    const ends = task.planned_sessions.filter(b => Date.parse(b.start) < now && Date.parse(b.end) > started).map(b => runEnd(task, b)).filter(end => end <= now);
+    if (ends.length) return [{ task, end: Math.min(...ends) }];
+    return task.auto_started_block !== null && !claimHolds(task, now) ? [{ task, end: now }] : [];
+  });
 }
 
 export interface BudgetUse {
@@ -48,12 +57,12 @@ export function fillOf(budget: number, tracked: number, planned: number): Budget
   return { budget, tracked, planned, left: budget - total, trackedPct: 100 * trackedFit / scale, plannedPct: 100 * (within - trackedFit) / scale, overPct: 100 * over / scale };
 }
 /** A task's tracked plus planned time measured against its own budget, or null when it has none. */
-export const budgetUse = (task: Task, now = Date.now()): BudgetUse | null => task.time_budget_seconds === null ? null : fillOf(task.time_budget_seconds, elapsed(task, now), plannable(task) ? plannedNotWorked(task.planned_sessions, workedSessions(task, now)) : 0);
+export const budgetUse = (task: Task, now = Date.now()): BudgetUse | null => task.time_budget_seconds === null ? null : fillOf(task.time_budget_seconds, elapsed(task, now), plannable(task) ? plannedNotWorked(task.planned_sessions, workedSessions(task, now), [now, Infinity]) : 0);
 /** The task's stored sessions plus its running timer up to `now`. */
 const workedSessions = (task: Task, now: number): WorkSession[] => [...task.work_sessions, ...(task.time_tracking_started_at !== null && Date.parse(task.time_tracking_started_at) < now ? [{ start: task.time_tracking_started_at, end: new Date(now).toISOString() }] : [])];
 /**
  * Seconds of planned time (inside `range`, when given) that the same task did not also work: a minute that was both planned and tracked (a timer run inside the block) is used once, as tracked, so a budget does not count it twice.
- * Planned time not worked still counts, whether it is still ahead or was skipped.
+ * Budgets pass a range that starts now: planned time that went by without being worked is not counted, so once a block is over only the time really worked remains.
  */
 export function plannedNotWorked(plans: WorkSession[], worked: WorkSession[], range: [number, number] | null = null): number {
   const spans = (sessions: WorkSession[]) => sessions.map(s => [Date.parse(s.start), Date.parse(s.end)] as const);
@@ -85,7 +94,7 @@ export function projectUse(tasks: Task[], project: string, period: Period, budge
   for (const task of tasks) {
     if (!task.projects.includes(project)) continue;
     const plans = plannable(task) ? task.planned_sessions : []; const worked = workedSessions(task, now);
-    planned += plannedNotWorked(plans, worked, range);
+    planned += plannedNotWorked(plans, worked, [Math.max(range?.[0] ?? now, now), range?.[1] ?? Infinity]);
     tracked += range ? overlap(worked, range) : elapsed(task, now);
   }
   return fillOf(budget, Math.floor(tracked), Math.floor(planned));

@@ -197,13 +197,14 @@ describe('bug hunt regressions', () => {
     // From the `[t]` marker on a todo line.
     const typed = await repo.create('Typed'); const file: any = await h.add(plugin.service.daily.path(localDate()), ''); const text = `- [t] Typed <!--organized:${typed.id}-->`; h.texts.set(file.path, text);
     await plugin.trigger({ file, line: parseTasks(text)[0] }); await last().edit.save(covering, 'planned'); await flush();
-    expect(await repo.read(typed.id)).toMatchObject({ status: 'in_progress', auto_started_block: covering.start, time_tracking_started_at: null }); expect(h.texts.get(file.path)).toContain('[/] Typed');
+    expect(await repo.read(typed.id)).toMatchObject({ status: 'in_progress', auto_started_block: covering.start, time_tracking_started_at: covering.start }); expect(h.texts.get(file.path)).toContain('[/] Typed');
     // From the side panel: adding, moving the block away, moving it back, removing it.
     const leaf: any = { app: h.app }; const view = new OrganizedInspectorView(leaf, plugin); const task = await repo.create('Panel'); const edit = (session: typeof covering | null) => { (view as any).editSession(task, session, localDate(), session ? 'planned' : null); return last().edit; };
     await edit(null).save(covering, 'planned'); await flush(); expect((await repo.read(task.id)).status).toBe('in_progress');
-    await edit(covering).save(later, 'planned'); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null });
-    await edit(later).save(covering, 'planned'); await flush(); expect((await repo.read(task.id)).status).toBe('in_progress');
-    await edit(covering).remove!(); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null, planned_sessions: [] });
+    // Moved away or removed while its timer runs: the timer stops now and the time so far counts; moved back, it runs again from now, never over that time.
+    await edit(covering).save(later, 'planned'); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null, time_tracking_started_at: null }); expect((await repo.read(task.id)).time_tracked_seconds).toBeGreaterThanOrEqual(1800);
+    const worked = (await repo.read(task.id)).work_sessions; await edit(later).save(covering, 'planned'); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'in_progress', time_tracking_started_at: worked.at(-1)!.end });
+    await edit(covering).remove!(); await flush(); expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null, time_tracking_started_at: null, planned_sessions: [] });
   });
   it('a todo ticked in a note while another action is still running reaches its task, and what the plugin itself writes is still not taken for a tick', async () => {
     const { h, plugin } = await loaded(); await ready(h); const { repo } = plugin; const tasks = [await repo.create('First'), await repo.create('Second'), await repo.create('Third')]; const [first, second, third] = tasks;
@@ -231,8 +232,9 @@ describe('bug hunt regressions', () => {
     const block = { start: new Date(now - 1800000).toISOString(), end: new Date(now + 1800000).toISOString() };
     await service.addPlanned(planned.id, block); await service.applyPlanning(); await service.status(canceled.id, 'canceled'); await service.status(timed.id, 'in_progress');
     expect(editor.getValue()).toContain('- [/] Planned'); expect(editor.getValue()).toContain('- [-] Canceled'); expect(editor.getValue()).toContain('- [/] Timed');
-    // Started by its planned block: clicking the box puts it back, and the block does not start it again.
-    click(plugin, editor, planned.id, ' '); await flush(); expect(await repo.read(planned.id)).toMatchObject({ status: 'open', auto_started_block: block.start });
+    // Started by its planned block, its timer runs: a press on the box puts it back, and the block does not start it again.
+    const pressed = createEl('input', { cls: 'task-list-item-checkbox' }); (plugin as any).domEvents.filter((d: any) => d.type === 'pointerdown').forEach((d: any) => d.cb({ target: pressed }));
+    click(plugin, editor, planned.id, ' '); await flush(); expect(await repo.read(planned.id)).toMatchObject({ status: 'open', auto_started_block: block.start, time_tracking_started_at: null }); (plugin as any).checkboxPressedAt = 0;
     await service.applyPlanning(); expect((await repo.read(planned.id)).status).toBe('open'); expect(editor.getValue()).toContain('- [ ] Planned');
     click(plugin, editor, canceled.id, ' '); await flush(); expect((await repo.read(canceled.id)).status).toBe('open');
     // The same change with no sign of the person (a note reloaded after a sync) leaves a running timer alone.
@@ -301,14 +303,14 @@ describe('bug hunt regressions', () => {
     // The original parent deleted together with what was under it: that subtask's line is gone.
     await edit(['## Elsewhere', line(0, kid), line(0, parent)].join('\n')); expect(await subtasks()).toEqual([]);
   });
-  it('making a task that a planned block set in progress recurring puts its todos back to open, and a running timer keeps its marker', async () => {
+  it('making a task that a planned block set in progress without a timer (before 0.1.5-beta.10) recurring puts its todos back to open, and a running timer keeps its marker', async () => {
     vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 2, 4, 9, 30));
     const { plugin, h } = await loaded(); vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 2, 4, 9, 30)); plugin.settings.startAtPlannedTime = true; const { service, repo } = plugin;
     const at = (hour: number, minute = 0) => new Date(2026, 2, 4, hour, minute);
     const task = await repo.create('Focus'); const line = (marker: string) => `- [${marker}] Focus <!--organized:${task.id}-->`;
     const note = service.daily.path(localDate()); await h.add(note, line(' ')); const project = `${repo.projectFolder()}/Plan.md`; await h.add(project, line(' ')); const past = service.daily.path('2026-03-03'); await h.add(past, line('/'));
-    await service.addPlanned(task.id, { start: at(9).toISOString(), end: at(10).toISOString() }); await service.applyPlanning(at(9, 30).getTime());
-    expect(h.texts.get(note)).toContain(line('/')); expect(h.texts.get(project)).toContain(line('/'));
+    // How earlier versions left a task their planned block had started: in progress, nothing timed.
+    await repo.update(task.id, t => ({ ...t, status: 'in_progress', planned_sessions: [{ start: at(9).toISOString(), end: at(10).toISOString() }], auto_started_block: at(9).toISOString() })); h.texts.set(note, line('/')); h.texts.set(project, line('/'));
     // A line the person set to something else since is theirs.
     await h.add('Notes/Done.md', line('x'));
     await service.recurrence(task.id, { every: 1, unit: 'week', days: [1, 2, 3, 4, 5], monthDay: null } as any);
