@@ -9,7 +9,8 @@ import { DatePicker, NoteConversionModal, OnboardingModal, RetireModal, SessionM
 import { RELEASE_NOTES } from '../src/whatsNew/releaseNotes';
 import { parseTasks } from '../src/codec';
 import { EditorState } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { EditorView, keymap } from '@codemirror/view';
+import { Prec } from '@codemirror/state';
 
 installObsidianDom();
 const task = newTask('A task title that stays readable at phone widths', 'task1234');
@@ -39,6 +40,10 @@ const view = new OrganizedInspectorView({ app } as any, owner);
 const root = document.querySelector('#app')!; root.appendChild(view.contentEl);
 let editor: EditorView | null = null;
 let modal: DatePicker | SessionModal | NoteConversionModal | OnboardingModal | RetireModal | WhatsNewModal | null = null;
+// The check reads the note text back after typing into the real editor.
+(window as any).editorText = () => editor?.state.doc.toString();
+// Stand-in for Obsidian's list continuation, which handles Enter in a real note (on iOS CodeMirror relies on such a command to drop the native line break).
+const continueList = Prec.low(keymap.of([{ key: 'Enter', run: view => { const at = view.state.selection.main.head; view.dispatch({ changes: { from: at, insert: '\n- [ ] ' }, selection: { anchor: at + 7 }, userEvent: 'input' }); return true; } }]));
 (window as any).scene = async (tab: string) => {
   showPanelTask = tab === 'Task';
   editor?.destroy(); editor = null; modal?.close(); modal = null; root.replaceChildren();
@@ -56,7 +61,7 @@ let modal: DatePicker | SessionModal | NoteConversionModal | OnboardingModal | R
     owner.settings.displayProperties = tab === 'Eof' ? ['priority'] : tab === 'AlignRight' ? ['priority', 'starred', 'recurring', 'time_tracked_seconds'] : [];
     owner.settings.propertiesAlign = tab === 'AlignRight' ? 'right' : 'text';
     const doc = tab === 'Eof' ? 'intro\n- [ ] Test task <!--organized:task1234-->' : tab === 'AlignRight' ? '- [ ] Short <!--organized:task1234-->\n- [ ] A much longer task title that wraps onto a second line on a phone screen <!--organized:task1234-->\n- [ ] Romeo Schmerzmittel <!--organized:task1234-->\n    - Proverbs 4_18' : '- [ ] Test task <!--organized:task1234--> <!--organized:repeat-->';
-    editor = new EditorView({ state: EditorState.create({ doc, selection: { anchor: 0 }, extensions: [EditorView.lineWrapping, ...(tab === 'Source' ? [] : [editorLivePreviewField]), editorExtension(owner)] }), parent: root });
+    editor = new EditorView({ state: EditorState.create({ doc, selection: { anchor: 0 }, extensions: [EditorView.lineWrapping, ...(tab === 'Source' ? [] : [editorLivePreviewField]), editorExtension(owner), continueList] }), parent: root });
   } else if (tab === 'ScheduleModal') {
     modal = new DatePicker(app, '2026-01-01', async () => undefined, async () => undefined);
     modal.open();
