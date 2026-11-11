@@ -52,7 +52,7 @@ export class TaskPicker extends SuggestModal<TaskChoice> {
     else {
       const title = el.createDiv({ cls: "organized-suggestion-title" });
       void renderMarkdownLinks(this.app, value.title, title, "", this.markdown).catch(report);
-      el.createDiv({ cls: "organized-suggestion-meta", text: `${value.status.replace(/_/g, " ")} · ${value.priority}${value.scheduled ? ` · ${value.scheduled}` : ""}` });
+      el.createDiv({ cls: "organized-suggestion-meta", text: `${(value.recurring && value.time_tracking_started_at ? "in_progress" : value.status).replace(/_/g, " ")} · ${value.priority}${value.scheduled ? ` · ${value.scheduled}` : ""}` });
     }
   }
   onChooseSuggestion(value: TaskChoice): void { void this.choose(value).catch(report); }

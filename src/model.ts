@@ -207,6 +207,8 @@ export function setStatus(task: Task, status: Status, now = new Date()): Task {
 }
 /** A planned block has begun: the task is in progress but nothing is timed, and the block is remembered so only this flip is undone. */
 /** The checkbox marker a task shows. A recurring task keeps the status "open" while its timer runs, so the timer counts too. */
+/** The status a todo's marker stands for; `[ ]` and every action marker mean open. */
+export function statusOfMarker(marker: string): Status { return marker.toLowerCase() === "x" ? "completed" : marker === "-" ? "canceled" : marker === "/" ? "in_progress" : "open"; }
 export function markerOf(task: Task): string { return task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.status === "in_progress" || task.time_tracking_started_at !== null ? "/" : " "; }
 export function startPlanned(task: Task, block: WorkSession): Task {
   return { ...task, status: "in_progress", closed_at: null, auto_started_block: block.start };
