@@ -112,6 +112,11 @@ Built from the bugs the 0.1.4 betas of this plugin shipped and then fixed, plus 
     - Ask: what does a selection that looks whole on screen actually contain? Which hidden text must travel with the visible text (copy, cut, drag), and which must stay behind (a word of the title)?
     - Test: put a real DOM selection over the visible text only and fire the browser's own copy (`document.execCommand('copy')` in `scripts/check-layout.mjs`, both engines); in jsdom, dispatch `copy`/`cut` on `contentDOM` with a fake `clipboardData` and the page selection inside the editor.
 
+23. **A stored field that is not what the person should see** (a recurring task keeps `status: open` for every day, because each day's todo holds that day's state; choosing *in progress* in the side panel started the timer and wrote `[/]`, but the status box read `task.status` and flipped back to *open*, which read as "it does not work"; the in-note status property showed *open* next to a ticked `[x]`).
+   - Grep: every display of a field that has a "shown" helper (`shownStatus`, `markerOf`, `statusOfMarker`): `task.status` in `view.ts`, `render.ts` (`symbolOf`), `modals.ts` (picker labels), `data-status`, `STATUS_ICONS[`, `aria-label` built from a field.
+   - Ask: is there a kind of task (recurring, converted, retired, secondary device) for which the stored value means something else? Does every place that shows it go through the same helper, and does a select or toggle written from the stored value undo the person's choice on the next render?
+   - Test: for each such kind, set the state the person would set (from the panel, from a marker, from a timer), render every surface (panel select, hero icon, list badge, in-note property in Live Preview and Reading view, picker), and assert they all agree with the todo.
+
 ## Method
 1. Scope the diff; list changed behaviours.
 2. For each, walk every class; write the question down only if it could apply.

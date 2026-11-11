@@ -189,6 +189,18 @@ describe('read-only projections and bundled visual markers', () => {
     owner.settings.displayProperties = ['priority']; const inline = list(); await reading(owner, inline.host, context); const span = inline.item.querySelector('.organized-properties')!; expect(span.tagName).toBe('SPAN'); expect(span.nextElementSibling?.tagName).toBe('UL');
     owner.settings.displayProperties = ['description']; const rich = list(); await reading(owner, rich.host, context); expect(rich.item.querySelector('.organized-properties')!.tagName).toBe('DIV'); expect(rich.item.lastElementChild?.classList.contains('organized-properties')).toBe(true);
   });
+  it('shows a recurring task\'s status from its own todo (done today, in progress, open), and a plain task\'s from the task', async () => {
+    const { owner, task, repo, add } = await fixture(); owner.settings.displayProperties = ['status']; await repo.update(task.id, t => ({ ...t, recurring: true }));
+    const plain = await repo.create('Plain'); await repo.update(plain.id, t => ({ ...t, status: 'in_progress' }));
+    const text = `- [x] Rendered task <!--organized:${task.id}-->\n- [/] Rendered task <!--organized:${task.id}-->\n- [ ] Plain <!--organized:${plain.id}-->`;
+    const file: any = await add('Daily/2026-03-04.md', text); const host = createDiv(); for (let i = 0; i < 3; i++) host.createEl('li', { cls: 'task-list-item' }).createEl('input', { type: 'checkbox' });
+    await reading(owner, host, { sourcePath: file.path, getSectionInfo: () => ({ text, lineStart: 0, lineEnd: 2 }), addChild: (c: any) => c.load() } as any); await flush();
+    expect([...host.querySelectorAll('.organized-property')].map(s => s.getAttribute('aria-label'))).toEqual(['Status: completed', 'Status: in progress', 'Status: in progress']);
+    const field = (editorExtension(owner) as any[])[0] as StateField<DecorationSet>; const state = EditorState.create({ doc: `- [x] Rendered task <!--organized:${task.id}-->\n`, extensions: [editorLivePreviewField, field] });
+    const widget = widgets(state, field)[0]; const dom = widget.toDOM(); await flush(); expect(dom.querySelector('.organized-property')!.getAttribute('aria-label')).toBe('Status: completed');
+    // Ticking or unticking the todo draws its properties again.
+    const unticked = widgets(state.update({ changes: { from: 3, to: 4, insert: ' ' } }).state, field)[0]; expect(widget.eq(unticked)).toBe(false); const open = unticked.toDOM(); await flush(); expect(open.querySelector('.organized-property')!.getAttribute('aria-label')).toBe('Status: open');
+  });
   it('shows a displayed priority as a flag coloured high red, medium orange, low yellow, none gray', async () => {
     const { owner, task } = await fixture(); owner.settings.displayProperties = ['priority']; const component: any = new Component();
     for (const priority of ['high', 'medium', 'low', 'none'] as const) {

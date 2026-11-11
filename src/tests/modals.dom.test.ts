@@ -26,6 +26,8 @@ describe("native task, date, source and project modals", () => {
     expect(picker.inputEl.value).toBe(''); expect(picker.getSuggestions('')).toEqual([task, scheduled]); expect(picker.getSuggestions('task')).toEqual([task, 'task']); expect(picker.getSuggestions('  ')).toEqual([task, scheduled]);
     decorated(picker);
     const host = createDiv(); picker.renderSuggestion(task, host); expect(host.textContent).toContain('open · none'); expect(host.textContent).not.toContain(task.id); picker.renderSuggestion(scheduled, host); expect(host.textContent).toContain('2026-01-01'); picker.renderSuggestion('new', host); expect(host.textContent).toContain('Create new task');
+    // A recurring task keeps status open; while its timer runs it is in progress.
+    const timed = createDiv(); picker.renderSuggestion({ ...task, recurring: true, time_tracking_started_at: '2026-01-01T09:00:00.000Z' }, timed); expect(timed.textContent).toContain('in progress · none'); const idle = createDiv(); picker.renderSuggestion({ ...task, recurring: true }, idle); expect(idle.textContent).toContain('open · none');
     picker.onChooseSuggestion(task); await flush(); expect(choose).toHaveBeenCalledWith(task);
     choose.mockRejectedValueOnce(Error('write failed')); picker.onChooseSuggestion('new'); await flush(); expect(Notice.instances.at(-1)?.message).toContain('write failed');
     const priority = new PriorityPicker(h.app, choose as any); expect(priority.getSuggestions('h')).toEqual(['high']); expect(priority.getSuggestions('')).toHaveLength(4); priority.renderSuggestion('none', host); expect(host.textContent).toBe('None'); priority.onChooseSuggestion('low'); await flush(); expect(choose).toHaveBeenCalledWith('low');

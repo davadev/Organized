@@ -4,7 +4,7 @@ import { EditorSelection, StateEffect, StateField, RangeSetBuilder, EditorState,
 import { editorLivePreviewField, Platform } from "obsidian";
 import type Organized from "./main";
 import { noteSection, parseTasks } from "./codec";
-import { DisplayProperty, elapsed, localDate, STATUS_ICONS, Task } from "./model";
+import { DisplayProperty, elapsed, localDate, STATUS_ICONS, statusOfMarker, Task } from "./model";
 import { projectName, splitNote } from "./repository";
 import { rgbOf } from "./colors";
 import { formatMinutes } from "./sessions";
@@ -28,11 +28,11 @@ export function symbol(host: HTMLElement, compact: Symbol): void {
   if (compact.text) span.createSpan({ cls: "organized-symbol-text", text: compact.text });
 }
 const STATUS_LABELS: Record<Task["status"], string> = { open: "open", in_progress: "in progress", completed: "completed", canceled: "canceled" };
-/** The compact symbol for a displayed property, or null when there is nothing to show (no moves yet). */
-export function symbolOf(property: Exclude<DisplayProperty, "scheduled" | "projects" | "description" | "sources">, task: Task, progress: { done: number; total: number } | null = null): Symbol | null {
+/** The compact symbol for a displayed property, or null when there is nothing to show (no moves yet). A recurring task keeps one status for every day, so its status is read from the todo's own `marker`. */
+export function symbolOf(property: Exclude<DisplayProperty, "scheduled" | "projects" | "description" | "sources">, task: Task, progress: { done: number; total: number } | null = null, marker?: string): Symbol | null {
   const minutes = formatMinutes(Math.floor(elapsed(task) / 60));
   switch (property) {
-    case "status": return { icon: STATUS_ICONS[task.status], cls: `organized-status-${task.status}`, label: `Status: ${STATUS_LABELS[task.status]}` };
+    case "status": { const status = task.recurring && marker !== undefined ? statusOfMarker(marker) : task.status; return { icon: STATUS_ICONS[status], cls: `organized-status-${status}`, label: `Status: ${STATUS_LABELS[status]}` }; }
     case "priority": return { icon: "flag", cls: `organized-priority-${task.priority}`, label: `Priority: ${task.priority}` };
     case "starred": return { icon: "star", cls: task.starred ? "organized-symbol-starred" : "organized-symbol-off", label: task.starred ? "Starred" : "Not starred" };
     case "recurring": return { icon: "repeat", cls: task.recurring ? "organized-symbol-recurring" : "organized-symbol-off", label: `Recurring: ${task.recurring ? "on" : "off"}` };
@@ -72,7 +72,7 @@ function watchWrap(host: HTMLElement, component: Component): void {
   component.register(() => { observer.disconnect(); window.cancelAnimationFrame(frame); });
 }
 /** `live` turns false once a newer draw or a teardown owns `host`, so an older projection stops appending after its awaits. */
-export async function projection(owner: Organized, host: HTMLElement, task: Task, component: Component, live: () => boolean = () => true): Promise<void> {
+export async function projection(owner: Organized, host: HTMLElement, task: Task, component: Component, live: () => boolean = () => true, marker?: string): Promise<void> {
   host.addClass("organized-projection"); const right = owner.settings.propertiesAlign === "right"; host.classList.toggle("organized-align-right", right);
   // Right-aligned, what varies from todo to todo (project names, the moves count, the time) goes to the left, so the symbols that every todo has line up in one column at the edge.
   const selected = right ? [...owner.settings.displayProperties.filter(p => VARYING.includes(p)), ...owner.settings.displayProperties.filter(p => !VARYING.includes(p))] : owner.settings.displayProperties;
@@ -91,7 +91,7 @@ export async function projection(owner: Organized, host: HTMLElement, task: Task
       const content = noteSection(body, property === "description" ? "Description" : "Sources");
       const block = host.createDiv({ cls: "organized-rich-property" }); await MarkdownRenderer.render(owner.app, content, block, file.path, component);
     } else {
-      const compact = symbolOf(property, task, property === "subtasks" ? await owner.repo.progress(task) : null); if (!live()) return; if (compact) symbol(host, compact);
+      const compact = symbolOf(property, task, property === "subtasks" ? await owner.repo.progress(task) : null, marker); if (!live()) return; if (compact) symbol(host, compact);
     }
   }
   if (right && host.tagName === "SPAN" && live()) watchWrap(host, component);
@@ -116,13 +116,13 @@ export async function reading(owner: Organized, el: HTMLElement, ctx: MarkdownPo
     const rich = hasRichProperties(owner); const host = rich ? item.createDiv({ cls: "organized-properties" }) : item.createSpan({ cls: "organized-properties" });
     // Beside the title, not after a nested list.
     const nested = rich ? null : item.querySelector(":scope > ul, :scope > ol"); if (nested) nested.before(host);
-    const child = new ReadingProjection(host, owner, task.id); ctx.addChild(child); await child.draw();
+    const child = new ReadingProjection(host, owner, task.id, task.marker); ctx.addChild(child); await child.draw();
   }
 }
 class ReadingProjection extends MarkdownRenderChild {
   private generation = 0;
   private markdown: Component | null = null;
-  constructor(el: HTMLElement, readonly owner: Organized, readonly id: string) { super(el); }
+  constructor(el: HTMLElement, readonly owner: Organized, readonly id: string, readonly marker: string) { super(el); }
   onload(): void {
     const update = () => { void this.draw().catch(report); };
     this.owner.projectionListeners.add(update); this.register(() => this.owner.projectionListeners.delete(update));
@@ -134,7 +134,7 @@ class ReadingProjection extends MarkdownRenderChild {
       const task = await this.owner.repo.read(this.id); if (generation !== this.generation) return;
       if (this.markdown) this.removeChild(this.markdown);
       this.markdown = this.addChild(new Component());
-      this.containerEl.empty(); await projection(this.owner, this.containerEl, task, this.markdown, () => generation === this.generation);
+      this.containerEl.empty(); await projection(this.owner, this.containerEl, task, this.markdown, () => generation === this.generation, this.marker);
     } catch { if (generation !== this.generation) return; this.containerEl.empty(); this.containerEl.createSpan({ cls: "organized-muted", text: "Missing/invalid task · use attach/create to repair" }); }
   }
 }
@@ -146,12 +146,12 @@ class IconWidget extends WidgetType {
 }
 class PropertyWidget extends WidgetType {
   private component: Component | null = null;
-  constructor(readonly owner: Organized, readonly id: string, readonly revision: number, readonly inline: boolean) { super(); }
-  eq(other: PropertyWidget): boolean { return this.id === other.id && this.revision === other.revision && this.inline === other.inline; }
+  constructor(readonly owner: Organized, readonly id: string, readonly revision: number, readonly inline: boolean, readonly marker: string) { super(); }
+  eq(other: PropertyWidget): boolean { return this.id === other.id && this.revision === other.revision && this.inline === other.inline && this.marker === other.marker; }
   toDOM(): HTMLElement {
     const host = this.inline ? createSpan() : createDiv(); const component = new Component(); this.component = component; component.load();
     let disposed = false; component.register(() => { disposed = true; });
-    void this.owner.repo.read(this.id).then(async task => { if (!disposed) await projection(this.owner, host, task, component, () => !disposed); }).catch(() => { if (!disposed) host.setText("Missing task; repair via attach/create"); });
+    void this.owner.repo.read(this.id).then(async task => { if (!disposed) await projection(this.owner, host, task, component, () => !disposed, this.marker); }).catch(() => { if (!disposed) host.setText("Missing task; repair via attach/create"); });
     return host;
   }
   destroy(): void { this.component?.unload(); this.component = null; }
@@ -225,7 +225,7 @@ function build(state: EditorState, owner: Organized): DecorationSet {
     // without a trailing newline; an inline widget there still renders.
     // Short properties sit to the right of the title; rich ones (notes, sources) get a block row below.
     const inline = !hasRichProperties(owner);
-    ranges.push(Decoration.widget({ widget: new PropertyWidget(owner, task.id, owner.revision, inline), block: !inline && line.to < state.doc.length, side: 1 }).range(line.to));
+    ranges.push(Decoration.widget({ widget: new PropertyWidget(owner, task.id, owner.revision, inline, task.marker), block: !inline && line.to < state.doc.length, side: 1 }).range(line.to));
     // The floated symbols would hang into the next line; the line contains them (see `.organized-align-right-line`).
     if (inline && owner.settings.propertiesAlign === "right") ranges.push(Decoration.line({ class: "organized-align-right-line" }).range(line.from));
   }

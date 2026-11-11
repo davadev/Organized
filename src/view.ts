@@ -3,7 +3,7 @@ import type { Editor } from "obsidian";
 import { moment } from "./moment";
 import { rgbOf, softTint } from "./colors";
 import type Organized from "./main";
-import { elapsed, FOLDABLE_CARDS, localDate, PRIORITIES, Section, STATUS_ICONS, STATUSES, Task, WorkSession } from "./model";
+import { elapsed, FOLDABLE_CARDS, localDate, PRIORITIES, Section, STATUS_ICONS, STATUSES, statusOfMarker, Task, WorkSession } from "./model";
 import { byPriority, report } from "./service";
 import { cells, HeatScale, MAX_CELLS, scaleFor, slider } from "./movement";
 import { BudgetModal, DatePicker, ProjectBudgetModal, SessionModal, TaskPicker } from "./modals";
@@ -509,7 +509,7 @@ export class OrganizedInspectorView extends ItemView {
     await this.app.workspace.getLeaf(false).openFile(note);
   }
   private plainTaskRow(host: HTMLElement, line: TaskLine, path: string): void {
-    const status = line.marker.toLowerCase() === "x" ? "completed" : line.marker === "-" ? "canceled" : line.marker === "/" ? "in_progress" : "open";
+    const status = statusOfMarker(line.marker);
     const row = host.createDiv({ cls: "organized-list-card organized-day-task", attr: { "data-status": status } });
     const open = row.createDiv({ cls: "organized-list-open" });
     void renderMarkdownLinks(this.app, line.title || "Untitled todo", open.createDiv({ cls: "organized-list-title" }), path, this.markdown).catch(report);
