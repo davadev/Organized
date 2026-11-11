@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { chromium, webkit } from 'playwright';
+import { chromium, webkit, devices } from 'playwright';
 import { readFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
@@ -9,6 +9,19 @@ const browser = await ({ chromium, webkit }[engine]).launch({ headless: true });
 const css = await readFile('styles.css', 'utf8');
 const hostCss = `*, *::before, *::after { box-sizing: border-box; } body { margin: 0; font: 14px system-ui; --text-normal: #222; --text-muted: #666; --text-faint: #777; --background-primary: #fff; --background-secondary: #eee; --background-modifier-border: #ccc; --interactive-accent: #6755c5; --color-green: #2f9e44; --text-on-accent: #fff; --font-ui-small: 13px; --font-ui-smaller: 11px; --size-4-1: 4px; --size-4-2: 8px; --size-4-3: 12px; } body.theme-dark { --text-normal: #ddd; --text-muted: #aaa; --text-faint: #999; --background-primary: #202020; --background-secondary: #303030; --background-modifier-border: #555; background: #202020; color: #ddd; } button, input, select, textarea { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); color: var(--text-normal); font: inherit; } button { cursor: pointer; } .setting-item { display: flex; justify-content: space-between; padding-block: 8px; }`;
 await mkdir('test-results', { recursive: true });
+/** Enter with the caret at the visible end of a todo (a tap or click there) must leave the hidden ID on the todo, not carry it to the new line. */
+async function enterKeepsId(page, label) {
+  await page.evaluate(async () => {
+    const content = document.querySelector('.cm-content'); const line = content.querySelector('.cm-line');
+    const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT); let title = null; while (walker.nextNode()) if (walker.currentNode.textContent.includes('Test task')) title = walker.currentNode;
+    content.focus(); const range = document.createRange(); range.setStart(title, title.textContent.indexOf('Test task') + 'Test task'.length); range.collapse(true);
+    const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    await new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)));
+  });
+  await page.keyboard.press('Enter'); await page.waitForTimeout(400); await page.keyboard.type('Next'); await page.waitForTimeout(100);
+  const text = await page.evaluate(() => window.editorText());
+  if (text !== '- [ ] Test task <!--organized:task1234--> <!--organized:repeat-->\n- [ ] Next') throw Error(`${label}: Enter at the end of a todo moved its hidden ID: ${JSON.stringify(text)}`);
+}
 try {
   let page; const errors = [];
   // A phone with a large system font scales every text size but not the fixed boxes around it (Android), so each width is also checked with text 1.3 times larger.
@@ -221,9 +234,17 @@ try {
         });
         if (copied !== '- [ ] Test task <!--organized:task1234--> <!--organized:repeat-->') throw Error(`${engine}: a todo copied from Live Preview lost its hidden ID: ${JSON.stringify(copied)}`);
       }
+      if (tab === 'LivePreview' && scale === 1 && width === 320 && !dark && !rtl) await enterKeepsId(page, engine);
       if (scale === 1 && width === 320 && !rtl) await page.screenshot({ path: `test-results/${engine}-${tab.toLowerCase()}-${dark ? 'dark' : 'light'}.png`, fullPage: true });
     }
   }
+  }
+  // On an iPhone CodeMirror lets the native line break happen and then runs the Enter commands; WebKit with an iPhone's user agent takes that path.
+  if (engine === 'webkit') {
+    const phone = await (await browser.newContext(devices['iPhone 13'])).newPage(); phone.on('pageerror', e => errors.push(e.message));
+    await phone.setContent('<!doctype html><html><head></head><body><main id="app"></main></body></html>');
+    await phone.addScriptTag({ content: bundle.outputFiles[0].text, type: 'module' }); await phone.waitForFunction(() => typeof window.scene === 'function');
+    await phone.evaluate(() => window.scene('LivePreview')); await enterKeepsId(phone, 'webkit (iPhone)'); await phone.close();
   }
   // Canary: a deliberately oversized child MUST be detected by the same probe.
   await page.addStyleTag({ content: '#app { inline-size: 2000px; min-block-size: 100px; }' });
