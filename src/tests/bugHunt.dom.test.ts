@@ -246,4 +246,32 @@ describe('bug hunt regressions', () => {
     const create = vi.spyOn(repo, 'create'); const plain = editor.getValue() + '\n- [ ] Plain'; editor.setValue(plain); editor.setCursor({ line: 4, ch: 3 }); const at = plain.lastIndexOf('[') + 1;
     press(box); editor.setValue(plain.slice(0, at) + 'x' + plain.slice(at + 1)); plugin.onEditorUpdate(changed(plain, at, at + 1, 'x')); await flush(); expect(create).not.toHaveBeenCalled(); expect(editor.getValue()).toContain('- [x] Plain');
   });
+  it('a todo pasted as a second copy of its task is named at once, its status is refused until one copy is deleted, and the ticked box gets its marker back', async () => {
+    const { h, plugin } = await loaded(); await ready(h); const { repo } = plugin;
+    const task = await repo.create('Moved'); const line = `- [ ] Moved <!--organized:${task.id}-->`; const text = `## Wrong\n${line}\n## Right\n`;
+    const file: any = await h.add('Note.md', text); const editor = h.setActive(file, text); editor.setCursor({ line: 3, ch: 0 });
+    const paste = (before: string, insert: string) => { const after = before + insert; editor.setValue(after); h.texts.set(file.path, after); plugin.onEditorUpdate(changed(before, before.length, before.length, insert, 'input.paste')); return after; };
+    const pasted = paste(text, line); expect(Notice.instances.at(-1)?.message).toBe('“Moved” is now on 2 lines in this note. Delete one copy: its status cannot change while it is on more than one. For a separate task, use "Duplicate as new task".');
+    // Pasting anything else says nothing.
+    const notices = Notice.instances.length; paste(pasted, '\nplain text'); expect(Notice.instances).toHaveLength(notices);
+    // A task that was not in the note, pasted twice at once.
+    const other = await repo.create('Other'); const twice = paste(h.texts.get(file.path)!, `\n- [ ] Other <!--organized:${other.id}-->`.repeat(2)); expect(Notice.instances.at(-1)?.message).toContain('“Other” is now on 2 lines');
+    editor.setValue(twice.replace(/\n- \[ \] Other.*/g, '')); h.texts.set(file.path, editor.getValue());
+    // Ticking either copy is refused: the task stays open and the box is unticked again.
+    click(plugin, editor, task.id, 'x'); await flush();
+    expect((await repo.read(task.id)).status).toBe('open'); expect(editor.getValue()).not.toContain('[x]');
+    expect(Notice.instances.at(-1)?.message).toBe('Organized: “Moved” is on 2 lines in Note.md. Delete one copy, then change its status again.');
+    // With the original deleted, the copy under the right heading is the task.
+    const moved = editor.getValue().replace(`${line}\n`, ''); editor.setValue(moved); h.texts.set(file.path, moved);
+    click(plugin, editor, task.id, 'x'); await flush(); expect((await repo.read(task.id)).status).toBe('completed'); expect(editor.getValue()).toBe(`## Wrong\n## Right\n- [x] Moved <!--organized:${task.id}-->\nplain text`);
+  });
+  it('a recurring task is refused only for a note it is on twice that the change would write, and the refusal is named even when the ticked line cannot be put back', async () => {
+    const h = harness(); const task = await h.repo.create('Repeat'); await h.repo.update(task.id, t => ({ ...t, recurring: true }));
+    const line = `- [ ] Repeat <!--organized:${task.id}--> <!--organized:repeat-->`;
+    const today: any = await h.add(`Daily/${localDate()}.md`, line); await h.add('Daily/2099-01-01.md', `${line}\n${line}`);
+    const context = () => ({ file: today, line: parseTasks(h.texts.get(today.path)!)[0] });
+    await h.service.status(task.id, 'completed', context()); expect(h.texts.get(today.path)).toContain('[x]');
+    h.texts.set(today.path, `${line}\n${line}`); const stale = { file: today, line: { ...parseTasks(line)[0], raw: '- [x] gone' } };
+    await expect(h.service.status(task.id, 'open', stale)).rejects.toThrow(`“Repeat” is on 2 lines in ${today.path}.`); expect(h.texts.get(today.path)).toBe(`${line}\n${line}`);
+  });
 });

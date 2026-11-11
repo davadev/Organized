@@ -509,6 +509,12 @@ export default class Organized extends Plugin {
       }).catch(report);
     }
   }
+  /** A paste that puts a task on one more line of the note is named at once: its status is refused until one copy is deleted. */
+  private warnPastedCopies(update: ViewUpdate): void {
+    const lines = (text: string) => { const found = new Map<string, TaskLine[]>(); for (const t of parseTasks(text)) if (t.id) found.set(t.id, [...(found.get(t.id) ?? []), t]); return found; };
+    const before = lines(update.startState.doc.toString());
+    for (const [id, copies] of lines(update.state.doc.toString())) if (copies.length > 1 && copies.length > (before.get(id)?.length ?? 0)) new Notice(`“${copies[0].title}” is now on ${copies.length} lines in this note. Delete one copy: its status cannot change while it is on more than one. For a separate task, use "Duplicate as new task".`, 10000);
+  }
   onEditorUpdate(update: ViewUpdate): void {
     if (update.selectionSet) this.followCursor();
     if (!update.docChanged) return;
@@ -518,6 +524,7 @@ export default class Organized extends Plugin {
     this.repo.ownText = null;
     if (this.pickerOpen) return;
     const events = update.transactions.map(t => t.annotation(Transaction.userEvent));
+    if (events.some(event => event?.includes("paste"))) this.warnPastedCopies(update);
     if (events.some(event => event && ["paste", "drop", "undo", "redo"].some(ignored => event.includes(ignored)))) return;
     const user = events.some(event => event && !event.startsWith("input.organized"));
     // A checkbox pressed just now makes the change the person's own, for a timer only: a plain todo that is clicked stays a plain todo.

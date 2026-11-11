@@ -161,10 +161,10 @@ describe("project sections and start date", () => {
     await h.service.projects(other.id, [note.path]); const text = h.texts.get(note.path)!; expect(text).toContain("## Open"); expect(text.indexOf("## Open")).toBeGreaterThan(text.indexOf("free text")); expect(text).toContain("free text");
     await h.service.status(other.id, "in_progress"); expect(h.texts.get(note.path)).toContain("## In progress\n"); expect(h.texts.get(note.path)).toMatch(/## In progress\n+- \[\/\] Other/);
   });
-  it("leaves daily notes and ambiguous project lines alone", async () => {
+  it("refuses a status change while a project note holds the task twice, and touches no note", async () => {
     const h = harness(); const task = await h.repo.create("Twice"); const note = `${h.repo.projectFolder()}/Dup.md`;
-    const daily: any = await h.add(`Daily/${localDate()}.md`, `# Today\n- [ ] Twice <!--organized:${task.id}-->\n`); await h.add(note, `---\norganized_type: project\n---\n- [ ] Twice <!--organized:${task.id}-->\n- [ ] Twice <!--organized:${task.id}-->\n`);
-    await h.service.status(task.id, "completed"); expect(h.texts.get(daily.path)).toBe(`# Today\n- [x] Twice <!--organized:${task.id}-->\n`); expect(h.texts.get(note)).not.toContain("## Done");
+    const daily: any = await h.add(`Daily/${localDate()}.md`, `# Today\n- [ ] Twice <!--organized:${task.id}-->\n`); const project = `---\norganized_type: project\n---\n- [ ] Twice <!--organized:${task.id}-->\n- [ ] Twice <!--organized:${task.id}-->\n`; await h.add(note, project);
+    await expect(h.service.status(task.id, "completed")).rejects.toThrow(`“Twice” is on 2 lines in ${note}. Delete one copy`); expect(h.texts.get(daily.path)).toBe(`# Today\n- [ ] Twice <!--organized:${task.id}-->\n`); expect(h.texts.get(note)).toBe(project); expect((await h.repo.read(task.id)).status).toBe("open");
   });
   it("dates the start of projects that lack one, keeps an existing start and sets one when a colour is chosen", async () => {
     const h = harness(); const folder = h.repo.projectFolder(); const old: any = await h.add(`${folder}/Old.md`, `---\norganized_type: project\n---\nbody`); const dated: any = await h.add(`${folder}/Dated.md`, `---\norganized_type: project\norganized_start: 2025-05-05\n---\n`);
