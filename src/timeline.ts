@@ -12,17 +12,29 @@ function minutesInto(ms: number, start: Date, end: Date): number {
   if (ms >= end.getTime()) return 1440;
   const at = new Date(ms); return at.getHours() * 60 + at.getMinutes() + at.getSeconds() / 60;
 }
-/** Overlapping blocks (as drawn, including the minimum height) share the width of the day: each gets a column and the number of columns in its group. */
+/**
+ * Overlapping blocks (as drawn, including the minimum height) share the width of the day: each gets a column and the number of columns in its group.
+ * Time worked on a task (or its running timer) that overlaps the task's own planned block is drawn in that block's column, over it: the plan reads as an outline filled where it was worked, not as a second copy of the task beside it.
+ * The column is kept for plan and work together, so an early start or a timer running past the plan's end neither collides with another block nor jumps to a new column.
+ */
 export function assignLanes(blocks: Block[]): Block[] {
+  const inside = new Map<Block, Block>(); const own = new Map<Block, Block[]>();
+  for (const block of blocks) {
+    const plan = block.planned ? undefined : blocks.find(p => p.planned && p.task === block.task && p.startMin < block.endMin && block.startMin < p.endMin);
+    if (plan) { inside.set(block, plan); own.set(plan, [...(own.get(plan) ?? []), block]); }
+  }
+  const startOf = (block: Block) => Math.min(block.startMin, ...(own.get(block) ?? []).map(b => b.startMin));
+  const endOf = (block: Block) => Math.max(drawnEnd(block), ...(own.get(block) ?? []).map(drawnEnd));
   const sorted = [...blocks].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
   let group: Block[] = []; let groupEnd = -1; const laneEnds: number[] = [];
   const close = () => { for (const block of group) block.lanes = laneEnds.length; group = []; laneEnds.length = 0; };
-  for (const block of sorted) {
-    if (block.startMin >= groupEnd) close();
-    let lane = laneEnds.findIndex(end => end <= block.startMin); if (lane < 0) lane = laneEnds.length;
-    laneEnds[lane] = drawnEnd(block); block.lane = lane; group.push(block); groupEnd = Math.max(groupEnd, drawnEnd(block));
+  for (const block of [...sorted].filter(b => !inside.has(b)).sort((a, b) => startOf(a) - startOf(b))) {
+    if (startOf(block) >= groupEnd) close();
+    let lane = laneEnds.findIndex(end => end <= startOf(block)); if (lane < 0) lane = laneEnds.length;
+    laneEnds[lane] = endOf(block); block.lane = lane; group.push(block); groupEnd = Math.max(groupEnd, endOf(block));
   }
   close();
+  for (const [block, plan] of inside) { block.lane = plan.lane; block.lanes = plan.lanes; }
   return sorted;
 }
 /** Tracked and planned blocks of every task on one local day, with the running timer drawn up to `now`. Sessions that cross midnight appear on both days. */

@@ -74,6 +74,8 @@
   inset-inline-start: calc(var(--organized-lane, 0) / var(--organized-lanes, 1) * 100%); inline-size: calc(100% / var(--organized-lanes, 1) - 2px); }
 .organized-view .organized-panel button.organized-block { border-inline-start-color: rgb(var(--organized-project-rgb, 150 150 150)); }
 .organized-view .organized-panel button.organized-block[data-planned="true"] { border-style: dashed; border-inline-start-style: solid; background: transparent; opacity: .85; }
+/* Time worked inside a planned block is drawn over it, so a tap there opens the session. */
+.organized-view .organized-panel button.organized-block:not([data-planned="true"]) { z-index: 1; }
 .organized-week-block[data-planned="true"] { opacity: .45; }
 .organized-day-grid { cursor: copy; }
 .organized-timer-label { margin-block-start: 4px; color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
