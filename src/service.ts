@@ -167,6 +167,7 @@ export class TaskService {
       // Explicit rescheduling is allowed to search by stable ID. Configuration
       // changes never turn undated references into guessed old destinations.
       const candidates = (await this.repo.occurrences(id)).filter(o => o.file.path !== originPath && this.daily.date(o.file.path) === oldDate);
+      if (candidates.length === 1 && candidates[0].tasks.length > 1) { new Notice(onTwoLines((await this.repo.read(id)).title, candidates[0].file.path, candidates[0].tasks.length, "Neither line there was removed; delete the ones you no longer need.")); return; }
       if (candidates.length !== 1 || candidates[0].tasks.length !== 1 || candidates[0].tasks[0].marker !== " " || candidates[0].tasks[0].repeat) throw new Error("Missing or ambiguous previous destination.");
       const old = candidates[0]; await this.edit(old.file, old.text, removeUnique(old.text, id), changes);
     } catch { new Notice("Previous scheduled occurrence is missing, ambiguous or changed. Preserved existing lines; use the references list to repair."); }
@@ -183,7 +184,7 @@ export class TaskService {
     const twice = (await this.repo.occurrences(id)).find(o => o.tasks.length > 1 && !(before.recurring && this.daily.date(o.file.path) && o.file.path !== context?.file.path));
     if (twice) {
       if (context) await this.clean(context, markerOf(before)).catch(() => undefined);
-      throw new Error(`“${before.title}” is on ${twice.tasks.length} lines in ${twice.file.path}. Delete one copy, then change its status again.`);
+      throw new Error(onTwoLines(before.title, twice.file.path, twice.tasks.length, "Delete one copy, then change its status again."));
     }
     await this.applyStatus(id, status, context);
     if ((status !== "completed" && status !== "canceled") || before.status === status || before.recurring) return;
@@ -233,7 +234,7 @@ export class TaskService {
     if (!title.trim() || /[\r\n]/.test(title)) throw new Error("Use a nonempty, single-line title.");
     await this.repo.update(id, t => ({ ...t, title: title.trim() }));
     for (const occurrence of await this.repo.occurrences(id)) {
-      if (occurrence.tasks.length > 1) { new Notice(`Multiple occurrences in ${occurrence.file.path}; preserved for repair.`); continue; }
+      if (occurrence.tasks.length > 1) { new Notice(onTwoLines(title.trim(), occurrence.file.path, occurrence.tasks.length, "Delete one copy, then rename the task again.")); continue; }
       await this.edit(occurrence.file, occurrence.text, replaceTask(occurrence.text, occurrence.tasks[0], { title: title.trim() }));
     }
     await this.nameNote(id);
@@ -281,6 +282,9 @@ export class TaskService {
     // The todo lines follow the relation: wherever both are in one note, the subtask is indented under its parent.
     const changes: Change[] = []; const parent = await this.repo.read(parentId); const child = await this.repo.read(childId); const unit = await this.repo.indentUnit(); let notes = 0;
     for (const occurrence of await this.repo.occurrences(childId)) {
+      // A note that holds either task twice is left as it is: which line to indent under which is unclear.
+      const parents = parseTasks(occurrence.text).filter(t => t.id === parentId).length; const doubled = occurrence.tasks.length > 1 ? child : parents > 1 ? parent : null;
+      if (doubled) { new Notice(onTwoLines(doubled.title, occurrence.file.path, doubled === child ? occurrence.tasks.length : parents, "Delete one copy, then make it a subtask again.")); continue; }
       const after = nestUnder(occurrence.text, childId, parentId, true, unit) ?? fixIndent(occurrence.text, childId, parentId, unit); if (after === null) continue;
       await this.edit(occurrence.file, occurrence.text, after, changes); notes++;
     }
@@ -486,7 +490,9 @@ export class TaskService {
     }
     for (const removed of task.projects.filter(p => !projects.includes(p))) {
       const file = this.repo.file(removed);
-      if (file) { const text = await this.repo.readText(file); try { await this.edit(file, text, removeUnique(text, id)); } catch { new Notice(`Could not safely unlink ${removed}; occurrence preserved for repair.`); } }
+      if (file) { const text = await this.repo.readText(file); const lines = parseTasks(text).filter(t => t.id === id).length;
+        if (lines > 1) new Notice(onTwoLines(task.title, removed, lines, "The project is unlinked; neither line there was removed, so delete them by hand."));
+        else try { await this.edit(file, text, removeUnique(text, id)); } catch { new Notice(`Could not safely unlink ${removed}; occurrence preserved for repair.`); } }
     }
     await this.repo.update(id, t => ({ ...t, projects })); this.changed();
   }
@@ -890,5 +896,7 @@ export class TaskService {
     else if (marker === "*") { await this.repo.update(id, t => ({ ...t, starred: !t.starred })); this.changed(); }
   }
 }
+/** What to say when a note holds a task on more than one line: which line is meant is unclear, so that note was left as it was. */
+export function onTwoLines(title: string, path: string, count: number, advice: string): string { return `“${title}” is on ${count} lines in ${path}. ${advice}`; }
 export function report(error: unknown): void { new Notice(`Organized: ${error instanceof Error ? error.message : String(error)}`, 10000); }
 export function byPriority(tasks: Task[]): Task[] { return [...tasks].sort((a, b) => PRIORITIES.indexOf(a.priority) - PRIORITIES.indexOf(b.priority)); }

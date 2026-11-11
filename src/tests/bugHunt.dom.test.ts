@@ -274,4 +274,15 @@ describe('bug hunt regressions', () => {
     h.texts.set(today.path, `${line}\n${line}`); const stale = { file: today, line: { ...parseTasks(line)[0], raw: '- [x] gone' } };
     await expect(h.service.status(task.id, 'open', stale)).rejects.toThrow(`“Repeat” is on 2 lines in ${today.path}.`); expect(h.texts.get(today.path)).toBe(`${line}\n${line}`);
   });
+  it('renaming, unlinking a project and making a subtask name the task and the note when a note holds a task twice, and leave that note as it is', async () => {
+    const h = harness(); const task = await h.repo.create('Twice'); const other = await h.repo.create('Other'); const line = (t: { title: string; id: string }) => `- [ ] ${t.title} <!--organized:${t.id}-->`;
+    const note: any = await h.add('Note.md', `${line(task)}\n${line(task)}\n${line(other)}`); const before = h.texts.get(note.path);
+    await h.service.title(task.id, 'Renamed'); expect(Notice.instances.at(-1)?.message).toBe('“Renamed” is on 2 lines in Note.md. Delete one copy, then rename the task again.'); expect(h.texts.get(note.path)).toBe(before);
+    const project = `${h.repo.projectFolder()}/Home.md`; await h.service.projects(task.id, [project]); h.texts.set(project, h.texts.get(project)! + `\n${line({ ...task, title: 'Renamed' })}`); const linked = h.texts.get(project);
+    await h.service.projects(task.id, []); expect(Notice.instances.at(-1)?.message).toBe(`“Renamed” is on 2 lines in ${project}. The project is unlinked; neither line there was removed, so delete them by hand.`); expect(h.texts.get(project)).toBe(linked); expect((await h.repo.read(task.id)).projects).toEqual([]);
+    h.texts.set(project, '');
+    await h.service.makeSubtask(other.id, task.id); expect(Notice.instances.at(-1)?.message).toBe('“Renamed” is on 2 lines in Note.md. Delete one copy, then make it a subtask again.'); expect(h.texts.get(note.path)).toBe(before);
+    const child = await h.repo.create('Child'); const solo: any = await h.add('Solo.md', `${line(other)}\n${line(other)}\n${line(child)}`); const alone = h.texts.get(solo.path);
+    await h.service.makeSubtask(other.id, child.id); expect(Notice.instances.at(-1)?.message).toBe('“Other” is on 2 lines in Solo.md. Delete one copy, then make it a subtask again.'); expect(h.texts.get(solo.path)).toBe(alone);
+  });
 });
