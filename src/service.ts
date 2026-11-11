@@ -177,7 +177,15 @@ export class TaskService {
    * (done and canceled ones are never changed, reopening and starting do not cascade), with one notice that can undo exactly what happened to the subtasks.
    */
   async status(id: string, status: Status, context?: Context): Promise<void> {
-    const before = await this.repo.read(id); await this.applyStatus(id, status, context);
+    const before = await this.repo.read(id);
+    // A task on two lines of one note (a todo copied and pasted) does not change: which line is meant is unclear. The todo that was ticked gets its marker back.
+    // A recurring task's line in another daily note is that day's own and is not written here (see syncLines), so a doubled one there does not count.
+    const twice = (await this.repo.occurrences(id)).find(o => o.tasks.length > 1 && !(before.recurring && this.daily.date(o.file.path) && o.file.path !== context?.file.path));
+    if (twice) {
+      if (context) await this.clean(context, markerOf(before)).catch(() => undefined);
+      throw new Error(`“${before.title}” is on ${twice.tasks.length} lines in ${twice.file.path}. Delete one copy, then change its status again.`);
+    }
+    await this.applyStatus(id, status, context);
     if ((status !== "completed" && status !== "canceled") || before.status === status || before.recurring) return;
     const changes: Change[] = []; const changed = await this.cascadeStatus(before, status, changes, new Set([id]));
     if (changed.length) this.summarize(changes, status === "completed" ? "Subtasks completed" : "Subtasks canceled", `${status === "completed" ? "Completed" : "Canceled"} ${plural(changed.length, "subtask")} of “${before.title}”: ${changed.join(", ")}.`);
