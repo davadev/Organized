@@ -39,7 +39,7 @@ try {
   for (const width of [240, 320, 360, 390, 412, 768].filter(width => scale === 1 || width <= 412)) for (const dark of [false, true]) for (const rtl of [false, true]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(({ dark, rtl }) => { document.body.className = `${dark ? 'theme-dark' : 'theme-light'} is-mobile`; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, { dark, rtl });
-    for (const tab of ['Calendar', 'Week', 'Day', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Favorites', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'SessionModal', 'NoteModal', 'RetireModal', 'Onboarding1', 'Onboarding2', 'Onboarding3', 'Onboarding4', 'Onboarding5', 'Onboarding6', 'Onboarding7', 'Onboarding8', 'Onboarding9', 'Onboarding10', 'Onboarding11', 'Onboarding12', 'Onboarding13', 'Onboarding14', 'Onboarding15', 'WhatsNew', 'Eof', 'AlignRight']) {
+    for (const tab of ['Calendar', 'Week', 'Day', 'Task', 'NoteTasks', 'InlineEditor', 'Projects', 'Favorites', 'Settings', 'LegacySettings', 'LivePreview', 'Source', 'ScheduleModal', 'RepeatModal', 'SessionModal', 'NoteModal', 'RetireModal', 'Onboarding1', 'Onboarding2', 'Onboarding3', 'Onboarding4', 'Onboarding5', 'Onboarding6', 'Onboarding7', 'Onboarding8', 'Onboarding9', 'Onboarding10', 'Onboarding11', 'Onboarding12', 'Onboarding13', 'Onboarding14', 'Onboarding15', 'WhatsNew', 'Eof', 'AlignRight']) {
       await page.evaluate(tab => window.scene(tab), tab);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       if (overflow) throw Error(`${engine}: horizontal overflow at ${width}${scale === 1 ? '' : ` with ${scale}x text`}, ${dark ? 'dark' : 'light'}, ${rtl ? 'RTL' : 'LTR'}, ${tab}`);
@@ -172,6 +172,11 @@ try {
         const buttons = page.locator('.organized-modal-window .modal-content button'); if ((await buttons.allTextContents()).join(',') !== 'Schedule,Clear date' || !(await buttons.first().isVisible()) || !(await buttons.last().isVisible())) throw Error('Schedule modal actions are missing or hidden');
         const times = await page.evaluate(() => { const w = document.querySelector('.organized-modal-window').getBoundingClientRect(); return Array.from(document.querySelectorAll('.organized-modal-window input[type=time]')).map(input => { const b = input.getBoundingClientRect(); return b.width > 60 && b.left >= w.left - 1 && b.right <= w.right + 1; }); });
         if (times.length !== 2 || times.some(inside => !inside)) throw Error(`Schedule time fields are missing, too narrow or leave the modal: ${times}`);
+      }
+      if (tab === 'RepeatModal') {
+        const box = await page.locator('.organized-modal-window').boundingBox(); if (!box || box.width > width - 8) throw Error(`Repeat modal overflows its ${width}px host: ${JSON.stringify(box)}`);
+        const rows = await page.evaluate(() => { const w = document.querySelector('.organized-modal-window').getBoundingClientRect(); return Array.from(document.querySelectorAll('.organized-repeat-time')).map(row => Array.from(row.children).every(child => { const b = child.getBoundingClientRect(); return b.width > 20 && b.left >= w.left - 1 && b.right <= w.right + 1; }) && Array.from(row.querySelectorAll('input')).every(input => input.getBoundingClientRect().width > 60)); });
+        if (rows.length !== 3 || rows.some(fits => !fits)) throw Error(`Repeat time rows leave the modal or squeeze their fields: ${rows}`);
       }
       if (tab === 'SessionModal') {
         const window = page.locator('.organized-modal-window'); const box = await window.boundingBox(); if (!box) throw Error('Session modal is not visible');

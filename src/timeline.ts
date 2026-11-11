@@ -1,7 +1,8 @@
 import type { Task, WorkSession } from "./model";
 import { plannable } from "./planning";
+import { Plan, plansIn } from "./plans";
 
-export interface Block { task: Task; startMin: number; endMin: number; running: boolean; /** Time set aside rather than worked. */ planned: boolean; lane: number; lanes: number; /** The stored session behind the block, unclipped; absent for a running timer. */ session?: WorkSession }
+export interface Block { task: Task; startMin: number; endMin: number; running: boolean; /** Time set aside rather than worked. */ planned: boolean; lane: number; lanes: number; /** The stored session behind the block, unclipped; absent for a running timer. */ session?: WorkSession; /** A block of the task's repeating times, not one of its own. */ repeating?: boolean }
 export const DEFAULT_HOURS: readonly [number, number] = [8, 18];
 
 /** A block is drawn at least this tall (see `.organized-block`), so a shorter run still occupies this much of the grid and must not share a column with the next one. */
@@ -44,13 +45,13 @@ export function blocksOn(tasks: Task[], date: string, now: number): Block[] {
   const blocks: Block[] = [];
   for (const task of tasks) {
     const running = task.time_tracking_started_at !== null;
-    const sessions: { start: number; end: number; running: boolean; planned: boolean; session?: WorkSession }[] = [...task.work_sessions.map(s => ({ start: Date.parse(s.start), end: Date.parse(s.end), running: false, planned: false, session: s })),
-      ...(plannable(task) ? task.planned_sessions.map(s => ({ start: Date.parse(s.start), end: Date.parse(s.end), running: false, planned: true, session: s })) : []),
+    const sessions: { start: number; end: number; running: boolean; planned: boolean; session?: WorkSession; repeating?: boolean }[] = [...task.work_sessions.map(s => ({ start: Date.parse(s.start), end: Date.parse(s.end), running: false, planned: false, session: s })),
+      ...(plannable(task) ? plansIn(task, start.getTime(), end.getTime(), now).map((s: Plan) => ({ start: Date.parse(s.start), end: Date.parse(s.end), running: false, planned: true, session: { start: s.start, end: s.end }, ...(s.repeating ? { repeating: true } : {}) })) : []),
       ...(running ? [{ start: Date.parse(task.time_tracking_started_at!), end: now, running: true, planned: false }] : [])];
     for (const session of sessions) {
       if (session.end <= start.getTime() || session.start >= end.getTime() || session.end <= session.start) continue;
       const startMin = minutesInto(session.start, start, end); const endMin = minutesInto(session.end, start, end);
-      if (endMin > startMin) blocks.push({ task, startMin, endMin, running: session.running, planned: session.planned, lane: 0, lanes: 1, session: session.session });
+      if (endMin > startMin) blocks.push({ task, startMin, endMin, running: session.running, planned: session.planned, lane: 0, lanes: 1, session: session.session, ...(session.repeating ? { repeating: true } : {}) });
     }
   }
   return assignLanes(blocks);

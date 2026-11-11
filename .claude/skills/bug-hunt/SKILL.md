@@ -29,7 +29,7 @@ Built from the bugs the 0.1.4 betas of this plugin shipped and then fixed, plus 
 
 4. **New metadata lifecycle gaps** (recurring/budget/plan fields not handled on retire, forward, convert, rename, copy, undo). Every new frontmatter key or line format is a column in a matrix of pipelines.
    - Found on 0.1.5: making a task recurring forced `status: open` but left `auto_started_block` and the `[/]` todo a planned block had written; nothing ever put the line back. Ask, for every action that sets a status by spreading a new object (not `setStatus` + `syncLines`): which markers and claims did the old status leave behind?
-   - Build the matrix: rows = each new key/line (`recurring`, `recurrence_periods`, `time_budget_seconds`, `planned_sessions`, project links, worked lines); columns = create, edit, complete, cancel, forward to next day, retire/strip/trash, convert note, project rename, Undo, sync conflict copy, parser round-trip (`codec`).
+   - Build the matrix: rows = each new key/line (`recurring`, `recurrence_periods`, `recurrence_times`, `recurrence_skips`, `time_budget_seconds`, `planned_sessions`, project links, worked lines); columns = create, edit, complete, cancel, forward to next day, retire/strip/trash, convert note, project rename, Undo, sync conflict copy, parser round-trip (`codec`).
    - Grep: the key name across `src/`; any pipeline that does not mention it either handles it implicitly (derived from `newTask`/`ORGANIZED_KEYS`, fine) or forgot it.
    - Test: property round-trip (write then parse equals input), and an end-to-end "task with every field set goes through the lifecycle and nothing is lost or resurrected".
 
@@ -54,6 +54,7 @@ Built from the bugs the 0.1.4 betas of this plugin shipped and then fixed, plus 
    - Grep: `new Date(`, `Date.now`, `moment(`, `localDate`, `getDay`, `86400`, `* 24 * 60 * 60`.
    - Ask: what runs at 23:59:59 vs 00:00:01? What if the clock jumps (sleep/wake) or the device timezone differs from the sync partner? Is `86400` ever used as "one day" across a DST change?
    - Test: fake timers at boundary instants; DST dates; month ends; Feb 29; Monday/Sunday week start.
+   - Times stored as clock times (`recurrence_times`) become instants per day and per device zone: make them with local `Date` fields, never `+ 86400000`; test the days the clocks change under `process.env.TZ = "Europe/Prague"` (Node honours it at runtime). Derived data that hides the past (repeating blocks only from today on) must not hide it from rules that look back (a run noticed after midnight).
 
 10. **Data safety on load/save** (writes as a side effect, hand-edited or foreign data, sync conflict copies).
     - Ask: is anything written without a user action? Does a parser throw on a half-written, reordered, or foreign-plugin note? Does a merge stay commutative and idempotent?
@@ -70,6 +71,7 @@ Built from the bugs the 0.1.4 betas of this plugin shipped and then fixed, plus 
     - An automation that runs only on a timer leaves the state it should react to visibly stale until the next tick (a planned block added while already under way left the task open for up to a minute, which reads as "it does not work"). Ask: which of the person's own actions change the automation's input (`addPlanned`, `changePlanned`)? Run the check right after each, and test without advancing the clock.
     - A handler that reacts to a host event (`create`) cannot see the caller's intent (a command that creates the note itself on a secondary device got "did not add recurring tasks" while adding them). Ask which of our own code paths also raise this event, and whether the handler's message is true for them.
     - An automation that measures from the trigger's own time (a timer started at the planned block's start) is right when it notices late, and wrong when the person made the trigger just now (a block saved at 13:00 that began at 08:00 credited five hours never worked; a block cut short under a running timer took back time already tracked). Ask: does the code tell the person's edit apart from the clock tick? Test both with the same data: the tick at 13:00, and the edit at 13:00.
+    - A memory of "already done" keyed on exact equality with its source (`auto_started_block === block.start`) breaks when the source is edited or recomputed (repeating times, a day changed alone, another zone). Key it on something that survives (an instant inside the stretch of planned time) and test an edit between the two ticks.
     - Late `onLayoutReady` blocks: every one needs the same `loaded`/`unloaded` guard as the first, or a plugin disabled during startup leaks timers and listeners that still write.
 
 14. **Hidden or stale views** (panel stale after the phone drawer was closed, search box rebuilt per keystroke closing the keyboard, leaf reuse saving an empty buffer over a note).
