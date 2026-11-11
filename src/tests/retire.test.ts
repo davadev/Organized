@@ -73,6 +73,9 @@ describe("retire preview", () => {
     expect(retirePreview(held, { ...base, yaml: "strip" }, now)).toMatchObject({ plans: 2, budgets: 2, rules: 2 });
     expect(describePreview(retirePreview(held, { ...base, yaml: "strip" }, now))).toContain("2 recurring tasks will stop repeating. Not kept: planned blocks of 2 tasks and time budgets of 2 tasks.");
     expect(describePreview(retirePreview(held, { ...base, notes: "trash" }, now))).toContain("Not kept: planned blocks of 2 tasks and time budgets of 2 tasks.");
+    // Repeating planned times live in the task note too.
+    const times = { ...held, tasks: [...held.tasks, rich("eeeeeeee", { recurring: true, recurrence: "daily", recurrence_times: [{ start: "08:00", end: "09:00" }] })] };
+    expect(retirePreview(times, { ...base, yaml: "strip" }, now)).toMatchObject({ plans: 3, rules: 3 });
   });
   it("keeps plans and budgets in a task note that stays, but a repeat still ends", () => {
     for (const o of [base, { ...base, notes: "rename" as const }]) {

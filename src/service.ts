@@ -4,7 +4,7 @@ import { descendants, duplicateRepeats, fixIndent, insertTask, insertUnder, migr
 import { DailyNotes } from "./daily";
 import { localDate, makeId, markerOf, MAX_PLANNED_SESSIONS, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, startPlanned, Status, Task, taskFrom, WorkSession } from "./model";
 import { blockAt, claimHolds, dueStarts, dueStops, plannable } from "./planning";
-import { ClockSpan, MAX_SKIPS, repeatingBlocks, stored } from "./plans";
+import { ClockSpan, MAX_SKIPS, repeatingBlocks, shiftTo, stored, unworkedParts } from "./plans";
 import { formatRule, repeatsOn, Rule, sameCadence, taskRule } from "./recurrence";
 import { seconds } from "./sessions";
 import { ProjectBudgets, projectTemplate, Repository, splitNote } from "./repository";
@@ -157,16 +157,13 @@ export class TaskService {
   private async movePlans(task: Task, from: string, to: string | null, changes: Change[]): Promise<number> {
     const now = Date.now(); const moving = (b: WorkSession) => localDate(new Date(b.start)) === from && Date.parse(b.start) > now;
     const count = task.planned_sessions.filter(moving).length; if (!count) return 0;
-    const shift = (b: WorkSession): WorkSession => {
-      const start = new Date(b.start); const [y, m, d] = to!.split("-").map(Number); const moved = new Date(y, m - 1, d, start.getHours(), start.getMinutes(), start.getSeconds());
-      return { start: moved.toISOString(), end: new Date(moved.getTime() + Date.parse(b.end) - start.getTime()).toISOString() };
-    };
+    const shift = (b: WorkSession): WorkSession => shiftTo(b, to!);
     await this.recorded(task.id, changes, () => this.repo.update(task.id, t => {
       const kept = t.planned_sessions.filter(b => !moving(b)); const same = (a: WorkSession, b: WorkSession) => a.start === b.start && a.end === b.end;
       const moved = to === null ? [] : t.planned_sessions.filter(moving).map(shift).filter((b, n, all) => !kept.some(k => same(k, b)) && all.findIndex(o => same(o, b)) === n);
       return { ...t, planned_sessions: [...kept, ...moved] };
     }));
-    await this.planEdited(task.id, task);
+    await this.planEdited(task.id, task, changes);
     return count;
   }
   /**
@@ -436,7 +433,7 @@ export class TaskService {
       try { const fresh = await this.resolve(context); await this.edit(context.file, fresh.text, replaceTask(fresh.text, fresh.line, { marker: " " }), changes); }
       catch { skipped.push(context.file.path); }
     }
-    await this.planEdited(id, old);
+    await this.planEdited(id, old, changes);
     const skippedPaths = [...new Set(skipped)];
     this.summarize(changes, task.recurring ? "Recurrence set" : "Recurrence disabled", skippedPaths.length ? `Skipped/preserved for repair: ${skippedPaths.join(", ")}` : "");
   }
@@ -576,10 +573,10 @@ export class TaskService {
   }
   /** Sets or removes (null) the time a task is allowed to take. */
   async setBudget(id: string, seconds: number | null): Promise<void> { await this.repo.update(id, t => ({ ...t, time_budget_seconds: seconds })); this.changed(); }
-  /** Sets time aside for a task: a block that never counts as worked. */
+  /** Sets time aside for a task: a block that never counts as worked. A block the task already has is not added again. */
   async addPlanned(id: string, block: WorkSession, changes?: Change[]): Promise<void> {
     const before = await this.repo.read(id); const own = changes ?? [];
-    await this.recorded(id, own, () => this.repo.update(id, t => ({ ...t, planned_sessions: [...t.planned_sessions, block].slice(-MAX_PLANNED_SESSIONS) })));
+    await this.recorded(id, own, () => this.repo.update(id, t => t.planned_sessions.some(b => b.start === block.start && b.end === block.end) ? t : { ...t, planned_sessions: [...t.planned_sessions, block].slice(-MAX_PLANNED_SESSIONS) }));
     // The first block on a later day dates a task that has none, so its todo is in that day's note. Recurring tasks have no date; a block today leaves the todo where it already is,
     // and one in the past is an estimate, not a plan.
     const day = localDate(new Date(block.start));
@@ -587,7 +584,8 @@ export class TaskService {
       await this.scheduleTask(id, day, undefined, undefined, own);
       this.summarize(own, "Scheduled", `“${before.title}” is scheduled for ${day}, the day of its planned block.`);
     }
-    await this.planEdited(id, before); this.changed();
+    // Recorded with the rest, so Undo also takes back a timer this started (an Undo whose note changed after it was recorded would refuse).
+    await this.planEdited(id, before, own); this.changed();
   }
   /** Replaces one planned block, or removes it when `to` is null. */
   async changePlanned(id: string, from: WorkSession, to: WorkSession | null): Promise<void> {
@@ -623,20 +621,21 @@ export class TaskService {
    * - planned time cut short or moved away under a running timer stops it now, not at the new end: time already tracked is never taken away.
    * The minute check still handles everything else, including a block that began while Obsidian was closed.
    */
-  private async planEdited(id: string, before: Task, now = Date.now()): Promise<void> {
+  private async planEdited(id: string, before: Task, changes?: Change[], now = Date.now()): Promise<void> {
     if (!this.repo.settings().startAtPlannedTime) return;
     const after = await this.repo.read(id); const context = await this.todayContext(after);
     if (dueStops([after], now).some(stop => stop.end < now) && !dueStops([before], now).length) {
-      await this.applyStatus(id, "open", context, undefined, t => ({ ...setStatus(t, "open", new Date(now)), auto_started_block: null })); return;
+      await this.applyStatus(id, "open", context, changes, t => ({ ...setStatus(t, "open", new Date(now)), auto_started_block: null })); return;
     }
     const start = dueStarts([after], now)[0];
-    if (start && !blockAt(before, now)) await this.applyStatus(id, "in_progress", context, undefined, t => startPlanned(t, { ...start.block, start: new Date(now).toISOString() }, start.block.start));
+    if (start && !blockAt(before, now)) await this.applyStatus(id, "in_progress", context, changes, t => startPlanned(t, { ...start.block, start: new Date(now).toISOString() }, start.block.start));
   }
-  /** The block turned out as planned: it becomes worked time and leaves the plan. */
+  /** The block turned out as planned: it leaves the plan, and the part of it not already worked (a timer that ran in it, time logged by hand) becomes worked time, so no minute counts twice. */
   async logPlanned(id: string, block: WorkSession): Promise<void> {
     await this.repo.update(id, t => {
       if (!t.planned_sessions.some(s => s.start === block.start && s.end === block.end)) throw new Error("That planned block no longer exists; it may have been changed elsewhere.");
-      return { ...t, planned_sessions: t.planned_sessions.filter(s => s.start !== block.start || s.end !== block.end), work_sessions: [...t.work_sessions, block].slice(-MAX_WORK_SESSIONS), time_tracked_seconds: t.time_tracked_seconds + seconds(block) };
+      const parts = unworkedParts(block, t.work_sessions);
+      return { ...t, planned_sessions: t.planned_sessions.filter(s => s.start !== block.start || s.end !== block.end), work_sessions: [...t.work_sessions, ...parts].sort((a, b) => Date.parse(a.start) - Date.parse(b.start)).slice(-MAX_WORK_SESSIONS), time_tracked_seconds: t.time_tracked_seconds + parts.reduce((sum, part) => sum + seconds(part), 0) };
     }); this.changed();
   }
   /**
