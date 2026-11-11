@@ -246,7 +246,8 @@ export class ScheduleModal extends Modal {
     }
     if (!this.rows.length) chips.querySelector("button")!.addClass("organized-schedule-first");
     const row = this.contentEl.createDiv({ cls: "organized-datetime organized-schedule-add" });
-    const date = row.createEl("input", { type: "date", attr: { "aria-label": "Day to add" } }); date.value = this.today;
+    // Days that are over stay as they were (see Earlier): only today and later days are added.
+    const date = row.createEl("input", { type: "date", attr: { "aria-label": "Day to add", min: this.today } }); date.value = this.today;
     const times = this.contentEl.createDiv({ cls: "organized-datetime organized-time-range" });
     const from = times.createEl("input", { type: "time", attr: { "aria-label": "From (optional)" } }); const to = times.createEl("input", { type: "time", attr: { "aria-label": "To (optional)" } });
     const lengths = this.contentEl.createDiv({ cls: "organized-schedule-durations", attr: { role: "group", "aria-label": "Length" } });
@@ -258,6 +259,7 @@ export class ScheduleModal extends Modal {
     const add = this.contentEl.createEl("button", { cls: "organized-repeat-add mod-cta", text: "Add" });
     const submit = () => {
       if (!validDate(date.value)) { note.setText("Choose a valid date."); note.addClass("organized-session-problem"); return; }
+      if (date.value < this.today) { note.setText("Pick today or a later day; days that are over stay as they were."); note.addClass("organized-session-problem"); return; }
       if (!from.value !== !to.value) { note.setText("Add both times, or neither for a day alone."); note.addClass("organized-session-problem"); return; }
       note.setText(""); note.removeClass("organized-session-problem");
       this.addDay(date.value, from.value ? { start: from.value, end: to.value } : undefined); from.value = ""; to.value = "";
@@ -287,9 +289,9 @@ export class ScheduleModal extends Modal {
       const card = this.list.createDiv({ cls: "organized-schedule-day", attr: { role: "listitem" } }); card.toggleClass("organized-schedule-highlight", row.date === this.setup.highlight);
       const head = card.createDiv({ cls: "organized-schedule-head" });
       head.createSpan({ cls: "organized-schedule-label", text: this.label(row.date) });
-      const day = head.createEl("input", { type: "date", attr: { "aria-label": `Day of ${this.label(row.date)}` } }); day.value = row.date;
+      const day = head.createEl("input", { type: "date", attr: { "aria-label": `Day of ${this.label(row.date)}`, min: this.today } }); day.value = row.date;
       day.addEventListener("change", () => {
-        if (!validDate(day.value) || day.value === row.date) { day.value = row.date; return; }
+        if (!validDate(day.value) || day.value === row.date || day.value < this.today) { day.value = row.date; return; }
         const other = this.rows.find(r => r.date === day.value);
         // Onto a day that is already scheduled: the two become one.
         if (other) { other.times.push(...row.times); this.rows.splice(this.rows.indexOf(row), 1); } else row.date = day.value;
