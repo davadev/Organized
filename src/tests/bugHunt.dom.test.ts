@@ -322,4 +322,16 @@ describe('bug hunt regressions', () => {
     vi.spyOn(repo, 'write').mockImplementation(async (file: any) => { if (file.path === 'Notes/Stuck.md') throw new Error('locked'); });
     await service.recurrence(stuck.id, null); expect((Notice.instances.at(-1)?.message as DocumentFragment).textContent).toContain('Notes/Stuck.md');
   });
+  it('a recurring task set in progress from the side panel shows in progress while its timer runs, not open', async () => {
+    const { h, plugin } = await loaded(); const { repo, service } = plugin; const today = service.daily.path(localDate());
+    const task = await repo.create('Habit'); await repo.update(task.id, t => ({ ...t, recurring: true, starred: true })); await h.add(today, `- [ ] Habit <!--organized:${task.id}-->`);
+    const view = new OrganizedInspectorView(h.app as any, plugin); plugin.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); await flush();
+    const status = () => view.contentEl.querySelector<HTMLSelectElement>('select[aria-label="Status"]')!;
+    status().value = 'in_progress'; status().dispatchEvent(new Event('change')); await flush(); await view.render(); await flush();
+    expect(await repo.read(task.id)).toMatchObject({ status: 'open' }); expect((await repo.read(task.id)).time_tracking_started_at).not.toBeNull(); expect(h.texts.get(today)).toContain('- [/] Habit');
+    expect(status().value).toBe('in_progress'); expect(view.contentEl.querySelector('.organized-status-icon')?.getAttribute('data-status')).toBe('in_progress');
+    view.tab = 'Favorites'; await view.render(); await flush(); const badge = view.contentEl.querySelector('.organized-list-card .organized-list-status')!; expect(badge.getAttribute('aria-label')).toBe('in progress'); expect(badge.getAttribute('data-status')).toBe('in_progress');
+    view.tab = 'Task'; await view.render(); await flush(); status().value = 'open'; status().dispatchEvent(new Event('change')); await flush(); await view.render(); await flush();
+    expect((await repo.read(task.id)).time_tracking_started_at).toBeNull(); expect(status().value).toBe('open'); expect(h.texts.get(today)).toContain('- [ ] Habit');
+  });
 });

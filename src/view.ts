@@ -167,7 +167,8 @@ export class OrganizedInspectorView extends ItemView {
   private async contextFor(task: Task): Promise<{ file: TFile; line: TaskLine } | undefined> {
     return this.owner.context?.line.id === task.id ? this.owner.context : task.recurring ? await this.todayContext(task.id) : undefined;
   }
-  private shownStatus(task: Task): Task["status"] { return task.recurring && task.status === "open" && this.doneToday.has(task.id) ? "completed" : task.status; }
+  /** A recurring task keeps `status: open` (each day's todo holds that day's state), so the panel shows today's: done when today's todo is ticked, in progress while its timer runs. */
+  private shownStatus(task: Task): Task["status"] { return !task.recurring || task.status !== "open" ? task.status : this.doneToday.has(task.id) ? "completed" : task.time_tracking_started_at ? "in_progress" : "open"; }
   private taskRow(host: HTMLElement, task: Task, action: () => Promise<unknown> | void): HTMLElement {
     const row = host.createDiv({ cls: "organized-list-card", attr: { "data-status": this.shownStatus(task) } }); 
     // A real button cannot contain links; this focusable card keeps both usable.
@@ -183,8 +184,8 @@ export class OrganizedInspectorView extends ItemView {
     void renderMarkdownLinks(this.app, task.title, title, this.owner.repo.sourcePath(task.id), this.markdown).catch(report);
     // One small icon per status instead of a word keeps the card compact.
     const shown = this.shownStatus(task); const doneToday = task.recurring && shown === "completed";
-    const label = doneToday ? "done · today" : task.status.replace(/_/g, " ");
-    const status = head.createSpan({ cls: "organized-list-status", attr: { "data-status": shown, role: "img", "aria-label": label, title: label } }); setIcon(status, doneToday ? "calendar-check" : STATUS_ICONS[task.status]);
+    const label = doneToday ? "done · today" : shown.replace(/_/g, " ");
+    const status = head.createSpan({ cls: "organized-list-status", attr: { "data-status": shown, role: "img", "aria-label": label, title: label } }); setIcon(status, doneToday ? "calendar-check" : STATUS_ICONS[shown]);
     if (task.priority !== "none" || (task.scheduled && this.owner.settings.showScheduledDate) || task.starred) {
       const meta = open.createDiv({ cls: "organized-list-meta" });
       if (task.priority !== "none") meta.createSpan({ cls: `organized-list-priority priority-${task.priority}`, text: task.priority });
@@ -610,7 +611,7 @@ export class OrganizedInspectorView extends ItemView {
     const star = this.iconButton(header, "Favorite", "star", () => this.owner.run(async () => { await this.owner.repo.update(id, t => ({ ...t, starred: !t.starred })); this.owner.refresh(); })); star.setAttribute("aria-pressed", String(task.starred));
     const toolbar = hero.createDiv({ cls: "organized-task-toolbar" });
     const status = toolbar.createDiv({ cls: "organized-status-field" });
-    const shown = this.shownStatus(task); setIcon(status.createSpan({ cls: "organized-status-icon", attr: { "data-status": shown, "aria-hidden": "true" } }), task.recurring && shown === "completed" ? "calendar-check" : STATUS_ICONS[task.status]);
+    const shown = this.shownStatus(task); setIcon(status.createSpan({ cls: "organized-status-icon", attr: { "data-status": shown, "aria-hidden": "true" } }), task.recurring && shown === "completed" ? "calendar-check" : STATUS_ICONS[shown]);
     const statusSelect = this.select(status, "Status", this.shownStatus(task), STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(async () => this.owner.service.status(id, value as Task["status"], await this.contextFor(task))); });
     if (task.recurring) statusSelect.options[STATUSES.indexOf("completed")].text = "done · today";
     const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Subtasks", "Description", "Sources"], value => { this.module = value; if (FOLDABLE_CARDS.includes(value) && this.owner.settings.collapsedTaskSections.includes(value)) this.owner.setTaskSectionCollapsed(value, false); this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
