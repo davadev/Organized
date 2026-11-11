@@ -66,9 +66,13 @@ const workedSessions = (task: Task, now: number): WorkSession[] => [...task.work
  */
 export function plannedNotWorked(plans: WorkSession[], worked: WorkSession[], range: [number, number] | null = null): number {
   const spans = (sessions: WorkSession[]) => sessions.map(s => [Date.parse(s.start), Date.parse(s.end)] as const);
+  // Plans that overlap are one stretch of planned time: the same minute planned twice is still one minute.
+  const merged: [number, number][] = [];
+  for (const [start, end] of spans(plans).map(([s, e]) => [range ? Math.max(s, range[0]) : s, range ? Math.min(e, range[1]) : e] as const).filter(([s, e]) => e > s).sort((a, b) => a[0] - b[0])) {
+    const last = merged.at(-1); if (last && start <= last[1]) last[1] = Math.max(last[1], end); else merged.push([start, end]);
+  }
   let total = 0;
-  for (const [start, end] of spans(plans)) {
-    const from = range ? Math.max(start, range[0]) : start, to = range ? Math.min(end, range[1]) : end; if (to <= from) continue;
+  for (const [from, to] of merged) {
     let left = to - from, reached = from;
     for (const [s, e] of spans(worked).map(([s, e]) => [Math.max(s, from), Math.min(e, to)] as const).filter(([s, e]) => e > s).sort((a, b) => a[0] - b[0])) {
       const counted = Math.max(s, reached); if (e > counted) { left -= e - counted; reached = e; }

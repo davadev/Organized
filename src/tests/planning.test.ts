@@ -71,6 +71,8 @@ describe("planning", () => {
     expect(plannedNotWorked([block("09:00", "10:00")], [block("08:30", "09:20"), block("09:10", "09:40"), block("09:50", "11:00")])).toBe(600); expect(plannedNotWorked([block("09:00", "10:00")], [block("09:10", "09:40"), block("09:15", "09:30")])).toBe(1800);
     // Planned and not worked (ahead or skipped) still counts; work outside the plan does not reduce it; only the part inside a period counts.
     expect(plannedNotWorked([block("09:00", "10:00"), block("14:00", "15:00")], [block("11:00", "12:00")])).toBe(7200);
+    // The same minute planned twice (blocks that overlap, or one inside another) is one minute of plan.
+    expect(plannedNotWorked([block("09:00", "11:00"), block("10:00", "12:00"), block("10:30", "10:45")], [])).toBe(3 * 3600); expect(plannedNotWorked([block("09:00", "10:00"), block("09:00", "10:00")], [block("09:30", "10:00")])).toBe(1800);
     expect(plannedNotWorked([block("09:00", "10:00")], [block("09:00", "09:30")], [at("09:15"), at("12:00")])).toBe(1800); expect(plannedNotWorked([block("09:00", "10:00")], [], [at("11:00"), at("12:00")])).toBe(0);
   });
   it("works out the day, week and month and counts only the part of a session inside them", () => {

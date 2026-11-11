@@ -7,7 +7,7 @@ import { settingsFrom } from "./model";
 import { Repository } from "./repository";
 import { anchorOf, explicitRule, taskRule } from "./recurrence";
 import { Context, report, TaskService } from "./service";
-import { formatMinutes } from "./sessions";
+import { formatMinutes, localInput } from "./sessions";
 import { loadRole, MirrorError, Role } from "./device";
 import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RecurrencePicker, RetireModal, SessionModal, TaskPicker, WhatsNewModal } from "./modals";
 import { notesOfLine, notesToShow, ReleaseNote } from "./whatsNew/releaseNotes";
@@ -589,7 +589,7 @@ export default class Organized extends Plugin {
   async trigger(context: Context): Promise<void> {
     const marker = context.line.marker; const id = context.line.id; if (!id) return;
     this.assertEditable(); this.context = context; this.selectedTaskId = id;
-    if (marker === "<") { const task = await this.repo.read(id); new DatePicker(this.app, task.scheduled ?? localDate(), date => this.run(() => this.service.schedule(context, date)), task.scheduled ? () => this.run(() => this.service.unschedule(id)) : undefined).open(); }
+    if (marker === "<") this.pickSchedule(await this.repo.read(id), context);
     else if (marker === "!") new PriorityPicker(this.app, priority => this.run(() => this.service.priority(context, priority))).open();
     else if (marker in SECTION_MARKERS) { await this.openInspector("Task", SECTION_MARKERS[marker]); await this.run(() => this.service.clean(context)); }
     else if (marker === PROJECT_MARKER) this.pickProjects(await this.repo.read(id), context);
@@ -598,6 +598,20 @@ export default class Organized extends Plugin {
     else if (marker === TIME_MARKER) this.addTime(await this.repo.read(id), context);
     else if (marker === SUBTASK_MARKER) await this.addSubtaskFromMarker(await this.repo.read(id), context);
     else await this.run(() => this.service.marker(context, marker));
+  }
+  /**
+   * Asks for the task's date and, optionally, a block of time on it. The one block not yet begun on the current date fills the time fields, and what is saved replaces it
+   * (emptied fields leave the date alone); more blocks than one simply move with the date, as the dialog says.
+   */
+  pickSchedule(task: Task, context?: Context): void {
+    const now = Date.now(); const clock = (iso: string) => localInput(iso).slice(11);
+    const onDay = task.scheduled ? task.planned_sessions.filter(b => localDate(new Date(b.start)) === task.scheduled && Date.parse(b.start) > now) : [];
+    const single = onDay.length === 1 ? onDay[0] : null;
+    new DatePicker(this.app, task.scheduled ?? localDate(), (date, time) => this.run(async () => {
+      if (single) await this.service.changePlanned(task.id, single, null);
+      await this.service.scheduleTask(task.id, date, context, undefined, undefined, time ?? undefined);
+    }), task.scheduled ? () => this.run(() => this.service.unschedule(task.id)) : undefined, single ? { start: clock(single.start), end: clock(single.end) } : null,
+    onDay.length > 1 ? `${onDay.length} planned blocks on ${task.scheduled} move with the date.` : "").open();
   }
   /** Asks how the task repeats. From a typed `[r]` (`typed`), cancelling puts the todo's own marker back; from the panel there is no marker to put back. */
   pickRecurrence(task: Task, context?: Context, typed = false): void {

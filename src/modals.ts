@@ -118,16 +118,39 @@ export class RecurrencePicker extends Modal {
   onClose(): void { this.contentEl.empty(); queueMicrotask(() => { if (!this.picked) this.cancelled?.(); }); }
 }
 export class DatePicker extends Modal {
-  /** `clear`, when given, adds a button that removes the date again. */
-  constructor(app: App, readonly initial: string, readonly choose: (date: string) => Promise<void>, readonly clear?: () => Promise<void>) { super(app); decorate(this); }
+  /**
+   * `clear`, when given, adds a button that removes the date again. `time` fills the optional From and To fields; with both filled, `choose` also gets that block of the day
+   * (an end at or before the start is the next morning). `hint` is a line under the fields (say, other blocks that move with the date).
+   */
+  constructor(app: App, readonly initial: string, readonly choose: (date: string, time: WorkSession | null) => Promise<void>, readonly clear?: () => Promise<void>, readonly time: { start: string; end: string } | null = null, readonly hint = "", readonly now = () => Date.now()) { super(app); decorate(this); }
   onOpen(): void {
     this.titleEl.setText("Schedule task"); this.contentEl.addClass("organized-modal");
     this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Scheduled date" });
     const input = this.contentEl.createEl("input", { type: "date", attr: { "aria-label": "Scheduled date" } }); input.value = this.initial;
+    this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Time (optional)" });
+    const row = this.contentEl.createDiv({ cls: "organized-datetime organized-time-range" });
+    const from = row.createEl("input", { type: "time", attr: { "aria-label": "From" } }); const to = row.createEl("input", { type: "time", attr: { "aria-label": "To" } });
+    from.value = this.time?.start ?? ""; to.value = this.time?.end ?? "";
+    const note = this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-note", attr: { role: "status" } });
+    // The block as instants: an end at or before the start runs past midnight. Null for a date alone; a string says what is wrong.
+    const read = (): WorkSession | null | string => {
+      if (!from.value && !to.value) return null;
+      if (!from.value || !to.value) return "Add both times, or neither for a date alone.";
+      const start = isoFromInput(`${input.value}T${from.value}`); let end = isoFromInput(`${input.value}T${to.value}`);
+      if (start && end && Date.parse(end) <= Date.parse(start)) end = new Date(new Date(end).setDate(new Date(end).getDate() + 1)).toISOString();
+      return sessionProblem(start, end, this.now(), "planned") ?? { start: start!, end: end! };
+    };
+    const paint = () => {
+      const block = read(); note.toggleClass("organized-session-problem", typeof block === "string");
+      note.setText(typeof block === "string" ? block : block ? `Planned time: ${lengthOf(block)}${localInput(block.end).slice(0, 10) !== input.value ? " · ends the next day" : ""}${this.hint ? ` · ${this.hint}` : ""}` : this.hint);
+    };
+    for (const field of [input, from, to]) field.addEventListener("input", paint);
+    paint();
     const actions = new Setting(this.contentEl);
     actions.addButton(b => b.setButtonText("Schedule").setCta().onClick(() => {
       if (!validDate(input.value)) { input.setCustomValidity("Choose a valid date."); input.reportValidity(); return; }
-      this.close(); void this.choose(input.value).catch(report);
+      const block = read(); if (typeof block === "string") { paint(); return; }
+      this.close(); void this.choose(input.value, block).catch(report);
     }));
     if (this.clear) { const clear = this.clear; actions.addButton(b => b.setButtonText("Clear date").onClick(() => { this.close(); void clear().catch(report); })); }
   }

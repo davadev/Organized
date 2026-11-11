@@ -5,7 +5,7 @@ import { harness, sessionFields } from './harness';
 import { installObsidianDom } from './__mocks__/obsidianDom';
 import { Notice, Modal } from './__mocks__/obsidian';
 import { localDate, taskFrom } from '../model';
-import { SessionModal } from '../modals';
+import { DatePicker, SessionModal } from '../modals';
 import { kindOf } from '../sessions';
 import { splitNote } from '../repository';
 
@@ -73,8 +73,8 @@ describe('planned time', () => {
     expect((await repo.read(long.id)).time_tracking_started_at).toBe(iso(9)); expect(await service.applyPlanning(at(11, 0))).toEqual(['Back to back']); expect((await repo.read(long.id)).time_tracked_seconds).toBe(7200);
   });
   it('checks for due blocks only when the setting is on, once a minute and when the app returns', async () => {
-    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 2, 4, 9, 30)); const { owner, service, repo } = await fixture(); const task = await repo.create('Ticking'); await service.addPlanned(task.id, block(9, 10));
-    owner.settings.startAtPlannedTime = false; owner.planningTick(); await flush(); expect((await repo.read(task.id)).status).toBe('open');
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 2, 4, 9, 30)); const { owner, service, repo } = await fixture(); const task = await repo.create('Ticking'); owner.settings.startAtPlannedTime = false; await service.addPlanned(task.id, block(9, 10));
+    owner.planningTick(); await flush(); expect((await repo.read(task.id)).status).toBe('open');
     owner.settings.startAtPlannedTime = true; owner.planningTick(); await flush(); expect((await repo.read(task.id)).status).toBe('in_progress');
     vi.setSystemTime(new Date(2026, 2, 4, 10, 1)); owner.planningTick(); await flush(); expect((await repo.read(task.id)).status).toBe('open'); expect(Notice.instances.at(-1)?.message).toContain('Planned time for “Ticking” is over: its timer stopped');
     const second = await repo.create('Also'); const third = await repo.create('And also'); for (const t of [second, third]) await repo.update(t.id, x => ({ ...x, status: 'in_progress', time_tracking_started_at: iso(9), planned_sessions: [block(9, 10)] }));
@@ -169,5 +169,60 @@ describe('planned time', () => {
       await service.applyPlanning(new Date(2026, 2, 4, 9, 0).getTime());
       expect(read(1)).toContain('[>]'); expect(read(2)).toContain('- [ ] Old line'); expect(read(3)!.split('\n')).toEqual([`- [<] Old line <!--organized:${task.id}-->`, `- [/] Old line <!--organized:${task.id}-->`]);
     });
+  });
+});
+
+describe('scheduling with a time', () => {
+  const on = (d: number, from: number, to: number) => ({ start: new Date(2026, 2, d, from).toISOString(), end: new Date(2026, 2, d, to).toISOString() });
+  async function today8() { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 2, 4, 8, 0)); return fixture(); }
+  const notices = () => Notice.instances.map(n => (n.message as unknown as HTMLElement).textContent ?? n.message);
+  it('sets the block aside on the day with the date, and a block on a later day dates a task that has none', async () => {
+    const { service, repo } = await today8(); const task = await repo.create('Meeting');
+    await service.scheduleTask(task.id, '2026-03-05', undefined, undefined, undefined, on(5, 10, 11)); expect(await repo.read(task.id)).toMatchObject({ scheduled: '2026-03-05', planned_sessions: [on(5, 10, 11)] });
+    const loose = await repo.create('Loose'); await service.addPlanned(loose.id, on(6, 14, 15)); expect((await repo.read(loose.id)).scheduled).toBe('2026-03-06'); expect(notices().at(-1)).toContain('“Loose” is scheduled for 2026-03-06');
+    await service.undo(); expect(await repo.read(loose.id)).toMatchObject({ scheduled: null, planned_sessions: [] });
+    // Not for a block today or earlier, a recurring or finished task, or one that already has a date.
+    const now = await repo.create('Now'); await service.addPlanned(now.id, on(4, 9, 10)); const past = await repo.create('Past'); await service.addPlanned(past.id, on(3, 9, 10));
+    const habit = await repo.create('Habit'); await repo.update(habit.id, t => ({ ...t, recurring: true })); await service.addPlanned(habit.id, on(6, 9, 10));
+    const done = await repo.create('Done'); await repo.update(done.id, t => ({ ...t, status: 'completed' })); await service.addPlanned(done.id, on(6, 9, 10));
+    await service.addPlanned(task.id, on(7, 9, 10));
+    for (const t of [now, past, habit, done]) expect((await repo.read(t.id)).scheduled).toBeNull(); expect((await repo.read(task.id)).scheduled).toBe('2026-03-05');
+  });
+  it('moves the blocks of the old day that have not begun to the new day at the same times, once, and clearing the date removes them', async () => {
+    const { service, repo } = await today8(); const task = await repo.create('Moving'); await repo.update(task.id, t => ({ ...t, scheduled: '2026-03-04', planned_sessions: [on(4, 7, 8), on(4, 10, 11), on(4, 13, 14), on(6, 13, 14), on(9, 9, 10)] }));
+    await service.scheduleTask(task.id, '2026-03-06'); expect((await repo.read(task.id)).planned_sessions).toEqual([on(4, 7, 8), on(6, 10, 11), on(6, 13, 14), on(9, 9, 10)]);
+    expect(notices().at(-1)).toContain('2 planned blocks of “Moving” moved from 2026-03-04 to 2026-03-06.');
+    await service.undo(); expect((await repo.read(task.id)).planned_sessions).toEqual([on(4, 7, 8), on(4, 10, 11), on(4, 13, 14), on(6, 13, 14), on(9, 9, 10)]); expect((await repo.read(task.id)).scheduled).toBe('2026-03-04');
+    await service.unschedule(task.id); expect(await repo.read(task.id)).toMatchObject({ scheduled: null, planned_sessions: [on(4, 7, 8), on(6, 13, 14), on(9, 9, 10)] }); expect(notices().at(-1)).toContain('2 planned blocks on 2026-03-04 removed with it');
+    await service.undo(); expect((await repo.read(task.id)).planned_sessions).toHaveLength(5);
+    // A day with nothing to move says nothing more than before.
+    const count = Notice.instances.length; await service.scheduleTask(task.id, '2026-03-04'); await service.scheduleTask(task.id, '2026-03-05'); await service.unschedule(task.id); expect(Notice.instances.length).toBe(count + 2);
+  });
+  it('moves the blocks when the todo is scheduled from its line, with its subtasks, and a time given there is added', async () => {
+    const { service, repo, add, texts } = await today8(); const task = await repo.create('Line'); const child = await repo.create('Child');
+    await repo.update(task.id, t => ({ ...t, scheduled: '2026-03-05', planned_sessions: [on(5, 10, 11)] })); await repo.update(child.id, t => ({ ...t, scheduled: '2026-03-05', planned_sessions: [on(5, 12, 13)] }));
+    const file: any = await add('Inbox.md', `- [ ] Line <!--organized:${task.id}-->\n  - [ ] Child <!--organized:${child.id}-->`); const context = { file, line: (await import('../codec')).parseTasks(texts.get('Inbox.md')!)[0] };
+    await service.scheduleTask(task.id, '2026-03-06', context, undefined, undefined, on(6, 15, 16));
+    expect((await repo.read(task.id)).planned_sessions).toEqual([on(6, 10, 11), on(6, 15, 16)]); expect((await repo.read(child.id)).planned_sessions).toEqual([on(6, 12, 13)]);
+    expect(notices().at(-1)).toContain('1 planned block of “Line” moved');
+  });
+  it('the date dialog shows the one block of the day and replaces it with what is saved; several blocks just move along', async () => {
+    const { owner, repo } = await today8(); const task = await repo.create('Dialog'); await repo.update(task.id, t => ({ ...t, scheduled: '2026-03-05', planned_sessions: [on(5, 10, 11)] }));
+    owner.pickSchedule(await repo.read(task.id)); let modal = Modal.instances.at(-1) as unknown as DatePicker; expect([modal.initial, modal.time, modal.hint]).toEqual(['2026-03-05', { start: '10:00', end: '11:00' }, '']);
+    await modal.choose('2026-03-06', on(6, 14, 15)); await flush(); expect(await repo.read(task.id)).toMatchObject({ scheduled: '2026-03-06', planned_sessions: [on(6, 14, 15)] });
+    await repo.update(task.id, t => ({ ...t, planned_sessions: [on(6, 9, 10), on(6, 14, 15)] })); owner.pickSchedule(await repo.read(task.id)); modal = Modal.instances.at(-1) as unknown as DatePicker;
+    expect([modal.time, modal.hint]).toEqual([null, '2 planned blocks on 2026-03-06 move with the date.']); await modal.choose('2026-03-07', null); await flush(); expect((await repo.read(task.id)).planned_sessions).toEqual([on(7, 9, 10), on(7, 14, 15)]);
+    const loose = await repo.create('Undated'); owner.pickSchedule(loose); modal = Modal.instances.at(-1) as unknown as DatePicker; expect([modal.initial, modal.time]).toEqual(['2026-03-04', null]); expect(modal.clear).toBeUndefined();
+  });
+  it('a change of planned time follows at once from now: a block added under way starts now, one cut under a running timer stops it now, never earlier', async () => {
+    const { service, repo } = await today8(); vi.setSystemTime(new Date(2026, 2, 4, 13, 0)); const task = await repo.create('Shift');
+    await service.addPlanned(task.id, on(4, 8, 17)); expect((await repo.read(task.id)).time_tracking_started_at).toBe(new Date(2026, 2, 4, 13).toISOString());
+    // Started with the block at 08:00 (the minute check), then the plan is cut to end at noon: the hour after noon was worked and stays.
+    const shift = await repo.create('Early'); await repo.update(shift.id, t => ({ ...t, planned_sessions: [on(4, 8, 17)] })); await service.applyPlanning(new Date(2026, 2, 4, 8).getTime());
+    await service.changePlanned(shift.id, on(4, 8, 17), on(4, 8, 12)); expect(await repo.read(shift.id)).toMatchObject({ status: 'open', time_tracking_started_at: null, time_tracked_seconds: 5 * 3600, auto_started_block: null });
+    // A stop that was already due before the edit is the minute check's (at the block's end), and with the setting off nothing follows at once.
+    const late = await repo.create('Late'); await repo.update(late.id, t => ({ ...t, status: 'in_progress', time_tracking_started_at: new Date(2026, 2, 4, 9).toISOString(), auto_started_block: on(4, 9, 10).start, planned_sessions: [on(4, 9, 10), on(4, 15, 16)] }));
+    await service.changePlanned(late.id, on(4, 15, 16), on(4, 15, 17)); expect((await repo.read(late.id)).time_tracking_started_at).not.toBeNull(); expect(await service.applyPlanning()).toEqual(['Late']); expect((await repo.read(late.id)).time_tracked_seconds).toBe(3600);
+    repo.settings().startAtPlannedTime = false; const off = await repo.create('Off'); await service.addPlanned(off.id, on(4, 12, 14)); expect((await repo.read(off.id)).time_tracking_started_at).toBeNull();
   });
 });
