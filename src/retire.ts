@@ -68,7 +68,7 @@ export function retirePreview(scan: RetireScan, raw: RetireOptions, now: number)
   const o = normalizeRetire(raw); const chosen = selectTasks(scan.tasks, o, now);
   const touched = new Set<string>(); let todos = 0;
   for (const task of chosen) { todos += scan.lines.get(task.id) ?? 0; for (const file of scan.files.get(task.id) ?? []) touched.add(file.path); }
-  return { tasks: chosen.length, todos, notes: touched.size, renamed: o.notes === "rename" ? chosen.filter(task => scan.unnamed.has(task.id)).length : 0, stripped: o.yaml === "strip" ? chosen.length : 0, trashed: o.notes === "trash" ? chosen.length : 0, plans: losesNote(o) ? chosen.filter(task => task.planned_sessions.length).length : 0, budgets: losesNote(o) ? chosen.filter(task => task.time_budget_seconds !== null).length : 0, rules: chosen.filter(task => task.recurring).length };
+  return { tasks: chosen.length, todos, notes: touched.size, renamed: o.notes === "rename" ? chosen.filter(task => scan.unnamed.has(task.id)).length : 0, stripped: o.yaml === "strip" ? chosen.length : 0, trashed: o.notes === "trash" ? chosen.length : 0, plans: losesNote(o) ? chosen.filter(task => task.planned_sessions.length || task.recurrence_times.length).length : 0, budgets: losesNote(o) ? chosen.filter(task => task.time_budget_seconds !== null).length : 0, rules: chosen.filter(task => task.recurring).length };
 }
 export const plural = (n: number, one: string): string => `${n} ${one}${n === 1 ? "" : "s"}`;
 export function describePreview(p: RetirePreview): string {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { newTask, Task, taskFrom } from "../model";
-import { clash, minutesOf, plansIn, repeatingBlocks, stored, timeLabel, timesFrom, timesProblem } from "../plans";
+import { clash, minutesOf, plansIn, repeatingBlocks, shiftTo, stored, timeLabel, timesFrom, timesProblem, unworkedParts } from "../plans";
 import { budgetUse, claimHolds, dueStarts, dueStops, projectUse } from "../planning";
 
 const at = (d: number, h: number, m = 0) => new Date(2026, 2, d, h, m).getTime();
@@ -58,6 +58,14 @@ describe("repeating times", () => {
   });
 });
 
+describe("moving and logging blocks", () => {
+  it("moves a block to another day at the same clock time and finds what of it was not worked", () => {
+    expect(shiftTo({ start: iso(4, 22), end: iso(5, 2) }, "2026-03-09")).toEqual({ start: iso(9, 22), end: iso(10, 2) });
+    const plan = block(4, 9, 12);
+    expect(unworkedParts(plan, [block(4, 11, 13), { start: iso(4, 9, 30), end: iso(4, 10) }, block(4, 8, 9), { start: iso(4, 9, 45), end: iso(4, 10, 15) }])).toEqual([{ start: iso(4, 9), end: iso(4, 9, 30) }, { start: iso(4, 10, 15), end: iso(4, 11) }]);
+    expect(unworkedParts(plan, [block(4, 8, 13)])).toEqual([]); expect(unworkedParts(plan, [])).toEqual([plan]);
+  });
+});
 describe("timer and budgets with repeating times", () => {
   const working = () => weekdays([{ start: "08:00", end: "12:00" }, { start: "12:00", end: "17:00" }]);
   it("starts at the first block, runs through blocks back to back, and stops at the end of the day's run, also when noticed late", () => {

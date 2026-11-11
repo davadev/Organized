@@ -7,7 +7,7 @@ import { elapsed, FOLDABLE_CARDS, localDate, PRIORITIES, Section, STATUS_ICONS, 
 import { byPriority, report } from "./service";
 import { cells, HeatScale, MAX_CELLS, scaleFor, slider } from "./movement";
 import { BudgetModal, ChoiceModal, ProjectBudgetModal, SessionModal, TaskPicker } from "./modals";
-import { timeLabel } from "./plans";
+import { timeLabel, unworkedParts } from "./plans";
 import { formatMinutes, lengthOf, lengthOfSeconds, seconds, SessionKind } from "./sessions";
 import { budgetUse, BudgetUse, PERIOD_LABELS, plannedSeconds, projectUse } from "./planning";
 import { descendants, NoteSection, NOTE_SECTIONS, noteSection, parseTasks, TaskLine } from "./codec";
@@ -67,6 +67,8 @@ export class OrganizedInspectorView extends ItemView {
   private expandedLists = new Set<string>();
   private scrolledModule = "";
   private doneToday = new Set<string>();
+  /** Recurring tasks whose todo today is done or canceled: today's planned time is over for them (see `withDoneToday`). */
+  private endedToday = new Set<string>();
   private markdown = this.addChild(new Component());
   constructor(leaf: WorkspaceLeaf, readonly owner: Organized) { super(leaf); }
   getViewType(): string { return VIEW_TYPE; }
@@ -156,7 +158,8 @@ export class OrganizedInspectorView extends ItemView {
   /** Recurring tasks stay open in frontmatter, so today's ticked occurrence is what shows them as done. */
   private async loadDoneToday(): Promise<void> {
     const note = this.owner.repo.file(this.owner.service.daily.path(localDate()));
-    this.doneToday = new Set(note ? parseTasks(await this.owner.repo.readText(note)).filter(t => t.id && t.marker.toLowerCase() === "x").map(t => t.id!) : []);
+    const lines = note ? parseTasks(await this.owner.repo.readText(note)).filter(t => t.id) : [];
+    this.doneToday = new Set(lines.filter(t => t.marker.toLowerCase() === "x").map(t => t.id!)); this.endedToday = new Set(lines.filter(t => t.marker.toLowerCase() === "x" || t.marker === "-").map(t => t.id!));
   }
   /** Today's occurrence of a recurring task, so changing status from the inspector targets only today. */
   /** The todo line a change from the panel should write to: the one the cursor is on when it is this task's, else today's occurrence of a recurring task. Another task's line is never used. */
@@ -165,7 +168,7 @@ export class OrganizedInspectorView extends ItemView {
   }
   /** A recurring task keeps `status: open` (each day's todo holds that day's state), so the panel shows today's: done when today's todo is ticked, in progress while its timer runs. */
   /** Tasks as planned time sees them: a recurring task done today is done with today's repeating time (the same rule as `applyPlanning`). */
-  private withDoneToday(tasks: Task[]): Task[] { const today = localDate(); return tasks.map(t => t.recurring && this.doneToday.has(t.id) ? { ...t, recurrence_skips: [...t.recurrence_skips, today] } : t); }
+  private withDoneToday(tasks: Task[]): Task[] { const today = localDate(); return tasks.map(t => t.recurring && this.endedToday.has(t.id) ? { ...t, recurrence_skips: [...t.recurrence_skips, today] } : t); }
   private shownStatus(task: Task): Task["status"] { return !task.recurring || task.status !== "open" ? task.status : this.doneToday.has(task.id) ? "completed" : task.time_tracking_started_at ? "in_progress" : "open"; }
   private taskRow(host: HTMLElement, task: Task, action: () => Promise<unknown> | void): HTMLElement {
     const row = host.createDiv({ cls: "organized-list-card", attr: { "data-status": this.shownStatus(task) } }); 
@@ -489,19 +492,22 @@ export class OrganizedInspectorView extends ItemView {
       }).then(() => this.owner.planningTick()),
       remove: session ? () => this.owner.run(() => type === "planned" ? service.changePlanned(task.id, session, null) : service.changeSession(task.id, session, null)).then(() => this.owner.planningTick()) : undefined,
       openTask: session ? () => this.openCalendarTask(task) : undefined,
-      logWorked: session && type === "planned" && Date.parse(session.end) <= Date.now() ? () => this.owner.run(() => service.logPlanned(task.id, session)) : undefined,
+      logWorked: session && type === "planned" && this.loggable(task, session) ? () => this.owner.run(() => service.logPlanned(task.id, session)) : undefined,
     }).open();
   }
+  /** A planned block that is over can be logged as worked while part of it was not worked already (a timer that ran in it counts). */
+  private loggable(task: Task, session: WorkSession): boolean { return Date.parse(session.end) <= Date.now() && unworkedParts(session, task.work_sessions).length > 0; }
   /** A block of a recurring task's repeating times: change that day alone (the other days keep the times), or the times of every day. */
-  private editRepeating(task: Task, session: WorkSession, date: string): void {
-    const service = this.owner.service;
+  private editRepeating(task: Task, session: WorkSession): void {
+    // The day the block starts on, also when its morning part after midnight was tapped.
+    const service = this.owner.service; const date = localDate(new Date(session.start));
     new ChoiceModal(this.app, "Change planned time", `“${task.title}” is planned at this time every day it repeats. Change only ${date}, or the times of every day?`, [
       { label: "This day", run: () => new SessionModal(this.app, {
         heading: "Edit planned time", taskTitle: task.title, start: session.start, end: session.end, kind: "planned",
         save: next => this.owner.run(() => service.editRepeatingDay(task.id, date, session, next)).then(() => this.owner.planningTick()),
         remove: () => this.owner.run(() => service.editRepeatingDay(task.id, date, session, null)).then(() => this.owner.planningTick()),
         openTask: () => this.openCalendarTask(task),
-        logWorked: Date.parse(session.end) <= Date.now() ? () => this.owner.run(async () => { await service.editRepeatingDay(task.id, date, session, session); await service.logPlanned(task.id, session); }) : undefined,
+        logWorked: this.loggable(task, session) ? () => this.owner.run(async () => { await service.editRepeatingDay(task.id, date, session, session); await service.logPlanned(task.id, session); }) : undefined,
       }).open() },
       { label: "Every day", run: () => this.owner.pickRecurrence(task) },
     ]).open();
@@ -574,7 +580,7 @@ export class OrganizedInspectorView extends ItemView {
       // A retired task has no task note: open the daily note that kept its time instead.
       const kept = retired.get(block.task.id);
       // A stored session opens for editing (with an Open task button); a running timer has nothing to edit yet.
-      part.addEventListener("click", () => { if (block.repeating) { this.editRepeating(block.task, block.session!, date); return; } if (!kept && block.session) { this.editSession(block.task, block.session, date, block.planned ? "planned" : "worked"); return; } void (kept ? this.openNote(kept.path) : this.openCalendarTask(block.task)).catch(report); });
+      part.addEventListener("click", () => { if (block.repeating) { this.editRepeating(block.task, block.session!); return; } if (!kept && block.session) { this.editSession(block.task, block.session, date, block.planned ? "planned" : "worked"); return; } void (kept ? this.openNote(kept.path) : this.openCalendarTask(block.task)).catch(report); });
     }
     const minutes = new Date(now).getHours() * 60 + new Date(now).getMinutes();
     if (date === localDate() && minutes >= from * 60 && minutes <= to * 60) { const nowLine = grid.createDiv({ cls: "organized-now-line", attr: { "aria-hidden": "true" } }); nowLine.setCssProps({ "--organized-at": String((minutes - from * 60) / span * 100) }); }

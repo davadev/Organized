@@ -80,3 +80,18 @@ export function repeatingBlocks(task: Planning, day: string, now = Date.now()): 
 }
 /** A plan as stored: just its times. */
 export const stored = (plan: Plan): WorkSession => ({ start: plan.start, end: plan.end });
+/** The block moved to `date` at the same local clock time, keeping its length. */
+export function shiftTo(block: WorkSession, date: string): WorkSession {
+  const start = new Date(block.start); const [y, m, d] = date.split("-").map(Number); const moved = new Date(y, m - 1, d, start.getHours(), start.getMinutes(), start.getSeconds());
+  return { start: moved.toISOString(), end: new Date(moved.getTime() + Date.parse(block.end) - start.getTime()).toISOString() };
+}
+/** The parts of `block` no session in `worked` covers: what logging the block as worked may still add. */
+export function unworkedParts(block: WorkSession, worked: WorkSession[]): WorkSession[] {
+  const parts: WorkSession[] = []; let from = Date.parse(block.start); const to = Date.parse(block.end);
+  for (const [s, e] of worked.map(w => [Date.parse(w.start), Date.parse(w.end)] as const).filter(([s, e]) => e > from && s < to).sort((a, b) => a[0] - b[0])) {
+    if (s > from) parts.push({ start: new Date(from).toISOString(), end: new Date(s).toISOString() });
+    from = Math.max(from, e);
+  }
+  if (to > from) parts.push({ start: new Date(from).toISOString(), end: new Date(to).toISOString() });
+  return parts;
+}

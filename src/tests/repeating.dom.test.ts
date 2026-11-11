@@ -5,7 +5,7 @@ import { OrganizedInspectorView } from '../view';
 import { harness } from './harness';
 import { installObsidianDom } from './__mocks__/obsidianDom';
 import { Modal, Notice } from './__mocks__/obsidian';
-import { ChoiceModal, RecurrencePicker, SessionModal } from '../modals';
+import { ChoiceModal, DatePicker, RecurrencePicker, SessionModal } from '../modals';
 import { parseRule } from '../recurrence';
 import { splitNote } from '../repository';
 
@@ -119,5 +119,61 @@ describe('repeating time in the views', () => {
     const pick = vi.spyOn(owner, 'pickRecurrence').mockImplementation(() => undefined); row.click(); expect(pick).toHaveBeenCalledWith(expect.objectContaining({ id: task.id }), undefined);
     // The cursor's todo goes along only when it is this task's (another task's line is never changed from here).
     const context: any = { file: { path: 'Note.md' }, line: { id: task.id } }; owner.context = context; row.click(); expect(pick).toHaveBeenLastCalledWith(expect.objectContaining({ id: task.id }), context);
+  });
+});
+
+describe('found by the bug hunt of beta.11 and beta.12', () => {
+  async function viewed(time = at(4, 7)) {
+    const f = await fixture(time); const leaf: any = { app: f.app }; const view = new OrganizedInspectorView(leaf, f.owner); leaf.view = view; document.body.appendChild(view.contentEl); f.raw.workspace.getLeavesOfType.mockReturnValue([leaf]);
+    return { ...f, view };
+  }
+  const daily = parseRule('daily')!;
+  it('logging a planned block as worked adds only the part no timer or session already covers, and is not offered once all of it is worked', async () => {
+    const { service, repo, view } = await viewed(); const task = await repo.create('Plan'); await service.addPlanned(task.id, block(4, 9, 10));
+    await service.applyPlanning(at(4, 9)); await service.applyPlanning(at(4, 10, 1)); expect((await repo.read(task.id)).time_tracked_seconds).toBe(3600);
+    await service.logPlanned(task.id, block(4, 9, 10)); expect(await repo.read(task.id)).toMatchObject({ time_tracked_seconds: 3600, planned_sessions: [], work_sessions: [block(4, 9, 10)] });
+    // Worked 10:15–10:30 by hand inside a plan of 10–11: logging adds the quarter before and the half hour after.
+    await repo.update(task.id, t => ({ ...t, planned_sessions: [block(4, 10, 11)], work_sessions: [...t.work_sessions, { start: iso(4, 10, 15), end: iso(4, 10, 30) }], time_tracked_seconds: 3600 + 900 }));
+    await service.logPlanned(task.id, block(4, 10, 11)); expect((await repo.read(task.id)).time_tracked_seconds).toBe(2 * 3600); expect((await repo.read(task.id)).work_sessions).toHaveLength(4);
+    // In the day view: a plan that was all worked offers no Log as worked; one that was not, does.
+    vi.setSystemTime(new Date(at(4, 12))); await repo.update(task.id, t => ({ ...t, planned_sessions: [block(4, 9, 10), { start: iso(4, 11), end: iso(4, 11, 30) }] }));
+    view.tab = 'Calendar'; view.selectedDate = '2026-03-04'; view.calendarMode = 'Day'; await view.render(); await flush();
+    const planned = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-block[data-planned="true"]'));
+    planned[0].click(); expect((Modal.instances.at(-1) as unknown as SessionModal).edit.logWorked).toBeUndefined(); planned[1].click(); expect((Modal.instances.at(-1) as unknown as SessionModal).edit.logWorked).toBeDefined();
+  });
+  it('a date dialog whose scheduling fails takes no planned block away', async () => {
+    const { owner, repo, service } = await viewed(); const task = await repo.create('Keep'); await repo.update(task.id, t => ({ ...t, scheduled: '2026-03-05', planned_sessions: [block(5, 10, 11)] }));
+    const schedule = vi.spyOn(service, 'scheduleTask').mockRejectedValueOnce(new Error('disk full'));
+    owner.pickSchedule(await repo.read(task.id)); await (Modal.instances.at(-1) as unknown as DatePicker).choose('2026-03-06', block(6, 14, 15)); await flush();
+    expect((await repo.read(task.id)).planned_sessions).toEqual([block(5, 10, 11)]); expect(Notice.instances.at(-1)!.message).toContain('disk full'); schedule.mockRestore();
+    // Same day, same times: nothing to change; emptied times take the block away.
+    owner.pickSchedule(await repo.read(task.id)); await (Modal.instances.at(-1) as unknown as DatePicker).choose('2026-03-05', block(5, 10, 11)); await flush(); expect((await repo.read(task.id)).planned_sessions).toEqual([block(5, 10, 11)]);
+    owner.pickSchedule(await repo.read(task.id)); await (Modal.instances.at(-1) as unknown as DatePicker).choose('2026-03-05', null); await flush(); expect((await repo.read(task.id)).planned_sessions).toEqual([]);
+  });
+  it('Undo right after saving times that started the timer takes back both', async () => {
+    const { service, repo, texts, add } = await fixture(at(4, 13)); const task = await repo.create('Shift'); const note = service.daily.path('2026-03-04'); await add(note, '');
+    await service.recurrence(task.id, daily, undefined, [{ start: '08:00', end: '17:00' }]); expect((await repo.read(task.id)).time_tracking_started_at).not.toBeNull(); expect(texts.get(note)).toContain('[/] Shift');
+    await service.undo(); expect(Notice.instances.at(-1)!.message).toBe('Organized changes undone. Created notes are preserved.');
+    expect(await repo.read(task.id)).toMatchObject({ recurring: false, recurrence_times: [], time_tracking_started_at: null }); expect(texts.get(note)).toBe('');
+    // Planning a later day for an undated task, with Undo, too.
+    const later = await repo.create('Later'); await service.addPlanned(later.id, block(5, 9, 10)); await service.undo(); expect(Notice.instances.at(-1)!.message).toBe('Organized changes undone. Created notes are preserved.');
+  });
+  it('the morning part of a night block is changed for the day the block starts on', async () => {
+    const { service, repo, view } = await viewed(); const task = await repo.create('Night'); await service.recurrence(task.id, daily, undefined, [{ start: '22:00', end: '02:00' }]);
+    view.tab = 'Calendar'; view.selectedDate = '2026-03-05'; view.calendarMode = 'Day'; await view.render(); await flush();
+    const morning = view.contentEl.querySelector<HTMLElement>('.organized-block')!; morning.click(); const ask = Modal.instances.at(-1) as unknown as ChoiceModal; expect(ask.message).toContain('Change only 2026-03-04');
+    button(ask.contentEl, 'This day').click(); await (Modal.instances.at(-1) as unknown as SessionModal).edit.remove!(); await flush();
+    expect(await repo.read(task.id)).toMatchObject({ recurrence_skips: ['2026-03-04'], planned_sessions: [] }); expect(Notice.instances.map(n => n.message).join('|')).not.toContain('no longer exists');
+  });
+  it('scheduling with a time the day already has does not plan it twice', async () => {
+    const { repo, service } = await fixture(); const task = await repo.create('Twice'); await repo.update(task.id, t => ({ ...t, scheduled: '2026-03-05', planned_sessions: [block(5, 10, 11), block(5, 14, 15)] }));
+    await service.scheduleTask(task.id, '2026-03-05', undefined, undefined, undefined, block(5, 10, 11)); expect((await repo.read(task.id)).planned_sessions).toEqual([block(5, 10, 11), block(5, 14, 15)]);
+  });
+  it('a recurring task canceled for today leaves today out of the day view and the budgets, like one done', async () => {
+    const { service, repo, view, add } = await viewed(); const task = await repo.create('Job'); await service.recurrence(task.id, daily, undefined, [{ start: '09:00', end: '10:00' }]);
+    await add(service.daily.path('2026-03-04'), `- [-] Job <!--organized:${task.id}--> <!--organized:repeat-->`);
+    view.tab = 'Calendar'; view.selectedDate = '2026-03-04'; view.calendarMode = 'Day'; await view.render(); await flush(); expect(view.contentEl.querySelector('.organized-block')).toBeNull();
+    // Canceled is not done: the list still says canceled for today, not done.
+    expect((view as any).doneToday.has(task.id)).toBe(false);
   });
 });
