@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **A todo forwarded to tomorrow takes its planned time along.** Forwarding a todo with `>` left the day's planned blocks that had not begun on the day it left; with *Start tasks at their planned time* on, such a block later started the timer of the task you had just put off and turned the forwarded `[>]` into `[/]`. Those blocks now move to the next day at the same times, with Undo, as when rescheduling. The automatic carry-over of unfinished todos still leaves the past day's planned time where it was.
 - **"Log as worked" never counts time twice.** A planned block whose timer already ran (with *Start tasks at their planned time*) still offered *Log as worked*, which added the whole block again: an hour planned and worked showed two. Logging now adds only the part of the block not already worked, and the button is gone once all of it was.
 - **The date dialog takes no block away when scheduling fails.** Changing the time of a task's one planned block removed the block before scheduling; if scheduling then failed (a daily note that could not be written), the block was gone. The date is set first now, and the block changed only after that.
 - **Undo after saving planned times takes back the timer too.** Saving a recurring task's planned times during one of them started the timer, and Undo then refused (*Undo preserved concurrent edits*), leaving the task repeating with its timer running. Undo now reverses both.

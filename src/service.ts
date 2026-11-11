@@ -108,13 +108,13 @@ export class TaskService {
       await this.edit(context.file, current.text, replaceTask(current.text, current.line, { marker: kind === "forward" ? (this.daily.date(context.file.path) ? ">" : " ") : "<" }), changes);
       await this.resortAfter(context.file, next, changes);
     }
-    if (oldDate && oldDate !== date && kind !== "forward") {
-      await this.cleanupSchedule(task.id, oldDate, context.file.path, changes);
-      moved = await this.movePlans(task, oldDate, date, changes);
-    }
+    if (oldDate && oldDate !== date && kind !== "forward") await this.cleanupSchedule(task.id, oldDate, context.file.path, changes);
+    // A todo the person forwards (`>`) takes the not-yet-begun blocks of the day it leaves along, or they would start its timer on that day. The automatic carry-over leaves the past as it was.
+    const planDay = kind === "forward" ? (source === "manual" ? this.daily.date(context.file.path) : null) : oldDate;
+    if (planDay && planDay !== date) moved = await this.movePlans(task, planDay, date, changes);
     if (options.time) await this.addPlanned(task.id, options.time, changes);
     if (options.cascade !== false) await this.carrySubtasks(context.file, originText, line, date, kind, source, changes);
-    if (moved && options.cascade !== false) this.summarize(changes, "Planned time moved", `${plural(moved, "planned block")} of “${task.title}” moved from ${oldDate} to ${date}.`);
+    if (moved && options.cascade !== false) this.summarize(changes, "Planned time moved", `${plural(moved, "planned block")} of “${task.title}” moved from ${planDay} to ${date}.`);
     this.changed();
   }
   /** Moves the subtasks nested under `parent` in `originText` that are still open or in progress (and not already forwarded or scheduled), each under its nearest moved ancestor. */
