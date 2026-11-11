@@ -113,6 +113,11 @@ Automated tests cover the logic with synthetic touch events; only a device shows
 ## Hide done in Projects
 - Projects tab: done and canceled tasks are hidden by default and a line counts them; the eye button beside the title shows them (and the Canceled section) and the choice survives a restart. With more than 50 tasks in a list, the rest sits behind **Show all N**.
 
+## Planning against project budgets
+- Give a project a weekly budget (Projects tab → Project budgets) and a task in it. Open its Schedule dialog and add a time: a line under the days reads *Project · this week: … left of …* and follows each change; tap the Day grid to plan a block for it: the dialog shows the same lines under the length. Pick the project in the Projects tab filter: its bars and *Open project note* show under the filter.
+- In a project note, write a todo and attach a new task: it is linked to that project. Schedule it from there with `[<]`: the daily note gets no *Open* heading and the project's todo keeps its marker.
+- Schedule a task for a day next week with no daily note yet: the Week view row counts it and the Month view marks the day.
+
 ## Manual time
 - Day view → **+** beside Time: pick a task, set a start/end and save; a block appears and the Task tab's tracked total grows. Tap the block: change the end and save, then Delete; the total follows. Try an end before the start, 30 seconds, more than 24 hours and a future end: each shows a reason and saves nothing. A running timer's block opens the task instead of the form. The Task tab's Timer card has a folded **Sessions (N)** list: open it to see every session newest first, grouped by day with totals; tapping one edits it.
 
