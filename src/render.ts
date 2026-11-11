@@ -183,7 +183,7 @@ export function editorExtension(owner: Organized): Extension {
           if (!editing && task.marker === ">") builder.add(line.from, line.from, Decoration.line({ class: "organized-forwarded" }));
           if (!editing && GLYPHS[task.marker]) builder.add(line.from + task.prefix.length - 1, line.from + task.prefix.length + 2, Decoration.replace({ widget: new IconWidget(task.marker) }));
           // The planned times the plugin writes after the title read as a quiet chip; a tap opens the Schedule dialog, where they are changed.
-          const times = task.times ? line.text.indexOf(` · ${task.times}`, task.prefix.length) : -1;
+          const times = task.times ? line.text.lastIndexOf(` · ${task.times}`) : -1;
           if (times >= 0) builder.add(line.from + times, line.from + times + task.times!.length + 3, Decoration.mark({ class: "organized-line-times", attributes: { title: "Planned times: tap to change them in Schedule" } }));
         }
         // Live Preview used to reveal the whole ID whenever its line had the

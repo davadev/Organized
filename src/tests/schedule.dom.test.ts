@@ -160,11 +160,14 @@ describe('saving a schedule, the rarer paths', () => {
 describe('days and the daily routine', () => {
   it('the day view lists the tasks scheduled for a day whose note is not made yet', async () => {
     const { owner, repo, raw } = await fixture(); const task = await repo.create('Ahead'); const gone = await repo.create('Converted'); await repo.update(task.id, t => ({ ...t, scheduled_dates: [day(9)] })); await repo.update(gone.id, t => ({ ...t, scheduled_dates: [day(9)], converted_to: 'Notes/C.md' }));
+    const done = await repo.create('Done early'); await repo.update(done.id, t => ({ ...t, scheduled_dates: [day(2), day(9)], status: 'completed' })); const past = await repo.create('Past'); await repo.update(past.id, t => ({ ...t, scheduled_dates: [day(2)] }));
     const { OrganizedInspectorView } = await import('../view'); const leaf: any = { app: owner.app }; const view = new OrganizedInspectorView(leaf, owner); leaf.view = view; document.body.appendChild(view.contentEl); raw.workspace.getLeavesOfType.mockReturnValue([leaf]);
     view.tab = 'Calendar'; view.selectedDate = day(9); view.calendarMode = 'Day'; await view.render(); await flush();
     expect(Array.from(view.contentEl.querySelectorAll('.organized-day-task')).map(r => r.textContent)).toEqual([expect.stringContaining('Ahead')]); expect(view.contentEl.textContent).toContain("Their todos go in this day's daily note when it is made.");
     const opened = vi.spyOn(view as any, 'openFromCalendar').mockResolvedValue(undefined); view.contentEl.querySelector<HTMLElement>('.organized-day-task .organized-list-open')!.click(); await flush(); expect(opened).toHaveBeenCalledWith(task.id);
-    owner.settings.dayTasksCollapsed = true; await view.render(); await flush(); expect(view.contentEl.querySelectorAll('.organized-day-task')).toHaveLength(0);
+    // A day that is over gets no todos when its note is made, and a task done early goes in no note.
+    view.selectedDate = day(2); await view.render(); await flush(); expect(view.contentEl.querySelectorAll('.organized-day-task')).toHaveLength(0); expect(view.contentEl.textContent).toContain('There is no daily note for this day yet.');
+    view.selectedDate = day(9); owner.settings.dayTasksCollapsed = true; await view.render(); await flush(); expect(view.contentEl.querySelectorAll('.organized-day-task')).toHaveLength(0);
   });
   it('a scheduled day that went by with no daily note brings the todo to today; one scheduled away to a later day waits', async () => {
     const { service, repo, add, texts, note } = await fixture(); const missed = await repo.create('Missed'); const later = await repo.create('Later'); const done = await repo.create('Finished');
