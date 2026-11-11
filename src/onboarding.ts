@@ -66,7 +66,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "Plan your time, and set a budget",
-    text: "Tap an empty spot on the Day grid, or type `[t]` with a time still to come, to set time aside; planned blocks are dashed and never count as worked. The Timer card compares tracked and planned time, and its target button sets a budget, shown as a bar.",
+    text: "Tap an empty spot on the Day grid, or type `[t]` with a time still to come, to set time aside; planned blocks are dashed and count as worked only once a timer runs in them (turn on Start tasks at their planned time to start it for you). The Timer card compares tracked and planned time, and its target button sets a budget, shown as a bar.",
     shot: "plan",
   },
   {

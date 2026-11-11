@@ -216,3 +216,14 @@ describe('hunt 4: a project note is a board', () => {
     await service.schedule({ file: repo.file(note(6))!, line: parseTasks(texts.get(note(6))!)[0] }, day(5)); expect(texts.get(note(5))).toMatch(/## Work\n+- \[ \] Daily/); expect(texts.get(note(6))).toContain('- [<] Daily');
   });
 });
+
+describe('hunt 5: from 0.1.4', () => {
+  it('a task 0.1.4 set in progress for its planned block, with no timer, is put back to open when the block ends, as 0.1.4 would have', async () => {
+    const { service, repo, add, texts, note } = await fixture(at(4, 9, 30)); const task = await repo.create('Legacy'); const plan = block(4, 9, 10);
+    await repo.update(task.id, t => ({ ...t, status: 'in_progress', auto_started_block: plan.start, planned_sessions: [plan] })); await add(note(4), `- [/] Legacy <!--organized:${task.id}-->`);
+    // While the block is under way nothing changes: no timer starts for a block already handled.
+    await service.applyPlanning(at(4, 9, 45)); expect(await repo.read(task.id)).toMatchObject({ status: 'in_progress', time_tracking_started_at: null });
+    vi.setSystemTime(new Date(at(4, 10, 5))); await service.applyPlanning(at(4, 10, 5));
+    expect(await repo.read(task.id)).toMatchObject({ status: 'open', auto_started_block: null, time_tracking_started_at: null, time_tracked_seconds: 0 }); expect(texts.get(note(4))).toContain('- [ ] Legacy');
+  });
+});

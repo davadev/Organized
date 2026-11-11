@@ -817,7 +817,13 @@ export class TaskService {
     for (const task of tasks) {
       if (moving.has(task.id)) continue;
       // Planned time that is over leaves nothing behind in the task note.
-      if (task.time_tracking_started_at === null) { if (task.auto_started_block !== null && !claimHolds(task, now)) await this.repo.update(task.id, t => ({ ...t, auto_started_block: null })); continue; }
+      // Version 0.1.4 set a task in progress for its planned block without a timer and put it back to open when the block ended; one it set before the update is put back the same way.
+      if (task.time_tracking_started_at === null) {
+        if (task.auto_started_block === null || claimHolds(task, now)) continue;
+        if (task.status === "in_progress") await this.applyStatus(task.id, "open", await this.todayContext(task), undefined, t => ({ ...setStatus(t, "open"), auto_started_block: null }));
+        else await this.repo.update(task.id, t => ({ ...t, auto_started_block: null }));
+        continue;
+      }
       // Only a timer of the planned time under way; one the person started outside it is theirs to fix.
       if (!claimHolds(task, now)) continue;
       try { await this.healStarted(task); } catch (error) { if (!lost(error)) throw error; }
