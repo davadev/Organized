@@ -20,12 +20,17 @@ export const MAX_PLANNED_SESSIONS = 500;
 /** Task properties written only while they hold something, so a task that never plans time carries no extra keys. */
 /** The task panel cards that can be folded away. */
 export const FOLDABLE_CARDS: readonly string[] = ["Description", "Subtasks", "Timer"];
-export const OPTIONAL_KEYS = ["planned_sessions", "auto_started_block", "time_budget_seconds", "recurrence", "recurrence_times", "recurrence_skips"] as const;
+export const OPTIONAL_KEYS = ["planned_sessions", "auto_started_block", "time_budget_seconds", "recurrence", "recurrence_times", "recurrence_skips", "scheduled_dates"] as const;
+/** The most days one task can be scheduled for; the oldest go first. */
+export const MAX_DAYS = 60;
 /** The longest time budget a task can hold (9999 hours); anything else in a note is ignored. */
 export const MAX_BUDGET_SECONDS = 9999 * 3600;
 export interface Task {
   schema_version: number; id: string; title: string; status: Status; priority: Priority;
+  /** The day the task is shown under: its first scheduled day from today on, else its last one (see `nextDay`). Derived from `scheduled_dates`, and kept in the note for older versions and other plugins. */
   scheduled: string | null; created: string; time_tracked_seconds: number;
+  /** Every day the task is scheduled for (`YYYY-MM-DD`, sorted). Its time on a day is that day's blocks in `planned_sessions`. A note with one day keeps only `scheduled`. */
+  scheduled_dates: string[];
   time_tracking_started_at: string | null; recurring: boolean; closed_at: string | null;
   /** How the task repeats while `recurring` is on, in the one-line form `parseRule` reads (`weekdays`, `every 3 weeks on thu`). Empty means every day. */
   recurrence: string | null;
@@ -169,7 +174,7 @@ export function taskFrom(value: unknown, expectedId: string): Task {
   const sessions = sessionsOf(v.work_sessions, MAX_WORK_SESSIONS);
   return {
     schema_version: 1, id: v.id, title: v.title.trim(), status: member(v.status, STATUSES, "open"), priority: member(v.priority, PRIORITIES, "none"),
-    scheduled: validDate(v.scheduled) ? v.scheduled : null,
+    ...daysOf(v),
     created: typeof v.created === "string" && Number.isFinite(Date.parse(v.created)) ? v.created : "1970-01-01T00:00:00.000Z",
     time_tracked_seconds: typeof v.time_tracked_seconds === "number" && Number.isFinite(v.time_tracked_seconds) && v.time_tracked_seconds >= 0 ? v.time_tracked_seconds : 0,
     time_tracking_started_at: typeof v.time_tracking_started_at === "string" && Number.isFinite(Date.parse(v.time_tracking_started_at)) ? v.time_tracking_started_at : null,
@@ -184,6 +189,24 @@ export function taskFrom(value: unknown, expectedId: string): Task {
     converted_to: typeof v.converted_to === "string" && v.converted_to.endsWith(".md") ? v.converted_to : null,
     subtasks: [...new Set(strings(v.subtasks).filter(isNoteLink))],
   };
+}
+/** The day a task with these scheduled days is shown under: the first from today on, else the last one. */
+export const nextDay = (days: string[], today = localDate()): string | null => days.find(day => day >= today) ?? days.at(-1) ?? null;
+/** The scheduled days a note holds: its list, and its `scheduled` (all an older version writes), sorted, at most `MAX_DAYS`. */
+function daysOf(v: Record<string, unknown>): Pick<Task, "scheduled" | "scheduled_dates"> {
+  const days = [...new Set([...strings(v.scheduled_dates).filter(validDate), ...(validDate(v.scheduled) ? [v.scheduled] : [])])].sort().slice(-MAX_DAYS);
+  return { scheduled: nextDay(days), scheduled_dates: days };
+}
+/**
+ * Puts a change of a task's days in order before it is written. A change that set only `scheduled` (the way a single date is changed) moves the day it replaces, or clears every day when
+ * set to null; a change of `scheduled_dates` gives `scheduled` again from them.
+ */
+export function settleDays(before: Task, next: Task): Task {
+  const listed = next.scheduled_dates.join() !== before.scheduled_dates.join();
+  if (!listed && next.scheduled === before.scheduled) return next;
+  const days = listed ? next.scheduled_dates : next.scheduled === null ? [] : [...before.scheduled_dates.filter(day => day !== before.scheduled), next.scheduled];
+  const sorted = [...new Set(days.filter(validDate))].sort().slice(-MAX_DAYS);
+  return { ...next, scheduled_dates: sorted, scheduled: nextDay(sorted) };
 }
 export function visibleFolder(value: string): string {
   const folder = path(value);

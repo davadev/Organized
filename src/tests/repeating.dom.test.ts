@@ -5,7 +5,7 @@ import { OrganizedInspectorView } from '../view';
 import { harness } from './harness';
 import { installObsidianDom } from './__mocks__/obsidianDom';
 import { Modal, Notice } from './__mocks__/obsidian';
-import { ChoiceModal, DatePicker, RecurrencePicker, SessionModal } from '../modals';
+import { ChoiceModal, RecurrencePicker, SessionModal } from '../modals';
 import { parseRule } from '../recurrence';
 import { splitNote } from '../repository';
 
@@ -141,14 +141,14 @@ describe('found by the bug hunt of beta.11 and beta.12', () => {
     const planned = Array.from(view.contentEl.querySelectorAll<HTMLElement>('.organized-block[data-planned="true"]'));
     planned[0].click(); expect((Modal.instances.at(-1) as unknown as SessionModal).edit.logWorked).toBeUndefined(); planned[1].click(); expect((Modal.instances.at(-1) as unknown as SessionModal).edit.logWorked).toBeDefined();
   });
-  it('a date dialog whose scheduling fails takes no planned block away', async () => {
-    const { owner, repo, service } = await viewed(); const task = await repo.create('Keep'); await repo.update(task.id, t => ({ ...t, scheduled: '2026-03-05', planned_sessions: [block(5, 10, 11)] }));
-    const schedule = vi.spyOn(service, 'scheduleTask').mockRejectedValueOnce(new Error('disk full'));
-    owner.pickSchedule(await repo.read(task.id)); await (Modal.instances.at(-1) as unknown as DatePicker).choose('2026-03-06', block(6, 14, 15)); await flush();
-    expect((await repo.read(task.id)).planned_sessions).toEqual([block(5, 10, 11)]); expect(Notice.instances.at(-1)!.message).toContain('disk full'); schedule.mockRestore();
-    // Same day, same times: nothing to change; emptied times take the block away.
-    owner.pickSchedule(await repo.read(task.id)); await (Modal.instances.at(-1) as unknown as DatePicker).choose('2026-03-05', block(5, 10, 11)); await flush(); expect((await repo.read(task.id)).planned_sessions).toEqual([block(5, 10, 11)]);
-    owner.pickSchedule(await repo.read(task.id)); await (Modal.instances.at(-1) as unknown as DatePicker).choose('2026-03-05', null); await flush(); expect((await repo.read(task.id)).planned_sessions).toEqual([]);
+  it('a day whose daily note cannot be written keeps its todo and its blocks', async () => {
+    const { repo, service, add } = await viewed(); const task = await repo.create('Keep'); await repo.update(task.id, t => ({ ...t, scheduled: '2026-03-05', planned_sessions: [block(5, 10, 11)] })); await add(service.daily.path('2026-03-06'), '');
+    const insert = vi.spyOn(service, 'insert').mockRejectedValueOnce(new Error('disk full'));
+    await service.saveSchedule(task.id, [{ date: '2026-03-06', from: '2026-03-05', blocks: [block(6, 14, 15)] }]); expect(await repo.read(task.id)).toMatchObject({ scheduled_dates: ['2026-03-05'], planned_sessions: [block(5, 10, 11)] });
+    expect((Notice.instances.at(-1)!.message as unknown as HTMLElement).textContent).toContain('Not changed: 2026-03-06'); insert.mockRestore();
+    // Same day, same times: nothing to change; emptied times take the block away and keep the day.
+    await service.saveSchedule(task.id, [{ date: '2026-03-05', from: '2026-03-05', blocks: [block(5, 10, 11)] }]); expect((await repo.read(task.id)).planned_sessions).toEqual([block(5, 10, 11)]);
+    await service.saveSchedule(task.id, [{ date: '2026-03-05', from: '2026-03-05', blocks: [] }]); expect(await repo.read(task.id)).toMatchObject({ scheduled_dates: ['2026-03-05'], planned_sessions: [] });
   });
   it('Undo right after saving times that started the timer takes back both', async () => {
     const { service, repo, texts, add } = await fixture(at(4, 13)); const task = await repo.create('Shift'); const note = service.daily.path('2026-03-04'); await add(note, '');
@@ -181,7 +181,7 @@ describe('found by the bug hunt of beta.11 and beta.12', () => {
 describe('found by the bug hunt of beta.13', () => {
   it('a todo forwarded by hand takes the day\'s blocks that have not begun along, so they start no timer on the day it left; the automatic carry-over moves none', async () => {
     const { service, repo, add, texts } = await fixture(at(4, 10)); const note = service.daily.path('2026-03-04'); const tomorrow = service.daily.path('2026-03-05');
-    const old = await repo.create('Old'); await add(note, `- [ ] Old <!--organized:${old.id}-->`); await repo.update(old.id, t => ({ ...t, planned_sessions: [block(4, 20, 21)] }));
+    await add(tomorrow, ''); const old = await repo.create('Old'); await add(note, `- [ ] Old <!--organized:${old.id}-->`); await repo.update(old.id, t => ({ ...t, planned_sessions: [block(4, 20, 21)] }));
     const task = await repo.create('Later'); await service.scheduleTask(task.id, '2026-03-04'); await service.addPlanned(task.id, block(4, 8, 9)); await service.addPlanned(task.id, block(4, 15, 16));
     const line = (await repo.occurrences(task.id)).find(o => o.file.path === note)!; await service.marker({ file: line.file, line: line.tasks[0] }, '>');
     expect(await repo.read(task.id)).toMatchObject({ scheduled: '2026-03-05', planned_sessions: [block(4, 8, 9), block(5, 15, 16)] }); expect(Notice.instances.map(n => (n.message as unknown as HTMLElement).textContent ?? n.message).join('|')).toContain('moved from 2026-03-04 to 2026-03-05');

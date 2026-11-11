@@ -6,7 +6,7 @@ import type Organized from "./main";
 import { elapsed, FOLDABLE_CARDS, localDate, PRIORITIES, Section, STATUS_ICONS, STATUSES, statusOfMarker, Task, WorkSession } from "./model";
 import { byPriority, report } from "./service";
 import { cells, HeatScale, MAX_CELLS, scaleFor, slider } from "./movement";
-import { BudgetModal, ChoiceModal, ProjectBudgetModal, SessionModal, TaskPicker } from "./modals";
+import { BudgetModal, ChoiceModal, dayLabel, ProjectBudgetModal, SessionModal, spanOf, TaskPicker } from "./modals";
 import { timeLabel, unworkedParts } from "./plans";
 import { formatMinutes, lengthOf, lengthOfSeconds, seconds, SessionKind } from "./sessions";
 import { budgetUse, BudgetUse, PERIOD_LABELS, plannedSeconds, projectUse } from "./planning";
@@ -190,7 +190,7 @@ export class OrganizedInspectorView extends ItemView {
     if (task.priority !== "none" || (task.scheduled && this.owner.settings.showScheduledDate) || task.starred) {
       const meta = open.createDiv({ cls: "organized-list-meta" });
       if (task.priority !== "none") meta.createSpan({ cls: `organized-list-priority priority-${task.priority}`, text: task.priority });
-      if (task.scheduled && this.owner.settings.showScheduledDate) meta.createSpan({ cls: "organized-list-date", text: task.scheduled });
+      if (task.scheduled && this.owner.settings.showScheduledDate) meta.createSpan({ cls: "organized-list-date", text: `${task.scheduled}${task.scheduled_dates.length > 1 ? ` +${task.scheduled_dates.length - 1}` : ""}` });
       if (task.starred) { const star = meta.createSpan({ cls: "organized-list-star", attr: { "aria-label": "Favorite" } }); setIcon(star, "star"); }
     }
     if (task.projects.length) {
@@ -330,7 +330,9 @@ export class OrganizedInspectorView extends ItemView {
       if (this.module === module) b.addClass("organized-selected-module"); return b;
     };
     if (showPriority) this.select(pill(strip, "div", "flag", "Priority", "Priority"), "Priority", task.priority, PRIORITIES, value => { void this.owner.run(async () => { await this.owner.service.setPriority(id, value as Task["priority"], this.owner.context?.line.id === id ? this.owner.context : undefined); this.owner.refresh(); }); });
-    if (showSchedule) action("calendar", task.scheduled ? `Schedule: ${task.scheduled}` : "Schedule", task.scheduled ?? "Choose date", "Schedule", () => this.owner.pickSchedule(task, this.owner.context ?? undefined));
+    // The next day, and how many more: the dialog shows them all. The cursor's todo goes along only when it is this task's.
+    const more = task.scheduled_dates.length > 1 ? ` +${task.scheduled_dates.length - 1}` : "";
+    if (showSchedule) action("calendar", task.scheduled ? `Schedule: ${task.scheduled}${more}` : "Schedule", task.scheduled ? `${task.scheduled}${more}` : "Choose date", "Schedule", () => { void this.owner.pickSchedule(task, this.owner.context?.line.id === id ? this.owner.context : undefined).catch(report); });
     if (showRecurring) {
       const span = task.recurrence_periods.length ? `: ${task.recurrence_periods[0].start} → ${task.recurring ? "active" : task.recurrence_periods[task.recurrence_periods.length - 1].stop}` : "";
       const rule = task.recurring ? ruleLabel(taskRule(task)) : "Off";
@@ -467,6 +469,18 @@ export class OrganizedInspectorView extends ItemView {
     });
   }
   /** Every recorded session (or planned block), newest first and grouped by day with the day's total, folded away by default because the list grows quickly. */
+  /** The task's days from today on with their times, up to three; each opens the Schedule dialog. */
+  private scheduleSummary(host: HTMLElement, task: Task): void {
+    const now = Date.now(); const today = localDate(); const dayOf = (b: WorkSession) => localDate(new Date(b.start));
+    const days = [...new Set([...task.scheduled_dates, ...task.planned_sessions.filter(b => Date.parse(b.end) > now).map(dayOf)])].filter(day => day >= today).sort();
+    const open = () => { void this.owner.pickSchedule(task, this.owner.context?.line.id === task.id ? this.owner.context : undefined).catch(report); };
+    const box = host.createDiv({ cls: "organized-schedule-summary", attr: { role: "group", "aria-label": "Schedule" } });
+    for (const day of days.slice(0, 3)) {
+      const times = task.planned_sessions.filter(b => dayOf(b) === day && Date.parse(b.end) > now).map(b => timeLabel(spanOf(b)));
+      this.button(box, `${dayLabel(day, now)} · ${times.length ? times.join(", ") : "Any time"}`, open).addClass("organized-session");
+    }
+    this.button(box, days.length > 3 ? `${days.length - 3} more days · Schedule…` : days.length ? "Schedule…" : "Planned earlier · Schedule…", open).addClass("organized-session");
+  }
   private sessionList(host: HTMLElement, task: Task, kind: SessionKind = "worked"): void {
     const blocks = kind === "planned" ? task.planned_sessions : task.work_sessions;
     const box = host.createEl("details", { cls: "organized-sessions" }); box.open = kind === "planned" ? this.plannedOpen : this.sessionsOpen;
@@ -544,9 +558,12 @@ export class OrganizedInspectorView extends ItemView {
     const linked = new Map(tasks.map(task => [task.id, task]));
     if (generation !== this.renderId) return;
     const collapsed = this.owner.settings.dayTasksCollapsed;
-    const list = this.section(host, "Tasks", lines.length, { collapsed, toggle: () => { this.owner.setDayTasksCollapsed(!collapsed); void this.render().catch(report); } }); list.addClass("organized-grouped");
+    // A later day's note is made when its day comes; until then the tasks scheduled for it are listed from their task notes.
+    const due = note ? [] : tasks.filter(task => !task.recurring && task.converted_to === null && task.scheduled_dates.includes(date));
+    const list = this.section(host, "Tasks", note ? lines.length : due.length, { collapsed, toggle: () => { this.owner.setDayTasksCollapsed(!collapsed); void this.render().catch(report); } }); list.addClass("organized-grouped");
     if (!note) {
-      const empty = list.createDiv({ cls: "organized-empty", text: "There is no daily note for this day yet." });
+      for (const task of collapsed ? [] : due) this.taskRow(list, task, () => this.openFromCalendar(task.id)).addClass("organized-day-task");
+      const empty = list.createDiv({ cls: "organized-empty", text: due.length ? "Their todos go in this day's daily note when it is made." : "There is no daily note for this day yet." });
       this.button(empty, "Create daily note", () => this.selectDay(date)).addClass("organized-note-link");
     } else if (!lines.length && !collapsed) list.createDiv({ cls: "organized-empty", text: "No tasks in this day's note." });
     for (const line of collapsed ? [] : lines) {
@@ -654,7 +671,9 @@ export class OrganizedInspectorView extends ItemView {
       await this.projectBars(timer, task);
       if (task.work_sessions.length) this.sessionList(timer, task);
       if (repeating) this.button(timer, `${ruleLabel(taskRule(task))} · ${task.recurrence_times.map(timeLabel).join(", ")}`, () => this.owner.pickRecurrence(task, this.owner.context?.line.id === id ? this.owner.context : undefined)).addClass("organized-session-row", "organized-repeat-times-row");
-      if (task.planned_sessions.length) this.sessionList(timer, task, "planned");
+      // One place to plan: a task's days and their times open the Schedule dialog. A recurring task's one-off blocks keep their own list (it has no days).
+      if (task.recurring) { if (task.planned_sessions.length) this.sessionList(timer, task, "planned"); }
+      else if (task.planned_sessions.length || task.scheduled_dates.length) this.scheduleSummary(timer, task);
     }
     const sources = noteSection(body, "Sources");
     if (sources || this.module === "Sources") await this.moduleCard(details, file.path, id, "Sources", sources);

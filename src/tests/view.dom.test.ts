@@ -8,7 +8,7 @@ import { installObsidianDom } from './__mocks__/obsidianDom';
 import { Notice, Modal, Platform } from './__mocks__/obsidian';
 import { localDate } from '../model';
 import { moment } from '../moment';
-import { BudgetModal, ProjectBudgetModal, DatePicker, SessionModal, TaskPicker } from '../modals';
+import { BudgetModal, ProjectBudgetModal, ScheduleModal, SessionModal, TaskPicker } from '../modals';
 import { parseTasks } from '../codec';
 import { DAILY } from '../recurrence';
 
@@ -77,8 +77,9 @@ describe('compact calendar and contextual task inspector', () => {
     const { owner, view, repo } = await fixture(); const task = await repo.create('Actions'); owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render();
     choose(view, 'Status', ''); await flush(); expect((await repo.read(task.id)).status).toBe('open'); choose(view, 'Status', 'completed'); await flush(); expect((await repo.read(task.id)).status).toBe('completed');
     choose(view, 'Add details', 'Priority'); await flush(); choose(view, 'Priority', 'high'); await flush(); expect((await repo.read(task.id)).priority).toBe('high');
-    choose(view, 'Add details', 'Schedule'); await flush(); button(view.contentEl, 'Choose date').click(); let modal = Modal.instances.at(-1) as DatePicker; const schedule = vi.spyOn(owner.service, 'scheduleTask').mockResolvedValue(); await modal.choose('2099-01-01', null); expect(schedule).toHaveBeenCalledWith(task.id, '2099-01-01', undefined, undefined, undefined, undefined); modal.close(); expect(modal.clear).toBeUndefined();
-    await repo.update(task.id, t => ({ ...t, scheduled: '2099-01-01' })); await view.render(); button(view.contentEl, '2099-01-01').click(); modal = Modal.instances.at(-1) as DatePicker; expect(modal.initial).toBe('2099-01-01'); const unschedule = vi.spyOn(owner.service, 'unschedule').mockResolvedValue(); await modal.clear!(); expect(unschedule).toHaveBeenCalledWith(task.id); modal.close();
+    choose(view, 'Add details', 'Schedule'); await flush(); const pick = vi.spyOn(owner, 'pickSchedule'); button(view.contentEl, 'Choose date').click(); await flush(); expect(pick).toHaveBeenCalledWith(expect.objectContaining({ id: task.id }), undefined); expect(Modal.instances.at(-1)).toBeInstanceOf(ScheduleModal); (Modal.instances.at(-1) as ScheduleModal).close();
+    await repo.update(task.id, t => ({ ...t, scheduled_dates: ['2099-01-01', '2099-01-03'] })); await view.render(); button(view.contentEl, '2099-01-01 +1').click(); await flush(); expect((Modal.instances.at(-1) as ScheduleModal).setup.days.map(d => d.date)).toEqual(['2099-01-01', '2099-01-03']); (Modal.instances.at(-1) as ScheduleModal).close();
+    const own: any = { file: { path: 'Note.md' }, line: { id: task.id } }; owner.context = own; button(view.contentEl, '2099-01-01 +1').click(); await flush(); expect(pick).toHaveBeenLastCalledWith(expect.objectContaining({ id: task.id }), own); (Modal.instances.at(-1) as ScheduleModal).close(); owner.context = null;
     choose(view, 'Add details', 'Timer'); await flush(); button(view.contentEl, 'Start timer').click(); await flush(); expect((await repo.read(task.id)).time_tracking_started_at).not.toBeNull(); expect(view.contentEl.textContent).toContain('running'); button(view.contentEl, 'Stop timer').click(); await flush(); expect((await repo.read(task.id)).time_tracking_started_at).toBeNull();
     choose(view, 'Add details', 'Recurring'); await flush(); button(view.contentEl, 'Recurring').click(); await flush(); (Modal.instances.at(-1) as any).contentEl.querySelector('.organized-repeat-preset').click(); await flush(); expect((await repo.read(task.id)).recurring).toBe(true); expect(button(view.contentEl, 'Recurring').title).toContain('→ active'); expect(button(view.contentEl, 'Recurring').textContent).toBe('Every day'); button(view.contentEl, 'Recurring').click(); await flush(); (Array.from((Modal.instances.at(-1) as any).contentEl.querySelectorAll('button')).find((b: any) => b.textContent === 'Stop repeating') as HTMLElement).click(); await flush(); expect((await repo.read(task.id)).recurring).toBe(false);
     choose(view, 'Add details', 'Projects'); await flush(); const projects = vi.spyOn(owner, 'pickProjects').mockImplementation(() => undefined); button(view.contentEl, 'Link projects or topics').click(); expect(projects).toHaveBeenCalled();
@@ -114,6 +115,7 @@ describe('compact calendar and contextual task inspector', () => {
     expect(listed(view).indexOf('High')).toBeLessThan(listed(view).indexOf('Low'));
     expect(card(view, 'High').querySelector('.organized-list-priority')?.textContent).toBe('high');
     expect(card(view, 'High').querySelector('.organized-list-date')?.textContent).toBe('2026-01-02');
+    await repo.update(high.id, t => ({ ...t, scheduled_dates: ['2026-01-02', '2026-01-05'] })); await view.render(); expect(card(view, 'High').querySelector('.organized-list-date')?.textContent).toBe('2026-01-05 +1');
     expect(card(view, 'High').querySelectorAll('.organized-chip')).toHaveLength(3);
     expect(card(view, 'High').querySelectorAll('.organized-chip')[2].textContent).toBe('+1');
     const picker = view.contentEl.querySelector<HTMLSelectElement>('[aria-label="Choose project"]')!; picker.value = 'Project.md'; picker.dispatchEvent(new Event('change')); await flush(); expect(view.selectedProject).toBe('Project.md'); view.module = 'Description'; openCard(view, 'High').click(); await flush(); expect(owner.selectedTaskId).toBe(high.id); expect(view.module).toBe(''); expect(view.origin).toBe('Projects');
@@ -562,7 +564,17 @@ describe('compact calendar and contextual task inspector', () => {
     expect(from.value).toBe('2026-03-05T13:00'); saved = await repo.read(task.id); expect(saved.planned_sessions[0].end).toBe(new Date(2026, 2, 5, 15, 0).toISOString());
     button(view.contentEl, 'Add time worked').click(); await flush(); await (Modal.instances.at(-1) as unknown as TaskPicker).choose(task); expect((Modal.instances.at(-1) as unknown as SessionModal).edit.kind).toBeNull();
     view.calendarMode = 'Week'; await view.render(); expect(view.contentEl.querySelector('.organized-week-block')!.getAttribute('data-planned')).toBe('true');
-    owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); expect(view.contentEl.querySelector('.organized-card-summary')).not.toBeNull(); expect(view.contentEl.querySelector('.organized-card-summary')!.textContent).toContain('planned'); expect(view.contentEl.querySelectorAll('.organized-sessions')).toHaveLength(1);
+    // The Timer card shows a task's days and times as the way into the Schedule dialog.
+    owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render(); expect(Array.from(view.contentEl.querySelectorAll('.organized-schedule-summary button')).map(b => b.textContent)).toEqual(['Tomorrow · 13:00–15:00', 'Schedule…']);
+    const pick = vi.spyOn(owner, 'pickSchedule').mockResolvedValue(); (view.contentEl.querySelector('.organized-schedule-summary button') as HTMLElement).click(); expect(pick).toHaveBeenCalledWith(expect.objectContaining({ id: task.id }), undefined);
+    const own: any = { file: { path: 'Note.md' }, line: { id: task.id } }; owner.context = own; (view.contentEl.querySelector('.organized-schedule-summary button') as HTMLElement).click(); expect(pick).toHaveBeenLastCalledWith(expect.objectContaining({ id: task.id }), own); owner.context = null; pick.mockRestore();
+    const later = (n: number) => `2026-03-${String(5 + n).padStart(2, '0')}`; await repo.update(task.id, t => ({ ...t, scheduled_dates: [0, 1, 2, 3, 4].map(later) })); await view.render();
+    expect(Array.from(view.contentEl.querySelectorAll('.organized-schedule-summary button')).map(b => b.textContent).slice(3)).toEqual(['2 more days · Schedule…']);
+    const kept = (await repo.read(task.id)).planned_sessions; await repo.update(task.id, t => ({ ...t, scheduled_dates: ['2026-03-01'], planned_sessions: [{ start: new Date(2026, 2, 1, 9).toISOString(), end: new Date(2026, 2, 1, 10).toISOString() }] })); await view.render();
+    expect(Array.from(view.contentEl.querySelectorAll('.organized-schedule-summary button')).map(b => b.textContent)).toEqual(['Planned earlier · Schedule…']); await repo.update(task.id, t => ({ ...t, scheduled_dates: [], planned_sessions: kept }));
+    // A recurring task has no days: its one-off blocks keep their own list.
+    await repo.update(task.id, t => ({ ...t, recurring: true })); await view.render();
+    expect(view.contentEl.querySelector('.organized-card-summary')).not.toBeNull(); expect(view.contentEl.querySelector('.organized-card-summary')!.textContent).toContain('planned'); expect(view.contentEl.querySelectorAll('.organized-sessions')).toHaveLength(1);
     expect(view.contentEl.querySelector('.organized-sessions summary')!.textContent).toBe('Planned blocks (1)');
     expect(Array.from(view.contentEl.querySelectorAll('button')).some(b => b.textContent === 'Plan time')).toBe(false);
     const details = view.contentEl.querySelector<HTMLDetailsElement>('.organized-sessions')!; details.open = true; details.dispatchEvent(new Event('toggle')); await view.render(); expect(view.contentEl.querySelector<HTMLDetailsElement>('.organized-sessions')!.open).toBe(true);

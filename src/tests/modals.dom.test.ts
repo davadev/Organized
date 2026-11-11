@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import { installObsidianDom } from "./__mocks__/obsidianDom";
-import { TaskPicker, PriorityPicker, DatePicker, ConfirmModal, ProjectPicker, SessionModal, BudgetModal, ProjectBudgetModal, NoteConversionModal, OnboardingModal, RetireModal, KEEP_AS_TODO } from "../modals";
+import { TaskPicker, PriorityPicker, ConfirmModal, ProjectPicker, SessionModal, BudgetModal, ProjectBudgetModal, NoteConversionModal, OnboardingModal, RetireModal, KEEP_AS_TODO } from "../modals";
 import { newTask } from "../model";
 import { harness, sessionFields } from "./harness";
 import { Notice, Setting } from "./__mocks__/obsidian";
@@ -49,38 +49,6 @@ describe("native task, date, source and project modals", () => {
     const external = externalRow.querySelector<HTMLAnchorElement>('a')!; const windowOpen = vi.spyOn(window, 'open').mockReturnValue(null);
     external.click(); expect(windowOpen).toHaveBeenCalledWith('https://example.com', '_blank', 'noopener'); windowOpen.mockRestore();
     const missingHref = vi.spyOn(anchor, 'getAttribute').mockReturnValue(null); anchor.click(); expect(open).toHaveBeenCalledOnce(); missingHref.mockRestore();
-  });
-  it("offers Clear date only when a clear action is given", async () => {
-    const h = harness(); const clear = vi.fn(async () => undefined);
-    const plain = new DatePicker(h.app, '2026-01-01', async () => undefined); plain.open(); expect(Array.from(plain.contentEl.querySelectorAll('button')).map(b => b.textContent)).toEqual(['Schedule']); plain.close();
-    const modal = new DatePicker(h.app, '2026-01-01', async () => undefined, clear); modal.open(); Array.from(modal.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Clear date')!.click(); await flush(); expect(clear).toHaveBeenCalledOnce(); expect(modal.contentEl.childElementCount).toBe(0);
-    const failed = new DatePicker(h.app, '2026-01-01', async () => undefined, async () => { throw Error('clear failure'); }); failed.open(); Array.from(failed.contentEl.querySelectorAll('button')).find(b => b.textContent === 'Clear date')!.click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain('clear failure');
-  });
-  it("date confirmation validates, cancellation creates nothing, errors are visible", async () => {
-    const h = harness(); const choose = vi.fn(async () => undefined); const modal = new DatePicker(h.app, '2026-01-01', choose); modal.open(); decorated(modal);
-    const input = modal.contentEl.querySelector('input') as HTMLInputElement; input.value = ''; modal.contentEl.querySelector('button')!.click(); expect(choose).not.toHaveBeenCalled();
-    input.value = '2026-01-02'; modal.contentEl.querySelector('button')!.click(); await flush(); expect(choose).toHaveBeenCalledWith('2026-01-02', null); expect(modal.contentEl.childElementCount).toBe(0);
-    const failed = new DatePicker(h.app, '2026-01-03', async () => { throw Error('date failure'); }); failed.open(); failed.contentEl.querySelector('button')!.click(); await flush(); expect(Notice.instances.at(-1)?.message).toContain('date failure'); failed.close();
-  });
-  it("schedules with an optional block of time: both times or neither, an end before the start is the next morning", async () => {
-    const h = harness(); const choose = vi.fn(async (_date: string, _time: unknown) => undefined); const now = () => new Date(2026, 0, 1, 8).getTime();
-    const modal = new DatePicker(h.app, '2026-01-02', choose, undefined, null, '', now); modal.open();
-    const [, from, to] = Array.from(modal.contentEl.querySelectorAll('input')) as HTMLInputElement[]; const note = () => modal.contentEl.querySelector('.organized-session-note')!;
-    const schedule = () => (modal.contentEl.querySelector('button') as HTMLButtonElement).click(); const local = (d: number, h: number, m = 0) => new Date(2026, 0, d, h, m).toISOString();
-    expect([from.getAttribute('aria-label'), to.getAttribute('aria-label'), from.value, to.value, note().textContent]).toEqual(['From', 'To', '', '', '']);
-    from.value = '10:00'; from.dispatchEvent(new Event('input')); expect(note().textContent).toBe('Add both times, or neither for a date alone.'); expect(note().classList.contains('organized-session-problem')).toBe(true);
-    schedule(); await flush(); expect(choose).not.toHaveBeenCalled();
-    to.value = '11:30'; to.dispatchEvent(new Event('input')); expect(note().textContent).toBe('Planned time: 1h 30min');
-    to.value = '10:00'; to.dispatchEvent(new Event('input')); expect(note().textContent).toBe('Planned time: 24h · ends the next day');
-    from.value = '22:00'; to.value = '02:00'; to.dispatchEvent(new Event('input')); expect(note().textContent).toBe('Planned time: 4h · ends the next day');
-    schedule(); await flush(); expect(choose).toHaveBeenCalledWith('2026-01-02', { start: local(2, 22), end: local(3, 2) });
-    // Filled from the block already on the day, with a line about what else moves.
-    const again = new DatePicker(h.app, '2026-01-02', choose, undefined, { start: '09:00', end: '09:00' }, '2 planned blocks on 2026-01-02 move with the date.', now); again.open();
-    expect(again.contentEl.querySelector('.organized-session-note')!.textContent).toBe('Planned time: 24h · ends the next day · 2 planned blocks on 2026-01-02 move with the date.');
-    const [, f2, t2] = Array.from(again.contentEl.querySelectorAll('input')) as HTMLInputElement[]; expect([f2.value, t2.value]).toEqual(['09:00', '09:00']);
-    f2.value = ''; t2.value = ''; t2.dispatchEvent(new Event('input')); expect(again.contentEl.querySelector('.organized-session-note')!.textContent).toBe('2 planned blocks on 2026-01-02 move with the date.');
-    f2.value = '09:00'; t2.value = '09:30'; t2.dispatchEvent(new Event('input')); expect(again.contentEl.querySelector('.organized-session-note')!.textContent).toBe('Planned time: 30 min · 2 planned blocks on 2026-01-02 move with the date.');
-    again.close();
   });
   it("settles confirmations exactly once and flags destructive actions", async () => {
     const h = harness();

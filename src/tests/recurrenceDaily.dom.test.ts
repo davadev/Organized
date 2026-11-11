@@ -60,7 +60,9 @@ describe('daily notes made by other plugins', () => {
   it('a note made at the same moment the plugin creates it for a scheduled task is created once and holds each task once', async () => {
     const { h, plugin } = await loaded(); const gym = await plugin.repo.create('Gym'); await plugin.service.recurrence(gym.id, DAILY); const other = await plugin.repo.create('Other'); const date = later(5); const path = plugin.service.daily.path(date);
     const real = h.raw.vault.create.getMockImplementation()!; let first = true; h.raw.vault.create.mockImplementation(async (p: string, text: string) => { if (p === path && first) { first = false; await real(p, '# From another plugin\n'); throw new Error('Exists'); } return real(p, text); });
-    await plugin.service.scheduleTask(other.id, date); vi.useFakeTimers({ toFake: ['setTimeout'] }); h.events.create.forEach(fn => fn(h.files.get(path))); await vi.advanceTimersByTimeAsync(2500); vi.useRealTimers(); await flush();
+    // A later day's note is not made when scheduling; the note another plugin makes for it gets the scheduled task along with the recurring one.
+    await plugin.service.scheduleTask(other.id, date); expect(h.files.get(path)).toBeUndefined(); await plugin.service.daily.ensure(date);
+    vi.useFakeTimers({ toFake: ['setTimeout'] }); h.events.create.forEach(fn => fn(h.files.get(path))); await vi.advanceTimersByTimeAsync(2500); vi.useRealTimers(); await flush();
     expect(h.texts.get(path)).toContain('# From another plugin'); expect(copies(h.texts.get(path), other.id)).toHaveLength(1); expect(copies(h.texts.get(path), gym.id)).toHaveLength(1);
   });
 });

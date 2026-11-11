@@ -2,15 +2,16 @@ import { Editor, MarkdownView, Notice, Platform, Plugin, TFile, TFolder, Workspa
 import { Transaction } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
 import { ACTION_MARKERS, duplicateRepeats, parentIds, parseTasks, sameNesting, unclearIds, NOTE_MARKER, NoteSection, PROJECT_MARKER, RECURRING_MARKER, SECTION_MARKERS, SUBTASK_MARKER, TaskLine, TIME_MARKER, writeNoteSection } from "./codec";
-import { DEFAULT_SETTINGS, elapsed, localDate, markerOf, object, Settings, Status, Task } from "./model";
+import { DEFAULT_SETTINGS, elapsed, localDate, markerOf, object, Settings, Status, Task, WorkSession } from "./model";
 import { settingsFrom } from "./model";
 import { Repository } from "./repository";
 import { anchorOf, explicitRule, taskRule } from "./recurrence";
 import { Context, report, TaskService } from "./service";
-import { formatMinutes, localInput } from "./sessions";
-import { shiftTo } from "./plans";
+import { formatMinutes } from "./sessions";
+import { plansIn } from "./plans";
+import { budgetUse, overlap, plannable } from "./planning";
 import { loadRole, MirrorError, Role } from "./device";
-import { ConfirmModal, DatePicker, isKeepAsTodo, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RecurrencePicker, RetireModal, SessionModal, TaskPicker, WhatsNewModal } from "./modals";
+import { ConfirmModal, isKeepAsTodo, ScheduleModal, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RecurrencePicker, RetireModal, SessionModal, TaskPicker, WhatsNewModal } from "./modals";
 import { notesOfLine, notesToShow, ReleaseNote } from "./whatsNew/releaseNotes";
 import { OrganizedInspectorView, VIEW_TYPE } from "./view";
 import { OrganizedSettingsTab } from "./settings";
@@ -86,6 +87,8 @@ export default class Organized extends Plugin {
       this.addCommand({ id: "show-whats-new", name: "Show what's new", callback: () => { this.showWhatsNew(); } });
       this.addCommand({ id: "undo", name: "Undo last recurrence/auto-forward batch", callback: () => { void this.service.undo().catch(report); } });
       this.addCommand({ id: "restore-settings", name: "Restore compatible settings backup (restart required)", callback: () => { void this.confirm("Queue the newest compatible settings backup for restoration on next restart? Task Markdown will not change.").then(yes => yes ? this.safety.queueCompatibleRestore() : undefined).catch(report); } });
+      this.addCommand({ id: "schedule-task", name: "Schedule task…", editorCallback: (editor, view) => { const context = view.file ? this.current(editor, view.file) : null; if (context?.line.id) void this.repo.read(context.line.id).then(task => this.pickSchedule(task, context)).catch(report); } });
+      this.addCommand({ id: "clear-schedule", name: "Clear schedule", editorCallback: (editor, view) => { const id = view.file ? this.current(editor, view.file)?.line.id : undefined; if (id) void this.run(() => this.service.unschedule(id)).catch(report); } });
       this.addCommand({ id: "edit-marker", name: "Edit checkbox marker", editorCallback: editor => { this.editMarker(editor); } });
       this.registerEditorExtension(editorExtension(this));
       this.registerMarkdownPostProcessor((el, ctx) => reading(this, el, ctx));
@@ -590,7 +593,7 @@ export default class Organized extends Plugin {
   async trigger(context: Context): Promise<void> {
     const marker = context.line.marker; const id = context.line.id; if (!id) return;
     this.assertEditable(); this.context = context; this.selectedTaskId = id;
-    if (marker === "<") this.pickSchedule(await this.repo.read(id), context);
+    if (marker === "<") await this.pickSchedule(await this.repo.read(id), context, true);
     else if (marker === "!") new PriorityPicker(this.app, priority => this.run(() => this.service.priority(context, priority))).open();
     else if (marker in SECTION_MARKERS) { await this.openInspector("Task", SECTION_MARKERS[marker]); await this.run(() => this.service.clean(context)); }
     else if (marker === PROJECT_MARKER) this.pickProjects(await this.repo.read(id), context);
@@ -601,21 +604,40 @@ export default class Organized extends Plugin {
     else await this.run(() => this.service.marker(context, marker));
   }
   /**
-   * Asks for the task's date and, optionally, a block of time on it. The one block not yet begun on the current date fills the time fields, and what is saved replaces it
-   * (emptied fields leave the date alone); more blocks than one simply move with the date, as the dialog says.
+   * Opens the Schedule dialog for a task: its days and their times, in one place. `typed` is set when the person typed `<` on the todo, so closing without saving puts the todo's
+   * marker back (`<` while it is scheduled away from that note).
    */
-  pickSchedule(task: Task, context?: Context): void {
-    const now = Date.now(); const clock = (iso: string) => localInput(iso).slice(11);
-    const onDay = task.scheduled ? task.planned_sessions.filter(b => localDate(new Date(b.start)) === task.scheduled && Date.parse(b.start) > now) : [];
-    const single = onDay.length === 1 ? onDay[0] : null;
-    new DatePicker(this.app, task.scheduled ?? localDate(), (date, time) => this.run(async () => {
-      // The date first (the block moves along with it), then the block is changed where it now is: when scheduling fails, nothing was taken away.
-      if (!single) { await this.service.scheduleTask(task.id, date, context, undefined, undefined, time ?? undefined); return; }
-      await this.service.scheduleTask(task.id, date, context);
-      const moved = date === task.scheduled ? single : shiftTo(single, date);
-      if (!time || time.start !== moved.start || time.end !== moved.end) await this.service.changePlanned(task.id, moved, time);
-    }), task.scheduled ? () => this.run(() => this.service.unschedule(task.id)) : undefined, single ? { start: clock(single.start), end: clock(single.end) } : null,
-    onDay.length > 1 ? `${onDay.length} planned blocks on ${task.scheduled} move with the date.` : "").open();
+  async pickSchedule(task: Task, context?: Context, typed = false): Promise<void> {
+    const now = Date.now(); const today = localDate(); const dayOf = (b: WorkSession) => localDate(new Date(b.start)); const begun = (b: WorkSession) => Date.parse(b.start) <= now;
+    // A block on a day the task is not scheduled for (planned before days were kept, or made in another time zone) shows as a day of its own: no planned time is out of sight.
+    const ahead = [...new Set([...task.scheduled_dates, ...task.planned_sessions.filter(b => !begun(b)).map(dayOf)])].filter(day => day >= today).sort();
+    const days = [];
+    for (const date of ahead) {
+      const note = this.repo.file(this.service.daily.path(date)); const missing = note ? !parseTasks(await this.repo.readText(note)).some(t => t.id === task.id) : false;
+      days.push({ date, blocks: task.planned_sessions.filter(b => dayOf(b) === date && !begun(b)), locked: task.planned_sessions.filter(b => dayOf(b) === date && begun(b)), missing });
+    }
+    const others = (await this.repo.list()).filter(t => t.id !== task.id); const own = context ? this.service.daily.date(context.file.path) : null;
+    const load = (day: string, blocks: WorkSession[]) => {
+      const [y, m, d] = day.split("-").map(Number); const from = new Date(y, m - 1, d).getTime(), to = new Date(y, m - 1, d + 1).getTime();
+      const theirs = others.filter(plannable).flatMap(t => plansIn(t, from, to, now).map(b => ({ title: t.title, b })));
+      const clash = theirs.find(o => blocks.some(b => Date.parse(b.start) < Date.parse(o.b.end) && Date.parse(o.b.start) < Date.parse(b.end)))?.title ?? null;
+      return { seconds: [...theirs.map(o => o.b), ...blocks].reduce((sum, b) => sum + overlap([b], [from, to]), 0), clash };
+    };
+    const budget = (blocks: WorkSession[]) => {
+      const use = budgetUse({ ...task, planned_sessions: [...task.planned_sessions.filter(b => begun(b) || !ahead.includes(dayOf(b))), ...blocks] }, now); if (!use) return "";
+      return `Planned ${formatMinutes(Math.round(use.planned / 60))} · ${use.left >= 0 ? `${formatMinutes(Math.round(use.left / 60))} of ${formatMinutes(Math.round(use.budget / 60))} left` : `${formatMinutes(Math.round(-use.left / 60))} over the ${formatMinutes(Math.round(use.budget / 60))} budget`}`;
+    };
+    const back = typed && context ? () => {
+      const marker = task.scheduled_dates.length && !(own && task.scheduled_dates.includes(own)) ? "<" : markerOf(task);
+      if (marker !== "<") void this.run(() => this.service.clean(context, marker));
+    } : undefined;
+    new ScheduleModal(this.app, {
+      title: task.title, days, earlier: task.scheduled_dates.filter(day => day < today), highlight: own ?? undefined, load, budget,
+      state: task.recurring ? "recurring" : task.status === "completed" || task.status === "canceled" ? "closed" : "open",
+      save: draft => this.run(() => this.service.saveSchedule(task.id, draft, context)).then(() => this.planningTick()), cancelled: back,
+      reopen: () => { void this.run(() => this.service.status(task.id, "open", context)).then(async () => this.pickSchedule(await this.repo.read(task.id), context)).catch(report); },
+      repeat: () => this.pickRecurrence(task, context),
+    }).open();
   }
   /** Asks how the task repeats. From a typed `[r]` (`typed`), cancelling puts the todo's own marker back; from the panel there is no marker to put back. */
   pickRecurrence(task: Task, context?: Context, typed = false): void {

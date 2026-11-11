@@ -26,7 +26,7 @@ describe('conflict and structural regression cases', () => {
     expect(sortTasks(text, 4, 'list', priorities)).toBe(sorted);
   });
   it('can schedule a browse-selected or orphan record without an editor, and reschedule without guessing', async () => {
-    const h = harness(); const task = await h.repo.create('Detached'); await h.service.scheduleTask(task.id, '2099-01-01'); expect(h.texts.get('Daily/2099-01-01.md')).toContain(task.id);
+    const h = harness(); const task = await h.repo.create('Detached'); await h.add('Daily/2099-01-01.md', ''); await h.add('Daily/2099-01-02.md', ''); await h.service.scheduleTask(task.id, '2099-01-01'); expect(h.texts.get('Daily/2099-01-01.md')).toContain(task.id);
     await h.service.scheduleTask(task.id, '2099-01-01'); expect(parseTasks(h.texts.get('Daily/2099-01-01.md')!)).toHaveLength(1);
     await h.service.scheduleTask(task.id, '2099-01-02'); expect(h.texts.get('Daily/2099-01-01.md')).not.toContain(task.id); expect((await h.repo.read(task.id)).movement_history.some(m => m.kind === 'reschedule')).toBe(true);
     h.texts.set('Daily/2099-01-02.md', 'User removed occurrence'); await h.service.scheduleTask(task.id, '2099-01-03'); expect(h.texts.get('Daily/2099-01-02.md')).toBe('User removed occurrence');

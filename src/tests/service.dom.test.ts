@@ -131,7 +131,8 @@ describe("repository and explicit task actions", () => {
     await h.service.reconcile(today); expect(parseTasks(h.texts.get(today.path)!)).toHaveLength(1); await h.service.undo(); expect(h.texts.get(today.path)).not.toContain(task.id);
     const other = harness(); const record = await other.repo.create('Future'); await other.repo.update(record.id, t => ({ ...t, scheduled: '2099-01-01' }));
     await other.add('Daily/2020-01-01.md', `- [ ] Future <!--organized:${record.id}-->\n- [x] Done <!--organized:done1234-->\n- [ ] Broken <!--organized:broken12-->`);
-    const now: any = await other.add(`Daily/${localDate()}.md`); await other.service.reconcile(now); expect(other.texts.get(now.path)).toBe('');
+    // An unfinished todo comes along also when a later day is scheduled; it keeps that day.
+    const now: any = await other.add(`Daily/${localDate()}.md`); await other.service.reconcile(now); expect(parseTasks(other.texts.get(now.path)!).map(t => t.id)).toEqual([record.id]); expect((await other.repo.read(record.id)).scheduled_dates).toEqual([localDate(), '2099-01-01']);
     const notice = Notice.instances.at(-1)?.message as DocumentFragment;
     expect(notice.querySelector('.organized-notice-title')?.textContent).toContain('Unfinished tasks carried to today');
     expect(notice.querySelector('.organized-notice-detail')?.textContent).toContain('conflict skipped');
