@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS, newTask } from '../src/model';
 import { editorExtension } from '../src/render';
 import { Setting, editorLivePreviewField } from '../src/tests/__mocks__/obsidian';
 import { OrganizedSettingsTab } from '../src/settings';
-import { DatePicker, NoteConversionModal, OnboardingModal, RetireModal, SessionModal, WhatsNewModal } from '../src/modals';
+import { DatePicker, NoteConversionModal, OnboardingModal, RecurrencePicker, RetireModal, SessionModal, WhatsNewModal } from '../src/modals';
 import { RELEASE_NOTES } from '../src/whatsNew/releaseNotes';
 import { parseTasks } from '../src/codec';
 import { EditorState } from '@codemirror/state';
@@ -64,6 +64,9 @@ const continueList = Prec.low(keymap.of([{ key: 'Enter', run: view => { const at
     editor = new EditorView({ state: EditorState.create({ doc, selection: { anchor: 0 }, extensions: [EditorView.lineWrapping, ...(tab === 'Source' ? [] : [editorLivePreviewField]), editorExtension(owner), continueList] }), parent: root });
   } else if (tab === 'ScheduleModal') {
     modal = new DatePicker(app, '2026-01-01', async () => undefined, async () => undefined);
+    modal.open();
+  } else if (tab === 'RepeatModal') {
+    modal = new RecurrencePicker(app, '2026-03-04', { every: 1, unit: 'week', days: [0, 1, 2, 3, 4], monthDay: null }, async () => undefined, undefined, [{ start: '08:00', end: '12:00' }, { start: '13:00', end: '17:00' }, { start: '22:00', end: '02:00' }]);
     modal.open();
   } else if (tab === 'SessionModal') {
     modal = new SessionModal(app, { heading: 'Edit time worked', taskTitle: 'A task title that stays readable at phone widths', start: new Date(2026, 2, 4, 9, 0).toISOString(), end: new Date(2026, 2, 4, 10, 30).toISOString(), save: async () => undefined, remove: async () => undefined, openTask: async () => undefined });

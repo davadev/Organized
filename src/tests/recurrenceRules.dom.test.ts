@@ -65,11 +65,11 @@ describe('repeat dialog', () => {
   const byText = (el: HTMLElement, text: string) => Array.from(el.querySelectorAll<HTMLButtonElement>('button')).find(b => (b.getAttribute('aria-label') ?? b.textContent) === text)!;
   it('saves a common repeat with one tap', async () => {
     const { el, choose, dialog } = open(); expect(Array.from(el.querySelectorAll('.organized-repeat-preset')).map(b => b.textContent)).toEqual(['Daily', 'Weekdays', 'Weekly', 'Monthly', 'Yearly']);
-    (el.querySelectorAll('.organized-repeat-preset')[1] as HTMLElement).click(); await flush(); expect(choose).toHaveBeenCalledWith(rule('weekdays')); expect((dialog as any).isOpen).toBe(false);
+    (el.querySelectorAll('.organized-repeat-preset')[1] as HTMLElement).click(); await flush(); expect(choose).toHaveBeenCalledWith(rule('weekdays'), []); expect((dialog as any).isOpen).toBe(false);
   });
   it('marks the current repeat and offers to stop it', async () => {
     const { el, choose } = open(rule('weekdays')); const pressed = Array.from(el.querySelectorAll('.organized-repeat-preset')).map(b => b.getAttribute('aria-pressed')); expect(pressed).toEqual(['false', 'true', 'false', 'false', 'false']); expect(el.querySelectorAll('.organized-repeat-preset')[2].getAttribute('title')).toBe('Every week on Thu');
-    expect(field(el, 'Repeat every').value).toBe('1'); byText(el, 'Stop repeating').click(); await flush(); expect(choose).toHaveBeenCalledWith(null);
+    expect(field(el, 'Repeat every').value).toBe('1'); byText(el, 'Stop repeating').click(); await flush(); expect(choose).toHaveBeenCalledWith(null, []);
     expect(open().el.textContent).not.toContain('Stop repeating');
   });
   it('builds a weekly rule from days and a number, and says it in words', async () => {
@@ -77,7 +77,7 @@ describe('repeat dialog', () => {
     type(field(el, 'Repeat every'), '3'); expect(el.querySelector('.organized-repeat-summary')!.textContent).toBe('Every 3 weeks on Thu');
     byText(el, 'Mon').click(); byText(el, 'Thu').click(); expect(el.querySelector('.organized-repeat-summary')!.textContent).toBe('Every 3 weeks on Mon');
     byText(el, 'Mon').click(); expect(el.querySelector('.organized-repeat-summary')!.textContent).toBe('Every 3 weeks on Mon');
-    byText(el, 'Fri').click(); byText(el, 'Save').click(); await flush(); expect(choose).toHaveBeenCalledWith(rule('every 3 weeks on mon,fri'));
+    byText(el, 'Fri').click(); byText(el, 'Save').click(); await flush(); expect(choose).toHaveBeenCalledWith(rule('every 3 weeks on mon,fri'), []);
   });
   it('shows only the fields that belong to the unit', async () => {
     const { el, choose } = open(); const days = el.querySelector('.organized-repeat-days')!; const month = field(el, 'Day of the month').parentElement!;
@@ -85,7 +85,7 @@ describe('repeat dialog', () => {
     const unit = field(el, 'Repeat unit'); unit.value = 'month'; unit.dispatchEvent(new Event('input')); expect(days.classList.contains('organized-hidden')).toBe(true); expect(month.classList.contains('organized-hidden')).toBe(false); expect(el.querySelector('.organized-repeat-summary')!.textContent).toBe('Every month on the 12th');
     const day = field(el, 'Day of the month'); day.value = 'last'; day.dispatchEvent(new Event('input')); expect(el.querySelector('.organized-repeat-summary')!.textContent).toBe('Every month on the last day'); day.value = '1'; day.dispatchEvent(new Event('input')); expect(el.querySelector('.organized-repeat-summary')!.textContent).toBe('Every month on the 1st');
     day.value = '22'; day.dispatchEvent(new Event('input')); expect(el.querySelector('.organized-repeat-summary')!.textContent).toBe('Every month on the 22nd'); day.value = '13'; day.dispatchEvent(new Event('input')); expect(el.querySelector('.organized-repeat-summary')!.textContent).toBe('Every month on the 13th');
-    unit.value = 'year'; unit.dispatchEvent(new Event('input')); expect(el.querySelector('.organized-repeat-summary')!.textContent).toBe('Every year'); byText(el, 'Save').click(); await flush(); expect(choose).toHaveBeenCalledWith(rule('every year'));
+    unit.value = 'year'; unit.dispatchEvent(new Event('input')); expect(el.querySelector('.organized-repeat-summary')!.textContent).toBe('Every year'); byText(el, 'Save').click(); await flush(); expect(choose).toHaveBeenCalledWith(rule('every year'), []);
   });
   it('starts the form from the current rule', () => {
     const { el } = open(rule('every 2 months on last')); expect(field(el, 'Repeat every').value).toBe('2'); expect(field(el, 'Repeat unit').value).toBe('month'); expect(field(el, 'Day of the month').value).toBe('last');
@@ -111,7 +111,7 @@ describe('typing r', () => {
     const context = () => { const text = `- [r] Water <!--organized:${task.id}-->`; h.texts.set(file.path, text); return { file, line: parseTasks(text)[0] }; };
     const set = vi.spyOn(plugin.service, 'recurrence').mockResolvedValue(); const clean = vi.spyOn(plugin.service, 'clean').mockResolvedValue();
     await plugin.trigger(context()); let picker = Modal.instances.at(-1) as RecurrencePicker; expect(picker).toBeInstanceOf(RecurrencePicker); expect(picker.current).toBeNull();
-    (picker.contentEl.querySelectorAll('.organized-repeat-preset')[1] as HTMLElement).click(); await flush(); expect(set).toHaveBeenCalledWith(task.id, rule('weekdays'), expect.objectContaining({ file })); picker.close(); await flush(); expect(clean).not.toHaveBeenCalled();
+    (picker.contentEl.querySelectorAll('.organized-repeat-preset')[1] as HTMLElement).click(); await flush(); expect(set).toHaveBeenCalledWith(task.id, rule('weekdays'), expect.objectContaining({ file }), []); picker.close(); await flush(); expect(clean).not.toHaveBeenCalled();
     await plugin.trigger(context()); picker = Modal.instances.at(-1) as RecurrencePicker; picker.close(); await flush(); expect(clean).toHaveBeenCalledWith(expect.objectContaining({ file }), ' ');
     await plugin.repo.update(task.id, t => ({ ...t, recurring: true, recurrence: 'every 2 days' })); const fresh = await plugin.repo.read(task.id);
     plugin.pickRecurrence(fresh); picker = Modal.instances.at(-1) as RecurrencePicker; expect(picker.current).toEqual(rule('every 2 days'));

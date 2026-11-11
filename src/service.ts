@@ -3,7 +3,8 @@ import { Notice, TFile } from "obsidian";
 import { descendants, duplicateRepeats, fixIndent, insertTask, insertUnder, migrateNote, moveTask, nestUnder, noteSection, parentIds, parseTasks, projectSection, removeLines, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
 import { localDate, makeId, markerOf, MAX_PLANNED_SESSIONS, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, startPlanned, Status, Task, taskFrom, WorkSession } from "./model";
-import { claimHolds, dueStarts, dueStops, plannable } from "./planning";
+import { blockAt, claimHolds, dueStarts, dueStops, plannable } from "./planning";
+import { ClockSpan, MAX_SKIPS, repeatingBlocks, stored } from "./plans";
 import { formatRule, repeatsOn, Rule, sameCadence, taskRule } from "./recurrence";
 import { seconds } from "./sessions";
 import { ProjectBudgets, projectTemplate, Repository, splitNote } from "./repository";
@@ -393,9 +394,9 @@ export class TaskService {
     if (this.repo.settings().sortScope === "none") return; await this.resort(file, task, changes).catch(() => undefined);
   }
   /** Makes the task repeat by `rule`, or stops it with `null`. Daily notes from today on get (or lose) their copy to match; today's copy and every earlier one stay. */
-  async recurrence(id: string, rule: Rule | null, context?: Context): Promise<void> {
+  async recurrence(id: string, rule: Rule | null, context?: Context, times?: ClockSpan[]): Promise<void> {
     const today = localDate(); const changes: Change[] = []; const skipped: string[] = [];
-    const file = await this.repo.resolve(id); const before = await this.repo.readText(file);
+    const file = await this.repo.resolve(id); const before = await this.repo.readText(file); const old = await this.repo.read(id);
     let started = false;
     const task = await this.repo.update(id, t => {
       started = t.status === "in_progress" && t.time_tracking_started_at === null;
@@ -405,7 +406,8 @@ export class TaskService {
       const keep = rule !== null && t.recurring && sameCadence(taskRule(t), rule);
       if (!keep && open) open.stop = today;
       if (rule !== null && !keep) periods.push({ start: today, stop: null });
-      return { ...t, status: "open", closed_at: null, auto_started_block: null, recurring: rule !== null, recurrence: rule ? formatRule(rule) : null, recurrence_periods: periods, daily_note_section_path: context?.line.section ?? t.daily_note_section_path };
+      // A running timer keeps its claim, so the planned time it runs for still stops it (now, when that time went with the change).
+      return { ...t, status: "open", closed_at: null, auto_started_block: t.time_tracking_started_at ? t.auto_started_block : null, recurrence_times: times ?? t.recurrence_times, recurring: rule !== null, recurrence: rule ? formatRule(rule) : null, recurrence_periods: periods, daily_note_section_path: context?.line.section ?? t.daily_note_section_path };
     });
     changes.push({ file, before, after: await this.repo.readText(file) });
     // The task is open now: a todo a planned block had set in progress (`[/]`) would keep saying so for good. A running timer keeps its marker.
@@ -434,6 +436,7 @@ export class TaskService {
       try { const fresh = await this.resolve(context); await this.edit(context.file, fresh.text, replaceTask(fresh.text, fresh.line, { marker: " " }), changes); }
       catch { skipped.push(context.file.path); }
     }
+    await this.planEdited(id, old);
     const skippedPaths = [...new Set(skipped)];
     this.summarize(changes, task.recurring ? "Recurrence set" : "Recurrence disabled", skippedPaths.length ? `Skipped/preserved for repair: ${skippedPaths.join(", ")}` : "");
   }
@@ -594,6 +597,20 @@ export class TaskService {
       return { ...t, planned_sessions: to ? t.planned_sessions.map((s, n) => n === at ? to : s) : t.planned_sessions.filter((_s, n) => n !== at) };
     }); await this.planEdited(id, before); this.changed();
   }
+  /**
+   * Changes one day of a recurring task's repeating times on its own ("this day"): that day's repeating blocks become blocks of its own, `from` among them replaced by `to` (or left out when
+   * `to` is null), and the day is marked so its repeating times no longer apply. The other days, and a later change of the times, leave it as it is.
+   */
+  async editRepeatingDay(id: string, day: string, from: WorkSession, to: WorkSession | null): Promise<void> {
+    const before = await this.repo.read(id); const blocks = repeatingBlocks(before, day).map(stored);
+    if (!blocks.some(b => b.start === from.start && b.end === from.end)) throw new Error("That repeating block no longer exists; its times may have been changed elsewhere.");
+    const recent = localDate(new Date(Date.now() - 7 * 86400000));
+    await this.repo.update(id, t => {
+      const own = blocks.flatMap(b => b.start === from.start && b.end === from.end ? (to ? [to] : []) : [b]).filter(b => !t.planned_sessions.some(p => p.start === b.start && p.end === b.end));
+      return { ...t, planned_sessions: [...t.planned_sessions, ...own].slice(-MAX_PLANNED_SESSIONS), recurrence_skips: [...new Set([...t.recurrence_skips.filter(d => d >= recent), day])].sort().slice(-MAX_SKIPS) };
+    });
+    await this.planEdited(id, before); this.changed();
+  }
   /** Runs a write of the task note and records it in `changes` for Undo. */
   private async recorded<T>(id: string, changes: Change[], write: () => Promise<T>): Promise<T> {
     const note = await this.repo.resolve(id); const before = await this.repo.readText(note);
@@ -613,7 +630,7 @@ export class TaskService {
       await this.applyStatus(id, "open", context, undefined, t => ({ ...setStatus(t, "open", new Date(now)), auto_started_block: null })); return;
     }
     const start = dueStarts([after], now)[0];
-    if (start && !dueStarts([before], now).length) await this.applyStatus(id, "in_progress", context, undefined, t => startPlanned(t, { ...start.block, start: new Date(now).toISOString() }, start.block.start));
+    if (start && !blockAt(before, now)) await this.applyStatus(id, "in_progress", context, undefined, t => startPlanned(t, { ...start.block, start: new Date(now).toISOString() }, start.block.start));
   }
   /** The block turned out as planned: it becomes worked time and leaves the plan. */
   async logPlanned(id: string, block: WorkSession): Promise<void> {
@@ -627,7 +644,12 @@ export class TaskService {
    * Returns the titles of tasks whose timer it stopped, so the caller can say so.
    */
   async applyPlanning(now = Date.now()): Promise<string[]> {
-    const tasks = await this.repo.list(); const stopped: string[] = [];
+    const tasks: Task[] = []; const stopped: string[] = []; const today = localDate(new Date(now));
+    // A recurring task ticked or canceled for today is done with today's repeating time: its later blocks today do not start it again. Only seen here, never written.
+    for (const task of await this.repo.list()) {
+      const line = task.recurring && task.recurrence_times.length ? (await this.todayContext(task))?.line : undefined;
+      tasks.push(line && ["x", "X", "-"].includes(line.marker) ? { ...task, recurrence_skips: [...task.recurrence_skips, today] } : task);
+    }
     // A write that loses a race with the person typing (or an editor saving older text over it) leaves the task changed but the note not: a stop is undone so the next pass makes it again, a start is put right by the heal below.
     const lost = (error: unknown) => error instanceof Error && error.message.includes("changed concurrently");
     // A task is never in both: a start needs its timer stopped, a stop needs it running (a later block starts it on the next pass).

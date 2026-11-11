@@ -615,8 +615,8 @@ export default class Organized extends Plugin {
   }
   /** Asks how the task repeats. From a typed `[r]` (`typed`), cancelling puts the todo's own marker back; from the panel there is no marker to put back. */
   pickRecurrence(task: Task, context?: Context, typed = false): void {
-    new RecurrencePicker(this.app, localDate(), task.recurring ? explicitRule(taskRule(task), anchorOf(task)) : null, rule => this.run(() => this.service.recurrence(task.id, rule, context)),
-      typed && context ? () => { void this.run(() => this.service.clean(context, markerOf(task))); } : undefined).open();
+    new RecurrencePicker(this.app, localDate(), task.recurring ? explicitRule(taskRule(task), anchorOf(task)) : null, (rule, times) => this.run(() => this.service.recurrence(task.id, rule, context, times)).then(() => this.planningTick()),
+      typed && context ? () => { void this.run(() => this.service.clean(context, markerOf(task))); } : undefined, task.recurrence_times).open();
   }
   /** The marker a task's own status shows (a running timer is `[/]`). */
   /** `[+]`: puts the todo's own marker back, then adds an empty subtask under it as the command does. */

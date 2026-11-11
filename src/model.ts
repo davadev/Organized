@@ -1,3 +1,4 @@
+import { ClockSpan, MAX_SKIPS, plansIn, timesFrom } from "./plans";
 import { normalizePath } from "obsidian";
 
 export const STATUSES = ["open", "in_progress", "completed", "canceled"] as const;
@@ -19,7 +20,7 @@ export const MAX_PLANNED_SESSIONS = 500;
 /** Task properties written only while they hold something, so a task that never plans time carries no extra keys. */
 /** The task panel cards that can be folded away. */
 export const FOLDABLE_CARDS: readonly string[] = ["Description", "Subtasks", "Timer"];
-export const OPTIONAL_KEYS = ["planned_sessions", "auto_started_block", "time_budget_seconds", "recurrence"] as const;
+export const OPTIONAL_KEYS = ["planned_sessions", "auto_started_block", "time_budget_seconds", "recurrence", "recurrence_times", "recurrence_skips"] as const;
 /** The longest time budget a task can hold (9999 hours); anything else in a note is ignored. */
 export const MAX_BUDGET_SECONDS = 9999 * 3600;
 export interface Task {
@@ -29,6 +30,10 @@ export interface Task {
   /** How the task repeats while `recurring` is on, in the one-line form `parseRule` reads (`weekdays`, `every 3 weeks on thu`). Empty means every day. */
   recurrence: string | null;
   recurrence_periods: { start: string; stop: string | null }[];
+  /** Times of day a recurring task is planned for on each day it repeats (see `plansIn`). They make no blocks while it does not repeat. */
+  recurrence_times: ClockSpan[];
+  /** Days (`YYYY-MM-DD`) whose repeating times were replaced by blocks of their own in `planned_sessions`, after the person changed that day alone. */
+  recurrence_skips: string[];
   starred: boolean; projects: string[]; movement_history: Movement[];
   daily_note_section_path: Section[]; work_sessions: WorkSession[];
   /** Blocks of time set aside for the future (or the past, as an estimate). They never count toward `time_tracked_seconds`. */
@@ -173,6 +178,7 @@ export function taskFrom(value: unknown, expectedId: string): Task {
     projects: [...new Set(strings(v.projects).filter(p => { try { return path(p) === p && p.endsWith(".md"); } catch { return false; } }))],
     movement_history: history as unknown as Movement[], daily_note_section_path: sections as unknown as Section[], work_sessions: sessions,
     planned_sessions: sessionsOf(v.planned_sessions, MAX_PLANNED_SESSIONS),
+    recurrence_times: timesFrom(v.recurrence_times), recurrence_skips: [...new Set(strings(v.recurrence_skips).filter(validDate))].sort().slice(-MAX_SKIPS),
     auto_started_block: typeof v.auto_started_block === "string" && Number.isFinite(Date.parse(v.auto_started_block)) ? v.auto_started_block : null,
     time_budget_seconds: Number.isInteger(v.time_budget_seconds) && Number(v.time_budget_seconds) > 0 && Number(v.time_budget_seconds) <= MAX_BUDGET_SECONDS ? Number(v.time_budget_seconds) : null,
     converted_to: typeof v.converted_to === "string" && v.converted_to.endsWith(".md") ? v.converted_to : null,
@@ -193,7 +199,7 @@ export function elapsed(task: Task, now = Date.now()): number {
 export function setStatus(task: Task, status: Status, now = new Date()): Task {
   // A change made while a planned block is under way marks that block as handled: a task the person stopped is not started again by it (see `dueStarts`), and a timer started in it stops when it ends.
   // A timer started outside planned time is the person's alone: nothing stops it.
-  const at = now.getTime(); const covering = task.planned_sessions.find(block => Date.parse(block.start) <= at && at < Date.parse(block.end));
+  const at = now.getTime(); const covering = plansIn(task, at, at + 1, at).find(block => Date.parse(block.start) <= at && at < Date.parse(block.end));
   const next = { ...task, status: task.recurring ? "open" as const : status, auto_started_block: covering?.start ?? (status === "in_progress" ? null : task.auto_started_block) };
   if (next.status === "completed" || next.status === "canceled") next.closed_at = task.status === next.status && task.closed_at ? task.closed_at : now.toISOString();
   else next.closed_at = null;

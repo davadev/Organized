@@ -309,6 +309,10 @@ body.is-mobile .modal-container.organized-modal-host { overflow-y: auto; }
 .organized-modal-window .organized-datetime { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 8px; margin-block-end: 8px; }
 .organized-modal-window .organized-datetime input { max-inline-size: 100%; text-align: start; }
 .organized-modal-window .organized-datetime.organized-time-range { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.organized-modal-window .organized-repeat-times { display: grid; gap: 6px; }
+.organized-modal-window .organized-repeat-time { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.organized-modal-window .organized-repeat-time input { max-inline-size: 100%; min-inline-size: 0; }
+.organized-modal-window .organized-repeat-add { margin-block: 6px 2px; }
 .organized-modal-window .organized-modal textarea { min-block-size: 12rem; line-height: 1.5; resize: vertical; }
 .organized-modal-window .modal-content .setting-item { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-block-start: 16px; padding: 0; border: 0; }
 .organized-modal-window .modal-content .setting-item-info { display: none; }

@@ -6,6 +6,7 @@ import { freePath, noteName } from "./names";
 import { report } from "./service";
 import { rgbOf } from "./colors";
 import { formatRule, presetRules, Rule, ruleLabel, Unit } from "./recurrence";
+import { ClockSpan, MAX_TIMES, timeLabel, timesProblem } from "./plans";
 import { BUDGET_KEYS, BudgetPeriod, budgetHours, MAX_BUDGET_HOURS, projectName, ProjectBudgets } from "./repository";
 import { renderMarkdownLinks } from "./markdown";
 import { ONBOARDING_STEPS, OnboardingStep } from "./onboarding";
@@ -70,10 +71,18 @@ const WEEKDAY_LETTERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export class RecurrencePicker extends Modal {
   private picked = false;
   /** `cancelled` runs when the dialog closes without a choice, so a typed `[r]` can be put back. */
-  constructor(app: App, readonly today: string, readonly current: Rule | null, readonly choose: (rule: Rule | null) => Promise<void>, readonly cancelled?: () => void) { super(app); decorate(this); }
-  private done(rule: Rule | null): void { this.picked = true; this.close(); void this.choose(rule).catch(report); }
+  /** `times` are the times of day the task is planned for on each day it repeats; `choose` gets them back with the rule (the rule null stops repeating and keeps them for later). */
+  constructor(app: App, readonly today: string, readonly current: Rule | null, readonly choose: (rule: Rule | null, times: ClockSpan[]) => Promise<void>, readonly cancelled?: () => void, readonly times: ClockSpan[] = []) { super(app); decorate(this); }
+  /** Reads the time rows (set up in `onOpen`): the times, or what is wrong with them. */
+  private readTimes!: () => ClockSpan[] | string;
+  private done(rule: Rule | null): void {
+    // Stopping keeps the stored times as they were, whatever the rows say.
+    const times = rule === null ? this.times : this.readTimes(); if (typeof times === "string") return;
+    this.picked = true; this.close(); void this.choose(rule, times).catch(report);
+  }
   onOpen(): void {
     this.titleEl.setText("Repeat"); this.contentEl.addClass("organized-modal");
+    this.timesEditor();
     const presets = this.contentEl.createDiv({ cls: "organized-repeat-presets", attr: { role: "group", "aria-label": "Common repeats" } });
     const now = this.current ? formatRule(this.current) : "";
     for (const rule of presetRules(this.today)) {
@@ -115,6 +124,31 @@ export class RecurrencePicker extends Modal {
     actions.addButton(b => b.setButtonText("Save").setCta().onClick(() => { const rule = read(); if (rule) this.done(rule); else paint(); }));
     if (this.current) actions.addButton(b => { b.setButtonText("Stop repeating").onClick(() => this.done(null)); b.buttonEl.addClass("mod-warning"); });
   }
+  /** Rows of From and To times (optional): each day the task repeats, those times are planned for it, with no daily note needed. */
+  private timesEditor(): void {
+    this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Planned times (optional)" });
+    const list = this.contentEl.createDiv({ cls: "organized-repeat-times", attr: { role: "group", "aria-label": "Planned times" } });
+    const rows: { from: HTMLInputElement; to: HTMLInputElement }[] = [];
+    const add = this.contentEl.createEl("button", { cls: "organized-repeat-add", text: "Add time" });
+    const note = this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-note", attr: { role: "status" } });
+    this.readTimes = () => {
+      const times = rows.filter(r => r.from.value || r.to.value).map(r => ({ start: r.from.value, end: r.to.value })); const problem = timesProblem(times);
+      note.setText(problem ?? (times.length ? times.map(timeLabel).join(", ") : "")); note.toggleClass("organized-session-problem", problem !== null);
+      return problem ?? times;
+    };
+    const row = (time?: ClockSpan) => {
+      const line = list.createDiv({ cls: "organized-repeat-time" }); const n = rows.length + 1;
+      const from = line.createEl("input", { type: "time", attr: { "aria-label": `Time ${n} from` } }); const to = line.createEl("input", { type: "time", attr: { "aria-label": `Time ${n} to` } });
+      from.value = time?.start ?? ""; to.value = time?.end ?? ""; const entry = { from, to }; rows.push(entry);
+      for (const input of [from, to]) input.addEventListener("input", () => this.readTimes());
+      const remove = line.createEl("button", { cls: "organized-repeat-remove", text: "×", attr: { "aria-label": `Remove time ${n}`, title: "Remove" } });
+      remove.addEventListener("click", () => { line.remove(); rows.splice(rows.indexOf(entry), 1); add.disabled = false; this.readTimes(); });
+      add.disabled = rows.length >= MAX_TIMES;
+    };
+    add.addEventListener("click", () => { row(); rows.at(-1)!.from.focus(); });
+    for (const time of this.times) row(time);
+    this.readTimes();
+  }
   onClose(): void { this.contentEl.empty(); queueMicrotask(() => { if (!this.picked) this.cancelled?.(); }); }
 }
 export class DatePicker extends Modal {
@@ -153,6 +187,17 @@ export class DatePicker extends Modal {
       this.close(); void this.choose(input.value, block).catch(report);
     }));
     if (this.clear) { const clear = this.clear; actions.addButton(b => b.setButtonText("Clear date").onClick(() => { this.close(); void clear().catch(report); })); }
+  }
+  onClose(): void { this.contentEl.empty(); }
+}
+/** A question with a few answers as buttons; closing it answers nothing. */
+export class ChoiceModal extends Modal {
+  constructor(app: App, readonly heading: string, readonly message: string, readonly choices: { label: string; run: () => void }[]) { super(app); decorate(this); }
+  onOpen(): void {
+    this.titleEl.setText(this.heading); this.contentEl.addClass("organized-modal");
+    this.contentEl.createEl("p", { cls: "organized-modal-copy", text: this.message });
+    const actions = new Setting(this.contentEl);
+    for (const [n, choice] of this.choices.entries()) actions.addButton(b => { b.setButtonText(choice.label).onClick(() => { this.close(); choice.run(); }); if (n === 0) b.setCta(); });
   }
   onClose(): void { this.contentEl.empty(); }
 }

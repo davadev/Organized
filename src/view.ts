@@ -6,7 +6,8 @@ import type Organized from "./main";
 import { elapsed, FOLDABLE_CARDS, localDate, PRIORITIES, Section, STATUS_ICONS, STATUSES, statusOfMarker, Task, WorkSession } from "./model";
 import { byPriority, report } from "./service";
 import { cells, HeatScale, MAX_CELLS, scaleFor, slider } from "./movement";
-import { BudgetModal, ProjectBudgetModal, SessionModal, TaskPicker } from "./modals";
+import { BudgetModal, ChoiceModal, ProjectBudgetModal, SessionModal, TaskPicker } from "./modals";
+import { timeLabel } from "./plans";
 import { formatMinutes, lengthOf, lengthOfSeconds, seconds, SessionKind } from "./sessions";
 import { budgetUse, BudgetUse, PERIOD_LABELS, plannedSeconds, projectUse } from "./planning";
 import { descendants, NoteSection, NOTE_SECTIONS, noteSection, parseTasks, TaskLine } from "./codec";
@@ -57,7 +58,7 @@ export class OrganizedInspectorView extends ItemView {
   private async projectBars(host: HTMLElement, task: Task): Promise<void> {
     const budgeted = task.projects.filter(project => this.budgeted(project)); if (!budgeted.length) return;
     // Time kept under retired todos (see retention.ts) still counts toward the project it was worked for.
-    const tasks = [...await this.owner.repo.list(true), ...(await this.owner.service.retiredWork(RETIRED_FROM, RETIRED_TO)).map(item => item.task)]; const now = Date.now();
+    const tasks = this.withDoneToday([...await this.owner.repo.list(true), ...(await this.owner.service.retiredWork(RETIRED_FROM, RETIRED_TO)).map(item => item.task)]); const now = Date.now();
     for (const project of budgeted) {
       const budgets = this.owner.repo.projectBudgets(project);
       for (const period of Object.keys(BUDGET_KEYS) as BudgetPeriod[]) { const budget = budgets[period]; if (budget !== null) this.budgetBar(host, projectUse(tasks, project, period, budget, now), `${this.projectLabel(project)} · ${PERIOD_LABELS[period]}`); }
@@ -163,6 +164,8 @@ export class OrganizedInspectorView extends ItemView {
     return this.owner.context?.line.id === task.id ? this.owner.context : await this.owner.service.todayContext(task);
   }
   /** A recurring task keeps `status: open` (each day's todo holds that day's state), so the panel shows today's: done when today's todo is ticked, in progress while its timer runs. */
+  /** Tasks as planned time sees them: a recurring task done today is done with today's repeating time (the same rule as `applyPlanning`). */
+  private withDoneToday(tasks: Task[]): Task[] { const today = localDate(); return tasks.map(t => t.recurring && this.doneToday.has(t.id) ? { ...t, recurrence_skips: [...t.recurrence_skips, today] } : t); }
   private shownStatus(task: Task): Task["status"] { return !task.recurring || task.status !== "open" ? task.status : this.doneToday.has(task.id) ? "completed" : task.time_tracking_started_at ? "in_progress" : "open"; }
   private taskRow(host: HTMLElement, task: Task, action: () => Promise<unknown> | void): HTMLElement {
     const row = host.createDiv({ cls: "organized-list-card", attr: { "data-status": this.shownStatus(task) } }); 
@@ -434,10 +437,10 @@ export class OrganizedInspectorView extends ItemView {
     this.rangeNav(host, `${start.format("MMM D")} – ${end.format("MMM D, YYYY")}`, "Previous week", "Next week",
       () => { this.selectedDate = moment(this.selectedDate, "YYYY-MM-DD").add(1, "week").format("YYYY-MM-DD"); },
       () => { this.selectedDate = moment(this.selectedDate, "YYYY-MM-DD").subtract(1, "week").format("YYYY-MM-DD"); });
-    const tasks = await this.owner.repo.list(true); const now = Date.now();
+    const tasks = await this.owner.repo.list(true); const now = Date.now(); await this.loadDoneToday();
     const days = Array.from({ length: 7 }, (_, i) => start.clone().add(i, "days"));
     const retired = (await this.owner.service.retiredWork(days[0].format("YYYY-MM-DD"), days[6].format("YYYY-MM-DD"))).map(item => item.task);
-    const blocks = days.map(day => blocksOn([...tasks, ...retired], day.format("YYYY-MM-DD"), now)); const [from, to] = hourRange(blocks.flat());
+    const blocks = days.map(day => blocksOn(this.withDoneToday([...tasks, ...retired]), day.format("YYYY-MM-DD"), now)); const [from, to] = hourRange(blocks.flat());
     const counts = await Promise.all(days.map(async day => {
       const note = this.owner.repo.file(this.owner.service.daily.path(day.format("YYYY-MM-DD"))); const lines = note ? await this.owner.taskLines(note) : [];
       return { done: lines.filter(line => line.marker.toLowerCase() === "x").length, total: lines.length };
@@ -489,6 +492,20 @@ export class OrganizedInspectorView extends ItemView {
       logWorked: session && type === "planned" && Date.parse(session.end) <= Date.now() ? () => this.owner.run(() => service.logPlanned(task.id, session)) : undefined,
     }).open();
   }
+  /** A block of a recurring task's repeating times: change that day alone (the other days keep the times), or the times of every day. */
+  private editRepeating(task: Task, session: WorkSession, date: string): void {
+    const service = this.owner.service;
+    new ChoiceModal(this.app, "Change planned time", `“${task.title}” is planned at this time every day it repeats. Change only ${date}, or the times of every day?`, [
+      { label: "This day", run: () => new SessionModal(this.app, {
+        heading: "Edit planned time", taskTitle: task.title, start: session.start, end: session.end, kind: "planned",
+        save: next => this.owner.run(() => service.editRepeatingDay(task.id, date, session, next)).then(() => this.owner.planningTick()),
+        remove: () => this.owner.run(() => service.editRepeatingDay(task.id, date, session, null)).then(() => this.owner.planningTick()),
+        openTask: () => this.openCalendarTask(task),
+        logWorked: Date.parse(session.end) <= Date.now() ? () => this.owner.run(async () => { await service.editRepeatingDay(task.id, date, session, session); await service.logPlanned(task.id, session); }) : undefined,
+      }).open() },
+      { label: "Every day", run: () => this.owner.pickRecurrence(task) },
+    ]).open();
+  }
   /** Picks a task, then asks to plan an hour from `start` (a spot tapped on the day grid). */
   private async planAt(start: string, date: string): Promise<void> {
     const tasks = (await this.owner.repo.list()).filter(t => t.status === "open" || t.status === "in_progress");
@@ -514,9 +531,9 @@ export class OrganizedInspectorView extends ItemView {
     const date = this.selectedDate; const day = moment(date, "YYYY-MM-DD");
     this.rangeNav(host, day.format("ddd, MMM D, YYYY"), "Previous day", "Next day",
       () => { this.selectedDate = day.clone().add(1, "day").format("YYYY-MM-DD"); }, () => { this.selectedDate = day.clone().subtract(1, "day").format("YYYY-MM-DD"); }, true);
-    const tasks = await this.owner.repo.list(true); const now = Date.now();
+    const tasks = await this.owner.repo.list(true); const now = Date.now(); await this.loadDoneToday();
     const retired = new Map((await this.owner.service.retiredWork(date, date)).map(item => [item.task.id, item]));
-    const blocks = blocksOn([...tasks, ...[...retired.values()].map(item => item.task)], date, now);
+    const blocks = blocksOn(this.withDoneToday([...tasks, ...[...retired.values()].map(item => item.task)]), date, now);
     const note = this.owner.repo.file(this.owner.service.daily.path(date)); const lines = note ? await this.owner.taskLines(note) : [];
     const linked = new Map(tasks.map(task => [task.id, task]));
     if (generation !== this.renderId) return;
@@ -557,7 +574,7 @@ export class OrganizedInspectorView extends ItemView {
       // A retired task has no task note: open the daily note that kept its time instead.
       const kept = retired.get(block.task.id);
       // A stored session opens for editing (with an Open task button); a running timer has nothing to edit yet.
-      part.addEventListener("click", () => { if (!kept && block.session) { this.editSession(block.task, block.session, date, block.planned ? "planned" : "worked"); return; } void (kept ? this.openNote(kept.path) : this.openCalendarTask(block.task)).catch(report); });
+      part.addEventListener("click", () => { if (block.repeating) { this.editRepeating(block.task, block.session!, date); return; } if (!kept && block.session) { this.editSession(block.task, block.session, date, block.planned ? "planned" : "worked"); return; } void (kept ? this.openNote(kept.path) : this.openCalendarTask(block.task)).catch(report); });
     }
     const minutes = new Date(now).getHours() * 60 + new Date(now).getMinutes();
     if (date === localDate() && minutes >= from * 60 && minutes <= to * 60) { const nowLine = grid.createDiv({ cls: "organized-now-line", attr: { "aria-hidden": "true" } }); nowLine.setCssProps({ "--organized-at": String((minutes - from * 60) / span * 100) }); }
@@ -616,18 +633,21 @@ export class OrganizedInspectorView extends ItemView {
     this.propertyStrip(details, task);
     await this.moduleCard(details, file.path, id, "Description", noteSection(body, "Description"));
     await this.subtaskCard(details, task);
-    if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || task.planned_sessions.length || task.time_budget_seconds !== null || this.hasProjectBudget(task) || this.module === "Timer") {
+    const repeating = task.recurring && task.recurrence_times.length > 0;
+    if (task.time_tracking_started_at || task.time_tracked_seconds > 0 || task.planned_sessions.length || repeating || (task.time_budget_seconds !== null && !task.recurring) || this.hasProjectBudget(task) || this.module === "Timer") {
       const planned = plannedSeconds(task); const running = task.time_tracking_started_at !== null;
       const summary = `${formatMinutes(Math.floor(elapsed(task) / 60))} tracked${running ? " · running" : ""}${planned ? ` · ${formatMinutes(Math.floor(planned / 60))} planned` : ""}`;
       const timer = this.card(details, "Timer", "timer", { summary, always: true, actions: head => {
         const actions = head.createDiv({ cls: "organized-card-actions" });
         this.iconButton(actions, running ? "Stop timer" : "Start timer", running ? "square" : "play", () => this.owner.run(async () => this.owner.service.status(id, running ? "open" : "in_progress", await this.contextFor(task)))).setAttribute("aria-pressed", String(running));
         this.iconButton(actions, "Add time", "plus", () => this.editSession(task, null, localDate(), null));
-        this.iconButton(actions, task.time_budget_seconds === null ? "Set budget" : "Edit budget", "target", () => new BudgetModal(this.app, task.title, task.time_budget_seconds, seconds => this.owner.run(() => this.owner.service.setBudget(id, seconds))).open());
+        // A recurring task's time has no end to measure against; its projects' day, week and month budgets do that.
+        if (!task.recurring) this.iconButton(actions, task.time_budget_seconds === null ? "Set budget" : "Edit budget", "target", () => new BudgetModal(this.app, task.title, task.time_budget_seconds, seconds => this.owner.run(() => this.owner.service.setBudget(id, seconds))).open());
       } });
       const own = budgetUse(task); if (own) this.budgetBar(timer, own, "Time budget", false);
       await this.projectBars(timer, task);
       if (task.work_sessions.length) this.sessionList(timer, task);
+      if (repeating) this.button(timer, `${ruleLabel(taskRule(task))} · ${task.recurrence_times.map(timeLabel).join(", ")}`, () => this.owner.pickRecurrence(task, this.owner.context?.line.id === id ? this.owner.context : undefined)).addClass("organized-session-row", "organized-repeat-times-row");
       if (task.planned_sessions.length) this.sessionList(timer, task, "planned");
     }
     const sources = noteSection(body, "Sources");
