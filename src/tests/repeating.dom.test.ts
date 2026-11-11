@@ -177,3 +177,18 @@ describe('found by the bug hunt of beta.11 and beta.12', () => {
     expect((view as any).doneToday.has(task.id)).toBe(false);
   });
 });
+
+describe('found by the bug hunt of beta.13', () => {
+  it('a todo forwarded by hand takes the day\'s blocks that have not begun along, so they start no timer on the day it left; the automatic carry-over moves none', async () => {
+    const { service, repo, add, texts } = await fixture(at(4, 10)); const note = service.daily.path('2026-03-04'); const tomorrow = service.daily.path('2026-03-05');
+    const old = await repo.create('Old'); await add(note, `- [ ] Old <!--organized:${old.id}-->`); await repo.update(old.id, t => ({ ...t, planned_sessions: [block(4, 20, 21)] }));
+    const task = await repo.create('Later'); await service.scheduleTask(task.id, '2026-03-04'); await service.addPlanned(task.id, block(4, 8, 9)); await service.addPlanned(task.id, block(4, 15, 16));
+    const line = (await repo.occurrences(task.id)).find(o => o.file.path === note)!; await service.marker({ file: line.file, line: line.tasks[0] }, '>');
+    expect(await repo.read(task.id)).toMatchObject({ scheduled: '2026-03-05', planned_sessions: [block(4, 8, 9), block(5, 15, 16)] }); expect(Notice.instances.map(n => (n.message as unknown as HTMLElement).textContent ?? n.message).join('|')).toContain('moved from 2026-03-04 to 2026-03-05');
+    await service.applyPlanning(at(4, 15)); expect((await repo.read(task.id)).time_tracking_started_at).toBeNull(); expect(texts.get(note)).toContain('[>] Later'); expect(texts.get(tomorrow)).toContain('[ ] Later');
+    await service.undo(); expect((await repo.read(task.id)).planned_sessions).toEqual([block(4, 8, 9), block(4, 15, 16)]);
+    // Carried over by itself the next morning: what was planned for the day before stays there, as its record.
+    vi.setSystemTime(new Date(at(5, 7))); const occurrence = (await repo.occurrences(old.id)).find(o => o.file.path === note)!;
+    await service.schedule({ file: occurrence.file, line: occurrence.tasks[0] }, '2026-03-05', 'forward', 'automatic'); expect((await repo.read(old.id)).planned_sessions).toEqual([block(4, 20, 21)]);
+  });
+});
