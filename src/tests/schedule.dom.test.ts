@@ -291,7 +291,10 @@ describe('opening the Schedule dialog', () => {
     await owner.pickSchedule(await repo.read(task.id)); let modal = Modal.instances.at(-1) as unknown as ScheduleModal; expect(modal.setup.state).toBe('closed');
     modal.setup.reopen!(); await flush(); expect((await repo.read(task.id)).status).toBe('open'); modal = Modal.instances.at(-1) as unknown as ScheduleModal; expect(modal.setup.state).toBe('open'); modal.close();
     await service.recurrence(task.id, parseRule('daily')); await owner.pickSchedule(await repo.read(task.id)); modal = Modal.instances.at(-1) as unknown as ScheduleModal; expect(modal.setup.state).toBe('recurring');
-    const repeat = vi.spyOn(owner, 'pickRecurrence').mockImplementation(() => undefined); modal.setup.repeat!(); expect(repeat).toHaveBeenCalled(); modal.close();
+    const repeat = vi.spyOn(owner, 'pickRecurrence').mockImplementation(() => undefined); modal.setup.repeat!(); expect(repeat).toHaveBeenCalled(); modal.close(); repeat.mockRestore();
+    // A `<` typed on a repeating task's todo: Repeat settings, then cancelled, gives the todo its marker back.
+    const typed: any = await add('Typed.md', `- [<] Shut <!--organized:${task.id}-->`); await owner.pickSchedule(await repo.read(task.id), { file: typed, line: parseTasks(texts.get('Typed.md')!)[0] }, true);
+    (Modal.instances.at(-1) as unknown as ScheduleModal).setup.repeat!(); (Modal.instances.at(-1) as any).close(); await flush(); expect(texts.get('Typed.md')).toBe(`- [ ] Shut <!--organized:${task.id}-->`);
     const plain = await repo.create('Cursor'); const file: any = await add('Note.md', `- [ ] Cursor <!--organized:${plain.id}-->`);
     const editor: any = { getValue: () => texts.get('Note.md'), getCursor: () => ({ line: 0, ch: 0 }) }; const stub: any = owner;
     stub.commands.find((c: any) => c.id === 'schedule-task').editorCallback(editor, { file }); await flush(); expect((Modal.instances.at(-1) as unknown as ScheduleModal).setup.title).toBe('Cursor');

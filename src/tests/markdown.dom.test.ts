@@ -35,7 +35,8 @@ describe('planned times in a todo line', () => {
     expect(taskText(line, { title: 'Renamed', times: '09:00–10:00' })).toBe('- [ ] Renamed · 09:00–10:00 <!--organized:abcdefgh12-->\r');
     expect(parseTasks('- [ ] Plain · 10:00–11:00').map(t => [t.title, t.times])).toEqual([['Plain · 10:00–11:00', null]]);
     expect(parseTasks('- [ ] Odd · 9:00–10:00 <!--organized:abcdefgh12-->').map(t => [t.title, t.times])).toEqual([['Odd · 9:00–10:00', null]]);
-    expect(taskText({ ...line, id: null }, {})).toBe('- [ ] Report\r');
+    // A todo unlinked from its task (Retire) keeps its times as text, so the note still says when.
+    expect(taskText({ ...line, id: null }, {})).toBe('- [ ] Report · 10:00–11:00, 14:00–15:30\r');
   });
   it('lists a day\'s planned times in order', () => {
     expect(dayTimes({ planned_sessions: [block(5, 14, 15), block(5, 9, 10), block(6, 9, 10)] }, day(5))).toBe('09:00–10:00, 14:00–15:00'); expect(dayTimes({ planned_sessions: [] }, day(5))).toBeNull();
@@ -113,6 +114,22 @@ describe('the times in Live Preview', () => {
     const count = Modal.instances.length; view.dom.querySelector<HTMLElement>('.cm-line')!.click(); await flush(); expect(Modal.instances.length).toBe(count);
     const stray = document.body.createSpan({ cls: 'organized-line-times' }); view.dom.querySelectorAll('.cm-line')[1].appendChild(stray); stray.click(); await flush(); expect(Modal.instances.length).toBe(count);
     view.destroy();
+  });
+});
+
+describe('hunt: since 0.1.4', () => {
+  it('Retire leaves a scheduled day\'s todo with its times as plain text', async () => {
+    const { service, repo, add, texts, note } = await fixture(); const task = await repo.create('Leave'); await add(note(5), '');
+    await service.saveSchedule(task.id, [{ date: day(5), blocks: [block(5, 9, 10)] }]);
+    await service.retireTasks({ which: 'all', olderThanDays: 7, lines: 'plain', keep: 'title', notes: 'keep', yaml: 'keep' }, async () => 'note-backups/x.json');
+    expect(texts.get(note(5))).toContain('- [ ] Leave · 09:00–10:00'); expect(texts.get(note(5))).not.toContain('organized:');
+  });
+  it('a planned block typed by hand that cannot be read is kept for the person to fix', async () => {
+    const { repo, texts } = await fixture(); const task = await repo.create('Typo'); const file = repo.taskFile(task.id)!.path;
+    texts.set(file, texts.get(file)!.replace(/^---\n/, '---\nplanned_sessions:\n  - 2026-03-05 09:00–10:00\n  - 2026-03-05 10:00-11:0\n'));
+    expect((await repo.read(task.id)).planned_sessions).toEqual([block(5, 9, 10)]);
+    await repo.update(task.id, t => ({ ...t, priority: 'high' as any })); expect(splitNote(texts.get(file)!).frontmatter.planned_sessions).toEqual(['2026-03-05 09:00–10:00', '2026-03-05 10:00-11:0']);
+    await repo.update(task.id, t => ({ ...t, planned_sessions: [] })); expect(splitNote(texts.get(file)!).frontmatter.planned_sessions).toEqual(['2026-03-05 10:00-11:0']);
   });
 });
 

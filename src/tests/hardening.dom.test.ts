@@ -57,7 +57,7 @@ describe('missing recurring tasks on request', () => {
   it('adds only what is missing from the date, today unless a later daily note is open', async () => {
     const { h, plugin, task } = await setup(); const today = localDate(); const path = plugin.service.daily.path(today);
     await h.add(path, '# Day\n'); await h.add('Notes/n.md', ''); await (plugin as any).addMissingRecurring();
-    expect(parseTasks(h.texts.get(path)!).filter(t => t.id === task.id)).toHaveLength(1); expect(messages().at(-1)).toContain('Added 1 recurring task to'); expect(messages().at(-1)).toContain('Gym');
+    expect(parseTasks(h.texts.get(path)!).filter(t => t.id === task.id)).toHaveLength(1); expect(messages().at(-1)).toContain('Added 1 task to'); expect(messages().at(-1)).toContain('Gym');
     await (plugin as any).addMissingRecurring(); expect(messages().at(-1)).toBe(`Nothing was missing from ${today}.`);
     const later = nextDate(today); const laterFile: any = await h.add(plugin.service.daily.path(later), ''); h.setActive(laterFile, ''); await (plugin as any).addMissingRecurring(); expect(messages().at(-1)).toContain(later);
     h.clearActive(); const notDaily: any = await h.add('Notes/m.md', ''); h.setActive(notDaily, ''); await (plugin as any).addMissingRecurring(); expect(messages().at(-1)).toBe(`Nothing was missing from ${today}.`);
@@ -65,7 +65,7 @@ describe('missing recurring tasks on request', () => {
   });
   it('is offered as commands that need a note, or fall back to today', async () => {
     const { h, plugin, task } = await setup(); const commands = (plugin as any).commands as any[]; const run = (id: string) => commands.find(c => c.id === id);
-    const second = await plugin.repo.create('Read'); await plugin.service.recurrence(second.id, DAILY); await h.add(plugin.service.daily.path(localDate()), ''); run('add-recurring-today').callback(); await flush(); expect(messages().at(-1)).toContain('Added 2 recurring tasks to');
+    const second = await plugin.repo.create('Read'); await plugin.service.recurrence(second.id, DAILY); await h.add(plugin.service.daily.path(localDate()), ''); run('add-recurring-today').callback(); await flush(); expect(messages().at(-1)).toContain('Added 2 tasks to');
     const file: any = await h.add('Daily/z.md', `${line('abcd1234')}\n${line('abcd1234')}\n`); run('remove-duplicate-repeats').editorCallback({}, { file: null }); await flush(); expect(h.texts.get('Daily/z.md')).toBe(`${line('abcd1234')}\n${line('abcd1234')}\n`);
     run('remove-duplicate-repeats').editorCallback({}, { file }); await flush(); expect(h.texts.get('Daily/z.md')).toBe(`${line('abcd1234')}\n`); expect(task.title).toBe('Gym');
   });
@@ -96,7 +96,7 @@ describe('a device that does not fill daily notes', () => {
   it('explains once per new daily note that it did not add the recurring tasks, only for today and later', async () => {
     for (const role of ['secondary', 'mirror'] as const) {
       Notice.instances.length = 0; const { h, plugin } = await loaded(role); const today = plugin.service.daily.path(localDate()); const file: any = await h.add(today, '');
-      h.events.create.forEach(fn => fn(file)); h.events.create.forEach(fn => fn(file)); expect(messages()).toEqual([expect.stringContaining(`${role === 'mirror' ? 'a mirror' : 'secondary'}, so it did not add recurring tasks to ${today}`)]);
+      h.events.create.forEach(fn => fn(file)); h.events.create.forEach(fn => fn(file)); expect(messages()).toEqual([expect.stringContaining(`${role === 'mirror' ? 'a mirror' : 'secondary'}, so it did not add recurring or scheduled tasks to ${today}`)]);
       const past: any = await h.add(plugin.service.daily.path('2020-01-01'), ''); const other: any = await h.add('Notes/z.md', ''); h.events.create.forEach(fn => { fn(past); fn(other); }); expect(messages()).toHaveLength(1);
     }
   });
