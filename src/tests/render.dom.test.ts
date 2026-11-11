@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { EditorState, StateField } from '@codemirror/state';
+import { EditorSelection, EditorState, StateField } from '@codemirror/state';
 import { DecorationSet, EditorView } from '@codemirror/view';
 import Organized from '../main';
 import { editorExtension, hasRichProperties, stepPastComments, GLYPHS, icon, projection, reading, refreshEditor } from '../render';
@@ -150,6 +150,31 @@ describe('read-only projections and bundled visual markers', () => {
     const middle = at(8); stepPastComments(middle); expect(middle.state.selection.main.head).toBe(8); middle.destroy();
     const ranged = at(visibleEnd, 4); stepPastComments(ranged); expect(ranged.state.selection.main.head).toBe(4); ranged.destroy();
     const done = at(doc.indexOf('\n')); stepPastComments(done); expect(done.state.selection.main.head).toBe(doc.indexOf('\n')); done.destroy();
+  });
+  it('copies and cuts a selected todo together with its hidden ID, so pasting it under another heading keeps the task, but leaves a copy of title text alone', async () => {
+    const { owner, task } = await fixture(); vi.spyOn(owner, 'onEditorUpdate').mockImplementation(() => undefined);
+    const line = `  - [x] Test task <!--organized:${task.id}--> <!--organized:repeat-->`; const doc = `## Wrong\n${line}\n- [ ] Other <!--organized:${task.id}x-->\n## Right\n`;
+    const start = doc.indexOf(line); const visibleEnd = start + '  - [x] Test task'.length; const lineEnd = start + line.length;
+    const clip = (type: 'copy' | 'cut', ...ranges: [number, number][]) => {
+      const view = new EditorView({ state: EditorState.create({ doc, selection: EditorSelection.create(ranges.map(([a, h]) => EditorSelection.range(a, h))), extensions: [EditorState.allowMultipleSelections.of(true), editorLivePreviewField, editorExtension(owner)] }), parent: document.body.createDiv() });
+      // CodeMirror copies only while the page selection is inside the editor.
+      document.getSelection()!.selectAllChildren(view.contentDOM);
+      let text = ''; const event = new Event(type, { bubbles: true, cancelable: true }); Object.defineProperty(event, 'clipboardData', { value: { clearData: () => undefined, setData: (kind: string, value: string) => { if (kind === 'text/plain') text = value; } } });
+      view.contentDOM.dispatchEvent(event); const after = view.state.doc.toString(); view.destroy(); return { text, after };
+    };
+    // Selected on a phone with the handles from the checkbox to the end of the title: the ID used to be left behind.
+    expect(clip('copy', [start, visibleEnd]).text).toBe(line);
+    expect(clip('copy', [visibleEnd, start]).text).toBe(line);
+    expect(clip('copy', [start + 2, visibleEnd]).text).toBe(line.slice(2));
+    const cut = clip('cut', [start, visibleEnd]); expect(cut.text).toBe(line); expect(cut.after).toBe(doc.replace(line, ''));
+    // Several todos at once, the last one ending at its visible end.
+    expect(clip('copy', [0, visibleEnd]).text).toBe(`## Wrong\n${line}`);
+    // Title text alone, a word, or a selection that already takes the ID: unchanged.
+    expect(clip('copy', [start + 8, visibleEnd]).text).toBe('Test task');
+    expect(clip('copy', [start + 8, start + 12]).text).toBe('Test');
+    expect(clip('copy', [start, lineEnd]).text).toBe(line);
+    expect(clip('copy', [doc.indexOf('## Right'), doc.length - 1]).text).toBe('## Right');
+    expect(clip('copy', [doc.indexOf('Other') + 5, doc.indexOf('Other') + 5], [start, visibleEnd]).text).toBe(line);
   });
   it('puts short properties inline beside the title and rich ones on their own row, and refreshes every open note', async () => {
     const { owner, task } = await fixture(); const field = (editorExtension(owner) as any[])[0] as StateField<DecorationSet>; const doc = `- [ ] Rendered <!--organized:${task.id}-->\n- [ ] ordinary`;

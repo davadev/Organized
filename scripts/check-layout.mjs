@@ -207,6 +207,20 @@ try {
         const visible = await page.locator('.cm-content').innerText();
         if (visible.includes('organized:') !== (tab === 'Source')) throw Error('Task identity source/Live Preview separation regressed');
       }
+      if (tab === 'LivePreview' && scale === 1 && width === 320 && !dark && !rtl) {
+        // Selected as with a phone's handles (or a mouse drag) from the line start to the end of the visible title, then copied
+        // by the browser itself: the hidden ID must come along, or the pasted todo is no longer the task.
+        const copied = await page.evaluate(async () => {
+          const content = document.querySelector('.cm-content'); const line = content.querySelector('.cm-line');
+          const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT); let title = null; while (walker.nextNode()) if (walker.currentNode.textContent.includes('Test task')) title = walker.currentNode;
+          content.focus(); const range = document.createRange(); range.setStart(line, 0); range.setEnd(title, title.textContent.indexOf('Test task') + 'Test task'.length);
+          const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range);
+          await new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)));
+          let text = null; const read = event => { text = event.clipboardData.getData('text/plain'); }; window.addEventListener('copy', read);
+          document.execCommand('copy'); window.removeEventListener('copy', read); return text;
+        });
+        if (copied !== '- [ ] Test task <!--organized:task1234--> <!--organized:repeat-->') throw Error(`${engine}: a todo copied from Live Preview lost its hidden ID: ${JSON.stringify(copied)}`);
+      }
       if (scale === 1 && width === 320 && !rtl) await page.screenshot({ path: `test-results/${engine}-${tab.toLowerCase()}-${dark ? 'dark' : 'light'}.png`, fullPage: true });
     }
   }

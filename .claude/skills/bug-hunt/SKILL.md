@@ -105,6 +105,11 @@ Built from the bugs the 0.1.4 betas of this plugin shipped and then fixed, plus 
     - Ask: is the person's action lost for good when this returns, or done later? A guard against the plugin's own writes must recognise that write (`Repository.ownText`), not a time window in which the person may act too. Which host actions change the note without a user event (checkbox click, mobile toolbar, a second pane), and for each marker, what does a click turn it into?
     - Test: start an action that does not finish (`plugin.run(() => promise)`), send the edit, then let it finish and assert the edit took effect; click every marker with no user event and the cursor elsewhere.
 
+22. **Hidden text left out of what the person selects** (Live Preview hides each todo's `<!--organized:id-->` comment with a replace decoration; a selection made with a phone's handles or a mouse drag ends at the visible end of the title, before the comment, so a copied or cut todo was pasted as a plain todo and the task lost its line).
+    - Grep: `Decoration.replace`, `atomicRanges`, `display: none` on anything that carries identity or structure; `copy`, `cut`, `drop`, `clipboard`.
+    - Ask: what does a selection that looks whole on screen actually contain? Which hidden text must travel with the visible text (copy, cut, drag), and which must stay behind (a word of the title)?
+    - Test: put a real DOM selection over the visible text only and fire the browser's own copy (`document.execCommand('copy')` in `scripts/check-layout.mjs`, both engines); in jsdom, dispatch `copy`/`cut` on `contentDOM` with a fake `clipboardData` and the page selection inside the editor.
+
 ## Method
 1. Scope the diff; list changed behaviours.
 2. For each, walk every class; write the question down only if it could apply.

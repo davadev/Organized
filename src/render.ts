@@ -1,6 +1,6 @@
 import { Component, MarkdownPostProcessorContext, MarkdownRenderer, MarkdownRenderChild, Notice, setIcon } from "obsidian";
 import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetType, keymap } from "@codemirror/view";
-import { StateEffect, StateField, RangeSetBuilder, EditorState, Extension, Prec } from "@codemirror/state";
+import { EditorSelection, StateEffect, StateField, RangeSetBuilder, EditorState, Extension, Prec } from "@codemirror/state";
 import { editorLivePreviewField, Platform } from "obsidian";
 import type Organized from "./main";
 import { noteSection, parseTasks } from "./codec";
@@ -192,9 +192,21 @@ export function editorExtension(owner: Organized): Extension {
     }
     update(update: ViewUpdate): void { if (update.docChanged || update.viewportChanged || update.selectionSet || update.transactions.some(t => t.effects.some(e => e.is(refreshEffect)))) this.decorations = this.build(update.view); }
   }, { decorations: value => value.decorations, provide: plugin => EditorView.atomicRanges.of(view => view.plugin(plugin)?.decorations ?? Decoration.none) });
-  return [field, icons, Prec.highest(keymap.of([{ key: "Enter", run: stepPastComments }])), EditorView.updateListener.of(update => owner.onEditorUpdate(update)), ...(Platform.isMobile ? [longPressMenu(owner)] : [])];
+  return [field, icons, Prec.highest(keymap.of([{ key: "Enter", run: stepPastComments }])), EditorView.domEventHandlers({ copy: copyWholeTodos, cut: copyWholeTodos }), EditorView.updateListener.of(update => owner.onEditorUpdate(update)), ...(Platform.isMobile ? [longPressMenu(owner)] : [])];
 }
 const TRAILING_COMMENTS = /^(?:\s*<!--organized:(?:[a-zA-Z0-9_-]{8,80}|repeat)-->)+\s*$/;
+/** A selection that takes a todo's checkbox and ends where its visible text ends stops before the hidden ID comments, so the copy (or cut) pasted elsewhere was a plain todo and the task lost its line. Before CodeMirror copies, such a selection is stretched over the comments. A selection of title text alone (no checkbox) is left as it is. */
+function copyWholeTodos(_event: Event, view: EditorView): boolean {
+  const { state } = view; let stretched = false;
+  const ranges = state.selection.ranges.map(range => {
+    if (range.empty) return range;
+    const line = state.doc.lineAt(range.to); const task = parseTasks(line.text)[0];
+    if (!task || range.to === line.to || !TRAILING_COMMENTS.test(line.text.slice(range.to - line.from)) || range.from > line.from + task.prefix.length - 1) return range;
+    stretched = true; return EditorSelection.range(range.anchor === range.to ? line.to : range.anchor, range.head === range.to ? line.to : range.head);
+  });
+  if (stretched) view.dispatch({ selection: EditorSelection.create(ranges, state.selection.mainIndex) });
+  return false;
+}
 /** The hidden ID comments sit after the visible text, so Enter at the visible end would split them onto the new line and orphan the task above. Step the caret past them first, then let the normal Enter (list continuation) run. */
 export function stepPastComments(view: EditorView): boolean {
   const { main } = view.state.selection; if (!main.empty) return false;

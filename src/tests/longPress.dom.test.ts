@@ -49,9 +49,9 @@ describe('long-press marker menu', () => {
   });
   it('is registered by the editor extension on mobile only', () => {
     const owner: any = { onEditorUpdate: () => undefined };
-    expect((editorExtension(owner) as unknown[]).length).toBe(4);
-    Platform.isMobile = true;
     expect((editorExtension(owner) as unknown[]).length).toBe(5);
+    Platform.isMobile = true;
+    expect((editorExtension(owner) as unknown[]).length).toBe(6);
   });
   it('opens the menu at the finger after a long press, with icons and the current marker ticked', () => {
     const { view, boxFor } = setup(); const box = boxFor(2);
