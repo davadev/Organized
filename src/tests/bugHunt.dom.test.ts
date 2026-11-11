@@ -121,7 +121,7 @@ describe('bug hunt regressions', () => {
     expect((await h.repo.read(b.id)).converted_to).toBe('N/New.md'); expect((await h.repo.read(c.id)).converted_to).toBe('N/New.md');
   });
   it('taking a parent off its day leaves its subtask a visible todo there, not an indented code block', async () => {
-    const { h, plugin } = await loaded(); await ready(h); const { service, repo } = plugin; const date = '2026-03-06';
+    const { h, plugin } = await loaded(); await ready(h); const { service, repo } = plugin; const date = '2099-03-06'; await h.add(service.daily.path(date), '');
     const parent = await repo.create('Parent'); await service.scheduleTask(parent.id, date); const child = await repo.create('Child'); await service.scheduleTask(child.id, date); await service.makeSubtask(parent.id, child.id);
     const path = service.daily.path(date); expect(h.texts.get(path)).toContain('\t- [ ] Child');
     await service.unschedule(parent.id);

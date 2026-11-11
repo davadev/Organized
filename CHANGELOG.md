@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Clearing a schedule keeps the todo you wrote.** A todo written in today's note and scheduled for today from the side panel was deleted when the schedule was cleared or the day removed, leaving the task with no line anywhere. A task's only line in today's or an earlier note now stays; a later day's copy still goes.
+- **Reopening a task scheduled away gives back its `[<]`.** Ticking done and then reopening a task scheduled for a later day turned the line it was scheduled from into `[ ]`, so it showed as open twice (there and on its day). That line is `[<]` again.
+- **The Schedule dialog adds only today and later days.** A day that is over could be added or picked for a day's date, which made that day's daily note after the fact and left the task looking overdue; earlier days stay as they were.
 - **Retire keeps a todo's planned times.** A scheduled day's todo turned into plain text lost its `· 10:00–11:00`; it now keeps it as text, so the note still says when after Organized is gone.
 - **A planned block typed by hand with a mistake is kept.** A line in `planned_sessions` that cannot be read (say `2026-11-18 10:00-11:0`) was deleted the next time the task changed; it now stays as you typed it, for you to fix.
 - **Cancelling Repeat after a typed `[<]` gives the todo its marker back.** Typing `<` on a repeating task's todo, choosing *Repeat settings…* and then cancelling left the todo `[<]`.

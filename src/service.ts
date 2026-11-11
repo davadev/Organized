@@ -312,7 +312,10 @@ export class TaskService {
     try {
       // Explicit rescheduling is allowed to search by stable ID. Configuration
       // changes never turn undated references into guessed old destinations.
-      const candidates = (await this.repo.occurrences(id)).filter(o => o.file.path !== originPath && this.daily.date(o.file.path) === oldDate);
+      const occurrences = await this.repo.occurrences(id); const candidates = occurrences.filter(o => o.file.path !== originPath && this.daily.date(o.file.path) === oldDate);
+      // A todo in today's (or an earlier) note that is the task's only line stays: it may be the one the person wrote there, and the task would be left with no line where they work.
+      // A later day's only line is the plan's own copy and goes.
+      if (oldDate <= localDate() && occurrences.length === 1 && candidates.length === 1 && candidates[0].tasks.length === 1) return;
       if (candidates.length === 1 && candidates[0].tasks.length > 1) { new Notice(onTwoLines((await this.repo.read(id)).title, candidates[0].file.path, candidates[0].tasks.length, "Neither line there was removed; delete the ones you no longer need.")); return; }
       if (candidates.length !== 1 || candidates[0].tasks.length !== 1 || candidates[0].tasks[0].marker !== " " || candidates[0].tasks[0].repeat) throw new Error("Missing or ambiguous previous destination.");
       const old = candidates[0]; await this.edit(old.file, old.text, removeUnique(old.text, id), changes);
@@ -369,7 +372,9 @@ export class TaskService {
         if (date && date < today && (line.marker === ">" || line.marker === "<")) continue;
         // A timer starting or stopping shows where the work is: the todo acted on and today's. The line it was scheduled away from (`<`) and a later day's copy keep theirs.
         if (!task.recurring && (marker === " " || marker === "/") && occurrence.file.path !== context?.file.path && (line.marker === "<" || (date && date > today && (line.marker === " " || line.marker === "/")))) continue;
-        const occurrenceMarker = task.recurring && date ? (status === "completed" ? "x" : status === "canceled" ? "-" : status === "in_progress" ? "/" : " ") : marker;
+        // A finished todo reopened while its task is scheduled for a day still ahead, outside that day's note, is the line it was scheduled away from: `<` again, not a second open copy.
+        const away = !task.recurring && marker === " " && ["x", "X", "-"].includes(line.marker) && !this.isProjectFile(occurrence.file) && !(date && task.scheduled_dates.includes(date)) && task.scheduled_dates.some(day => day >= today);
+        const occurrenceMarker = task.recurring && date ? (status === "completed" ? "x" : status === "canceled" ? "-" : status === "in_progress" ? "/" : " ") : away ? "<" : marker;
         after = replaceTask(after, line, { marker: occurrenceMarker });
       }
       // In a project note the line also moves to the heading for the new status.

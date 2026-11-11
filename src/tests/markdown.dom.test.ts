@@ -168,3 +168,34 @@ describe('hunt: times and days', () => {
     view.destroy();
   });
 });
+
+describe('hunt 3', () => {
+  it('clearing or removing a day from the panel keeps a todo that is the task\'s only line', async () => {
+    const { service, repo, add, texts, note } = await fixture(); const task = await repo.create('Mine'); await add(note(4), `- [ ] Mine <!--organized:${task.id}-->`);
+    await service.saveSchedule(task.id, [{ date: day(4), blocks: [] }]); expect(texts.get(note(4))).toBe(`- [ ] Mine <!--organized:${task.id}-->`);
+    await service.saveSchedule(task.id, []); expect(texts.get(note(4))).toContain(`Mine <!--organized:${task.id}-->`);
+    await service.saveSchedule(task.id, [{ date: day(4), blocks: [] }]); await service.unschedule(task.id); expect(texts.get(note(4))).toContain(`Mine <!--organized:${task.id}-->`);
+  });
+});
+
+describe('hunt 3: dialog', () => {
+  it('days that are over cannot be added or moved to', async () => {
+    const save = vi.fn(async () => undefined);
+    const modal = new ScheduleModal({} as any, { title: 'T', days: [{ date: day(5), blocks: [], locked: [], missing: false }], earlier: [], state: 'open', load: () => ({ seconds: 0, clash: null }), budget: () => '', save, now: () => at(4, 9) });
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(at(4, 9))); modal.open();
+    const el = (modal as any).contentEl as HTMLElement; const add = el.querySelector<HTMLInputElement>('input[aria-label="Day to add"]')!; expect(add.min).toBe(day(4));
+    add.value = day(3); el.querySelector<HTMLButtonElement>('.organized-repeat-add.mod-cta')!.click(); expect(el.textContent).toContain('Pick today or a later day');
+    const move = el.querySelector<HTMLInputElement>(`input[aria-label^="Day of"]`)!; expect(move.min).toBe(day(4)); move.value = day(2); move.dispatchEvent(new Event('change')); expect(move.value).toBe(day(5));
+    expect((modal as any).rows.map((r: any) => r.date)).toEqual([day(5)]);
+  });
+});
+
+describe('hunt 3: reopen', () => {
+  it('reopening a task scheduled away gives the line it was scheduled from its `<` back', async () => {
+    const { service, repo, add, texts, note } = await fixture(); const task = await repo.create('Away'); await add(note(4), `- [ ] Away <!--organized:${task.id}-->`); await add(note(6), '');
+    const context = { file: repo.file(note(4))!, line: parseTasks(texts.get(note(4))!)[0] };
+    await service.saveSchedule(task.id, [{ date: day(6), blocks: [] }], context); expect(texts.get(note(4))).toContain('- [<] Away');
+    await service.status(task.id, 'completed'); expect(texts.get(note(4))).toContain('- [x] Away'); expect(texts.get(note(6))).toContain('- [x] Away');
+    await service.status(task.id, 'open'); expect(texts.get(note(6))).toContain('- [ ] Away'); expect(texts.get(note(4))).toContain('- [<] Away');
+  });
+});
