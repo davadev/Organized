@@ -48,7 +48,26 @@ export function fillOf(budget: number, tracked: number, planned: number): Budget
   return { budget, tracked, planned, left: budget - total, trackedPct: 100 * trackedFit / scale, plannedPct: 100 * (within - trackedFit) / scale, overPct: 100 * over / scale };
 }
 /** A task's tracked plus planned time measured against its own budget, or null when it has none. */
-export const budgetUse = (task: Task, now = Date.now()): BudgetUse | null => task.time_budget_seconds === null ? null : fillOf(task.time_budget_seconds, elapsed(task, now), plannable(task) ? plannedSeconds(task) : 0);
+export const budgetUse = (task: Task, now = Date.now()): BudgetUse | null => task.time_budget_seconds === null ? null : fillOf(task.time_budget_seconds, elapsed(task, now), plannable(task) ? plannedNotWorked(task.planned_sessions, workedSessions(task, now)) : 0);
+/** The task's stored sessions plus its running timer up to `now`. */
+const workedSessions = (task: Task, now: number): WorkSession[] => [...task.work_sessions, ...(task.time_tracking_started_at !== null && Date.parse(task.time_tracking_started_at) < now ? [{ start: task.time_tracking_started_at, end: new Date(now).toISOString() }] : [])];
+/**
+ * Seconds of planned time (inside `range`, when given) that the same task did not also work: a minute that was both planned and tracked (a timer run inside the block) is used once, as tracked, so a budget does not count it twice.
+ * Planned time not worked still counts, whether it is still ahead or was skipped.
+ */
+export function plannedNotWorked(plans: WorkSession[], worked: WorkSession[], range: [number, number] | null = null): number {
+  const spans = (sessions: WorkSession[]) => sessions.map(s => [Date.parse(s.start), Date.parse(s.end)] as const);
+  let total = 0;
+  for (const [start, end] of spans(plans)) {
+    const from = range ? Math.max(start, range[0]) : start, to = range ? Math.min(end, range[1]) : end; if (to <= from) continue;
+    let left = to - from, reached = from;
+    for (const [s, e] of spans(worked).map(([s, e]) => [Math.max(s, from), Math.min(e, to)] as const).filter(([s, e]) => e > s).sort((a, b) => a[0] - b[0])) {
+      const counted = Math.max(s, reached); if (e > counted) { left -= e - counted; reached = e; }
+    }
+    total += left;
+  }
+  return total / 1000;
+}
 
 /** The span a project budget covers: the whole project, or the current day, week or month. */
 export type Period = "total" | "day" | "week" | "month";
@@ -65,11 +84,9 @@ export function projectUse(tasks: Task[], project: string, period: Period, budge
   const range = periodRange(period, now); let tracked = 0, planned = 0;
   for (const task of tasks) {
     if (!task.projects.includes(project)) continue;
-    const plans = plannable(task) ? task.planned_sessions : [];
-    if (!range) { tracked += elapsed(task, now); planned += plannedOf(plans); continue; }
-    const running = task.time_tracking_started_at !== null && Date.parse(task.time_tracking_started_at) < now ? [{ start: task.time_tracking_started_at, end: new Date(now).toISOString() }] : [];
-    tracked += overlap([...task.work_sessions, ...running], range); planned += overlap(plans, range);
+    const plans = plannable(task) ? task.planned_sessions : []; const worked = workedSessions(task, now);
+    planned += plannedNotWorked(plans, worked, range);
+    tracked += range ? overlap(worked, range) : elapsed(task, now);
   }
   return fillOf(budget, Math.floor(tracked), Math.floor(planned));
 }
-const plannedOf = (blocks: WorkSession[]): number => blocks.reduce((sum, b) => sum + seconds(b), 0);

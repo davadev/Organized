@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { moment } from "../moment";
 import { newTask, setStatus, startPlanned, Task } from "../model";
-import { blockAt, budgetUse, fillOf, dueEnds, overlap, periodRange, projectUse, dueStarts, plannable, plannedSeconds } from "../planning";
+import { blockAt, budgetUse, fillOf, dueEnds, overlap, periodRange, projectUse, dueStarts, plannable, plannedNotWorked, plannedSeconds } from "../planning";
 
 const at = (time: string) => new Date(`2026-03-09T${time}:00Z`).getTime();
 const block = (from: string, to: string) => ({ start: new Date(at(from)).toISOString(), end: new Date(at(to)).toISOString() });
@@ -56,6 +56,18 @@ describe("planning", () => {
     expect(budgetUse(task({ ...base, time_tracked_seconds: 5400, planned_sessions: [] }))!.overPct).toBeCloseTo(100 / 3);
     const running = task({ ...base, planned_sessions: [], time_tracking_started_at: new Date(at("09:00")).toISOString() });
     expect(budgetUse(running, at("09:10"))?.tracked).toBe(1500);
+  });
+  it("counts a minute that was both planned and worked once, as worked, in the task's budget and the project's", () => {
+    // The case from a phone: planned 08:00-15:00, the timer started inside it at 10:50, now 11:00.
+    const work = task({ planned_sessions: [block("08:00", "15:00")], time_budget_seconds: 8 * 3600, time_tracking_started_at: new Date(at("10:50")).toISOString(), projects: ["P.md"] });
+    expect(budgetUse(work, at("11:00"))).toMatchObject({ tracked: 600, planned: 7 * 3600 - 600, left: 3600 });
+    expect(projectUse([work], "P.md", "total", 8 * 3600, at("11:00"))).toMatchObject({ tracked: 600, planned: 7 * 3600 - 600 });
+    expect(projectUse([work], "P.md", "day", 8 * 3600, at("11:00"))).toMatchObject({ tracked: 600, planned: 7 * 3600 - 600 });
+    // Worked past the plan's end and before it, in overlapping sessions: the plan is used up, the extra is worked time.
+    expect(plannedNotWorked([block("09:00", "10:00")], [block("08:30", "09:20"), block("09:10", "09:40"), block("09:50", "11:00")])).toBe(600); expect(plannedNotWorked([block("09:00", "10:00")], [block("09:10", "09:40"), block("09:15", "09:30")])).toBe(1800);
+    // Planned and not worked (ahead or skipped) still counts; work outside the plan does not reduce it; only the part inside a period counts.
+    expect(plannedNotWorked([block("09:00", "10:00"), block("14:00", "15:00")], [block("11:00", "12:00")])).toBe(7200);
+    expect(plannedNotWorked([block("09:00", "10:00")], [block("09:00", "09:30")], [at("09:15"), at("12:00")])).toBe(1800); expect(plannedNotWorked([block("09:00", "10:00")], [], [at("11:00"), at("12:00")])).toBe(0);
   });
   it("works out the day, week and month and counts only the part of a session inside them", () => {
     const now = new Date(2026, 2, 11, 15, 0).getTime();
