@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LONG_PRESS_MARKERS, readingLongPress } from '../longPress';
 import { parseTasks } from '../codec';
+import { localDate } from '../model';
 import Organized from '../main';
 import { harness } from './harness';
 import { Menu, Notice, Platform } from './__mocks__/obsidian';
@@ -54,7 +55,7 @@ describe('every acting marker, picked from the menu', () => {
   });
   it('forwards a task to tomorrow', async () => {
     const s = await withTasks(1, ([id]) => line(' ', id)); await s.press(0, title('>'))!.pick();
-    const task = await s.read(0); expect(task.scheduled).toBeTruthy(); expect(task.scheduled! > new Date().toISOString().slice(0, 10)).toBe(true); s.done();
+    const task = await s.read(0); expect(task.scheduled).toBeTruthy(); expect(task.scheduled! > localDate()).toBe(true); s.done();
   });
 });
 
