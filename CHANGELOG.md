@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Moving a task in a note with Windows line endings keeps the endings.** Changing the status of the last task in a project note saved with CRLF line endings (so its todo moved to another heading) left a stray carriage return and mixed `\r\n` with `\n`. The note keeps one line ending.
+- **A subtask under an indented numbered item is nested.** Making a todo a subtask of an item like `  1. ` (indented, or with 2-space indentation set in Obsidian) indented it one tab or step, too little for Markdown to see it as nested, so the link was lost on the next read. The subtask is now indented to where the item's text starts.
 - **Screenshots, What's new, the tour and the docs match this version.** The Timer card screenshot shows a project's weekly budget (a repeating task has no budget of its own now), What's new has an item for planning against project budgets, and the README and docs describe the project-note, calendar and budget changes of the last betas.
 - **A task 0.1.4 set in progress for its planned time goes back to open.** Version 0.1.4 set a task in progress, without a timer, while a block planned for it ran, and put it back when the block ended. A task left that way at the update stayed `[/]` in progress for good; it is now put back to open when its block is over, as 0.1.4 would have.
 - **What's new and the tour describe the plugin as it is.** What's new described the old date dialog with *From* and *To* fields, which the Schedule dialog replaced, and said recurring tasks' planned times start the timer without saying that *Start tasks at their planned time* must be on. The tour said planned blocks never count as worked, which is no longer so once a timer runs in them.

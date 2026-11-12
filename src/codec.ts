@@ -205,10 +205,10 @@ export function moveTask(text: string, id: string, name: string): string {
   const matches = parseTasks(text).filter(t => t.id === id); if (matches.length !== 1) throw new Error("Occurrence is missing or ambiguous; preserved for repair.");
   const target = sectionNamed(text, name); if (JSON.stringify(matches[0].section) === JSON.stringify(target)) return text;
   // What is nested under the line travels with it; left behind it would be indented under nothing, which Markdown reads as code.
-  const lines = text.split("\n"); const [moved, ...nested] = rebase(lines.splice(matches[0].line, blockEnd(lines, matches[0].line) - matches[0].line), "");
-  const placed = insertTask(lines.join("\n"), moved.replace(/\r$/, ""), target).text;
-  if (!nested.length) return placed;
-  const result = placed.split("\n"); result.splice(parseTasks(placed).find(t => t.id === id)!.line + 1, 0, ...nested); return result.join("\n");
+  const newline = text.includes("\r\n") ? "\r\n" : "\n"; const lines = text.split(/\r?\n/); const [moved, ...nested] = rebase(lines.splice(matches[0].line, blockEnd(lines, matches[0].line) - matches[0].line), "");
+  const placed = insertTask(lines.join("\n"), moved, target).text;
+  if (!nested.length) return placed.replace(/\n/g, newline);
+  const result = placed.split("\n"); result.splice(parseTasks(placed).find(t => t.id === id)!.line + 1, 0, ...nested); return result.join(newline);
 }
 export function removeUnique(text: string, id: string, repeatOnly = false): string {
   const matches = parseTasks(text).filter(t => t.id === id && (!repeatOnly || t.repeat));
@@ -234,12 +234,19 @@ export function duplicateRepeats(tasks: TaskLine[]): number[] {
   }).map(t => t.line);
 }
 const indentation = (raw: string): number => /^\s*/.exec(raw)![0].replace(/\t/g, "    ").length;
+/** The column text reaches after `text`, tabs going to the next multiple of four as Markdown reads them. */
+const column = (text: string): number => [...text].reduce((col, ch) => ch === "\t" ? col + 4 - col % 4 : col + 1, 0);
+/** The indentation of a todo's direct subtask: one `unit` in from the todo, or as far as its text starts when that is further (an ordered item like `  1. ` is wider than one tab), or Markdown does not nest the subtask. */
+function childBase(raw: string, unit: string): string {
+  const lead = /^\s*/.exec(raw)![0]; const base = `${lead}${unit}`; const text = column(/^\s*(?:[-+*]|\d+[.)]) /.exec(raw)![0]);
+  return column(base) >= text ? base : " ".repeat(text);
+}
 /** Inserts `line` as the last subtask of the todo `parentId`, after everything already nested under it; null when that todo is not in the text exactly once. */
 export function insertUnder(text: string, parentId: string, line: string, unit = "\t"): string | null {
   const parents = parseTasks(text).filter(t => t.id === parentId); if (parents.length !== 1) return null;
   const newline = text.includes("\r\n") ? "\r\n" : "\n"; const lines = text.split(/\r?\n/); const own = lines[parents[0].line];
   let end = parents[0].line + 1; while (end < lines.length && lines[end].trim() && indentation(lines[end]) > indentation(own)) end++;
-  lines.splice(end, 0, `${/^\s*/.exec(own)![0]}${unit}${line}`); return lines.join(newline);
+  lines.splice(end, 0, `${childBase(own, unit)}${line}`); return lines.join(newline);
 }
 /** Where a todo's block (the todo and everything nested under it) ends, as a line index. */
 function blockEnd(lines: string[], line: number): number {
@@ -267,13 +274,13 @@ export function nestUnder(text: string, childId: string, parentId: string, force
   const block = lines.splice(child.line, end - child.line);
   // Taking the block out can change how the rest parses (a paragraph that was inside it), and the parent may stop being a todo.
   const moved = parseTasks(lines.join("\n")).find(t => t.id === parentId); if (!moved) return null;
-  lines.splice(blockEnd(lines, moved.line), 0, ...rebase(block, `${/^\s*/.exec(lines[moved.line])![0]}${unit}`)); return lines.join(newline);
+  lines.splice(blockEnd(lines, moved.line), 0, ...rebase(block, childBase(lines[moved.line], unit))); return lines.join(newline);
 }
 /** Re-indents a subtask that is already directly under its parent but not by one `unit` (for example two spaces where Obsidian's Tab inserts a tab); null when it is right or is not a direct subtask. */
 export function fixIndent(text: string, childId: string, parentId: string, unit = "\t"): string | null {
   const tasks = parseTasks(text); const children = tasks.filter(t => t.id === childId); const parents = tasks.filter(t => t.id === parentId);
   if (children.length !== 1 || parents.length !== 1 || children[0].parent !== parents[0].line) return null;
-  const newline = text.includes("\r\n") ? "\r\n" : "\n"; const lines = text.split(/\r?\n/); const base = `${/^\s*/.exec(lines[parents[0].line])![0]}${unit}`;
+  const newline = text.includes("\r\n") ? "\r\n" : "\n"; const lines = text.split(/\r?\n/); const base = childBase(lines[parents[0].line], unit);
   if (/^\s*/.exec(lines[children[0].line])![0] === base) return null;
   const end = blockEnd(lines, children[0].line); lines.splice(children[0].line, end - children[0].line, ...rebase(lines.slice(children[0].line, end), base)); return lines.join(newline);
 }
