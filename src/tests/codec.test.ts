@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { removeLines, moveTask, nestUnder, descendants, insertTask, readNote, hasLegacyHeading, migrateNote, noteSection, parseTasks, removeUnique, replaceTask, sortTasks, taskText, writeNoteSection } from "../codec";
+import { fixIndent, insertUnder, removeLines, moveTask, nestUnder, descendants, insertTask, readNote, hasLegacyHeading, migrateNote, noteSection, parseTasks, removeUnique, replaceTask, sortTasks, taskText, writeNoteSection } from "../codec";
 
 describe("Markdown task codec", () => {
   it('uses real Markdown structure for nested fences, indented code, comments and setext headings', () => {
@@ -171,5 +171,25 @@ describe("codec edits keep the document intact", () => {
     expect(parseTasks(moved).map(t => [t.title, t.parent === null ? null : parseTasks(moved)[t.parent]?.title ?? parseTasks(moved).find(p => p.line === t.parent)!.title])).toEqual([['Other', null], ['Parent', null], ['Child', 'Parent']]);
     const nested = '## Open\n\n- [ ] Top <!--organized:dddddddd-->\n\t- [ ] Mid <!--organized:eeeeeeee-->\n\t\t- [ ] Low <!--organized:ffffffff-->\n\n## Done\n';
     expect(moveTask(nested, 'eeeeeeee', 'Done')).toBe('## Open\n\n- [ ] Top <!--organized:dddddddd-->\n\n## Done\n\n- [ ] Mid <!--organized:eeeeeeee-->\n\t- [ ] Low <!--organized:ffffffff-->');
+  });
+
+  it('moves the last block of a CRLF note without a stray carriage return or a mixed line ending', () => {
+    const text = '## Open\r\n\r\n- [ ] Stay <!--organized:aaaaaaaa-->\r\n- [ ] Last <!--organized:bbbbbbbb-->\r\n\t- [ ] Child <!--organized:cccccccc-->\r\n\r\n## Done\r\n';
+    for (const note of [text, text.replace(/\r\n$/, '')]) {
+      for (const id of ['bbbbbbbb', 'aaaaaaaa']) { const out = moveTask(note, id, 'Done'); expect(out.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/); expect(parseTasks(out).map(t => t.id)).toContain(id); }
+    }
+    const tail = '## Open\r\n\r\n- [ ] Stay <!--organized:aaaaaaaa-->\r\n- [ ] Last <!--organized:bbbbbbbb-->';
+    expect(moveTask(tail, 'bbbbbbbb', 'Done')).toBe('## Open\r\n\r\n- [ ] Stay <!--organized:aaaaaaaa-->\r\n\r\n## Done\r\n\r\n- [ ] Last <!--organized:bbbbbbbb-->\r\n');
+  });
+  it('indents a subtask far enough to be nested under an ordered item, however wide its number is', () => {
+    const direct = (text: string | null, child: string, parent: string) => { const tasks = parseTasks(text!); return tasks.find(t => t.id === child)!.parent === tasks.find(t => t.id === parent)!.line; };
+    const text = '  1. [ ] Parent <!--organized:aaaaaaaa-->\n- [ ] Other <!--organized:bbbbbbbb-->\n\t- [ ] Loose <!--organized:cccccccc-->\n';
+    expect(direct(nestUnder(text, 'bbbbbbbb', 'aaaaaaaa'), 'bbbbbbbb', 'aaaaaaaa')).toBe(true);
+    expect(direct(insertUnder(text, 'aaaaaaaa', '- [ ] New <!--organized:dddddddd-->'), 'dddddddd', 'aaaaaaaa')).toBe(true);
+    const spaces = '1. [ ] Parent <!--organized:aaaaaaaa-->\n- [ ] Other <!--organized:bbbbbbbb-->\n';
+    expect(direct(nestUnder(spaces, 'bbbbbbbb', 'aaaaaaaa', false, '  '), 'bbbbbbbb', 'aaaaaaaa')).toBe(true);
+    const crooked = '  1. [ ] Parent <!--organized:aaaaaaaa-->\n\t\t- [ ] Child <!--organized:bbbbbbbb-->\n';
+    expect(direct(fixIndent(crooked, 'bbbbbbbb', 'aaaaaaaa'), 'bbbbbbbb', 'aaaaaaaa')).toBe(true);
+    expect(nestUnder('- [ ] Parent <!--organized:aaaaaaaa-->\n- [ ] Other <!--organized:bbbbbbbb-->\n', 'bbbbbbbb', 'aaaaaaaa')).toBe('- [ ] Parent <!--organized:aaaaaaaa-->\n\t- [ ] Other <!--organized:bbbbbbbb-->\n');
   });
 });
