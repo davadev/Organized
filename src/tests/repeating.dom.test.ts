@@ -59,7 +59,7 @@ describe('repeating planned time', () => {
     await expect(service.editRepeatingDay(task.id, '2026-03-06', block(6, 7, 8), null)).rejects.toThrow('no longer exists');
     // Moved onto a block the day already has of its own: planned once.
     await repo.update(task.id, t => ({ ...t, planned_sessions: [...t.planned_sessions, block(6, 11, 12)] })); await service.editRepeatingDay(task.id, '2026-03-06', block(6, 9, 10), block(6, 11, 12));
-    expect((await repo.read(task.id)).planned_sessions.filter(b => b.start.startsWith('2026-03-06'))).toEqual([block(6, 11, 12)]);
+    expect((await repo.read(task.id)).planned_sessions.filter(b => new Date(b.start).getDate() === 6)).toEqual([block(6, 11, 12)]);
   });
 });
 

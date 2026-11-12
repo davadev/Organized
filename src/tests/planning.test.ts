@@ -3,7 +3,7 @@ import { moment } from "../moment";
 import { newTask, setStatus, startPlanned, Task } from "../model";
 import { blockAt, budgetUse, fillOf, dueStops, overlap, periodRange, projectUse, dueStarts, plannable, plannedNotWorked, plannedSeconds } from "../planning";
 
-const at = (time: string) => new Date(`2026-03-09T${time}:00Z`).getTime();
+const at = (time: string) => new Date(`2026-03-09T${time}:00`).getTime();
 const block = (from: string, to: string) => ({ start: new Date(at(from)).toISOString(), end: new Date(at(to)).toISOString() });
 const task = (patch: Partial<Task> = {}): Task => ({ ...newTask("t", "t".padEnd(8, "x"), new Date("2026-01-01T00:00:00Z")), ...patch });
 
