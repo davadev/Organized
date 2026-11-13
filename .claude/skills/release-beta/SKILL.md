@@ -7,6 +7,8 @@ description: Cut a prerelease (X.Y.Z-beta.N) of the plugin for BRAT testing. Use
 
 `main`'s `manifest.json` / `package.json` / `versions.json` **do not change**. CI stamps the beta version into the working tree only (`scripts/stamp-prerelease.mjs`, never commit its output). Full manual: `docs/releasing.md`.
 
+**Dependabot gate first.** Before tagging, run the Dependabot gate in `dependency-update`: every open Dependabot PR is folded into this beta (merged or superseded), not left behind.
+
 ## Steps
 1. Change is merged to `main` via PR with CI green (`feature-done` checklist passed). `git checkout main && git pull`.
 2. Inspect the real-browser test snapshots. If newly generated artwork or annotated documentation images will be published, obtain design approval first; ordinary build outputs and mechanically bundled existing licensed glyphs are not newly generated artwork. Docs/asset-only changes still go through this full pipeline.
