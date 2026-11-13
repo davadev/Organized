@@ -30,6 +30,14 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.1.6",
+    title: "What's new in Organized 0.1.6",
+    intro: "A maintenance update. These are the changes since 0.1.5.",
+    items: [
+      { title: "Security updates to development tools", text: "Organized updated the tools it is built and tested with, to close published security advisories. Nothing in the plugin you run changed, and your tasks and notes are untouched." },
+    ],
+  },
+  {
     version: "0.1.5",
     title: "What's new in Organized 0.1.5",
     intro: "Moving todos between headings keeps their task. These are the changes since 0.1.4.",

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Development tools updated for security advisories.** `happy-dom` 21.0.4, `fast-uri` 3.1.9, and parent-scoped `overrides` for `minimatch` 11.0.1 and `moment` 2.31.0 close the open Dependabot alerts. They are development dependencies only: the shipped `main.js` is unchanged and `npm audit` reports 0 vulnerabilities.
 - **Moving a task in a note with Windows line endings keeps the endings.** Changing the status of the last task in a project note saved with CRLF line endings (so its todo moved to another heading) left a stray carriage return and mixed `\r\n` with `\n`. The note keeps one line ending.
 - **A subtask under an indented numbered item is nested.** Making a todo a subtask of an item like `  1. ` (indented, or with 2-space indentation set in Obsidian) indented it one tab or step, too little for Markdown to see it as nested, so the link was lost on the next read. The subtask is now indented to where the item's text starts.
 - **Screenshots, What's new, the tour and the docs match this version.** The Timer card screenshot shows a project's weekly budget (a repeating task has no budget of its own now), What's new has an item for planning against project budgets, and the README and docs describe the project-note, calendar and budget changes of the last betas.
