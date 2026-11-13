@@ -35,6 +35,7 @@ Read the applicable `.claude/skills/<name>/SKILL.md` before its task.
 - Tag-driven releases only. Read `docs/releasing.md`; never hand-create a release.
 - Main keeps stable-shaped version metadata; beta assets are stamped in CI. Initial 0.0.0 is an unpublished bootstrap, not a stable release.
 - No stable promotion or community submission without explicit approval; real-device testing is required before stable.
+- **Dependabot gate.** Before every beta and every stable run the Dependabot gate in `dependency-update`: fold every open Dependabot PR into the next beta; stable needs 0 open alerts (turn alerts on if the API says they are disabled).
 
 ## Reference
 - `PLAN.md`: design notes: what the plugin is for, the principles behind it, and where the code keeps them.

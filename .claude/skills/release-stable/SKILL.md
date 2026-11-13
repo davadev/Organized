@@ -11,6 +11,8 @@ description: Promote a tested beta to stable X.Y.Z. ONLY on the user's explicit 
 
 Only run after the user explicitly says so. The stable release must be **published before `main` advertises it**.
 
+**Alert gate.** Run the Dependabot gate in `dependency-update` before tagging: **0 open alerts**, or the user has been told which remain and why. Dependabot PRs that opened after the tested beta go into the next beta, not into this stable.
+
 ## Steps
 0. Run the `bug-hunt` skill on the diff since the last stable tag. Every reproduced bug is fixed with its regression test (a test that failed before the fix) and released in a beta first; do not promote with a known bug that lacks one.
 1. `git checkout -b release/X.Y.Z main`.
