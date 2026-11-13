@@ -32,7 +32,7 @@
     "esbuild": "0.28.2",
     "eslint": "^10.11.0",
     "eslint-plugin-depend": "1.5.0",
-    "eslint-plugin-obsidianmd": "^0.4.2",
+    "eslint-plugin-obsidianmd": "^0.5.1",
     "happy-dom": "20.14.6",
     "jsonc-eslint-parser": "3.3.0",
     "knip": "6.43.0",
