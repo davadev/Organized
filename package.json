@@ -33,7 +33,7 @@
     "eslint": "^10.11.0",
     "eslint-plugin-depend": "1.5.0",
     "eslint-plugin-obsidianmd": "^0.4.2",
-    "happy-dom": "20.14.6",
+    "happy-dom": "21.0.4",
     "jsonc-eslint-parser": "3.3.0",
     "knip": "6.43.0",
     "moment": "2.31.0",
@@ -50,7 +50,22 @@
   "name": "organized",
   "overrides": {
     "@lezer/common": "1.5.1",
-    "@lezer/highlight": "1.2.3"
+    "@lezer/highlight": "1.2.3",
+    "eslint": {
+      "minimatch": "11.0.1"
+    },
+    "eslint-plugin-obsidianmd": {
+      "moment": "2.31.0"
+    },
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.1"
+    },
+    "eslint-plugin-n": {
+      "minimatch": "11.0.1"
+    },
+    "eslint-plugin-json-schema-validator": {
+      "minimatch": "11.0.1"
+    }
   },
   "version": "0.1.5",
   "private": true,
