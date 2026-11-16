@@ -9,6 +9,7 @@
     "dev": "node esbuild.config.mjs",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "check-release": "node scripts/check-release.mjs",
+    "sync": "node scripts/sync-main.mjs",
     "lint": "eslint 'src/**/*.ts' --max-warnings=0",
     "lint:fix": "eslint 'src/**/*.ts' --fix",
     "lint:css": "stylelint styles.css",

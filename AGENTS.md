@@ -11,6 +11,7 @@ Project attribution: **davadev only**. Git authors may be **davadev** or **Dany*
 - `npm run test:cov`: all source measured; 100% coverage requirement.
 - `npm run check:dead-code`: production reachability and dependencies.
 - `npm run check:layout` / `npm run check:webkit`: real-browser layout.
+- `npm run sync`: fetch, fast-forward a clean main, `npm ci` when package-lock.json moved, report what the auto-merge lane did.
 - `npm run check-release -- --with-build --strict`: pre-tag gate.
 
 ## Procedures
@@ -35,7 +36,8 @@ Read the applicable `.claude/skills/<name>/SKILL.md` before its task.
 - Tag-driven releases only. Read `docs/releasing.md`; never hand-create a release.
 - Main keeps stable-shaped version metadata; beta assets are stamped in CI. Initial 0.0.0 is an unpublished bootstrap, not a stable release.
 - No stable promotion or community submission without explicit approval; real-device testing is required before stable.
-- **Dependabot gate.** Before every beta and every stable run the Dependabot gate in `dependency-update`: fold every open Dependabot PR into the next beta; stable needs 0 open alerts (turn alerts on if the API says they are disabled).
+- **GitHub changes main without you.** The Dependabot auto-merge lane merges dependency bumps that leave `main.js` byte-identical (see `dependency-update`, "Auto-merge lane"), so a checkout is stale by default. A SessionStart hook runs `npm run sync`; run it yourself before creating a branch, before a PR and before a tag, and act on every `NEEDS A HUMAN` line. Never work from a `node_modules` that does not match `package-lock.json`.
+- **Dependabot gate.** Before every beta and every stable run the Dependabot gate in `dependency-update`. An open Dependabot PR now means the lane left it for a human: fold it into the next beta. A `needs-beta` issue is a security fix that changes shipped bytes: cut a beta. Stable needs 0 open alerts (turn alerts on if the API says they are disabled).
 
 ## Reference
 - `PLAN.md`: design notes: what the plugin is for, the principles behind it, and where the code keeps them.
