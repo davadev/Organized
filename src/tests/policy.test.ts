@@ -10,8 +10,8 @@ describe('release and privacy wiring', () => {
     expect(JSON.parse(text('manifest.json')).author).toBe('davadev'); expect(text('LICENSE')).toContain('Copyright (c) 2026 davadev');
     const result = spawnSync(process.execPath, ['scripts/check-identity.mjs'], { encoding: 'utf8' }); expect(result.status, result.stderr).toBe(0); expect(result.stdout).toContain('privacy verified');
   });
-  it('accepts a commit by Dependabot (committed by GitHub) next to the owner\'s, and no other author, address or committer', () => {
-    const owner = ['davadev', '67618972+davadev@users.noreply.github.com']; const github = ['GitHub', 'noreply@github.com']; const bot = ['dependabot[bot]', '49699333+dependabot[bot]@users.noreply.github.com'];
+  it('accepts a commit by Dependabot or the Actions auto-merge bot (committed by GitHub) next to the owner\'s, and no other author, address or committer', () => {
+    const owner = ['davadev', '67618972+davadev@users.noreply.github.com']; const github = ['GitHub', 'noreply@github.com']; const bot = ['dependabot[bot]', '49699333+dependabot[bot]@users.noreply.github.com']; const actions = ['github-actions[bot]', '41898282+github-actions[bot]@users.noreply.github.com'];
     const verdict = (author: string[], committer: string[]) => {
       const dir = mkdtempSync(join(tmpdir(), 'identity-'));
       try {
@@ -21,7 +21,7 @@ describe('release and privacy wiring', () => {
         return spawnSync(process.execPath, [resolve('scripts/check-identity.mjs')], { cwd: dir, encoding: 'utf8' }).status;
       } finally { rmSync(dir, { recursive: true, force: true }); }
     };
-    expect(verdict(bot, github)).toBe(0); expect(verdict(owner, github)).toBe(0); expect(verdict(['Dany', owner[1]], owner)).toBe(0);
+    expect(verdict(bot, github)).toBe(0); expect(verdict(actions, github)).toBe(0); expect(verdict(['github-actions[bot]', 'someone@example.com'], github)).toBe(1); expect(verdict(actions, actions)).toBe(1); expect(verdict(owner, github)).toBe(0); expect(verdict(['Dany', owner[1]], owner)).toBe(0);
     expect(verdict(['dependabot[bot]', 'someone@example.com'], github)).toBe(1); expect(verdict(['Someone', bot[1]], github)).toBe(1);
     expect(verdict(bot, bot)).toBe(1); expect(verdict(['Someone', 'someone@example.com'], github)).toBe(1); expect(verdict(owner, ['GitHub', 'someone@example.com'])).toBe(1);
   });
