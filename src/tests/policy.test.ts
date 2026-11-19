@@ -42,7 +42,7 @@ describe('release and privacy wiring', () => {
   it('keeps bundled artwork local, licensed and scoped to plugin-owned selectors', () => {
     const css = text('styles.css'); const notices = text('THIRD_PARTY_NOTICES.md');
     for (const project of ['Things 2', 'Heroicons', 'Bootstrap Icons', 'Ionicons', 'Fluent UI System Icons', 'Octicons']) expect(notices).toContain(project);
-    expect(css).toContain('Permission is hereby granted'); expect(css).not.toContain('!important'); expect(css).toContain('.organized-glyph'); expect(css).not.toMatch(/url\(["']?https?:/);
+    expect(css).toContain('Permission is hereby granted'); expect(css).not.toContain('!important'); expect(css).toContain('.organized-glyph'); expect(css).toContain('input.task-list-item-checkbox[data-task="B"]:checked::after'); expect(css).not.toMatch(/url\(["']?https?:/);
     const bundle = text('esbuild.config.mjs'); expect(bundle).toContain('"@codemirror/state"'); expect(bundle).toContain('"@codemirror/view"');
   });
   it('fails the release hook before a tag when the guard cannot run', () => {
