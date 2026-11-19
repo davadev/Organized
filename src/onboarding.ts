@@ -56,12 +56,12 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "Type a letter in the checkbox",
-    text: "No menus needed: a letter between the brackets does what the panel does. Set priority, schedule days and times, start a timer, log time worked, link projects, repeat, favorite. `[n]` gives a todo its own note, `[+]` adds a subtask. Eight are below; the README lists them all.",
+    text: "No menus needed: a letter between the brackets does what the panel does. Set priority, schedule days and times, start a timer, log time worked, link projects, repeat, favorite. `[n]` gives a todo its own note, `[+]` adds a subtask, `[B]` blocks it. Eight are below; the README lists them all.",
     figure: "keys",
   },
   {
-    title: "Repeat a todo",
-    text: "Type `[r]` in a todo, or tap the Recurring pill in the Task tab, and pick how it repeats: every day, weekday, week, month or year, or your own, such as every 3 weeks on Monday and Thursday. The rule lives in the task note, and the todo appears in each daily note that matches it.",
+    title: "Repeat a todo, or park it",
+    text: "Type `[r]` and pick how it repeats: every day, week, month, or your own rule. The todo appears in each daily note that matches. A task stuck on someone else, or not a priority now? Type `[B]` for blocked, choose every how many days it returns, and whether it comes back as a reminder or opens.",
     shot: "repeat",
   },
   {

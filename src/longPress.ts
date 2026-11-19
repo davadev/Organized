@@ -8,7 +8,7 @@ import { report } from "./service";
 /** The markers offered on a long press: only the ones that act (see the marker reference in the README), never formatting-only letters. Each has the icon its row shows. */
 export const LONG_PRESS_MARKERS: readonly (readonly [marker: string, label: string, icon: string])[] = [
   [" ", "Open", "circle"], ["x", "Done", "check"], ["/", "In progress", "play"], ["-", "Cancel", "x"], [">", "Forward", "arrow-right"], ["<", "Schedule", "calendar"], ["!", "Priority", "flag"], ["*", "Star", "star"],
-  ["a", "Description", "text"], ["s", "Sources", "link"], ["j", "Projects", "folder"], ["r", "Recurring", "repeat"], ["n", "Convert to note", "file-plus"], ["t", "Add time", "timer"], ["+", "Add subtask", "list-plus"],
+  ["a", "Description", "text"], ["s", "Sources", "link"], ["j", "Projects", "folder"], ["r", "Recurring", "repeat"], ["n", "Convert to note", "file-plus"], ["t", "Add time", "timer"], ["+", "Add subtask", "list-plus"], ["B", "Blocked", "hourglass"],
 ];
 /** Marker changes that mean "just tick it": on a plain todo they stay a plain edit, as with the native checkbox, instead of creating a task. */
 const PLAIN_MARKERS = [" ", "x", "-"];

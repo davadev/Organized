@@ -1,7 +1,7 @@
 import { Editor, MarkdownView, Notice, Platform, Plugin, TFile, TFolder, WorkspaceLeaf } from "obsidian";
 import { Transaction } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
-import { ACTION_MARKERS, duplicateRepeats, parentIds, parseTasks, sameNesting, unclearIds, NOTE_MARKER, NoteSection, PROJECT_MARKER, RECURRING_MARKER, SECTION_MARKERS, SUBTASK_MARKER, TaskLine, TIME_MARKER, writeNoteSection } from "./codec";
+import { ACTION_MARKERS, BLOCKED_MARKER, duplicateRepeats, parentIds, parseTasks, sameNesting, unclearIds, NOTE_MARKER, NoteSection, PROJECT_MARKER, RECURRING_MARKER, SECTION_MARKERS, SUBTASK_MARKER, TaskLine, TIME_MARKER, writeNoteSection } from "./codec";
 import { DEFAULT_SETTINGS, elapsed, localDate, markerOf, object, Settings, Status, Task, WorkSession } from "./model";
 import { settingsFrom } from "./model";
 import { BUDGET_KEYS, BudgetPeriod, projectName, Repository } from "./repository";
@@ -11,7 +11,7 @@ import { formatMinutes } from "./sessions";
 import { plansIn } from "./plans";
 import { budgetUse, overlap, PERIOD_LABELS, plannable, projectUse } from "./planning";
 import { loadRole, MirrorError, Role } from "./device";
-import { ConfirmModal, isKeepAsTodo, ScheduleModal, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RecurrencePicker, RetireModal, SessionModal, TaskPicker, WhatsNewModal } from "./modals";
+import { BlockedModal, ConfirmModal, isKeepAsTodo, ScheduleModal, NoteConversionModal, OnboardingModal, PriorityPicker, ProjectPicker, RecurrencePicker, RetireModal, SessionModal, TaskPicker, WhatsNewModal } from "./modals";
 import { notesOfLine, notesToShow, ReleaseNote } from "./whatsNew/releaseNotes";
 import { OrganizedInspectorView, VIEW_TYPE } from "./view";
 import { OrganizedSettingsTab } from "./settings";
@@ -511,7 +511,7 @@ export default class Organized extends Plugin {
   private stopEditedTimers(update: ViewUpdate): void {
     const active = this.activeEditor(); if (!active || active.editor.getValue() !== update.state.doc.toString()) return;
     const after = new Map(parseTasks(update.state.doc.toString()).flatMap(t => t.id ? [[t.id, t.marker] as const] : []));
-    const status = (marker: string | undefined): Status | null => marker === undefined || marker === " " ? "open" : marker === "x" || marker === "X" ? "completed" : marker === "-" ? "canceled" : null;
+    const status = (marker: string | undefined): Status | null => marker === undefined || marker === " " ? "open" : marker === "x" || marker === "X" ? "completed" : marker === "-" ? "canceled" : marker === BLOCKED_MARKER ? "open" : null;
     for (const line of parseTasks(update.startState.doc.toString())) {
       const id = line.id; if (!id || line.marker !== "/") continue; const next = status(after.get(id)); if (next === null) continue;
       void this.run(async () => {
@@ -606,6 +606,7 @@ export default class Organized extends Plugin {
     else if (marker === RECURRING_MARKER) this.pickRecurrence(await this.repo.read(id), context, true);
     else if (marker === TIME_MARKER) await this.addTime(await this.repo.read(id), context);
     else if (marker === SUBTASK_MARKER) await this.addSubtaskFromMarker(await this.repo.read(id), context);
+    else if (marker === BLOCKED_MARKER) this.pickBlocked(await this.repo.read(id), context, true);
     else await this.run(() => this.service.marker(context, marker));
   }
   /**
@@ -665,6 +666,13 @@ export default class Organized extends Plugin {
   pickRecurrence(task: Task, context?: Context, typed = false): void {
     new RecurrencePicker(this.app, localDate(), task.recurring ? explicitRule(taskRule(task), anchorOf(task)) : null, (rule, times) => this.run(() => this.service.recurrence(task.id, rule, context, times)).then(() => this.planningTick()),
       typed && context ? () => { void this.run(() => this.service.clean(context, markerOf(task))); } : undefined, task.recurrence_times).open();
+  }
+  /** Asks why a task is blocked and when it resurfaces. From a typed `[B]` (`typed`), cancelling puts the todo's own marker back. A recurring task repeats on its own and cannot be blocked. */
+  pickBlocked(task: Task, context?: Context, typed = false): void {
+    const restore = typed && context ? () => { void this.run(() => this.service.clean(context, markerOf(task))); } : undefined;
+    if (task.recurring) { new Notice(`“${task.title}” repeats on its own, so it cannot be blocked.`); restore?.(); return; }
+    const initial = { kind: task.blocked_kind ?? "waiting" as const, days: task.blocked_interval_days ?? this.settings.blockedDefaultDays, mode: task.blocked_mode ?? this.settings.blockedDefaultMode };
+    new BlockedModal(this.app, task.title, initial, setup => this.run(() => this.service.block(task.id, setup, context)), restore).open();
   }
   /** The marker a task's own status shows (a running timer is `[/]`). */
   /** `[+]`: puts the todo's own marker back, then adds an empty subtask under it as the command does. */

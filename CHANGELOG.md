@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **A blocked status for tasks that cannot move.** Type `[B]` in a todo (or press and hold its checkbox on a phone and choose Blocked), say whether you are waiting on something or it is backlog, how many days until it returns, and whether it then comes back as a reminder that stays blocked or as an open task. The todo leaves your notes and sorts below open ones; the interval and choice are remembered per task, with defaults under Settings → Task behavior. While blocked, a small pill in the Task tab shows why and how often and opens the dialog to change them. Planning time for a blocked task opens it again, with a notice. Tasks written by an older version read the status as open.
 - **A `>` typed in a later day's note forwards to the day after that note.** It always went to tomorrow, so from a note of a day ahead the todo was pulled back to tomorrow (or, for tomorrow's own note, stayed a `[>]` the panel hides, and looked gone). An earlier day's todo still comes to tomorrow.
 - **One task that cannot be written no longer keeps other timers running.** The minute check for planned time stopped at the first task whose note could not be written, so every later timer kept running over the day's end, on every check. The rest is done first and the error is shown once.
 - **A timer left running for days stops where its block ended.** Planned blocks more than two days old were out of sight of the stop rule, so the timer stopped at the moment it was noticed and counted the days between.

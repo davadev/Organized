@@ -30,6 +30,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.1.7",
+    title: "What's new in Organized 0.1.7",
+    intro: "A new status for tasks that are stuck, and fixes for tasks that vanished, timers that ran on and statuses that flipped back.",
+    items: [
+      { title: "Blocked tasks that come back when you want them", text: "Type `[B]` in a todo (or press and hold its checkbox on a phone and choose Blocked) when a task cannot move: you are waiting for someone, or it is simply not a priority now. Say which, and every how many days it should return. The todo leaves your notes and sorts below open ones. When it is due, it comes back as a reminder that stays blocked (and returns in each new note until you change its status) or as an open task, as you chose. Planning time for a blocked task opens it again. Organized remembers the interval and choice for that task; Settings → Task behavior sets the defaults." },
+      { title: "Fewer lost todos and runaway timers", text: "Forwarding with `>` from a note of a later day goes to the day after that note. One task that cannot be written no longer keeps other timers running past their planned time, a timer left running for days stops at its block's end, and the panel's timer and subtask buttons no longer flip a status you had just changed in the note." },
+    ],
+  },
+  {
     version: "0.1.6",
     title: "What's new in Organized 0.1.6",
     intro: "A maintenance update. These are the changes since 0.1.5.",

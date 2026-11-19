@@ -187,8 +187,9 @@ export class OrganizedInspectorView extends ItemView {
     const shown = this.shownStatus(task); const doneToday = task.recurring && shown === "completed";
     const label = doneToday ? "done · today" : shown.replace(/_/g, " ");
     const status = head.createSpan({ cls: "organized-list-status", attr: { "data-status": shown, role: "img", "aria-label": label, title: label } }); setIcon(status, doneToday ? "calendar-check" : STATUS_ICONS[shown]);
-    if (task.priority !== "none" || (task.scheduled && this.owner.settings.showScheduledDate) || task.starred) {
+    if (task.priority !== "none" || (task.scheduled && this.owner.settings.showScheduledDate) || task.starred || task.status === "blocked") {
       const meta = open.createDiv({ cls: "organized-list-meta" });
+      if (task.status === "blocked") meta.createSpan({ cls: "organized-list-date", text: `${task.blocked_kind} · back ${task.blocked_next}`, attr: { title: "Blocked: resurfaces in a daily note on this day" } });
       if (task.priority !== "none") meta.createSpan({ cls: `organized-list-priority priority-${task.priority}`, text: task.priority });
       if (task.scheduled && this.owner.settings.showScheduledDate) meta.createSpan({ cls: "organized-list-date", text: `${task.scheduled}${task.scheduled_dates.length > 1 ? ` +${task.scheduled_dates.length - 1}` : ""}` });
       if (task.starred) { const star = meta.createSpan({ cls: "organized-list-star", attr: { "aria-label": "Favorite" } }); setIcon(star, "star"); }
@@ -319,7 +320,8 @@ export class OrganizedInspectorView extends ItemView {
   private propertyStrip(details: HTMLElement, task: Task): void {
     const id = task.id; const showPriority = task.priority !== "none" || this.module === "Priority"; const showSchedule = task.scheduled !== null || this.module === "Schedule";
     const showRecurring = task.recurring || task.recurrence_periods.length > 0 || this.module === "Recurring"; const showProjects = task.projects.length > 0 || this.module === "Projects";
-    if (!showPriority && !showSchedule && !showRecurring && !showProjects) return;
+    const showBlocked = task.status === "blocked";
+    if (!showPriority && !showSchedule && !showRecurring && !showProjects && !showBlocked) return;
     const strip = details.createDiv({ cls: "organized-prop-strip" });
     const pill = (host: HTMLElement, tag: "div" | "span", icon: string, label: string, module: string) => {
       const el = host.createEl(tag, { cls: "organized-prop", attr: { title: label } }); setIcon(el.createSpan({ cls: "organized-prop-icon", attr: { "aria-hidden": "true" } }), icon);
@@ -333,6 +335,12 @@ export class OrganizedInspectorView extends ItemView {
     // The next day, and how many more: the dialog shows them all. The cursor's todo goes along only when it is this task's.
     const more = task.scheduled_dates.length > 1 ? ` +${task.scheduled_dates.length - 1}` : "";
     if (showSchedule) action("calendar", task.scheduled ? `Schedule: ${task.scheduled}${more}` : "Schedule", task.scheduled ? `${task.scheduled}${more}` : "Choose date", "Schedule", () => { void this.owner.pickSchedule(task, this.owner.context?.line.id === id ? this.owner.context : undefined).catch(report); });
+    // Only while the task is blocked: why and how often in the pill, everything (and the next day) on hover. It opens the dialog with the task's choices to change them.
+    if (showBlocked) {
+      const detail = `Blocked (${task.blocked_kind}): back every ${task.blocked_interval_days ?? this.owner.settings.blockedDefaultDays} days, next ${task.blocked_next}, ${(task.blocked_mode ?? this.owner.settings.blockedDefaultMode) === "reopen" ? "then opens" : "as a reminder"}`;
+      const blocked = action("hourglass", `${detail}. Edit`, `${task.blocked_kind} · ${task.blocked_interval_days ?? this.owner.settings.blockedDefaultDays}d`, "Blocked", () => this.contextFor(task).then(context => this.owner.pickBlocked(task, context)));
+      blocked.title = detail; blocked.addClass("organized-prop-blocked");
+    }
     if (showRecurring) {
       const span = task.recurrence_periods.length ? `: ${task.recurrence_periods[0].start} → ${task.recurring ? "active" : task.recurrence_periods[task.recurrence_periods.length - 1].stop}` : "";
       const rule = task.recurring ? ruleLabel(taskRule(task)) : "Off";
@@ -657,7 +665,10 @@ export class OrganizedInspectorView extends ItemView {
     const toolbar = hero.createDiv({ cls: "organized-task-toolbar" });
     const status = toolbar.createDiv({ cls: "organized-status-field" });
     const shown = this.shownStatus(task); setIcon(status.createSpan({ cls: "organized-status-icon", attr: { "data-status": shown, "aria-hidden": "true" } }), task.recurring && shown === "completed" ? "calendar-check" : STATUS_ICONS[shown]);
-    const statusSelect = this.select(status, "Status", this.shownStatus(task), STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(async () => this.owner.service.status(id, value as Task["status"], await this.contextFor(task))); });
+    const statusSelect: HTMLSelectElement = this.select(status, "Status", this.shownStatus(task), STATUSES, value => {
+      // Blocking asks a few questions first; the choice shown stays the task's own status until the dialog is saved.
+      if (value === "blocked") { statusSelect.value = this.shownStatus(task); void this.contextFor(task).then(context => this.owner.pickBlocked(task, context)).catch(report); return; }
+      if (STATUSES.includes(value as Task["status"])) void this.owner.run(async () => this.owner.service.status(id, value as Task["status"], await this.contextFor(task))); });
     if (task.recurring) statusSelect.options[STATUSES.indexOf("completed")].text = "done · today";
     const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Subtasks", "Description", "Sources"], value => { this.module = value; if (FOLDABLE_CARDS.includes(value) && this.owner.settings.collapsedTaskSections.includes(value)) this.owner.setTaskSectionCollapsed(value, false); this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
     const file = await this.owner.repo.resolve(id, "showing the task"); const body = splitNote(await this.owner.repo.readText(file)).body;
