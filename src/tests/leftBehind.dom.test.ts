@@ -53,7 +53,18 @@ describe('carrying left-behind tasks to today', () => {
     expect(result.skipped.some(s => s.startsWith('Twice'))).toBe(true); expect(result.skipped.some(s => s.startsWith('Missing task'))).toBe(true);
     expect(parseTasks(h.texts.get(note(today()))!).filter(t => t.id === child.id)).toHaveLength(1);
   });
-  it('reads a skipped one that is not an error object, and makes today\'s note when it is missing', async () => {
+  it('writes nothing when nothing is left behind: today\'s note is made only by the first move', async () => {
+    const h = harness(); await h.service.carryLeftBehind(); expect(h.texts.has(note(today()))).toBe(false);
+    const task = await h.repo.create('Left'); await h.add(note(ago(2)), line(' ', 'Left', task.id)); await h.service.carryLeftBehind(); expect(h.texts.get(note(today()))).toContain(task.id);
+  });
+  it('names a todo that disagrees with its open task, a missing task note and a ticked todo of a task that is really done, instead of guessing', async () => {
+    const h = harness(); const ticked = await h.repo.create('Ticked'); const canceled = await h.repo.create('Canceled'); const blocked = await h.repo.create('Blocked line'); const done = await h.repo.create('Done'); await h.service.status(done.id, 'completed');
+    const ahead = await h.repo.create('Ahead'); await h.repo.update(ahead.id, t => ({ ...t, scheduled_dates: [later(3)] }));
+    await h.add(note(ago(2)), [line('x', 'Ticked', ticked.id), line('-', 'Canceled', canceled.id), line('B', 'Blocked line', blocked.id), line('x', 'Done', done.id), line('x', 'Ahead', ahead.id), line('x', 'Gone', 'zzzzzzzz'), line(' ', 'No note', 'yyyyyyyy')].join('\n'));
+    const result = await h.service.carryLeftBehind(); expect(result.moved).toEqual([]);
+    expect(result.skipped).toEqual(['Ticked (its todo is ticked but the task is open)', 'Canceled (its todo is canceled but the task is open)', 'Blocked line (its todo is blocked but the task is open)', 'No note (no task note)']);
+  });
+  it('reads a skipped one that is not an error object', async () => {
     const h = harness(); const task = await h.repo.create('Odd'); await h.add(note(ago(2)), `${line(' ', 'Odd', task.id)}\n- [ ] \n${line(' ', '', 'zzzzzzzz')}`); await h.add(note(today()), '- [ ] My own todo'); vi.spyOn(h.service, 'schedule').mockRejectedValueOnce('plain text');
     const { skipped } = await h.service.carryLeftBehind(); expect(skipped[0]).toBe('Odd (plain text)'); expect(skipped[1]).toContain('zzzzzzzz ('); expect(h.texts.has(note(today()))).toBe(true);
   });

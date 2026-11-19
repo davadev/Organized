@@ -520,7 +520,8 @@ export default class Organized extends Plugin {
   private stopEditedTimers(update: ViewUpdate): void {
     const active = this.activeEditor(); if (!active || active.editor.getValue() !== update.state.doc.toString()) return;
     const after = new Map(parseTasks(update.state.doc.toString()).flatMap(t => t.id ? [[t.id, t.marker] as const] : []));
-    const status = (marker: string | undefined): Status | null => marker === undefined || marker === " " ? "open" : marker === "x" || marker === "X" ? "completed" : marker === "-" ? "canceled" : marker === BLOCKED_MARKER ? "open" : null;
+    // `[/]` retyped as `[B]` leaves the timer alone: it stops when blocking is confirmed in the dialog, and keeps running if the dialog is cancelled (the `[/]` comes back).
+    const status = (marker: string | undefined): Status | null => marker === undefined || marker === " " ? "open" : marker === "x" || marker === "X" ? "completed" : marker === "-" ? "canceled" : null;
     for (const line of parseTasks(update.startState.doc.toString())) {
       const id = line.id; if (!id || line.marker !== "/") continue; const next = status(after.get(id)); if (next === null) continue;
       void this.run(async () => {

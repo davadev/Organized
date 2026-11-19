@@ -121,7 +121,7 @@ export class TaskService {
       movement_history: current.scheduled === date ? current.movement_history : [...current.movement_history, event] }));
     changes.push({ file: taskFile, before: beforeTask, after: await this.repo.readText(taskFile) });
     const under = options.under !== undefined ? options.under : (await this.repo.parentOf(task.id))?.id ?? null;
-    if (target) await this.insert(target, next, task.status === "in_progress" && kind === "forward" ? "/" : " ", false, changes, under);
+    if (target) await this.insert(target, next, task.status === "blocked" ? "B" : task.status === "in_progress" && kind === "forward" ? "/" : " ", false, changes, under);
     if (target?.path !== context.file.path) {
       const current = await this.resolve(context);
       await this.edit(context.file, current.text, replaceTask(current.text, current.line, { marker: board ? markerOf(task) : kind === "forward" ? (this.daily.date(context.file.path) ? ">" : " ") : "<" }), changes);
@@ -240,7 +240,7 @@ export class TaskService {
     const wanted = new Set(draft.map(d => d.date)); const sources = new Set(moves.map(m => m.from!));
     const added = [...wanted].filter(day => !had.includes(day) && !moves.some(m => m.date === day));
     const board = context !== undefined && this.isProjectFile(context.file); const placed = context && !board ? { ...before, daily_note_section_path: context.line.section } : before; const under = (await this.repo.parentOf(id))?.id ?? null;
-    const put = async (day: string) => { const file = await this.dayNote(day); if (file) await this.insert(file, placed, day === localDate() ? markerOf(before) : " ", false, changes, under); };
+    const put = async (day: string) => { const file = await this.dayNote(day); if (file) await this.insert(file, placed, day === localDate() || before.status === "blocked" ? markerOf(before) : " ", false, changes, under); };
     // The daily notes first: a day whose note cannot be written stays as it was, todo and blocks.
     const days = new Set(had); const stuck = new Set<string>(); const at = new Date().toISOString(); const events: Movement[] = [];
     for (const move of moves) {
@@ -593,7 +593,7 @@ export class TaskService {
    */
   private async resurface(file: TFile, date: string, tasks: Task[]): Promise<void> {
     const present = new Set(parseTasks(await this.repo.readText(file)).map(t => t.id));
-    for (const task of tasks.filter(t => t.status === "blocked" && t.blocked_next !== null && t.blocked_next <= date).sort((a, b) => a.title.localeCompare(b.title))) {
+    for (const task of tasks.filter(t => t.status === "blocked" && (t.blocked_next === null || t.blocked_next <= date)).sort((a, b) => a.title.localeCompare(b.title))) {
       const reopen = (task.blocked_mode ?? this.repo.settings().blockedDefaultMode) === "reopen"; const parent = (await this.repo.parentOf(task.id))?.id ?? null;
       try {
         if (reopen) await this.applyStatus(task.id, "open");
@@ -630,27 +630,33 @@ export class TaskService {
    * Never the same as the daily carry: it runs when asked, whatever "Auto-forward" says. It leaves alone (and says how many):
    * - recurring tasks (their days are made from the rule, so an unticked one is not owed a copy), tasks that are done, canceled, blocked or became a note;
    * - a task that already has a todo in today's note or in a later day's note, or is scheduled for a later day (it waits for that day);
-   * - a todo that is not an open one (`[x]`, `[-]`, `[B]`, `[r]`, text or a todo with no task), and a task that cannot be read or sits on two lines of one note (named in the notice).
+   * - a todo that is not an open one (`[r]`, text, a todo with no task). A ticked, canceled or blocked todo whose task is still open is named in the notice, not moved; so is a task whose note is missing or whose move failed.
    * Only the latest earlier todo of a task counts, so a task forwarded step by step is moved once.
    */
   async carryLeftBehind(): Promise<{ moved: string[]; skipped: string[] }> {
-    const today = localDate(); const file = await this.daily.ensure(today); const days = this.daily.files().sort((a, b) => a.date.localeCompare(b.date));
+    // Today's note is made by the first move (`schedule`), not before: a check that finds nothing writes nothing.
+    const today = localDate(); const days = this.daily.files().sort((a, b) => a.date.localeCompare(b.date));
     const latest = new Map<string, { file: TFile; line: TaskLine; date: string }>(); const present = new Set<string>();
     for (const day of days) {
-      const lines = parseTasks(day.date === today ? await this.repo.readText(file) : await this.repo.readText(day.file));
+      const lines = parseTasks(await this.repo.readText(day.file));
       for (const line of lines) if (line.id) { if (day.date < today) latest.set(line.id, { ...day, line }); else present.add(line.id); }
     }
-    const changes: Change[] = []; const moved: string[] = []; const skipped: string[] = [];
+    const changes: Change[] = []; const moved: string[] = []; const skipped: string[] = []; const known = new Map((await this.repo.list(true)).map(t => [t.id, t]));
     for (const [id, occurrence] of latest) {
-      if (present.has(id) || ![" ", "/", ">", "<"].includes(occurrence.line.marker)) continue;
+      if (present.has(id)) continue;
+      const marker = occurrence.line.marker; const open = [" ", "/", ">", "<"].includes(marker); const settled = ["x", "X", "-", "B"].includes(marker);
+      if (!open && !settled) continue;
+      const task = known.get(id); const title = occurrence.line.title || id;
+      if (task === undefined) { if (open) skipped.push(`${title} (no task note)`); continue; }
+      if (task.recurring || task.converted_to !== null || !["open", "in_progress"].includes(task.status) || task.scheduled_dates.some(day => day > today)) continue;
+      // A todo that says done, canceled or blocked while its task is open disagrees with it: moving either would guess, so it is named for the person to settle.
+      if (settled) { skipped.push(`${title} (its todo is ${marker === "B" ? "blocked" : marker === "-" ? "canceled" : "ticked"} but the task is open)`); continue; }
       try {
-        const task = await this.repo.read(id);
-        if (task.recurring || task.converted_to !== null || !["open", "in_progress"].includes(task.status) || task.scheduled_dates.some(day => day > today)) continue;
         await this.schedule({ file: occurrence.file, line: occurrence.line }, today, "forward", "automatic", changes);
         moved.push(task.title);
         // Subtasks that travelled with their parent are in today's note now.
-        for (const line of parseTasks(await this.repo.readText(file))) if (line.id) present.add(line.id);
-      } catch (error) { skipped.push(`${occurrence.line.title || id} (${error instanceof Error ? error.message : String(error)})`); }
+        for (const line of parseTasks(await this.repo.readText(await this.daily.ensure(today)))) if (line.id) present.add(line.id);
+      } catch (error) { skipped.push(`${title} (${error instanceof Error ? error.message : String(error)})`); }
     }
     if (moved.length) this.summarize(changes, "Left-behind tasks carried to today", `${plural(moved.length, "task")}: ${moved.join(", ")}.${skipped.length ? ` Not moved: ${skipped.join("; ")}.` : ""}`);
     return { moved, skipped };
@@ -692,7 +698,7 @@ export class TaskService {
     const week = localDate(new Date(Date.now() - 7 * 86400000));
     for (const task of await this.repo.list()) {
       const last = task.scheduled_dates.at(-1);
-      if (!last || last >= today || last < week || present.has(task.id) || task.recurring || ["completed", "canceled"].includes(task.status) || this.repo.file(this.daily.path(last))) continue;
+      if (!last || last >= today || last < week || present.has(task.id) || task.recurring || ["completed", "canceled", "blocked"].includes(task.status) || this.repo.file(this.daily.path(last))) continue;
       try {
         const event: Movement = { id: makeId(), kind: "forward", source: "automatic", from: last, to: today, at: new Date().toISOString() };
         const next = await this.recorded(task.id, changes, () => this.repo.update(task.id, t => ({ ...t, scheduled_dates: [...t.scheduled_dates.filter(day => day !== last), today], movement_history: [...t.movement_history, event] })));
