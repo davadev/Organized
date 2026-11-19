@@ -45,7 +45,7 @@ const hold = () => vi.advanceTimersByTime(500);
 
 describe('long-press marker menu', () => {
   it('only offers markers that act, never formatting-only letters', () => {
-    expect(LONG_PRESS_MARKERS.map(([m]) => m).join('')).toBe(' x/-><!*asjrnt+');
+    expect(LONG_PRESS_MARKERS.map(([m]) => m).join('')).toBe(' x/-><!*asjrnt+B');
   });
   it('is registered by the editor extension on mobile only', () => {
     const owner: any = { onEditorUpdate: () => undefined };

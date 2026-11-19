@@ -1,9 +1,9 @@
 import { App, Component, Modal, Setting, SuggestModal } from "obsidian";
-import { localDate, MAX_BUDGET_SECONDS, MAX_DAYS, path, PRIORITIES, Priority, Task, validDate, WorkSession } from "./model";
+import { BLOCKED_KINDS, BLOCKED_MODES, localDate, MAX_BLOCKED_DAYS, MAX_BUDGET_SECONDS, MAX_DAYS, path, PRIORITIES, Priority, Task, validDate, WorkSession } from "./model";
 import { isoFromInput, kindOf, lengthOf, lengthOfSeconds, localInput, SessionKind, sessionProblem } from "./sessions";
 import { cleanTags } from "./notes";
 import { freePath, noteName } from "./names";
-import { report, type DraftDay } from "./service";
+import { report, type BlockedSetup, type DraftDay } from "./service";
 import { rgbOf } from "./colors";
 import { formatRule, presetRules, Rule, ruleLabel, Unit } from "./recurrence";
 import { ClockSpan, MAX_TIMES, minutesOf, timeLabel, timesProblem } from "./plans";
@@ -532,6 +532,43 @@ export class ProjectBudgetModal extends Modal {
     enterSaves(this.contentEl);
   }
   onClose(): void { this.contentEl.empty(); }
+}
+
+const BLOCKED_KIND_LABELS = { waiting: "Waiting (on someone or something I cannot influence)", backlog: "Backlog (could be done now, not a priority)" } as const;
+const BLOCKED_MODE_LABELS = { reminder: "Remind me: the todo comes back and stays blocked", reopen: "Open it: the todo comes back as an open task" } as const;
+/** Asks why a task is blocked, how many days until it resurfaces in a daily note and what it does then. Closing without saving calls `cancelled` (a typed marker is put back). */
+export class BlockedModal extends Modal {
+  private saved = false;
+  constructor(app: App, readonly taskTitle: string, readonly initial: BlockedSetup, readonly save: (setup: BlockedSetup) => Promise<void>, readonly cancelled?: () => void) { super(app); decorate(this); }
+  onOpen(): void {
+    this.titleEl.setText("Block task"); this.contentEl.addClass("organized-modal");
+    this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-task", text: this.taskTitle });
+    const choose = <T extends string>(label: string, values: readonly T[], labels: Record<T, string>, current: T): HTMLSelectElement => {
+      this.contentEl.createEl("label", { cls: "organized-modal-label", text: label });
+      const select = this.contentEl.createEl("select", { cls: "dropdown organized-control", attr: { "aria-label": label } });
+      for (const value of values) select.createEl("option", { value, text: labels[value] });
+      select.value = current; return select;
+    };
+    const kind = choose("Why is it blocked?", BLOCKED_KINDS, BLOCKED_KIND_LABELS, this.initial.kind);
+    this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Bring it back every" });
+    const row = this.contentEl.createDiv({ cls: "organized-datetime" });
+    const days = row.createEl("input", { type: "number", attr: { min: "1", max: String(MAX_BLOCKED_DAYS), step: "1", inputmode: "numeric", "aria-label": "Days until it resurfaces" } }); days.value = String(this.initial.days);
+    row.createSpan({ cls: "organized-muted", text: "days" });
+    const mode = choose("When it comes back", BLOCKED_MODES, BLOCKED_MODE_LABELS, this.initial.mode);
+    const note = this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-note", attr: { role: "status" } });
+    const read = (): BlockedSetup | string => {
+      const n = Number(days.value);
+      return Number.isInteger(n) && n >= 1 && n <= MAX_BLOCKED_DAYS ? { kind: kind.value as BlockedSetup["kind"], days: n, mode: mode.value as BlockedSetup["mode"] } : `Use a whole number of days from 1 to ${MAX_BLOCKED_DAYS}.`;
+    };
+    const paint = () => { const value = read(); note.setText(typeof value === "string" ? value : ""); note.toggleClass("organized-session-problem", typeof value === "string"); };
+    days.addEventListener("input", paint);
+    new Setting(this.contentEl).addButton(b => b.setButtonText("Block").setCta().onClick(() => {
+      const value = read(); if (typeof value === "string") { paint(); return; }
+      this.saved = true; this.close(); void this.save(value).catch(report);
+    }));
+    enterSaves(this.contentEl);
+  }
+  onClose(): void { this.contentEl.empty(); if (!this.saved) this.cancelled?.(); }
 }
 
 /** Asks how much time a task may take, in hours and minutes; the saved budget is `seconds`, null removes it. */

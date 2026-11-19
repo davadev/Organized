@@ -11,7 +11,7 @@ describe('settings completeness and validation', () => {
   it('renders every setting in classic and modern hosts, validates changes before save', () => {
     const h = harness(); const owner = { settings: { ...DEFAULT_SETTINGS, displayProperties: [] }, service: h.service, saveSettings: vi.fn(), role: 'main', refresh: vi.fn() } as any;
     const tab = new OrganizedSettingsTab(h.app, owner); Setting.instances.length = 0; tab.display();
-    expect(Setting.instances.filter(s => s.controls.length)).toHaveLength(19 + DISPLAY_PROPERTIES.length - 1);
+    expect(Setting.instances.filter(s => s.controls.length)).toHaveLength(21 + DISPLAY_PROPERTIES.length - 1);
     const controls = (name: string) => Setting.instances.find(s => s.nameText === name)!.controls[0];
     const type = (control: any, value: string) => { control.inputEl.value = value; control.inputEl.dispatchEvent(new Event('input')); };
     type(controls('Task folder'), 'Work'); expect(owner.settings.taskFolder).toBe('Work'); type(controls('Task folder'), '.tasks'); expect(owner.settings.taskFolder).toBe('Work'); expect(Notice.instances.at(-1)?.message).toContain('visible');
@@ -23,6 +23,8 @@ describe('settings completeness and validation', () => {
     controls('Auto-forward unfinished tasks').toggle(); expect(owner.settings.autoForward).toBe(false);
     const select = (name: string, value: string) => { const c = controls(name); c.selectEl.value = value; c.selectEl.dispatchEvent(new Event('change')); };
     select('What retired tasks keep', 'all'); expect(owner.settings.retentionDetail).toBe('all'); select('What retired tasks keep', 'bogus'); expect(owner.settings.retentionDetail).toBe('all'); select('What retired tasks keep', 'description'); expect(owner.settings.retentionDetail).toBe('description');
+    type(controls('Blocked tasks: days until they resurface'), '5'); expect(owner.settings.blockedDefaultDays).toBe(5); for (const bad of ['', '0', '366', '1.5']) { type(controls('Blocked tasks: days until they resurface'), bad); expect(owner.settings.blockedDefaultDays).toBe(5); }
+    select('Blocked tasks: when they come back', 'reopen'); expect(owner.settings.blockedDefaultMode).toBe('reopen'); select('Blocked tasks: when they come back', 'bogus'); expect(owner.settings.blockedDefaultMode).toBe('reminder');
     select('Missing sections', 'ask'); expect(owner.settings.missingSection).toBe('ask'); select('Missing sections', 'recreate'); expect(owner.settings.missingSection).toBe('recreate');
     select('Priority sort scope', 'none'); expect(owner.settings.sortScope).toBe('none');
     select('Alignment', 'right'); expect(owner.settings.propertiesAlign).toBe('right'); select('Alignment', 'bogus'); expect(owner.settings.propertiesAlign).toBe('text');

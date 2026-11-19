@@ -72,6 +72,11 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 
 In Live Preview and source mode on desktop, bind a key to **Edit checkbox marker** (Settings → Hotkeys). On a todo line, press it: the caret lands on the marker with the character selected (in Live Preview check that the checkbox turns into its `[ ]` source so the selection is visible). Type `x`: the todo completes as if typed. On a plain line it only shows a notice. Check the key on Windows, Linux and macOS; Option+letter can type a special character on macOS layouts.
 
+## Blocked status (manual)
+- Type `[B]` on a linked todo and on a plain todo: the dialog opens with the task's remembered choice or the settings' defaults; Escape puts the old marker back. A recurring task shows a notice instead.
+- With a due date of today (edit `blocked_next`), open or create a daily note: reminder mode writes `[B]` and keeps the task blocked; open mode writes `[ ]` and clears the block.
+- Hourglass icon and orange colour in the panel (status select, list card, hero) in light and dark themes, on phone width too.
+
 ## Long-press marker menu (mobile, manual)
 
 Automated tests cover the logic with synthetic touch events; only a device shows the real behaviour. On iOS and Android (BRAT beta), in a daily note in Live Preview:

@@ -657,7 +657,10 @@ export class OrganizedInspectorView extends ItemView {
     const toolbar = hero.createDiv({ cls: "organized-task-toolbar" });
     const status = toolbar.createDiv({ cls: "organized-status-field" });
     const shown = this.shownStatus(task); setIcon(status.createSpan({ cls: "organized-status-icon", attr: { "data-status": shown, "aria-hidden": "true" } }), task.recurring && shown === "completed" ? "calendar-check" : STATUS_ICONS[shown]);
-    const statusSelect = this.select(status, "Status", this.shownStatus(task), STATUSES, value => { if (STATUSES.includes(value as Task["status"])) void this.owner.run(async () => this.owner.service.status(id, value as Task["status"], await this.contextFor(task))); });
+    const statusSelect: HTMLSelectElement = this.select(status, "Status", this.shownStatus(task), STATUSES, value => {
+      // Blocking asks a few questions first; the choice shown stays the task's own status until the dialog is saved.
+      if (value === "blocked") { statusSelect.value = this.shownStatus(task); void this.contextFor(task).then(context => this.owner.pickBlocked(task, context)).catch(report); return; }
+      if (STATUSES.includes(value as Task["status"])) void this.owner.run(async () => this.owner.service.status(id, value as Task["status"], await this.contextFor(task))); });
     if (task.recurring) statusSelect.options[STATUSES.indexOf("completed")].text = "done · today";
     const add = this.select(toolbar, "Add details", "", ["", "Priority", "Schedule", "Timer", "Recurring", "Projects", "Subtasks", "Description", "Sources"], value => { this.module = value; if (FOLDABLE_CARDS.includes(value) && this.owner.settings.collapsedTaskSections.includes(value)) this.owner.setTaskSectionCollapsed(value, false); this.editingModule = (NOTE_SECTIONS as readonly string[]).includes(value) ? value : ""; void this.render().catch(report); }); add.options[0].text = "Add details…"; add.addClass("organized-add-details");
     const file = await this.owner.repo.resolve(id, "showing the task"); const body = splitNote(await this.owner.repo.readText(file)).body;

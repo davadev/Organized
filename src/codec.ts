@@ -1,4 +1,4 @@
-import type { Section, Settings, Priority } from "./model";
+import type { Section, Settings, Priority, Task } from "./model";
 import { PRIORITIES } from "./model";
 import { parser } from "@lezer/markdown";
 
@@ -22,7 +22,9 @@ export const NOTE_MARKER = "n";
 export const TIME_MARKER = "t";
 /** Adds an empty subtask under the todo. */
 export const SUBTASK_MARKER = "+";
-export const ACTION_MARKERS = `<>/!xX-*${Object.keys(SECTION_MARKERS).join("")}${PROJECT_MARKER}${RECURRING_MARKER}${NOTE_MARKER}${TIME_MARKER}${SUBTASK_MARKER}`;
+/** Blocks the task: it waits, and resurfaces in a daily note after a few days. */
+export const BLOCKED_MARKER = "B";
+export const ACTION_MARKERS = `<>/!xX-*${Object.keys(SECTION_MARKERS).join("")}${PROJECT_MARKER}${RECURRING_MARKER}${NOTE_MARKER}${TIME_MARKER}${SUBTASK_MARKER}${BLOCKED_MARKER}`;
 /**
  * Task note body: the description is the text itself and `## Sources` is the only heading Organized writes, so the note reads
  * naturally without the plugin. Older notes used `## Description`, `## Notes` (and `## Idea`/`## Question`) headings; they are
@@ -191,9 +193,11 @@ export function insertTask(text: string, line: string, section: Section[]): { te
 }
 /** Status sections of a project note, in the order a project reads: what is being done, what waits, what is finished. */
 export const PROJECT_SECTIONS = { in_progress: "In progress", open: "Open", completed: "Done", canceled: "Canceled" } as const;
+/** A blocked task waits under the Open heading of a project note: it is not done, and its todo shows the blocked icon. */
+const projectStatus = (status: Task["status"]): keyof typeof PROJECT_SECTIONS => status === "blocked" ? "open" : status;
 /** Recurring tasks never finish, so in a project note they live under their own heading instead of a status one. */
 export const PROJECT_ONGOING = "Ongoing";
-export const projectSection = (task: { recurring: boolean; status: keyof typeof PROJECT_SECTIONS }): string => task.recurring ? PROJECT_ONGOING : PROJECT_SECTIONS[task.status];
+export const projectSection = (task: { recurring: boolean; status: Task["status"] }): string => task.recurring ? PROJECT_ONGOING : PROJECT_SECTIONS[projectStatus(task.status)];
 /** The heading path to use for `name` in a note: an existing heading of that name at any level, else a new level-2 heading. */
 export function sectionNamed(text: string, name: string): Section[] {
   let found: Section[] | null = null;
@@ -303,8 +307,8 @@ export function sortTasks(text: string, line: number, scope: Settings["sortScope
     while (end < group.length - 1 && bulletsOnly(endOfBlock(group[end]), group[end + 1].line)) end++;
     group = group.slice(start, end + 1);
   }
-  // What is being worked on comes first; forwarded, scheduled and finished lines are no longer open work, so they rank below every open todo, even one without a priority.
-  const rank = (task: TaskLine) => task.marker === "/" ? -1 : ["<", ">", "x", "X", "-"].includes(task.marker) ? PRIORITIES.length : PRIORITIES.indexOf(priorities.get(task.id ?? "") ?? "none");
+  // What is being worked on comes first; blocked todos wait below every open one, and forwarded, scheduled and finished lines are no longer open work, so they rank below those.
+  const rank = (task: TaskLine) => task.marker === "/" ? -1 : task.marker === BLOCKED_MARKER ? PRIORITIES.length : ["<", ">", "x", "X", "-"].includes(task.marker) ? PRIORITIES.length + 1 : PRIORITIES.indexOf(priorities.get(task.id ?? "") ?? "none");
   const sorted = [...group].sort((a, b) => rank(a) - rank(b));
   if (scope === "first") {
     const selected = group.find(t => t.line === line)!;

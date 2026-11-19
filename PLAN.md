@@ -19,7 +19,7 @@ Organized is a mobile-compatible Obsidian plugin that gives the todos in a daily
 
 ## Behaviour in brief
 
-- **Markers.** Type a letter in the checkbox: `[!]` priority, `[<]` schedule, `[>]` forward, `[/]` start the timer, `[x]` done, `[-]` cancel, `[*]` star, `[a]` description, `[s]` sources, `[b]` projects, `[n]` standalone note, `[r]` recurrence.
+- **Markers.** Type a letter in the checkbox: `[!]` priority, `[<]` schedule, `[>]` forward, `[/]` start the timer, `[x]` done, `[-]` cancel, `[B]` blocked (resurfaces after a few days), `[*]` star, `[a]` description, `[s]` sources, `[b]` projects, `[n]` standalone note, `[r]` recurrence.
 - **Sorting.** With sorting on, in-progress todos rise to the top, then open todos by priority; finished, canceled, forwarded and scheduled todos sink below every open one. Sorting never crosses a heading path.
 - **Daily notes.** Opening today's note forwards yesterday's unfinished todos; the old line is marked forwarded so history stays honest.
 - **Panel.** The side panel has Calendar (month, week, day), Task, Projects and Favorites views over the same Markdown.

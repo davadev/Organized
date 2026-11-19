@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting, SettingDefinitionItem } from "obsidian";
 import type Organized from "./main";
-import { DISPLAY_PROPERTIES, DisplayProperty, path, RETENTION_DETAILS, RetentionDetail, settingsFrom, visibleFolder } from "./model";
+import { DISPLAY_PROPERTIES, DisplayProperty, MAX_BLOCKED_DAYS, path, RETENTION_DETAILS, RetentionDetail, settingsFrom, visibleFolder } from "./model";
 import { report } from "./service";
 import { loadRole, Role, ROLE_LABELS, saveRole } from "./device";
 
@@ -88,6 +88,19 @@ export class OrganizedSettingsTab extends PluginSettingTab {
         }),
         row("Start tasks at their planned time", "While Obsidian is open, a task's timer starts when a block planned for it begins and stops when the block ends, so the planned time you spend on it counts as worked. Stop it during the block and that block leaves it stopped; a timer still running when the block ends stops at its end. Off by default.", setting => {
           setting.addToggle(t => t.setValue(this.owner.settings.startAtPlannedTime).onChange(value => { this.owner.settings.startAtPlannedTime = value; this.owner.saveSettings(); if (value) this.owner.planningTick(); }));
+        }),
+        row("Blocked tasks: days until they resurface", "How many days a task you mark blocked (type [B] in its checkbox) stays out of the daily notes before it comes back. A task remembers the interval you chose for it last time; this is used for tasks that have none.", setting => {
+          setting.addText(t => {
+            t.setValue(String(this.owner.settings.blockedDefaultDays)); t.inputEl.type = "number"; t.inputEl.min = "1"; t.inputEl.max = String(MAX_BLOCKED_DAYS); t.inputEl.step = "1";
+            t.onChange(value => {
+              const days = Number(value);
+              if (!value.trim() || !Number.isInteger(days) || days < 1 || days > MAX_BLOCKED_DAYS) return;
+              this.owner.settings.blockedDefaultDays = days; this.owner.saveSettings();
+            });
+          });
+        }),
+        row("Blocked tasks: when they come back", "Remind: the todo comes back in a daily note and stays blocked, every day until you change its status. Open: the todo comes back as an open task. A task remembers the choice you made for it last time; this is used for tasks that have none.", setting => {
+          setting.addDropdown(d => d.addOption("reminder", "Remind me (stays blocked)").addOption("reopen", "Open the task").setValue(this.owner.settings.blockedDefaultMode).onChange(value => { this.owner.settings.blockedDefaultMode = value === "reopen" ? "reopen" : "reminder"; this.owner.saveSettings(); }));
         }),
         row("Missing sections", "Choose what happens when a destination heading is missing.", setting => {
           setting.addDropdown(d => d.addOption("recreate", "Recreate heading path").addOption("ask", "Ask before inserting").setValue(this.owner.settings.missingSection).onChange(value => { this.owner.settings.missingSection = value === "ask" ? "ask" : "recreate"; this.owner.saveSettings(); }));

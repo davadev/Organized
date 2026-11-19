@@ -85,7 +85,7 @@ describe('read-only projections and bundled visual markers', () => {
     try {
       vi.spyOn(owner.service.daily, 'date').mockReturnValue('2026-01-01');
       const host = make(); await reading(owner, host, context); const boxes = host.querySelectorAll('input');
-      press(boxes[0]); expect(Menu.last!.items).toHaveLength(14); press(boxes[1]); expect(Menu.last!.items).toHaveLength(3);
+      press(boxes[0]); expect(Menu.last!.items).toHaveLength(15); press(boxes[1]); expect(Menu.last!.items).toHaveLength(3);
       Menu.last = null; files.delete(file.path); const orphan = make(); await reading(owner, orphan, context); press(orphan.querySelector('input')!); expect(Menu.last).toBeNull();
     } finally { Platform.isMobile = false; Menu.last = null; }
   });

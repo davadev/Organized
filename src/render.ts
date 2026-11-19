@@ -12,7 +12,7 @@ import { report } from "./service";
 import { longPressMenu, readingLongPress } from "./longPress";
 
 export const GLYPHS: Record<string, string> = {
-  "<": "Scheduled", ">": "Forwarded", "/": "In progress", "!": "Priority", i: "Description", I: "Idea", "?": "Question", "-": "Canceled", "*": "Star", '"': "Source", l: "Location", b: "Project", S: "Savings", p: "Pros", c: "Cons", f: "Recurring", a: "Description", j: "Project", e: "Idea", q: "Question", s: "Source", r: "Recurring", k: "Key", w: "Win", u: "Up", d: "Down", D: "Draft pull request", P: "Open pull request", M: "Merged pull request",
+  "<": "Scheduled", ">": "Forwarded", "/": "In progress", B: "Blocked", "!": "Priority", i: "Description", I: "Idea", "?": "Question", "-": "Canceled", "*": "Star", '"': "Source", l: "Location", b: "Project", S: "Savings", p: "Pros", c: "Cons", f: "Recurring", a: "Description", j: "Project", e: "Idea", q: "Question", s: "Source", r: "Recurring", k: "Key", w: "Win", u: "Up", d: "Down", D: "Draft pull request", P: "Open pull request", M: "Merged pull request",
 };
 export function icon(host: HTMLElement, marker: string): void {
   const label = GLYPHS[marker]; if (!label) return;
@@ -27,7 +27,7 @@ export function symbol(host: HTMLElement, compact: Symbol): void {
   setIcon(span.createSpan({ cls: "organized-symbol-icon", attr: { "aria-hidden": "true" } }), compact.icon);
   if (compact.text) span.createSpan({ cls: "organized-symbol-text", text: compact.text });
 }
-const STATUS_LABELS: Record<Task["status"], string> = { open: "open", in_progress: "in progress", completed: "completed", canceled: "canceled" };
+const STATUS_LABELS: Record<Task["status"], string> = { open: "open", in_progress: "in progress", completed: "completed", canceled: "canceled", blocked: "blocked" };
 /** The compact symbol for a displayed property, or null when there is nothing to show (no moves yet). A recurring task keeps one status for every day, so its status is read from the todo's own `marker`. */
 export function symbolOf(property: Exclude<DisplayProperty, "scheduled" | "projects" | "description" | "sources">, task: Task, progress: { done: number; total: number } | null = null, marker?: string): Symbol | null {
   const minutes = formatMinutes(Math.floor(elapsed(task) / 60));

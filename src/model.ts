@@ -1,7 +1,15 @@
 import { ClockSpan, MAX_SKIPS, plannedFrom, plansIn, timesFrom } from "./plans";
 import { normalizePath } from "obsidian";
 
-export const STATUSES = ["open", "in_progress", "completed", "canceled"] as const;
+export const STATUSES = ["open", "in_progress", "completed", "canceled", "blocked"] as const;
+/** Why a task is blocked: waiting on something out of the person's hands, or parked because it is not a priority. */
+export const BLOCKED_KINDS = ["waiting", "backlog"] as const;
+/** What happens when a blocked task resurfaces: its todo comes back and stays blocked (a reminder), or the task is open again. */
+export const BLOCKED_MODES = ["reminder", "reopen"] as const;
+export type BlockedKind = typeof BLOCKED_KINDS[number];
+export type BlockedMode = typeof BLOCKED_MODES[number];
+/** The longest resurface interval, in days. */
+export const MAX_BLOCKED_DAYS = 365;
 export const PRIORITIES = ["high", "medium", "low", "none"] as const;
 export type Status = typeof STATUSES[number];
 export type Priority = typeof PRIORITIES[number];
@@ -20,7 +28,7 @@ export const MAX_PLANNED_SESSIONS = 500;
 /** Task properties written only while they hold something, so a task that never plans time carries no extra keys. */
 /** The task panel cards that can be folded away. */
 export const FOLDABLE_CARDS: readonly string[] = ["Description", "Subtasks", "Timer"];
-export const OPTIONAL_KEYS = ["planned_sessions", "auto_started_block", "time_budget_seconds", "recurrence", "recurrence_times", "recurrence_skips", "scheduled_dates"] as const;
+export const OPTIONAL_KEYS = ["planned_sessions", "auto_started_block", "time_budget_seconds", "recurrence", "recurrence_times", "recurrence_skips", "scheduled_dates", "blocked_kind", "blocked_interval_days", "blocked_mode", "blocked_next"] as const;
 /** The most days one task can be scheduled for; the oldest go first. */
 export const MAX_DAYS = 60;
 /** The longest time budget a task can hold (9999 hours); anything else in a note is ignored. */
@@ -51,9 +59,17 @@ export interface Task {
   converted_to: string | null;
   /** Links to the task notes of this task's subtasks (`[[Name]]`), kept in step with the todos nested under it in the notes. */
   subtasks: string[];
+  /** While the task is blocked: why (`waiting` or `backlog`). Cleared when the status changes. */
+  blocked_kind: BlockedKind | null;
+  /** How often a blocked task resurfaces, in days. Kept after the task is unblocked, so blocking it again starts from the same interval. */
+  blocked_interval_days: number | null;
+  /** Whether a resurfacing task stays blocked (`reminder`) or opens (`reopen`). Kept like the interval. */
+  blocked_mode: BlockedMode | null;
+  /** The day a blocked task next resurfaces in a daily note (`YYYY-MM-DD`). Null while the task is not blocked. */
+  blocked_next: string | null;
 }
 /** One small icon per task status, shared by the panel and the onboarding card's figures. */
-export const STATUS_ICONS: Record<Task["status"], string> = { open: "circle", in_progress: "play", completed: "check", canceled: "x" };
+export const STATUS_ICONS: Record<Task["status"], string> = { open: "circle", in_progress: "play", completed: "check", canceled: "x", blocked: "hourglass" };
 export const DISPLAY_PROPERTIES = ["status", "priority", "scheduled", "created", "time_tracked_seconds", "recurring", "starred", "projects", "movement_history", "subtasks", "sources", "description"] as const;
 export type DisplayProperty = typeof DISPLAY_PROPERTIES[number];
 /** What a retired task leaves in the note: its title only, plus its description, or everything worth keeping (description and time worked). */
@@ -72,6 +88,10 @@ export interface Settings {
   /** While Obsidian is open, a task is set in progress when a block planned for it begins and put back to open when the block ends. */
   startAtPlannedTime: boolean;
   taskRetentionDays: number;
+  /** How many days a blocked task stays out of the daily notes before it resurfaces, when the task has no interval of its own. */
+  blockedDefaultDays: number;
+  /** What a resurfacing blocked task does when it has no mode of its own. */
+  blockedDefaultMode: BlockedMode;
   dailyTemplate: string;
   /** Where daily notes live: the folder, format and template of the Daily Notes (or Periodic Notes) plugin, or the three settings here. */
   dailySource: "plugin" | "custom";
@@ -102,7 +122,7 @@ export interface Settings {
 }
 export const DEFAULT_SETTINGS: Settings = {
   taskFolder: "Tasks", dailyFolder: "Daily", dailyFormat: "YYYY-MM-DD", autoForward: true,
-  missingSection: "recreate", sortScope: "list", displayProperties: [], propertiesAlign: "text", showScheduledDate: true, longPressMenu: true, startAtPlannedTime: false, taskRetentionDays: 0,
+  missingSection: "recreate", sortScope: "list", displayProperties: [], propertiesAlign: "text", showScheduledDate: true, longPressMenu: true, startAtPlannedTime: false, taskRetentionDays: 0, blockedDefaultDays: 3, blockedDefaultMode: "reminder",
   lastSeenVersion: "", showWhatsNew: true, dailyTemplate: "", dailySource: "plugin", knownProjects: [], collapsedHeadings: {}, collapsedTaskSections: [], projectsMigrated: false, projectNotesMarked: false, projectStartsSet: false, retentionDetail: "title", dayTasksCollapsed: false, hideDoneTasks: false, hideClosedProjects: true, noteFolder: "", onboardingSeen: false, taskNotesMigrated: false, taskNoteNamesMigrated: false, subtaskNestingMigrated: false, subtaskIndentMigrated: false,
 };
 export function object(value: unknown): Record<string, unknown> {
@@ -124,6 +144,10 @@ export function validDate(value: unknown): value is string {
 }
 export function nextDate(value: string): string {
   const d = new Date(`${value}T12:00:00`); d.setDate(d.getDate() + 1); return localDate(d);
+}
+/** The day `days` after `value` (`YYYY-MM-DD`), by the calendar, so a change of clocks does not move it. */
+export function addDays(value: string, days: number): string {
+  const d = new Date(`${value}T12:00:00`); d.setDate(d.getDate() + days); return localDate(d);
 }
 export function validId(value: unknown): value is string { return typeof value === "string" && /^[a-zA-Z0-9_-]{8,80}$/.test(value); }
 export function makeId(): string {
@@ -150,6 +174,8 @@ export function settingsFrom(value: unknown): Settings {
   s.lastSeenVersion = typeof v.lastSeenVersion === "string" ? v.lastSeenVersion : "";
   s.longPressMenu = typeof v.longPressMenu === "boolean" ? v.longPressMenu : true;
   s.startAtPlannedTime = v.startAtPlannedTime === true;
+  s.blockedDefaultDays = Number.isInteger(v.blockedDefaultDays) && Number(v.blockedDefaultDays) >= 1 && Number(v.blockedDefaultDays) <= MAX_BLOCKED_DAYS ? Number(v.blockedDefaultDays) : 3;
+  s.blockedDefaultMode = member(v.blockedDefaultMode, BLOCKED_MODES, "reminder");
   s.taskRetentionDays = Number.isInteger(v.taskRetentionDays) && Number(v.taskRetentionDays) >= 0 && Number(v.taskRetentionDays) <= 36500 ? Number(v.taskRetentionDays) : 0;
   try { if (typeof v.noteFolder === "string") s.noteFolder = path(v.noteFolder, true); } catch { /* An invalid remembered folder falls back to the vault root. */ }
   try { if (typeof v.dailyTemplate === "string" && v.dailyTemplate.trim()) { const template = path(v.dailyTemplate); if (template.endsWith(".md")) s.dailyTemplate = template; } } catch { /* Invalid persisted paths use safe defaults. */ }
@@ -189,6 +215,11 @@ export function taskFrom(value: unknown, expectedId: string): Task {
     time_budget_seconds: Number.isInteger(v.time_budget_seconds) && Number(v.time_budget_seconds) > 0 && Number(v.time_budget_seconds) <= MAX_BUDGET_SECONDS ? Number(v.time_budget_seconds) : null,
     converted_to: typeof v.converted_to === "string" && v.converted_to.endsWith(".md") ? v.converted_to : null,
     subtasks: [...new Set(strings(v.subtasks).filter(isNoteLink))],
+    // Blocked details only mean something on a blocked task; the interval and mode are remembered for the next time.
+    blocked_kind: v.status === "blocked" ? member(v.blocked_kind, BLOCKED_KINDS, "waiting") : null,
+    blocked_interval_days: Number.isInteger(v.blocked_interval_days) && Number(v.blocked_interval_days) >= 1 && Number(v.blocked_interval_days) <= MAX_BLOCKED_DAYS ? Number(v.blocked_interval_days) : null,
+    blocked_mode: BLOCKED_MODES.includes(v.blocked_mode as BlockedMode) ? v.blocked_mode as BlockedMode : null,
+    blocked_next: v.status === "blocked" && validDate(v.blocked_next) ? v.blocked_next : null,
   };
 }
 /** The day a task with these scheduled days is shown under: the first from today on, else the last one. */
@@ -227,6 +258,8 @@ export function setStatus(task: Task, status: Status, now = new Date()): Task {
   const next = { ...task, status: task.recurring ? "open" as const : status, auto_started_block: covering?.start ?? (status === "in_progress" ? null : task.auto_started_block) };
   if (next.status === "completed" || next.status === "canceled") next.closed_at = task.status === next.status && task.closed_at ? task.closed_at : now.toISOString();
   else next.closed_at = null;
+  // Leaving the blocked status ends what it set up; the interval and mode stay for the next time.
+  if (next.status !== "blocked") { next.blocked_kind = null; next.blocked_next = null; }
   if (status === "in_progress") next.time_tracking_started_at = task.time_tracking_started_at ?? now.toISOString();
   else {
     if (task.time_tracking_started_at && now.getTime() - Date.parse(task.time_tracking_started_at) >= MIN_SESSION_SECONDS * 1000) {
@@ -239,8 +272,8 @@ export function setStatus(task: Task, status: Status, now = new Date()): Task {
 /** A planned block has begun: the task's timer runs, as if the person had started it, and the block is remembered so it starts the task once. */
 /** The checkbox marker a task shows. A recurring task keeps the status "open" while its timer runs, so the timer counts too. */
 /** The status a todo's marker stands for; `[ ]` and every action marker mean open. */
-export function statusOfMarker(marker: string): Status { return marker.toLowerCase() === "x" ? "completed" : marker === "-" ? "canceled" : marker === "/" ? "in_progress" : "open"; }
-export function markerOf(task: Task): string { return task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.status === "in_progress" || task.time_tracking_started_at !== null ? "/" : " "; }
+export function statusOfMarker(marker: string): Status { return marker.toLowerCase() === "x" ? "completed" : marker === "-" ? "canceled" : marker === "/" ? "in_progress" : marker === "B" ? "blocked" : "open"; }
+export function markerOf(task: Task): string { return task.status === "completed" ? "x" : task.status === "canceled" ? "-" : task.status === "blocked" ? "B" : task.status === "in_progress" || task.time_tracking_started_at !== null ? "/" : " "; }
 export function startPlanned(task: Task, block: WorkSession, claim = block.start): Task {
   // Timed from the block's start (the plugin may notice only later, after the phone woke), but never over time already worked.
   const start = Math.max(Date.parse(block.start), ...task.work_sessions.map(s => Date.parse(s.end)));
