@@ -172,5 +172,15 @@ describe('the panel', () => {
     select.value = 'blocked'; select.dispatchEvent(new Event('change')); await vi.advanceTimersByTimeAsync(10); const dialog = Modal.instances.at(-1) as BlockedModal; expect(dialog).toBeInstanceOf(BlockedModal); expect(select.value).toBe('open');
     (dialog.contentEl.querySelector('button.mod-cta') as HTMLElement).click(); await vi.advanceTimersByTimeAsync(10); expect(await owner.repo.read(task.id)).toMatchObject({ status: 'blocked', blocked_next: later(3) });
     await view.render(); expect(view.contentEl.querySelector('.organized-status-icon')?.getAttribute('data-status')).toBe('blocked');
+    // A compact pill shows why and how often, opens the dialog with the task's choices, and the list card says when it is back.
+    const pill = view.contentEl.querySelector<HTMLElement>('.organized-prop-blocked')!; expect(pill.textContent).toBe('waiting · 3d'); expect(pill.title).toBe(`Blocked (waiting): back every 3 days, next ${later(3)}, as a reminder`);
+    pill.click(); await vi.advanceTimersByTimeAsync(10); const edit = Modal.instances.at(-1) as BlockedModal; expect(edit).toBeInstanceOf(BlockedModal); expect(edit.initial).toEqual({ kind: 'waiting', days: 3, mode: 'reminder' });
+    edit.contentEl.querySelector<HTMLInputElement>('[aria-label="Days until it resurfaces"]')!.value = '10'; edit.contentEl.querySelector<HTMLSelectElement>('[aria-label="When it comes back"]')!.value = 'reopen'; (edit.contentEl.querySelector('button.mod-cta') as HTMLElement).click(); await vi.advanceTimersByTimeAsync(10);
+    expect(await owner.repo.read(task.id)).toMatchObject({ status: 'blocked', blocked_interval_days: 10, blocked_mode: 'reopen', blocked_next: later(10) });
+    await view.render(); expect(view.contentEl.querySelector<HTMLElement>('.organized-prop-blocked')!.title).toContain('then opens');
+    view.tab = 'Favorites'; await owner.repo.update(task.id, t => ({ ...t, starred: true })); await view.render(); expect(view.contentEl.querySelector('.organized-list-meta')?.textContent).toContain(`waiting · back ${later(10)}`);
+    // A note edited by hand to blocked, with no interval or mode, shows the settings' defaults.
+    await owner.repo.update(task.id, t => ({ ...t, blocked_interval_days: null, blocked_mode: null })); view.tab = 'Task'; await view.render(); expect(view.contentEl.querySelector<HTMLElement>('.organized-prop-blocked')!.textContent).toBe('waiting · 3d'); expect(view.contentEl.querySelector<HTMLElement>('.organized-prop-blocked')!.title).toContain('as a reminder');
+    await owner.service.status(task.id, 'open'); view.tab = 'Task'; await view.render(); expect(view.contentEl.querySelector('.organized-prop-blocked')).toBeNull();
   });
 });

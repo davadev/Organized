@@ -121,6 +121,7 @@
 .organized-status-icon svg { inline-size: 16px; block-size: 16px; }
 .organized-status-icon[data-status="in_progress"], .organized-status-icon[data-status="completed"] { color: var(--color-green, #2f9e44); }
 .organized-status-icon[data-status="canceled"] { color: var(--color-red, #d64545); }
+.organized-prop-blocked { color: var(--color-orange, #d9822b); }
 .organized-status-icon[data-status="blocked"], .organized-list-status[data-status="blocked"], .organized-status-blocked { color: var(--color-orange, #d9822b); }
 .organized-view .organized-control { appearance: auto; max-inline-size: 100%; min-block-size: 36px; block-size: auto; margin: 0; padding: 6px 10px; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s, 5px); background: var(--background-secondary); color: var(--text-normal); box-shadow: none; font-size: 13px; }
 .organized-view .organized-control.organized-add-details { border-style: dashed; color: var(--text-muted); }
