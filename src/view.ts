@@ -672,7 +672,7 @@ export class OrganizedInspectorView extends ItemView {
       const summary = `${formatMinutes(Math.floor(elapsed(task) / 60))} tracked${running ? " · running" : ""}${planned ? ` · ${formatMinutes(Math.floor(planned / 60))} planned` : ""}`;
       const timer = this.card(details, "Timer", "timer", { summary, always: true, actions: head => {
         const actions = head.createDiv({ cls: "organized-card-actions" });
-        this.iconButton(actions, running ? "Stop timer" : "Start timer", running ? "square" : "play", () => this.owner.run(async () => this.owner.service.status(id, running ? "open" : "in_progress", await this.contextFor(task)))).setAttribute("aria-pressed", String(running));
+        this.iconButton(actions, running ? "Stop timer" : "Start timer", running ? "square" : "play", () => this.owner.run(async () => this.owner.service.status(id, (await this.owner.repo.read(id)).time_tracking_started_at !== null ? "open" : "in_progress", await this.contextFor(task)))).setAttribute("aria-pressed", String(running));
         this.iconButton(actions, "Add time", "plus", () => this.editSession(task, null, localDate(), null));
         // A recurring task's time has no end to measure against; its projects' day, week and month budgets do that.
         if (!task.recurring) this.iconButton(actions, task.time_budget_seconds === null ? "Set budget" : "Edit budget", "target", () => new BudgetModal(this.app, task.title, task.time_budget_seconds, seconds => this.owner.run(() => this.owner.service.setBudget(id, seconds))).open());
@@ -740,7 +740,7 @@ export class OrganizedInspectorView extends ItemView {
     for (const child of children) {
       const row = card.createDiv({ cls: "organized-subtask", attr: { "data-status": child.status } });
       const toggle = row.createEl("button", { cls: "organized-subtask-toggle", attr: { "aria-label": child.status === "completed" ? `Reopen ${child.title}` : `Complete ${child.title}`, "aria-pressed": String(child.status === "completed") } }); setIcon(toggle, STATUS_ICONS[child.status]);
-      toggle.addEventListener("click", () => { void this.owner.run(() => this.owner.service.status(child.id, child.status === "completed" ? "open" : "completed")).catch(report); });
+      toggle.addEventListener("click", () => { void this.owner.run(async () => this.owner.service.status(child.id, (await this.owner.repo.read(child.id)).status === "completed" ? "open" : "completed")).catch(report); });
       const open = row.createEl("button", { cls: "organized-subtask-title", text: child.title, attr: { "aria-label": `Open subtask ${child.title}` } });
       open.addEventListener("click", () => { void this.openTask(child).catch(report); });
       this.iconButton(row, `Remove ${child.title} from this task`, "unlink", () => this.owner.run(() => this.owner.service.detachSubtask(child.id))).addClass("organized-subtask-unlink");

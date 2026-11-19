@@ -806,29 +806,34 @@ export class TaskService {
     const lost = (error: unknown) => error instanceof Error && error.message.includes("changed concurrently");
     // A task is never in both: a start needs its timer stopped, a stop needs it running (a later block starts it on the next pass).
     const stops = dueStops(tasks, now); const starts = dueStarts(tasks, now);
+    // One task whose note cannot be written must not keep every other timer from stopping or starting: its error is reported after the rest is done.
+    const failures: unknown[] = [];
     for (const { task, end } of stops) {
       try { await this.applyStatus(task.id, "open", await this.todayContext(task), undefined, t => ({ ...setStatus(t, "open", new Date(end)), auto_started_block: null })); stopped.push(task.title); } catch (error) {
-        if (!lost(error)) throw error;
+        if (!lost(error)) { failures.push(error); continue; }
         await this.repo.update(task.id, t => ({ ...t, status: task.status, closed_at: task.closed_at, time_tracking_started_at: task.time_tracking_started_at, time_tracked_seconds: task.time_tracked_seconds, work_sessions: task.work_sessions, auto_started_block: task.auto_started_block }));
       }
     }
-    for (const { task, block } of starts) { try { await this.applyStatus(task.id, "in_progress", await this.todayContext(task), undefined, t => startPlanned(t, block)); } catch (error) { if (!lost(error)) throw error; } }
+    for (const { task, block } of starts) { try { await this.applyStatus(task.id, "in_progress", await this.todayContext(task), undefined, t => startPlanned(t, block)); } catch (error) { if (!lost(error)) failures.push(error); } }
     const moving = new Set([...stops, ...starts].map(item => item.task.id));
     for (const task of tasks) {
       if (moving.has(task.id)) continue;
       // Planned time that is over leaves nothing behind in the task note.
       // Version 0.1.4 set a task in progress for its planned block without a timer and put it back to open when the block ended; one it set before the update is put back the same way.
-      if (task.time_tracking_started_at === null) {
-        if (task.auto_started_block === null || claimHolds(task, now)) continue;
-        if (task.status === "in_progress") await this.applyStatus(task.id, "open", await this.todayContext(task), undefined, t => ({ ...setStatus(t, "open"), auto_started_block: null }));
-        else await this.repo.update(task.id, t => ({ ...t, auto_started_block: null }));
-        continue;
-      }
-      // Only a timer of the planned time under way; one the person started outside it is theirs to fix.
-      if (!claimHolds(task, now)) continue;
-      try { await this.healStarted(task); } catch (error) { if (!lost(error)) throw error; }
+      try {
+        if (task.time_tracking_started_at === null) {
+          if (task.auto_started_block === null || claimHolds(task, now)) continue;
+          if (task.status === "in_progress") await this.applyStatus(task.id, "open", await this.todayContext(task), undefined, t => ({ ...setStatus(t, "open"), auto_started_block: null }));
+          else await this.repo.update(task.id, t => ({ ...t, auto_started_block: null }));
+          continue;
+        }
+        // Only a timer of the planned time under way; one the person started outside it is theirs to fix.
+        if (!claimHolds(task, now)) continue;
+        await this.healStarted(task);
+      } catch (error) { if (!lost(error)) failures.push(error); }
     }
     if (stops.length || starts.length) this.changed();
+    if (failures.length) throw failures[0];
     return stopped;
   }
   /** Today's todo of a recurring task, the one line its status is written to in daily notes (a status change elsewhere leaves other days' todos alone). */
@@ -1146,9 +1151,10 @@ export class TaskService {
     this.references = null; this.changed();
     return note;
   }
+  /** A typed `>` forwards to the day after the note it is in, or after today when that note is not a later day (an earlier day's todo comes to tomorrow, never into the past). */
   async marker(context: Context, marker: string): Promise<void> {
     const id = context.line.id; if (!id) return;
-    if (marker === ">") await this.schedule(context, nextDate(localDate()), "forward");
+    if (marker === ">") await this.schedule(context, nextDate([this.daily.date(context.file.path) ?? "", localDate()].sort().at(-1)!), "forward");
     else if ([" ", "x", "X", "/", "-"].includes(marker)) await this.status(id, marker === "x" || marker === "X" ? "completed" : marker === "/" ? "in_progress" : marker === "-" ? "canceled" : "open", context);
     else if (marker === "*") { await this.repo.update(id, t => ({ ...t, starred: !t.starred })); this.changed(); }
   }

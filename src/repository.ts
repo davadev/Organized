@@ -74,6 +74,9 @@ export class Repository {
   }
   /** Parsed properties of task notes by path, valid while the note's modified time and size are unchanged; a note this plugin writes, or a modify, rename or delete event, drops its entry. */
   private parsed = new Map<string, { stamp: string; frontmatter: Record<string, unknown> }>();
+  /** Bumped whenever an entry of `parsed` is dropped: a read that was under way across the drop must not put its older text back. */
+  private dropped = 0;
+  private forget(path: string): void { this.dropped++; this.parsed.delete(path); }
   /** The properties of a task note. The text is read and parsed only when the note changed since last time, so redrawing the panel does not read the whole task folder again. */
   async properties(file: TFile): Promise<Record<string, unknown>> {
     // Unsaved text in the editor is newer than the disk, so it is never cached.
@@ -81,10 +84,10 @@ export class Repository {
     // The stamp is taken before reading: a change during the read leaves a stamp that no longer matches, so the next call reads again.
     const stamp = `${file.stat.mtime}:${file.stat.size}`; const hit = this.parsed.get(file.path);
     if (hit?.stamp === stamp) return hit.frontmatter;
-    const frontmatter = splitNote(await this.readText(file)).frontmatter; this.parsed.set(file.path, { stamp, frontmatter }); return frontmatter;
+    const seen = this.dropped; const frontmatter = splitNote(await this.readText(file)).frontmatter; if (seen === this.dropped) this.parsed.set(file.path, { stamp, frontmatter }); return frontmatter;
   }
   private link(notePath: string, id: string): void { if (this.idOfPath.get(notePath) !== id) this.names = null; this.touched?.add(notePath); Repository.add(this.byId, this.idOfPath, notePath, id); }
-  private unlink(notePath: string): void { this.names = null; this.parsed.delete(notePath); this.touched?.add(notePath); Repository.remove(this.byId, this.idOfPath, notePath); }
+  private unlink(notePath: string): void { this.names = null; this.forget(notePath); this.touched?.add(notePath); Repository.remove(this.byId, this.idOfPath, notePath); }
   /** The id a note claims: its frontmatter `id` when that is a valid id, otherwise its file name (an invalid note then fails `taskFrom`, as before). */
   idOf(file: TFile, frontmatter: Record<string, unknown>): string { return validId(frontmatter.id) ? frontmatter.id : file.basename; }
   /** Rebuilds the id -> file lookup from the notes' own text. The old lookup stays usable until the new one is ready, so nothing is "missing" meanwhile. */
@@ -141,7 +144,7 @@ export class Repository {
   /** Learns what one task note claims (after it was created, changed or synced in). */
   async track(file: TFile): Promise<void> {
     if (!this.isTaskRecord(file.path)) return;
-    this.parsed.delete(file.path);
+    this.forget(file.path);
     try { this.link(file.path, this.idOf(file, await this.properties(file))); } catch { this.unlink(file.path); }
   }
   /** A note was renamed or moved: it keeps its id at the new path, and stops being a task note when it left the task folder. */
@@ -292,7 +295,7 @@ export class Repository {
       // Planned blocks are written as local text a person can read and fix (`2026-11-18 10:00–11:00`).
       if (result.planned_sessions.length || unread.length) raw.planned_sessions = [...result.planned_sessions.map(plannedText), ...unread];
     });
-    this.parsed.delete(file.path);
+    this.forget(file.path);
     if (!result) throw new Error("The frontmatter update did not complete."); return result;
   }
   async write(file: TFile, before: string, after: string): Promise<void> {
@@ -318,7 +321,7 @@ export class Repository {
     } else {
       await this.app.vault.process(file, current => { if (current !== before) throw new Error(`${file.path} changed concurrently; preserved. Retry the action.`); return after; });
     }
-    this.parsed.delete(file.path);
+    this.forget(file.path);
   }
   /** Ids of task notes that remember `notePath` as the note they became (read from the metadata cache, so this is cheap enough for every rename). */
   convertedTo(notePath: string): string[] {

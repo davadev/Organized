@@ -47,7 +47,8 @@ export function dueStops(tasks: Task[], now: number): { task: Task; end: number 
   return tasks.flatMap(task => {
     if (task.time_tracking_started_at === null) return [];
     const started = Date.parse(task.time_tracking_started_at);
-    const ends = runsOf(plansNear(task, now)).filter(([s, e]) => s < now && e > started && e <= now).map(([, e]) => e);
+    // All the task's own blocks count, not only those near now: a timer left running for days still stops where its block ended.
+    const ends = runsOf([...task.planned_sessions, ...plansNear(task, now)]).filter(([s, e]) => s < now && e > started && e <= now).map(([, e]) => e);
     if (ends.length) return [{ task, end: Math.min(...ends) }];
     return task.auto_started_block !== null && !claimHolds(task, now) ? [{ task, end: now }] : [];
   });
