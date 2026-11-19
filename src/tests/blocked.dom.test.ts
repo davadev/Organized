@@ -108,6 +108,19 @@ describe('blocked tasks in the move and carry pipelines', () => {
   });
 });
 
+describe('a blocked task whose date is missing', () => {
+  it('comes back at the next daily note, then keeps its interval, and the panel says so', async () => {
+    const h = harness(); const task = await h.repo.create('Hand edited'); await h.service.block(task.id, SETUP); await h.repo.update(task.id, t => ({ ...t, blocked_next: null }));
+    const note: any = await h.add(`Daily/${today()}.md`); await h.service.onDailyCreated(note); expect(h.texts.get(note.path)).toContain('- [B] Hand edited'); expect((await h.repo.read(task.id)).blocked_next).toBe(later(3));
+  });
+  it('is named without a date in the panel', async () => {
+    vi.useFakeTimers(); const h = harness(); const owner = new Organized(h.app, { id: 'organized', version: '0.0.0' } as any); await owner.onload();
+    const leaf: any = { app: h.app }; const view = new OrganizedInspectorView(leaf, owner); leaf.view = view; document.body.appendChild(view.contentEl); h.raw.workspace.getLeavesOfType.mockReturnValue([leaf]);
+    const task = await owner.repo.create('Hand edited'); await owner.service.block(task.id, SETUP); await owner.repo.update(task.id, t => ({ ...t, blocked_next: null, starred: true })); owner.selectedTaskId = task.id; view.tab = 'Task'; await view.render();
+    expect(view.contentEl.querySelector<HTMLElement>('.organized-prop-blocked')!.title).toContain('next at the next daily note'); view.tab = 'Favorites'; await view.render(); expect(view.contentEl.querySelector('.organized-list-meta')?.textContent).toContain('waiting · back soon');
+  });
+});
+
 describe('a blocked task resurfacing', () => {
   async function blocked(setup: typeof SETUP, due: string) {
     const h = harness(); const task = await h.repo.create('Wait for Sam'); await h.service.block(task.id, setup); await h.repo.update(task.id, t => ({ ...t, blocked_next: due })); return { h, task };
@@ -173,12 +186,13 @@ describe('typing B and the panel', () => {
     await owner.trigger({ file, line: parseTasks(h.texts.get(file.path)!)[0] }); await flush(); expect(Modal.instances.length).toBe(before); expect(Notice.instances.at(-1)?.message).toContain('cannot be blocked'); expect(clean).toHaveBeenCalledWith(expect.anything(), ' ');
     owner.pickBlocked(await owner.repo.read(task.id)); expect(Notice.instances.at(-1)?.message).toContain('cannot be blocked');
   });
-  it('turns a plain todo into a task when B is typed, and stops a running timer', async () => {
+  it('keeps a running timer going when its marker is retyped B, and stops it only when blocking is saved', async () => {
     const { h, owner } = await plugin(); const task = await owner.repo.create('Run'); await owner.service.status(task.id, 'in_progress');
     const file: any = await h.add('Note.md', `- [/] Run <!--organized:${task.id}-->`); h.setActive(file, `- [/] Run <!--organized:${task.id}-->`);
     expect(ACTION_MARKERS).toContain('B'); const update = (owner as any).stopEditedTimers.bind(owner);
     const edited = { state: { doc: { toString: () => `- [B] Run <!--organized:${task.id}-->` } }, startState: { doc: { toString: () => `- [/] Run <!--organized:${task.id}-->` } } };
-    h.setActive(file, `- [B] Run <!--organized:${task.id}-->`); update(edited); await flush(); expect((await owner.repo.read(task.id)).time_tracking_started_at).toBeNull();
+    h.setActive(file, `- [B] Run <!--organized:${task.id}-->`); update(edited); await flush(); expect((await owner.repo.read(task.id)).time_tracking_started_at).not.toBeNull();
+    await owner.service.block(task.id, SETUP); expect(await owner.repo.read(task.id)).toMatchObject({ status: 'blocked', time_tracking_started_at: null });
   });
 });
 

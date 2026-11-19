@@ -189,7 +189,7 @@ export class OrganizedInspectorView extends ItemView {
     const status = head.createSpan({ cls: "organized-list-status", attr: { "data-status": shown, role: "img", "aria-label": label, title: label } }); setIcon(status, doneToday ? "calendar-check" : STATUS_ICONS[shown]);
     if (task.priority !== "none" || (task.scheduled && this.owner.settings.showScheduledDate) || task.starred || task.status === "blocked") {
       const meta = open.createDiv({ cls: "organized-list-meta" });
-      if (task.status === "blocked") meta.createSpan({ cls: "organized-list-date", text: `${task.blocked_kind} · back ${task.blocked_next}`, attr: { title: "Blocked: resurfaces in a daily note on this day" } });
+      if (task.status === "blocked") meta.createSpan({ cls: "organized-list-date", text: task.blocked_next === null ? `${task.blocked_kind} · back soon` : `${task.blocked_kind} · back ${task.blocked_next}`, attr: { title: "Blocked: resurfaces in a daily note on this day" } });
       if (task.priority !== "none") meta.createSpan({ cls: `organized-list-priority priority-${task.priority}`, text: task.priority });
       if (task.scheduled && this.owner.settings.showScheduledDate) meta.createSpan({ cls: "organized-list-date", text: `${task.scheduled}${task.scheduled_dates.length > 1 ? ` +${task.scheduled_dates.length - 1}` : ""}` });
       if (task.starred) { const star = meta.createSpan({ cls: "organized-list-star", attr: { "aria-label": "Favorite" } }); setIcon(star, "star"); }
@@ -337,7 +337,7 @@ export class OrganizedInspectorView extends ItemView {
     if (showSchedule) action("calendar", task.scheduled ? `Schedule: ${task.scheduled}${more}` : "Schedule", task.scheduled ? `${task.scheduled}${more}` : "Choose date", "Schedule", () => { void this.owner.pickSchedule(task, this.owner.context?.line.id === id ? this.owner.context : undefined).catch(report); });
     // Only while the task is blocked: why and how often in the pill, everything (and the next day) on hover. It opens the dialog with the task's choices to change them.
     if (showBlocked) {
-      const detail = `Blocked (${task.blocked_kind}): back every ${task.blocked_interval_days ?? this.owner.settings.blockedDefaultDays} days, next ${task.blocked_next}, ${(task.blocked_mode ?? this.owner.settings.blockedDefaultMode) === "reopen" ? "then opens" : "as a reminder"}`;
+      const detail = `Blocked (${task.blocked_kind}): back every ${task.blocked_interval_days ?? this.owner.settings.blockedDefaultDays} days, next ${task.blocked_next ?? "at the next daily note"}, ${(task.blocked_mode ?? this.owner.settings.blockedDefaultMode) === "reopen" ? "then opens" : "as a reminder"}`;
       const blocked = action("hourglass", `${detail}. Edit`, `${task.blocked_kind} · ${task.blocked_interval_days ?? this.owner.settings.blockedDefaultDays}d`, "Blocked", () => this.contextFor(task).then(context => this.owner.pickBlocked(task, context)));
       blocked.title = detail; blocked.addClass("organized-prop-blocked");
     }

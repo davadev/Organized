@@ -593,7 +593,7 @@ export class TaskService {
    */
   private async resurface(file: TFile, date: string, tasks: Task[]): Promise<void> {
     const present = new Set(parseTasks(await this.repo.readText(file)).map(t => t.id));
-    for (const task of tasks.filter(t => t.status === "blocked" && t.blocked_next !== null && t.blocked_next <= date).sort((a, b) => a.title.localeCompare(b.title))) {
+    for (const task of tasks.filter(t => t.status === "blocked" && (t.blocked_next === null || t.blocked_next <= date)).sort((a, b) => a.title.localeCompare(b.title))) {
       const reopen = (task.blocked_mode ?? this.repo.settings().blockedDefaultMode) === "reopen"; const parent = (await this.repo.parentOf(task.id))?.id ?? null;
       try {
         if (reopen) await this.applyStatus(task.id, "open");
@@ -630,7 +630,7 @@ export class TaskService {
    * Never the same as the daily carry: it runs when asked, whatever "Auto-forward" says. It leaves alone (and says how many):
    * - recurring tasks (their days are made from the rule, so an unticked one is not owed a copy), tasks that are done, canceled, blocked or became a note;
    * - a task that already has a todo in today's note or in a later day's note, or is scheduled for a later day (it waits for that day);
-   * - a todo that is not an open one (`[x]`, `[-]`, `[B]`, `[r]`, text or a todo with no task), and a task that cannot be read or sits on two lines of one note (named in the notice).
+   * - a todo that is not an open one (`[r]`, text, a todo with no task). A ticked, canceled or blocked todo whose task is still open is named in the notice, not moved; so is a task whose note is missing or whose move failed.
    * Only the latest earlier todo of a task counts, so a task forwarded step by step is moved once.
    */
   async carryLeftBehind(): Promise<{ moved: string[]; skipped: string[] }> {
@@ -641,17 +641,22 @@ export class TaskService {
       const lines = parseTasks(await this.repo.readText(day.file));
       for (const line of lines) if (line.id) { if (day.date < today) latest.set(line.id, { ...day, line }); else present.add(line.id); }
     }
-    const changes: Change[] = []; const moved: string[] = []; const skipped: string[] = [];
+    const changes: Change[] = []; const moved: string[] = []; const skipped: string[] = []; const known = new Map((await this.repo.list(true)).map(t => [t.id, t]));
     for (const [id, occurrence] of latest) {
-      if (present.has(id) || ![" ", "/", ">", "<"].includes(occurrence.line.marker)) continue;
+      if (present.has(id)) continue;
+      const marker = occurrence.line.marker; const open = [" ", "/", ">", "<"].includes(marker); const settled = ["x", "X", "-", "B"].includes(marker);
+      if (!open && !settled) continue;
+      const task = known.get(id); const title = occurrence.line.title || id;
+      if (task === undefined) { if (open) skipped.push(`${title} (no task note)`); continue; }
+      if (task.recurring || task.converted_to !== null || !["open", "in_progress"].includes(task.status) || task.scheduled_dates.some(day => day > today)) continue;
+      // A todo that says done, canceled or blocked while its task is open disagrees with it: moving either would guess, so it is named for the person to settle.
+      if (settled) { skipped.push(`${title} (its todo is ${marker === "B" ? "blocked" : marker === "-" ? "canceled" : "ticked"} but the task is open)`); continue; }
       try {
-        const task = await this.repo.read(id);
-        if (task.recurring || task.converted_to !== null || !["open", "in_progress"].includes(task.status) || task.scheduled_dates.some(day => day > today)) continue;
         await this.schedule({ file: occurrence.file, line: occurrence.line }, today, "forward", "automatic", changes);
         moved.push(task.title);
         // Subtasks that travelled with their parent are in today's note now.
         for (const line of parseTasks(await this.repo.readText(await this.daily.ensure(today)))) if (line.id) present.add(line.id);
-      } catch (error) { skipped.push(`${occurrence.line.title || id} (${error instanceof Error ? error.message : String(error)})`); }
+      } catch (error) { skipped.push(`${title} (${error instanceof Error ? error.message : String(error)})`); }
     }
     if (moved.length) this.summarize(changes, "Left-behind tasks carried to today", `${plural(moved.length, "task")}: ${moved.join(", ")}.${skipped.length ? ` Not moved: ${skipped.join("; ")}.` : ""}`);
     return { moved, skipped };
