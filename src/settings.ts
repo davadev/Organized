@@ -99,7 +99,7 @@ export class OrganizedSettingsTab extends PluginSettingTab {
             });
           });
         }),
-        row("Blocked tasks: when they come back", "Remind: the todo comes back in a daily note and stays blocked, every day until you change its status. Open: the todo comes back as an open task. A task remembers the choice you made for it last time; this is used for tasks that have none.", setting => {
+        row("Blocked tasks: when they come back", "Remind: the todo comes back in a daily note and stays blocked, and is gone from the notes until the next interval is over. Open: the todo comes back as an open task. A task remembers the choice you made for it last time; this is used for tasks that have none.", setting => {
           setting.addDropdown(d => d.addOption("reminder", "Remind me (stays blocked)").addOption("reopen", "Open the task").setValue(this.owner.settings.blockedDefaultMode).onChange(value => { this.owner.settings.blockedDefaultMode = value === "reopen" ? "reopen" : "reminder"; this.owner.saveSettings(); }));
         }),
         row("Missing sections", "Choose what happens when a destination heading is missing.", setting => {

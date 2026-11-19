@@ -588,7 +588,8 @@ export class TaskService {
   }
   /**
    * Brings the blocked tasks that are due on `date` into its note. A task set to open is open again (its blocked details cleared), its todo written here; one set to remind is written here as a
-   * blocked todo, and stays due, so each new note brings it back until the person changes its status. A todo of the task already in the note is left where it is.
+   * blocked todo and stays blocked: its next day moves a whole interval on, so it is gone from the notes after this one and comes back then (the next day's note does not carry it). A todo of the task
+   * already in the note is left where it is.
    */
   private async resurface(file: TFile, date: string, tasks: Task[]): Promise<void> {
     const present = new Set(parseTasks(await this.repo.readText(file)).map(t => t.id));
@@ -597,6 +598,7 @@ export class TaskService {
       try {
         if (reopen) await this.applyStatus(task.id, "open");
         if (!present.has(task.id)) await this.insert(file, reopen ? await this.repo.read(task.id) : task, reopen ? " " : "B", false, undefined, parent);
+        if (!reopen) await this.repo.update(task.id, t => ({ ...t, blocked_next: addDays(date, t.blocked_interval_days ?? this.repo.settings().blockedDefaultDays) }));
       } catch { /* A todo that cannot be written now is tried again with the next note; the task stays as it is. */ }
     }
   }
