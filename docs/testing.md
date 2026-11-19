@@ -72,6 +72,9 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 
 In Live Preview and source mode on desktop, bind a key to **Edit checkbox marker** (Settings → Hotkeys). On a todo line, press it: the caret lands on the marker with the character selected (in Live Preview check that the checkbox turns into its `[ ]` source so the selection is visible). Type `x`: the todo completes as if typed. On a plain line it only shows a notice. Check the key on Windows, Linux and macOS; Option+letter can type a special character on macOS layouts.
 
+## Left-behind tasks (manual, for testers)
+- Command *Carry left-behind tasks to today* (main device): unfinished tasks whose latest todo sits in an earlier daily note and that are not in today's or a later note come to today, with one Undo. Recurring, done, canceled, blocked and converted tasks and tasks scheduled for a later day are left alone. Meant for checking that the automatic carry-forward missed nothing; it is not documented for users.
+
 ## Blocked status (manual)
 - Type `[B]` on a linked todo and on a plain todo: the dialog opens with the task's remembered choice or the settings' defaults; Escape puts the old marker back. A recurring task shows a notice instead.
 - With a due date of today (edit `blocked_next`), open or create a daily note: reminder mode writes `[B]` and keeps the task blocked; open mode writes `[ ]` and clears the block.

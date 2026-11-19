@@ -79,6 +79,7 @@ export default class Organized extends Plugin {
       this.addCommand({ id: "add-subtask", name: "Add subtask", editorCallback: (editor, view) => { if (view.file) void this.addSubtask(editor, view.file).catch(report); } });
       this.addCommand({ id: "repair-subtasks", name: "Repair subtask links in this note", editorCallback: (_editor, view) => { const file = view.file; if (file) void this.run(() => this.service.repairSubtasks(file)).catch(report); } });
       this.addCommand({ id: "add-recurring-today", name: "Add missing recurring and scheduled tasks to this daily note", callback: () => { void this.addMissingRecurring(); } });
+      this.addCommand({ id: "carry-left-behind", name: "Carry left-behind tasks to today", callback: () => { void this.carryLeftBehind(); } });
       this.addCommand({ id: "remove-duplicate-repeats", name: "Remove duplicate recurring lines in this note", editorCallback: (_editor, view) => { if (view.file) void this.removeDuplicates(view.file); } });
       this.addCommand({ id: "nest-subtasks", name: "Indent subtasks under their parents", callback: () => { void this.run(() => this.nestSubtasks(true)).catch(report); } });
       this.addCommand({ id: "retire-tasks", name: "Retire tasks…", callback: () => { this.retireTasks(); } });
@@ -332,6 +333,14 @@ export default class Organized extends Plugin {
       const added = await this.service.catchUp(date);
       new Notice(added.length ? `Added ${added.length} task${added.length === 1 ? "" : "s"} to ${date}: ${added.join(", ")}.` : `Nothing was missing from ${date}.`);
     }); } finally { this.catchingUp = null; }
+  }
+  /** The safety net for the daily carry-forward: unfinished tasks left in earlier daily notes come to today (see `TaskService.carryLeftBehind`). Only the main device writes daily notes. */
+  private async carryLeftBehind(): Promise<void> {
+    if (this.role !== "main") { new Notice("Carrying tasks to today writes the daily note: run it on the main device."); return; }
+    await this.run(async () => {
+      const { moved, skipped } = await this.service.carryLeftBehind();
+      if (!moved.length) new Notice(skipped.length ? `Nothing was moved. Not moved: ${skipped.join("; ")}.` : "No unfinished task was left behind in earlier daily notes.", skipped.length ? 12000 : undefined);
+    });
   }
   private paintedDay = localDate();
   /** A panel left hidden past midnight still shows yesterday as today (calendar highlight, "today" budgets); repaint it when the app comes back to the foreground on a new day. */
