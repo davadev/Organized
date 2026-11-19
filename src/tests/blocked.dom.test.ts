@@ -72,6 +72,28 @@ describe('blocking a task', () => {
   });
 });
 
+describe('planning time for a blocked task', () => {
+  const fixed = { start: new Date(Date.now() + 86400000).toISOString(), end: new Date(Date.now() + 86400000 + 3600000).toISOString() }; const block = () => ({ ...fixed });
+  it('opens the task and says so, whether the block is added, moved or saved in the Schedule dialog', async () => {
+    const h = harness(); const file: any = await h.add(`Daily/${today()}.md`, '');
+    for (const [name, plan] of [['add', (id: string) => h.service.addPlanned(id, block())], ['change', async (id: string) => { await h.service.addPlanned(id, block()); await h.service.block(id, SETUP); await h.service.changePlanned(id, block(), { start: block().start, end: new Date(Date.parse(block().end) + 3600000).toISOString() }); }], ['dialog', (id: string) => h.service.saveSchedule(id, [{ date: later(1), blocks: [block()] }])]] as const) {
+      const task = await h.repo.create(name); await h.service.block(task.id, SETUP); Notice.instances.length = 0; await plan(task.id);
+      expect(await h.repo.read(task.id), name).toMatchObject({ status: 'open', blocked_next: null, blocked_interval_days: 3 }); expect(Notice.instances.some(n => typeof n.message === 'string' && n.message.includes('no longer blocked')), name).toBe(true);
+    }
+    expect(file).toBeTruthy();
+  });
+  it('keeps it blocked when nothing is planned: a block taken away, a schedule without time, an open task', async () => {
+    const h = harness(); const task = await h.repo.create('Parked'); await h.service.block(task.id, SETUP); Notice.instances.length = 0;
+    await h.service.saveSchedule(task.id, [{ date: later(1), blocks: [] }]); expect((await h.repo.read(task.id)).status).toBe('blocked');
+    await h.service.changePlanned(task.id, block(), null).catch(() => undefined); expect((await h.repo.read(task.id)).status).toBe('blocked');
+    const open = await h.repo.create('Open'); await h.service.addPlanned(open.id, block()); expect(Notice.instances.some(n => typeof n.message === 'string' && n.message.includes('no longer blocked'))).toBe(false);
+  });
+  it('puts the todo in the note back to open, and Undo takes it back', async () => {
+    const h = harness(); const task = await h.repo.create('Parked'); const file: any = await h.add(`Daily/${today()}.md`, `- [B] Parked <!--organized:${task.id}-->`); await h.service.block(task.id, SETUP);
+    await h.service.addPlanned(task.id, block()); expect(h.texts.get(file.path)).toContain('- [ ] Parked');
+  });
+});
+
 describe('a blocked task resurfacing', () => {
   async function blocked(setup: typeof SETUP, due: string) {
     const h = harness(); const task = await h.repo.create('Wait for Sam'); await h.service.block(task.id, setup); await h.repo.update(task.id, t => ({ ...t, blocked_next: due })); return { h, task };

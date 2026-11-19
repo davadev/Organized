@@ -220,6 +220,7 @@ export class TaskService {
    * a removed day lets go of its todo. Each day's blocks become the draft's, except blocks that have begun, which are history and stay. A day whose note cannot be written is left as it was, and the notice names it.
    */
   async saveSchedule(id: string, draft: DraftDay[], context?: Context): Promise<void> {
+    if (draft.some(d => d.blocks.length)) await this.unblockForPlan(id);
     const before = await this.repo.read(id);
     if (before.recurring) throw new Error("A recurring task is planned by its repeating times; change them in Repeat.");
     if (new Set(draft.map(d => d.date)).size > MAX_DAYS) throw new Error(`A task can be scheduled for at most ${MAX_DAYS} days.`);
@@ -355,6 +356,12 @@ export class TaskService {
   private blockedBy(task: Task, setup?: BlockedSetup): Task {
     const settings = this.repo.settings(); const use = setup ?? { kind: task.blocked_kind ?? "waiting", days: task.blocked_interval_days ?? settings.blockedDefaultDays, mode: task.blocked_mode ?? settings.blockedDefaultMode };
     return { ...setStatus(task, "blocked"), blocked_kind: use.kind, blocked_interval_days: use.days, blocked_mode: use.mode, blocked_next: addDays(localDate(), use.days) };
+  }
+  /** A blocked task cannot have time set aside: planning time for it opens it again, and the person is told. */
+  private async unblockForPlan(id: string, changes?: Change[]): Promise<void> {
+    const task = await this.repo.read(id); if (task.status !== "blocked") return;
+    await this.applyStatus(id, "open", undefined, changes);
+    new Notice(`“${task.title}” is no longer blocked: it has planned time now.`);
   }
   private async cascadeStatus(parent: Task, status: Status, changes: Change[], seen: Set<string>): Promise<string[]> {
     const changed: string[] = [];
@@ -752,7 +759,7 @@ export class TaskService {
   async setBudget(id: string, seconds: number | null): Promise<void> { await this.repo.update(id, t => ({ ...t, time_budget_seconds: seconds })); this.changed(); }
   /** Sets time aside for a task: a block that never counts as worked. A block the task already has is not added again. */
   async addPlanned(id: string, block: WorkSession, changes?: Change[]): Promise<void> {
-    const before = await this.repo.read(id); const own = changes ?? [];
+    const own = changes ?? []; await this.unblockForPlan(id, own); const before = await this.repo.read(id);
     await this.recorded(id, own, () => this.repo.update(id, t => t.planned_sessions.some(b => b.start === block.start && b.end === block.end) ? t : { ...t, planned_sessions: [...t.planned_sessions, block].slice(-MAX_PLANNED_SESSIONS) }));
     await this.scheduleBlockDay(before, block, own);
     // Recorded with the rest, so Undo also takes back a timer this started (an Undo whose note changed after it was recorded would refuse).
@@ -760,7 +767,7 @@ export class TaskService {
   }
   /** Replaces one planned block, or removes it when `to` is null. A block moved to a later day schedules the task for that day (see `scheduleBlockDay`); the day it left stays scheduled. */
   async changePlanned(id: string, from: WorkSession, to: WorkSession | null): Promise<void> {
-    const before = await this.repo.read(id); const own: Change[] = [];
+    const own: Change[] = []; if (to) await this.unblockForPlan(id, own); const before = await this.repo.read(id);
     await this.recorded(id, own, () => this.repo.update(id, t => {
       const at = t.planned_sessions.findIndex(s => s.start === from.start && s.end === from.end); if (at < 0) throw new Error("That planned block no longer exists; it may have been changed elsewhere.");
       return { ...t, planned_sessions: to ? t.planned_sessions.map((s, n) => n === at ? to : s) : t.planned_sessions.filter((_s, n) => n !== at) };
