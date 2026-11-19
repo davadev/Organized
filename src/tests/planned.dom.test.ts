@@ -56,6 +56,15 @@ describe('planned time', () => {
     const late = await repo.create('Late'); await service.addPlanned(late.id, block(11, 12)); await service.applyPlanning(new Date(2026, 2, 4, 11, 40).getTime()); expect((await repo.read(late.id)).time_tracking_started_at).toBe(iso(11));
     expect(await service.applyPlanning(new Date(2026, 2, 4, 15, 0).getTime())).toEqual(['Late']); expect(await repo.read(late.id)).toMatchObject({ time_tracked_seconds: 3600, work_sessions: [block(11, 12)] });
   });
+  it('one task that cannot be written does not keep the other timers from stopping or starting', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 2, 4, 8, 0)); const { service, repo } = await fixture();
+    const bad = await repo.create('Bad'); const good = await repo.create('Good'); const next = await repo.create('Next');
+    for (const t of [bad, good]) await service.addPlanned(t.id, block(9, 10)); await service.addPlanned(next.id, block(10, 11));
+    await service.applyPlanning(new Date(2026, 2, 4, 9, 0).getTime());
+    const update = repo.update.bind(repo); vi.spyOn(repo, 'update').mockImplementation(async (id, change) => { if (id === bad.id) throw new Error('Bad note is unwritable'); return update(id, change); });
+    await expect(service.applyPlanning(new Date(2026, 2, 4, 10, 0).getTime())).rejects.toThrow('unwritable');
+    expect((await repo.read(good.id)).status).toBe('open'); expect((await repo.read(next.id)).status).toBe('in_progress'); expect((await repo.read(good.id)).time_tracked_seconds).toBe(3600);
+  });
   it('counts only the time in progress: stopped and restarted inside the block, started before it, run over back-to-back blocks, finished early, recurring', async () => {
     vi.useFakeTimers({ toFake: ['Date'] }); const { service, repo, add } = await fixture(); const at = (h: number, m = 0) => { vi.setSystemTime(new Date(2026, 2, 4, h, m)); return new Date(2026, 2, 4, h, m).getTime(); };
     at(8, 0); const paused = await repo.create('Paused'); const early = await repo.create('Early'); const long = await repo.create('Back to back'); const done = await repo.create('Done early'); const habit = await repo.create('Habit');

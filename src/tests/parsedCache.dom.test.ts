@@ -41,6 +41,14 @@ describe("parsed task notes are read once until they change", () => {
     h.setActive(file, text(h.ids[0], "high")); expect((await h.repo.read(h.ids[0])).priority).toBe("high");
     h.setActive(await h.add("Other.md", "x"), "x"); expect((await h.repo.read(h.ids[0])).priority).toBe("none");
   });
+  it("does not cache a read that was under way while this plugin wrote the note", async () => {
+    const h = await fixture(1); const file = h.file(h.ids[0]); const stale = h.texts.get(file.path)!; let release = () => {};
+    // The first read gets the old text, and finishes only after the write below (the stamp never changes: mocks keep the stat constant, a real clock can too).
+    h.raw.vault.read.mockImplementationOnce(async () => { await new Promise<void>(resolve => { release = resolve; }); return stale; });
+    const slow = h.repo.properties(file); await Promise.resolve();
+    await h.repo.update(h.ids[0], task => ({ ...task, priority: "high" })); release(); await slow;
+    expect((await h.repo.read(h.ids[0])).priority).toBe("high");
+  });
   it("forgets a note that moved or was deleted", async () => {
     const h = await fixture(1); const file = h.file(h.ids[0]); await h.repo.read(h.ids[0]);
     await h.repo.renameNote(file, "Tasks/Renamed.md"); h.texts.set("Tasks/Renamed.md", text(h.ids[0], "high")); file.stat = { ...file.stat, size: file.stat.size + 1 };

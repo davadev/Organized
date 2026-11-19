@@ -89,6 +89,15 @@ describe("repository and explicit task actions", () => {
     await h.service.schedule({ file: project, line: parseTasks(await h.repo.readText(project))[0] }, '2026-01-03', 'forward'); expect(h.texts.get('Project.md')).toContain('[ ]');
     await h.service.schedule({ file, line: parseTasks(await h.repo.readText(file))[0] }, '2026-01-01'); expect(h.texts.get(file.path)).toContain('[>]');
   });
+  it("a forward typed in a dated note goes to the day after that note, not after today", async () => {
+    const h = harness(); const task = await h.repo.create('Later'); const day = nextDate(nextDate(localDate()));
+    const file: any = await h.add(`Daily/${day}.md`, `- [>] Later <!--organized:${task.id}-->`); await h.add(`Daily/${nextDate(day)}.md`);
+    await h.repo.update(task.id, t => ({ ...t, scheduled_dates: [day] }));
+    await h.service.marker({ file, line: parseTasks(await h.repo.readText(file))[0] }, '>');
+    expect((await h.repo.read(task.id)).scheduled_dates).toEqual([nextDate(day)]); expect(h.texts.get(`Daily/${nextDate(day)}.md`)).toContain(task.id); expect(h.texts.get(file.path)).toContain('[>]');
+    const loose: any = await h.add('Loose.md', `- [>] Later <!--organized:${task.id}-->`); await h.add(`Daily/${nextDate(localDate())}.md`);
+    await h.service.marker({ file: loose, line: parseTasks(await h.repo.readText(loose))[0] }, '>'); expect((await h.repo.read(task.id)).scheduled_dates).toContain(nextDate(localDate()));
+  });
   it("status propagates only to today/future and undated notes, leaving prior daily history untouched", async () => {
     const h = harness(); const task = await h.repo.create('Status'); const today = localDate();
     for (const p of ['Daily/2020-01-01.md', `Daily/${today}.md`, `Daily/${nextDate(today)}.md`, 'Project.md']) await h.add(p, `- [ ] Status <!--organized:${task.id}-->`);

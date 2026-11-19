@@ -47,6 +47,10 @@ describe("planning", () => {
     // A timer started after the blocks it could belong to keeps running until the next one it runs into ends.
     expect(dueStops([running("12:00")], at("13:00"))).toEqual([]); expect(dueStops([running("12:00")], at("15:00"))[0].end).toBe(at("15:00"));
   });
+  it("stops a timer left running for days at the end of its block, not at the moment it is noticed", () => {
+    const old = task({ planned_sessions: [block("09:00", "10:00")], time_tracking_started_at: new Date(at("09:00")).toISOString() });
+    expect(dueStops([old], at("09:00") + 5 * 86400000)).toEqual([{ task: old, end: at("10:00") }]);
+  });
   it("measures tracked plus planned time against a budget and extends the bar when over", () => {
     expect(budgetUse(task())).toBeNull();
     const base = { time_budget_seconds: 3600, time_tracked_seconds: 900, planned_sessions: [block("09:00", "09:30")] };
