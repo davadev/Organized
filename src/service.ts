@@ -625,6 +625,36 @@ export class TaskService {
     await this.onDailyCreated(file);
     return parseTasks(await this.repo.readText(file)).filter(t => t.id && !before.has(t.id)).map(t => t.title);
   }
+  /**
+   * A safety net for the carry-forward (`reconcile`): finds the unfinished tasks whose todo was left in an earlier daily note and is nowhere in today's, and brings each to today, as one Undo.
+   * Never the same as the daily carry: it runs when asked, whatever "Auto-forward" says. It leaves alone (and says how many):
+   * - recurring tasks (their days are made from the rule, so an unticked one is not owed a copy), tasks that are done, canceled, blocked or became a note;
+   * - a task that already has a todo in today's note or in a later day's note, or is scheduled for a later day (it waits for that day);
+   * - a todo that is not an open one (`[x]`, `[-]`, `[B]`, `[r]`, text or a todo with no task), and a task that cannot be read or sits on two lines of one note (named in the notice).
+   * Only the latest earlier todo of a task counts, so a task forwarded step by step is moved once.
+   */
+  async carryLeftBehind(): Promise<{ moved: string[]; skipped: string[] }> {
+    const today = localDate(); const file = await this.daily.ensure(today); const days = this.daily.files().sort((a, b) => a.date.localeCompare(b.date));
+    const latest = new Map<string, { file: TFile; line: TaskLine; date: string }>(); const present = new Set<string>();
+    for (const day of days) {
+      const lines = parseTasks(day.date === today ? await this.repo.readText(file) : await this.repo.readText(day.file));
+      for (const line of lines) if (line.id) { if (day.date < today) latest.set(line.id, { ...day, line }); else present.add(line.id); }
+    }
+    const changes: Change[] = []; const moved: string[] = []; const skipped: string[] = [];
+    for (const [id, occurrence] of latest) {
+      if (present.has(id) || ![" ", "/", ">", "<"].includes(occurrence.line.marker)) continue;
+      try {
+        const task = await this.repo.read(id);
+        if (task.recurring || task.converted_to !== null || !["open", "in_progress"].includes(task.status) || task.scheduled_dates.some(day => day > today)) continue;
+        await this.schedule({ file: occurrence.file, line: occurrence.line }, today, "forward", "automatic", changes);
+        moved.push(task.title);
+        // Subtasks that travelled with their parent are in today's note now.
+        for (const line of parseTasks(await this.repo.readText(file))) if (line.id) present.add(line.id);
+      } catch (error) { skipped.push(`${occurrence.line.title || id} (${error instanceof Error ? error.message : String(error)})`); }
+    }
+    if (moved.length) this.summarize(changes, "Left-behind tasks carried to today", `${plural(moved.length, "task")}: ${moved.join(", ")}.${skipped.length ? ` Not moved: ${skipped.join("; ")}.` : ""}`);
+    return { moved, skipped };
+  }
   /** Removes repeat copies that repeat an earlier copy exactly (see `duplicateRepeats`); returns how many. Undoable. */
   async removeDuplicateRepeats(file: TFile): Promise<number> {
     const text = await this.repo.readText(file); const drop = new Set(duplicateRepeats(parseTasks(text)));
