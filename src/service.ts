@@ -650,7 +650,7 @@ export class TaskService {
         await this.schedule({ file: occurrence.file, line: occurrence.line }, today, "forward", "automatic", changes);
         moved.push(task.title);
         // Subtasks that travelled with their parent are in today's note now.
-        for (const line of parseTasks(await this.repo.readText(this.repo.file(this.daily.path(today))!))) if (line.id) present.add(line.id);
+        for (const line of parseTasks(await this.repo.readText(await this.daily.ensure(today)))) if (line.id) present.add(line.id);
       } catch (error) { skipped.push(`${occurrence.line.title || id} (${error instanceof Error ? error.message : String(error)})`); }
     }
     if (moved.length) this.summarize(changes, "Left-behind tasks carried to today", `${plural(moved.length, "task")}: ${moved.join(", ")}.${skipped.length ? ` Not moved: ${skipped.join("; ")}.` : ""}`);
