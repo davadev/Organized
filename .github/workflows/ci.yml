@@ -25,6 +25,11 @@ on:
   # lane starts CI on main by hand.
   workflow_dispatch:
 
+# A new push to a pull request replaces the run still going for the old one.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -117,10 +122,18 @@ jobs:
           if-no-files-found: ignore
 
   browsers:
-    # Playwright 1.58.2 supports Ubuntu 24.04, not the new 26.04 latest
-    # runner. Pin only these layout jobs; deterministic release stays latest.
+    # Playwright's own image: the browsers and their system libraries are already in it, so the job installs nothing from
+    # apt (a slow Ubuntu mirror made `playwright install --with-deps` run past the time limit and fail WebKit on 2026-11-19).
+    # The tag must be the Playwright version in package.json, and the digest pins that tag; src/tests/policy.test.ts fails
+    # when they drift. Bump both together with Playwright:
+    #   curl -sI -H "Accept: application/vnd.oci.image.index.v1+json" https://mcr.microsoft.com/v2/playwright/manifests/v<version>-noble | grep -i docker-content-digest
+    # Pin only these layout jobs; deterministic release stays on the plain runner.
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
+      # Not root (Chromium does not start its sandbox as root); --ipc=host keeps Chromium from running out of shared memory.
+      options: --user 1001 --ipc=host
     permissions:
       contents: read
     strategy:
@@ -137,7 +150,6 @@ jobs:
           cache: npm
       - run: node scripts/check-toolchain.mjs
       - run: npm ci
-      - run: npx playwright install --with-deps ${{ matrix.engine }}
       - run: node scripts/check-layout.mjs ${{ matrix.engine }}
       - run: node scripts/render-screenshots.mjs --check
         if: matrix.engine == 'chromium'
