@@ -75,9 +75,9 @@ describe('repeat dialog times', () => {
     inputs()[2].value = '22:00'; inputs()[3].value = '02:00'; inputs()[3].dispatchEvent(new Event('input')); expect(note()).toBe('08:00–12:00, 22:00–02:00 (+1 day)');
     button(el, 'Remove time 1').click(); for (let n = 0; n < 7; n++) button(el, 'Add time').click(); expect((button(el, 'Add time') as HTMLButtonElement).disabled).toBe(true);
     button(el, 'Remove time 3').click(); expect((button(el, 'Add time') as HTMLButtonElement).disabled).toBe(false);
-    (el.querySelectorAll('.organized-repeat-preset')[1] as HTMLElement).click(); await flush(); expect(choose).toHaveBeenCalledWith(weekdays, [{ start: '22:00', end: '02:00' }]);
+    (el.querySelectorAll('.organized-repeat-preset')[1] as HTMLElement).click(); await flush(); expect(choose).toHaveBeenCalledWith(weekdays, [{ start: '22:00', end: '02:00' }], null);
     const stop = new RecurrencePicker(app, '2026-03-04', weekdays, choose, undefined, [{ start: '08:00', end: '12:00' }]); stop.open(); const rows = Array.from(stop.contentEl.querySelectorAll<HTMLInputElement>('.organized-repeat-time input'));
-    rows[1].value = ''; rows[1].dispatchEvent(new Event('input')); button(stop.contentEl, 'Stop repeating').click(); await flush(); expect(choose).toHaveBeenLastCalledWith(null, [{ start: '08:00', end: '12:00' }]);
+    rows[1].value = ''; rows[1].dispatchEvent(new Event('input')); button(stop.contentEl, 'Stop repeating').click(); await flush(); expect(choose).toHaveBeenLastCalledWith(null, [{ start: '08:00', end: '12:00' }], null);
   });
   it('asks a question with buttons and answers nothing when closed', () => {
     const { app } = harness(); const first = vi.fn(); const second = vi.fn(); const modal = new ChoiceModal(app, 'Pick', 'Which one?', [{ label: 'One', run: first }, { label: 'Two', run: second }]); modal.open();

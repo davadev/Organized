@@ -55,7 +55,7 @@ function repeatingOn(task: Pick<Task, "recurrence_times">, day: string): Plan[] 
     return end > start ? [{ start: start.toISOString(), end: end.toISOString(), repeating: true as const }] : [];
   });
 }
-type Planning = Pick<Task, "planned_sessions" | "recurring" | "recurrence" | "recurrence_periods" | "created" | "recurrence_times" | "recurrence_skips">;
+type Planning = Pick<Task, "planned_sessions" | "recurring" | "recurrence" | "recurrence_periods" | "created" | "recurrence_times" | "recurrence_skips" | "recurrence_end">;
 /**
  * Every block of planned time of a task that overlaps `[from, to)`: its own blocks, and the blocks its repeating times make on each day the rule falls on. Repeating blocks are shown and counted
  * from today on (one under way since last night included): past days keep only what was planned for them one by one and what was worked, and nothing needs a daily note. A day in `recurrence_skips` has

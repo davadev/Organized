@@ -28,7 +28,7 @@ export const MAX_PLANNED_SESSIONS = 500;
 /** Task properties written only while they hold something, so a task that never plans time carries no extra keys. */
 /** The task panel cards that can be folded away. */
 export const FOLDABLE_CARDS: readonly string[] = ["Description", "Subtasks", "Timer"];
-export const OPTIONAL_KEYS = ["planned_sessions", "auto_started_block", "time_budget_seconds", "recurrence", "recurrence_times", "recurrence_skips", "scheduled_dates", "blocked_kind", "blocked_interval_days", "blocked_mode", "blocked_next"] as const;
+export const OPTIONAL_KEYS = ["planned_sessions", "auto_started_block", "time_budget_seconds", "recurrence", "recurrence_times", "recurrence_skips", "scheduled_dates", "blocked_kind", "blocked_interval_days", "blocked_mode", "blocked_next", "recurrence_end"] as const;
 /** The most days one task can be scheduled for; the oldest go first. */
 export const MAX_DAYS = 60;
 /** The longest time budget a task can hold (9999 hours); anything else in a note is ignored. */
@@ -43,6 +43,8 @@ export interface Task {
   /** How the task repeats while `recurring` is on, in the one-line form `parseRule` reads (`weekdays`, `every 3 weeks on thu`). Empty means every day. */
   recurrence: string | null;
   recurrence_periods: { start: string; stop: string | null }[];
+  /** The last day a recurring task repeats on (`YYYY-MM-DD`, that day included); null repeats for good. Only meaningful while `recurring` is on: the day after it, the repeat is switched off (see `endRepeats`). */
+  recurrence_end: string | null;
   /** Times of day a recurring task is planned for on each day it repeats (see `plansIn`). They make no blocks while it does not repeat. */
   recurrence_times: ClockSpan[];
   /** Days (`YYYY-MM-DD`) whose repeating times were replaced by blocks of their own in `planned_sessions`, after the person changed that day alone. */
@@ -210,6 +212,7 @@ export function taskFrom(value: unknown, expectedId: string): Task {
     projects: [...new Set(strings(v.projects).filter(p => { try { return path(p) === p && p.endsWith(".md"); } catch { return false; } }))],
     movement_history: history as unknown as Movement[], daily_note_section_path: sections as unknown as Section[], work_sessions: sessions,
     planned_sessions: sessionsOf(v.planned_sessions, MAX_PLANNED_SESSIONS, true),
+    recurrence_end: v.recurring === true && validDate(v.recurrence_end) ? v.recurrence_end : null,
     recurrence_times: timesFrom(v.recurrence_times), recurrence_skips: [...new Set(strings(v.recurrence_skips).filter(validDate))].sort().slice(-MAX_SKIPS),
     auto_started_block: typeof v.auto_started_block === "string" && Number.isFinite(Date.parse(v.auto_started_block)) ? v.auto_started_block : null,
     time_budget_seconds: Number.isInteger(v.time_budget_seconds) && Number(v.time_budget_seconds) > 0 && Number(v.time_budget_seconds) <= MAX_BUDGET_SECONDS ? Number(v.time_budget_seconds) : null,

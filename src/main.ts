@@ -674,8 +674,8 @@ export default class Organized extends Plugin {
   }
   /** Asks how the task repeats. From a typed `[r]` (`typed`), cancelling puts the todo's own marker back; from the panel there is no marker to put back. */
   pickRecurrence(task: Task, context?: Context, typed = false): void {
-    new RecurrencePicker(this.app, localDate(), task.recurring ? explicitRule(taskRule(task), anchorOf(task)) : null, (rule, times) => this.run(() => this.service.recurrence(task.id, rule, context, times)).then(() => this.planningTick()),
-      typed && context ? () => { void this.run(() => this.service.clean(context, markerOf(task))); } : undefined, task.recurrence_times).open();
+    new RecurrencePicker(this.app, localDate(), task.recurring ? explicitRule(taskRule(task), anchorOf(task)) : null, (rule, times, end) => this.run(() => this.service.recurrence(task.id, rule, context, times, end)).then(() => this.planningTick()),
+      typed && context ? () => { void this.run(() => this.service.clean(context, markerOf(task))); } : undefined, task.recurrence_times, task.recurrence_end, anchorOf(task)).open();
   }
   /** Asks why a task is blocked and when it resurfaces. From a typed `[B]` (`typed`), cancelling puts the todo's own marker back. A recurring task repeats on its own and cannot be blocked. */
   pickBlocked(task: Task, context?: Context, typed = false): void {

@@ -61,7 +61,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "Repeat a todo, or park it",
-    text: "Type `[r]` and pick how it repeats: every day, week, month, or your own rule. The todo appears in each daily note that matches. A task stuck on someone else, or not a priority now? Type `[B]` for blocked, choose every how many days it returns, and whether it comes back as a reminder or opens.",
+    text: "Type `[r]` and pick how it repeats: every day, week, month, or your own rule. The todo appears in each daily note that matches, up to a last day if you set one. A task stuck on someone else, or not a priority now? Type `[B]` for blocked, choose every how many days it returns, and whether it comes back as a reminder or opens.",
     shot: "repeat",
   },
   {

@@ -72,6 +72,10 @@ Real-device interaction cannot be certified by desktop emulation. Stable promoti
 
 In Live Preview and source mode on desktop, bind a key to **Edit checkbox marker** (Settings → Hotkeys). On a todo line, press it: the caret lands on the marker with the character selected (in Live Preview check that the checkbox turns into its `[ ]` source so the selection is visible). Type `x`: the todo completes as if typed. On a plain line it only shows a notice. Check the key on Windows, Linux and macOS; Option+letter can type a special character on macOS layouts.
 
+## Last day of a repeat (manual)
+- Repeat dialog → *Last day*: leave it empty (repeats for good), pick a day: the panel pill reads "Every day · until <day>", daily notes made up to that day get the todo and later ones do not, and copies already in later notes (untouched) go. A day in the past, or one the rule never reaches, is named in the dialog and nothing is saved. *Stop repeating* drops the day.
+- With the last day yesterday (edit `recurrence_end`): open today's daily note; a notice says the repeat ended, the panel shows an ordinary task, and Undo brings the repeat back.
+
 ## Left-behind tasks (manual, for testers)
 - Command *Carry left-behind tasks to today* (main device): unfinished tasks whose latest todo sits in an earlier daily note and that are not in today's or a later note come to today, with one Undo. Recurring, done, canceled, blocked and converted tasks and tasks scheduled for a later day are left alone. A ticked, canceled or blocked todo whose task is still open, and a todo whose task note is missing, are named in the notice instead of moved. Meant for checking that the automatic carry-forward missed nothing; it is not documented for users.
 
