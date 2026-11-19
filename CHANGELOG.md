@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **A blocked todo shows the hourglass in Obsidian's own checkbox too.** Where Obsidian draws the checkbox itself (the line the cursor is on, or a theme that styles every custom marker alike), a `[B]` todo looked like a ticked one. The mark inside the box is now the hourglass.
 - **A blocked reminder comes back once per interval.** A blocked task set to remind was written into every new daily note after it was due, so it nagged daily. It now appears in one note and returns one interval later, until you change its status.
 - **A blocked status for tasks that cannot move.** Type `[B]` in a todo (or press and hold its checkbox on a phone and choose Blocked), say whether you are waiting on something or it is backlog, how many days until it returns, and whether it then comes back as a reminder that stays blocked or as an open task. The todo leaves your notes and sorts below open ones; the interval and choice are remembered per task, with defaults under Settings → Task behavior. While blocked, a small pill in the Task tab shows why and how often and opens the dialog to change them. Planning time for a blocked task opens it again, with a notice. Tasks written by an older version read the status as open.
 - **A `>` typed in a later day's note forwards to the day after that note.** It always went to tomorrow, so from a note of a day ahead the todo was pulled back to tomorrow (or, for tomorrow's own note, stayed a `[>]` the panel hides, and looked gone). An earlier day's todo still comes to tomorrow.
