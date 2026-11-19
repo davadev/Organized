@@ -86,10 +86,19 @@ export function occursOn(rule: Rule, anchor: string, date: string): boolean {
   return mod(y - ay) === 0 && m === am && d === Math.min(ad, daysIn(y, m));
 }
 /** Whether a recurring task belongs on `date`. A task without a rule (the old on/off switch) repeats daily; a rule nobody can read does too, so a hand-edit never makes a task vanish. */
-type Repeating = { recurring: boolean; recurrence: string | null; recurrence_periods: { start: string; stop: string | null }[]; created: string };
+type Repeating = { recurring: boolean; recurrence: string | null; recurrence_periods: { start: string; stop: string | null }[]; created: string; recurrence_end?: string | null };
 /** The day the current repeat started: its open period, or when the task was made. */
 export const anchorOf = (task: Repeating): string => [...task.recurrence_periods].reverse().find(p => p.stop === null)?.start ?? task.created.slice(0, 10);
-export function repeatsOn(task: Repeating, date: string): boolean { return task.recurring && occursOn(taskRule(task), anchorOf(task), date); }
+export function repeatsOn(task: Repeating, date: string): boolean { return task.recurring && (!task.recurrence_end || date <= task.recurrence_end) && occursOn(taskRule(task), anchorOf(task), date); }
+const addDay = (date: string): string => { const [y, m, d] = parts(date); return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10); };
+/** The days a form looks through for a day the rule falls on before an end date (about ten years); an end further out is not checked. */
+const LOOKAHEAD_DAYS = 3660;
+/** Whether the rule falls on at least one day from `from` to `to`, both included (`anchor` is the day the repeat started). Looks at most `LOOKAHEAD_DAYS` ahead and then assumes it does. */
+export function occursBetween(rule: Rule, anchor: string, from: string, to: string): boolean {
+  let day = from;
+  for (let n = 0; day <= to; n++, day = addDay(day)) { if (n >= LOOKAHEAD_DAYS) return true; if (occursOn(rule, anchor, day)) return true; }
+  return false;
+}
 /** The rule with what it leaves out spelled out (the weekday or day of the month it started on), so a form can show what really happens. */
 export function explicitRule(rule: Rule, anchor: string): Rule {
   const [, , d] = parts(anchor);

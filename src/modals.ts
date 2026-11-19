@@ -5,7 +5,7 @@ import { cleanTags } from "./notes";
 import { freePath, noteName } from "./names";
 import { report, type BlockedSetup, type DraftDay } from "./service";
 import { rgbOf } from "./colors";
-import { formatRule, presetRules, Rule, ruleLabel, Unit } from "./recurrence";
+import { formatRule, occursBetween, presetRules, Rule, ruleLabel, sameCadence, Unit } from "./recurrence";
 import { ClockSpan, MAX_TIMES, minutesOf, timeLabel, timesProblem } from "./plans";
 import { moment } from "./moment";
 import { BUDGET_KEYS, BudgetPeriod, budgetHours, MAX_BUDGET_HOURS, projectName, ProjectBudgets } from "./repository";
@@ -73,17 +73,22 @@ export class RecurrencePicker extends Modal {
   private picked = false;
   /** `cancelled` runs when the dialog closes without a choice, so a typed `[r]` can be put back. */
   /** `times` are the times of day the task is planned for on each day it repeats; `choose` gets them back with the rule (the rule null stops repeating and keeps them for later). */
-  constructor(app: App, readonly today: string, readonly current: Rule | null, readonly choose: (rule: Rule | null, times: ClockSpan[]) => Promise<void>, readonly cancelled?: () => void, readonly times: ClockSpan[] = []) { super(app); decorate(this); }
+  /** `end` is the last day it repeats (null: for good) and `anchor` the day the repeat started, for telling whether a rule still falls on a day before the end. */
+  constructor(app: App, readonly today: string, readonly current: Rule | null, readonly choose: (rule: Rule | null, times: ClockSpan[], end: string | null) => Promise<void>, readonly cancelled?: () => void, readonly times: ClockSpan[] = [], readonly end: string | null = null, readonly anchor: string = today) { super(app); decorate(this); }
+  /** Reads the last-day field (set up in `onOpen`) for `rule`: the day or null, or what is wrong with it. */
+  private readEnd!: (rule: Rule) => string | null | { problem: string };
   /** Reads the time rows (set up in `onOpen`): the times, or what is wrong with them. */
   private readTimes!: () => ClockSpan[] | string;
   private done(rule: Rule | null): void {
     // Stopping keeps the stored times as they were, whatever the rows say.
     const times = rule === null ? this.times : this.readTimes(); if (typeof times === "string") return;
-    this.picked = true; this.close(); void this.choose(rule, times).catch(report);
+    // Stopping drops the last day with the repeat.
+    const end = rule === null ? null : this.readEnd(rule); if (end !== null && typeof end === "object") return;
+    this.picked = true; this.close(); void this.choose(rule, times, end).catch(report);
   }
   onOpen(): void {
     this.titleEl.setText("Repeat"); this.contentEl.addClass("organized-modal");
-    this.timesEditor();
+    this.timesEditor(); this.endEditor();
     const presets = this.contentEl.createDiv({ cls: "organized-repeat-presets", attr: { role: "group", "aria-label": "Common repeats" } });
     const now = this.current ? formatRule(this.current) : "";
     for (const rule of presetRules(this.today)) {
@@ -124,6 +129,19 @@ export class RecurrencePicker extends Modal {
     const actions = new Setting(this.contentEl);
     actions.addButton(b => b.setButtonText("Save").setCta().onClick(() => { const rule = read(); if (rule) this.done(rule); else paint(); }));
     if (this.current) actions.addButton(b => { b.setButtonText("Stop repeating").onClick(() => this.done(null)); b.buttonEl.addClass("mod-warning"); });
+  }
+  /** The last day it repeats (optional): a date field that an empty value leaves as "for good". A day that is over, or after which the rule never falls, is named and not saved. */
+  private endEditor(): void {
+    this.contentEl.createEl("label", { cls: "organized-modal-label", text: "Last day (optional)" });
+    const field = this.contentEl.createEl("input", { type: "date", attr: { "aria-label": "Last day of the repeat", min: this.today } }); field.value = this.end ?? "";
+    const note = this.contentEl.createDiv({ cls: "organized-modal-copy organized-session-note", attr: { role: "status" } });
+    const show = (problem: string | null) => { note.setText(problem ?? ""); note.toggleClass("organized-session-problem", problem !== null); };
+    this.readEnd = rule => {
+      if (!field.value) { show(null); return null; }
+      const problem = !validDate(field.value) || field.value < this.today ? "The last day must be today or later." : !occursBetween(rule, this.current && sameCadence(this.current, rule) ? this.anchor : this.today, this.today, field.value) ? "No day up to then matches this repeat." : null;
+      show(problem); return problem === null ? field.value : { problem };
+    };
+    field.addEventListener("input", () => show(null));
   }
   /** Rows of From and To times (optional): each day the task repeats, those times are planned for it, with no daily note needed. */
   private timesEditor(): void {

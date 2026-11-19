@@ -343,7 +343,7 @@ export class OrganizedInspectorView extends ItemView {
     }
     if (showRecurring) {
       const span = task.recurrence_periods.length ? `: ${task.recurrence_periods[0].start} → ${task.recurring ? "active" : task.recurrence_periods[task.recurrence_periods.length - 1].stop}` : "";
-      const rule = task.recurring ? ruleLabel(taskRule(task)) : "Off";
+      const rule = task.recurring ? `${ruleLabel(taskRule(task))}${task.recurrence_end ? ` · ${task.recurrence_end < localDate() ? "ended" : "until"} ${task.recurrence_end}` : ""}` : "Off";
       const toggle = action("repeat", "Recurring", rule, "Recurring", () => this.owner.pickRecurrence(task, this.owner.context?.line.id === id ? this.owner.context : undefined));
       toggle.title = `Recurring: ${rule}${span}`;
     }

@@ -2,10 +2,10 @@ import { inBatches } from "./batches";
 import { Notice, TFile } from "obsidian";
 import { descendants, duplicateRepeats, fixIndent, insertTask, insertUnder, migrateNote, moveTask, nestUnder, noteSection, parentIds, parseTasks, projectSection, removeLines, removeUnique, replaceTask, sectionNamed, sortTasks, TaskLine, taskText } from "./codec";
 import { DailyNotes } from "./daily";
-import { addDays, BlockedKind, BlockedMode, localDate, makeId, markerOf, MAX_DAYS, MAX_PLANNED_SESSIONS, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, startPlanned, Status, Task, taskFrom, WorkSession } from "./model";
+import { addDays, validDate, BlockedKind, BlockedMode, localDate, makeId, markerOf, MAX_DAYS, MAX_PLANNED_SESSIONS, MAX_WORK_SESSIONS, Movement, nextDate, path, PRIORITIES, Priority, setStatus, startPlanned, Status, Task, taskFrom, WorkSession } from "./model";
 import { blockAt, claimHolds, dueStarts, dueStops, plannable } from "./planning";
 import { ClockSpan, dayTimes, MAX_SKIPS, repeatingBlocks, shiftTo, stored, unworkedParts } from "./plans";
-import { formatRule, repeatsOn, Rule, sameCadence, taskRule } from "./recurrence";
+import { anchorOf, formatRule, occursBetween, repeatsOn, Rule, sameCadence, taskRule } from "./recurrence";
 import { lengthOfSeconds, seconds } from "./sessions";
 import { ProjectBudgets, projectTemplate, Repository, splitNote } from "./repository";
 import { parseWorked, retiredLines } from "./retention";
@@ -33,6 +33,7 @@ export class TaskService {
   private indexing = new Map<string, number>();
   private reconciled = "";
   private resurfaced = "";
+  private repeatsEnded = "";
   private retentionReconciled = "";
   /** While one save writes several daily notes, the answer to "recreate the missing heading?" is asked once and holds for all of them. */
   private askOnce: { answer: boolean | null } | null = null;
@@ -540,9 +541,15 @@ export class TaskService {
     if (this.repo.settings().sortScope === "none") return; await this.resort(file, task, changes).catch(() => undefined);
   }
   /** Makes the task repeat by `rule`, or stops it with `null`. Daily notes from today on get (or lose) their copy to match; today's copy and every earlier one stay. */
-  async recurrence(id: string, rule: Rule | null, context?: Context, times?: ClockSpan[]): Promise<void> {
+  async recurrence(id: string, rule: Rule | null, context?: Context, times?: ClockSpan[], end: string | null = null): Promise<void> {
     const today = localDate(); const changes: Change[] = []; const skipped: string[] = [];
     const file = await this.repo.resolve(id); const before = await this.repo.readText(file); const old = await this.repo.read(id);
+    // The last day (included): not a day that is over, and a day the rule still falls on, or the repeat would end before it gave anything.
+    if (rule !== null && end !== null) {
+      if (!validDate(end) || end < today) throw new Error("The last day of a repeat must be today or later.");
+      const same = old.recurring && sameCadence(taskRule(old), rule);
+      if (!occursBetween(rule, same ? anchorOf(old) : today, today, end)) throw new Error("No day up to the end date matches this repeat; choose a later end date or another rule.");
+    }
     let started = false;
     const task = await this.repo.update(id, t => {
       started = t.status === "in_progress" && t.time_tracking_started_at === null;
@@ -553,7 +560,7 @@ export class TaskService {
       if (!keep && open) open.stop = today;
       if (rule !== null && !keep) periods.push({ start: today, stop: null });
       // A running timer keeps its claim, so the planned time it runs for still stops it (now, when that time went with the change).
-      return { ...t, status: "open", closed_at: null, auto_started_block: t.time_tracking_started_at ? t.auto_started_block : null, recurrence_times: times ?? t.recurrence_times, recurring: rule !== null, recurrence: rule ? formatRule(rule) : null, recurrence_periods: periods, daily_note_section_path: context && !this.isProjectFile(context.file) ? context.line.section : t.daily_note_section_path };
+      return { ...t, status: "open", closed_at: null, auto_started_block: t.time_tracking_started_at ? t.auto_started_block : null, recurrence_times: times ?? t.recurrence_times, recurring: rule !== null, recurrence: rule ? formatRule(rule) : null, recurrence_end: rule !== null ? end : null, recurrence_periods: periods, daily_note_section_path: context && !this.isProjectFile(context.file) ? context.line.section : t.daily_note_section_path };
     });
     changes.push({ file, before, after: await this.repo.readText(file) });
     // The task is open now: a todo a planned block had set in progress (`[/]`) would keep saying so for good. A running timer keeps its marker.
@@ -585,6 +592,21 @@ export class TaskService {
     await this.planEdited(id, old, changes);
     const skippedPaths = [...new Set(skipped)];
     this.summarize(changes, task.recurring ? "Recurrence set" : "Recurrence disabled", skippedPaths.length ? `Skipped/preserved for repair: ${skippedPaths.join(", ")}` : "");
+  }
+  /**
+   * Switches off the repeat of every task whose last day (`recurrence_end`) is over, once a day: no more todos in new daily notes, the repeat's period closes on its last day, and the task is an ordinary
+   * task from then on, as it was (its status, its todos in the notes and its history stay). One that cannot be written is tried again the next day. One Undo for the lot.
+   */
+  private async endRepeats(today: string): Promise<void> {
+    const changes: Change[] = []; const titles: string[] = [];
+    for (const task of (await this.repo.list()).filter(t => t.recurring && t.recurrence_end !== null && t.recurrence_end < today)) {
+      const last = task.recurrence_end as string;
+      try {
+        await this.recorded(task.id, changes, () => this.repo.update(task.id, t => ({ ...t, recurring: false, recurrence: null, recurrence_periods: t.recurrence_periods.map(p => p.stop === null ? { ...p, stop: last } : p) })));
+        titles.push(task.title);
+      } catch { /* The next day's check tries again. */ }
+    }
+    if (titles.length) this.summarize(changes, "Repeat ended", `Reached the last day of the repeat, now an ordinary task: ${titles.join(", ")}.`);
   }
   /**
    * Brings the blocked tasks that are due on `date` into its note. A task set to open is open again (its blocked details cleared), its todo written here; one set to remind is written here as a
@@ -675,6 +697,7 @@ export class TaskService {
     if (settings.taskRetentionDays > 0 && this.retentionReconciled !== today) {
       await this.cleanupExpiredTasks(settings.taskRetentionDays, Date.now()); this.retentionReconciled = today;
     }
+    if (this.repeatsEnded !== today) { this.repeatsEnded = today; await this.endRepeats(today); }
     if (this.resurfaced !== today) { this.resurfaced = today; await this.resurface(file, today, await this.repo.list()); }
     if (!settings.autoForward || this.reconciled === today) return;
     const latest = new Map<string, { file: TFile; line: TaskLine; date: string }>();
