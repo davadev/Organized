@@ -103,12 +103,17 @@ describe('a blocked task resurfacing', () => {
     const early: any = await h.add(`Daily/${later(1)}.md`); await h.service.onDailyCreated(early); expect(h.texts.get(early.path)).not.toContain(task.id);
     const due: any = await h.add(`Daily/${later(2)}.md`); await h.service.onDailyCreated(due); expect(h.texts.get(due.path)).toContain(`- [B] Wait for Sam <!--organized:${task.id}-->`);
   });
-  it('reminder mode writes the blocked todo, keeps the task blocked and brings it into every note until its status changes', async () => {
+  it('reminder mode writes the blocked todo once, keeps the task blocked and brings it back one interval later, not in the next note', async () => {
     const { h, task } = await blocked(SETUP, today()); const note: any = await h.add(`Daily/${today()}.md`); await h.service.onDailyCreated(note);
-    expect(h.texts.get(note.path)).toContain(`- [B] Wait for Sam <!--organized:${task.id}-->`); expect(await h.repo.read(task.id)).toMatchObject({ status: 'blocked', blocked_next: today() });
+    expect(h.texts.get(note.path)).toContain(`- [B] Wait for Sam <!--organized:${task.id}-->`); expect(await h.repo.read(task.id)).toMatchObject({ status: 'blocked', blocked_next: later(3) });
     await h.service.onDailyCreated(note); expect(parseTasks(h.texts.get(note.path)!)).toHaveLength(1);
-    const next: any = await h.add(`Daily/${later(1)}.md`); await h.service.onDailyCreated(next); expect(h.texts.get(next.path)).toContain('- [B] Wait for Sam');
-    await h.service.status(task.id, 'completed'); const after: any = await h.add(`Daily/${later(2)}.md`); await h.service.onDailyCreated(after); expect(h.texts.get(after.path)).not.toContain(task.id);
+    for (const n of [1, 2]) { const next: any = await h.add(`Daily/${later(n)}.md`); await h.service.onDailyCreated(next); expect(h.texts.get(next.path)).not.toContain(task.id); }
+    const again: any = await h.add(`Daily/${later(3)}.md`); await h.service.onDailyCreated(again); expect(h.texts.get(again.path)).toContain('- [B] Wait for Sam'); expect((await h.repo.read(task.id)).blocked_next).toBe(later(6));
+    await h.service.status(task.id, 'completed'); const after: any = await h.add(`Daily/${later(6)}.md`); await h.service.onDailyCreated(after); expect(h.texts.get(after.path)).not.toContain(task.id);
+  });
+  it('a reminder noticed late counts the interval from the note it came into, and a task with no interval of its own uses the setting', async () => {
+    const { h, task } = await blocked(SETUP, addDays(today(), -5)); await h.repo.update(task.id, t => ({ ...t, blocked_interval_days: null })); h.setSettings({ blockedDefaultDays: 4 });
+    const note: any = await h.add(`Daily/${today()}.md`); await h.service.onDailyCreated(note); expect((await h.repo.read(task.id)).blocked_next).toBe(later(4));
   });
   it('open mode opens the task, clears it and writes an open todo; a todo already in the note is opened', async () => {
     const { h, task } = await blocked({ ...SETUP, mode: 'reopen' }, today()); const note: any = await h.add(`Daily/${today()}.md`); await h.service.onDailyCreated(note);
