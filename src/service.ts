@@ -596,8 +596,9 @@ export class TaskService {
     for (const task of tasks.filter(t => t.status === "blocked" && (t.blocked_next === null || t.blocked_next <= date)).sort((a, b) => a.title.localeCompare(b.title))) {
       const reopen = (task.blocked_mode ?? this.repo.settings().blockedDefaultMode) === "reopen"; const parent = (await this.repo.parentOf(task.id))?.id ?? null;
       try {
+        // The todo first: it can fail (the note is being typed in), and a task opened with no todo anywhere would never be seen again. A failure after it leaves the task due, so the next note tries again.
+        if (!present.has(task.id)) await this.insert(file, task, reopen ? " " : "B", false, undefined, parent);
         if (reopen) await this.applyStatus(task.id, "open");
-        if (!present.has(task.id)) await this.insert(file, reopen ? await this.repo.read(task.id) : task, reopen ? " " : "B", false, undefined, parent);
         if (!reopen) await this.repo.update(task.id, t => ({ ...t, blocked_next: addDays(date, t.blocked_interval_days ?? this.repo.settings().blockedDefaultDays) }));
       } catch { /* A todo that cannot be written now is tried again with the next note; the task stays as it is. */ }
     }

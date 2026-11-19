@@ -158,6 +158,14 @@ describe('a blocked task resurfacing', () => {
     h.setSettings({ blockedDefaultMode: 'reopen' }); const note: any = await h.add(`Daily/${today()}.md`); await h.service.onDailyCreated(note);
     expect(parseTasks(h.texts.get(note.path)!).map(t => [t.title, t.marker])).toEqual([['Another', ' '], ['Wait for Sam', 'B']]); expect((await h.repo.read(other.id)).status).toBe('open'); expect(task.id).toBeTruthy();
   });
+  it('open mode never opens a task whose todo could not be written, and finishes the opening when only that step failed', async () => {
+    const { h, task } = await blocked({ ...SETUP, mode: 'reopen' }, today()); const note: any = await h.add(`Daily/${today()}.md`); vi.spyOn(h.service, 'insert').mockRejectedValueOnce(new Error('busy'));
+    await h.service.onDailyCreated(note); expect(await h.repo.read(task.id)).toMatchObject({ status: 'blocked', blocked_next: today() }); expect(h.texts.get(note.path)).not.toContain(task.id);
+    await h.service.onDailyCreated(note); expect(await h.repo.read(task.id)).toMatchObject({ status: 'open', blocked_next: null }); expect(h.texts.get(note.path)).toContain(`- [ ] Wait for Sam <!--organized:${task.id}-->`);
+    const other = await blocked({ ...SETUP, mode: 'reopen' }, today()); const second: any = await other.h.add(`Daily/${later(1)}.md`); vi.spyOn(other.h.service as any, 'applyStatus').mockRejectedValueOnce(new Error('busy'));
+    await other.h.service.onDailyCreated(second); expect((await other.h.repo.read(other.task.id)).status).toBe('blocked'); expect(other.h.texts.get(second.path)).toContain(`- [ ] Wait for Sam`);
+    await other.h.service.onDailyCreated(second); expect((await other.h.repo.read(other.task.id)).status).toBe('open'); expect(parseTasks(other.h.texts.get(second.path)!)).toHaveLength(1);
+  });
   it('tries a todo that cannot be written again with the next note, and says nothing', async () => {
     const { h, task } = await blocked(SETUP, today()); const note: any = await h.add(`Daily/${today()}.md`); vi.spyOn(h.service, 'insert').mockRejectedValueOnce(new Error('busy'));
     await h.service.onDailyCreated(note); expect(h.texts.get(note.path)).not.toContain(task.id); await h.service.onDailyCreated(note); expect(h.texts.get(note.path)).toContain(task.id);
