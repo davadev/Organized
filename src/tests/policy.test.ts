@@ -33,6 +33,9 @@ describe('release and privacy wiring', () => {
       expect(workflow).toContain('run: node scripts/check-toolchain.mjs');
       for (const script of ['test:cov', 'lint:css', 'check:dead-code', 'check:identity']) expect(workflow).toContain(`run: npm run ${script}`);
     }
+    // The browser jobs run in Playwright's image of the same version as the package, pinned by digest: nothing is installed from apt.
+    const playwright = JSON.parse(text('package.json')).devDependencies.playwright as string; const image = /^\s+image:\s*(\S+)/m.exec(ci)?.[1] ?? '';
+    expect(image).toMatch(new RegExp(`^mcr\\.microsoft\\.com/playwright:v${playwright.replace(/\./g, '\\.')}-noble@sha256:[a-f0-9]{64}$`)); expect(ci).not.toMatch(/^\s*-\s*run:.*playwright install/m);
     expect(ci).toContain('engine: [chromium, webkit]'); expect(ci).toContain('node scripts/check-layout.mjs'); expect(release).not.toMatch(/run: .*playwright|run: .*check:(?:layout|webkit)/);
     expect(release).toContain('--strict'); expect(release).toContain('cancel-in-progress: false'); expect(release).toContain('scripts/stamp-prerelease.mjs');
   });
