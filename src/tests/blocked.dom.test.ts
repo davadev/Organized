@@ -94,6 +94,20 @@ describe('planning time for a blocked task', () => {
   });
 });
 
+describe('blocked tasks in the move and carry pipelines', () => {
+  it('reconcile does not carry a blocked task whose scheduled day went by with no note', async () => {
+    const h = harness(); const task = await h.repo.create('Parked'); await h.repo.update(task.id, t => ({ ...t, scheduled_dates: [addDays(today(), -3)] })); await h.service.block(task.id, SETUP);
+    const note: any = await h.add(`Daily/${today()}.md`); await h.service.reconcile(note); expect(h.texts.get(note.path)).not.toContain(task.id); expect((await h.repo.read(task.id)).scheduled_dates).toEqual([addDays(today(), -3)]);
+  });
+  it('forwarding or scheduling a blocked todo writes it blocked on the other day, not open', async () => {
+    const h = harness(); const task = await h.repo.create('Parked'); await h.service.block(task.id, SETUP); const file: any = await h.add(`Daily/${today()}.md`, `- [B] Parked <!--organized:${task.id}-->`);
+    await h.add(`Daily/${later(1)}.md`);
+    await h.service.marker({ file, line: parseTasks(h.texts.get(file.path)!)[0] }, '>'); expect(h.texts.get(`Daily/${later(1)}.md`)).toContain('- [B] Parked'); expect((await h.repo.read(task.id)).status).toBe('blocked');
+    const other = await h.repo.create('Other'); await h.service.block(other.id, SETUP); await h.add(`Daily/${later(2)}.md`);
+    await h.service.saveSchedule(other.id, [{ date: later(2), blocks: [] }]); expect(h.texts.get(`Daily/${later(2)}.md`)).toContain('- [B] Other'); expect((await h.repo.read(other.id)).status).toBe('blocked');
+  });
+});
+
 describe('a blocked task resurfacing', () => {
   async function blocked(setup: typeof SETUP, due: string) {
     const h = harness(); const task = await h.repo.create('Wait for Sam'); await h.service.block(task.id, setup); await h.repo.update(task.id, t => ({ ...t, blocked_next: due })); return { h, task };

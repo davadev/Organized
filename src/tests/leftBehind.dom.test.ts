@@ -53,7 +53,11 @@ describe('carrying left-behind tasks to today', () => {
     expect(result.skipped.some(s => s.startsWith('Twice'))).toBe(true); expect(result.skipped.some(s => s.startsWith('Missing task'))).toBe(true);
     expect(parseTasks(h.texts.get(note(today()))!).filter(t => t.id === child.id)).toHaveLength(1);
   });
-  it('reads a skipped one that is not an error object, and makes today\'s note when it is missing', async () => {
+  it('writes nothing when nothing is left behind: today\'s note is made only by the first move', async () => {
+    const h = harness(); await h.service.carryLeftBehind(); expect(h.texts.has(note(today()))).toBe(false);
+    const task = await h.repo.create('Left'); await h.add(note(ago(2)), line(' ', 'Left', task.id)); await h.service.carryLeftBehind(); expect(h.texts.get(note(today()))).toContain(task.id);
+  });
+  it('reads a skipped one that is not an error object', async () => {
     const h = harness(); const task = await h.repo.create('Odd'); await h.add(note(ago(2)), `${line(' ', 'Odd', task.id)}\n- [ ] \n${line(' ', '', 'zzzzzzzz')}`); await h.add(note(today()), '- [ ] My own todo'); vi.spyOn(h.service, 'schedule').mockRejectedValueOnce('plain text');
     const { skipped } = await h.service.carryLeftBehind(); expect(skipped[0]).toBe('Odd (plain text)'); expect(skipped[1]).toContain('zzzzzzzz ('); expect(h.texts.has(note(today()))).toBe(true);
   });

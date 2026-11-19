@@ -121,7 +121,7 @@ export class TaskService {
       movement_history: current.scheduled === date ? current.movement_history : [...current.movement_history, event] }));
     changes.push({ file: taskFile, before: beforeTask, after: await this.repo.readText(taskFile) });
     const under = options.under !== undefined ? options.under : (await this.repo.parentOf(task.id))?.id ?? null;
-    if (target) await this.insert(target, next, task.status === "in_progress" && kind === "forward" ? "/" : " ", false, changes, under);
+    if (target) await this.insert(target, next, task.status === "blocked" ? "B" : task.status === "in_progress" && kind === "forward" ? "/" : " ", false, changes, under);
     if (target?.path !== context.file.path) {
       const current = await this.resolve(context);
       await this.edit(context.file, current.text, replaceTask(current.text, current.line, { marker: board ? markerOf(task) : kind === "forward" ? (this.daily.date(context.file.path) ? ">" : " ") : "<" }), changes);
@@ -240,7 +240,7 @@ export class TaskService {
     const wanted = new Set(draft.map(d => d.date)); const sources = new Set(moves.map(m => m.from!));
     const added = [...wanted].filter(day => !had.includes(day) && !moves.some(m => m.date === day));
     const board = context !== undefined && this.isProjectFile(context.file); const placed = context && !board ? { ...before, daily_note_section_path: context.line.section } : before; const under = (await this.repo.parentOf(id))?.id ?? null;
-    const put = async (day: string) => { const file = await this.dayNote(day); if (file) await this.insert(file, placed, day === localDate() ? markerOf(before) : " ", false, changes, under); };
+    const put = async (day: string) => { const file = await this.dayNote(day); if (file) await this.insert(file, placed, day === localDate() || before.status === "blocked" ? markerOf(before) : " ", false, changes, under); };
     // The daily notes first: a day whose note cannot be written stays as it was, todo and blocks.
     const days = new Set(had); const stuck = new Set<string>(); const at = new Date().toISOString(); const events: Movement[] = [];
     for (const move of moves) {
@@ -634,10 +634,11 @@ export class TaskService {
    * Only the latest earlier todo of a task counts, so a task forwarded step by step is moved once.
    */
   async carryLeftBehind(): Promise<{ moved: string[]; skipped: string[] }> {
-    const today = localDate(); const file = await this.daily.ensure(today); const days = this.daily.files().sort((a, b) => a.date.localeCompare(b.date));
+    // Today's note is made by the first move (`schedule`), not before: a check that finds nothing writes nothing.
+    const today = localDate(); const days = this.daily.files().sort((a, b) => a.date.localeCompare(b.date));
     const latest = new Map<string, { file: TFile; line: TaskLine; date: string }>(); const present = new Set<string>();
     for (const day of days) {
-      const lines = parseTasks(day.date === today ? await this.repo.readText(file) : await this.repo.readText(day.file));
+      const lines = parseTasks(await this.repo.readText(day.file));
       for (const line of lines) if (line.id) { if (day.date < today) latest.set(line.id, { ...day, line }); else present.add(line.id); }
     }
     const changes: Change[] = []; const moved: string[] = []; const skipped: string[] = [];
@@ -649,7 +650,7 @@ export class TaskService {
         await this.schedule({ file: occurrence.file, line: occurrence.line }, today, "forward", "automatic", changes);
         moved.push(task.title);
         // Subtasks that travelled with their parent are in today's note now.
-        for (const line of parseTasks(await this.repo.readText(file))) if (line.id) present.add(line.id);
+        for (const line of parseTasks(await this.repo.readText(this.repo.file(this.daily.path(today))!))) if (line.id) present.add(line.id);
       } catch (error) { skipped.push(`${occurrence.line.title || id} (${error instanceof Error ? error.message : String(error)})`); }
     }
     if (moved.length) this.summarize(changes, "Left-behind tasks carried to today", `${plural(moved.length, "task")}: ${moved.join(", ")}.${skipped.length ? ` Not moved: ${skipped.join("; ")}.` : ""}`);
@@ -692,7 +693,7 @@ export class TaskService {
     const week = localDate(new Date(Date.now() - 7 * 86400000));
     for (const task of await this.repo.list()) {
       const last = task.scheduled_dates.at(-1);
-      if (!last || last >= today || last < week || present.has(task.id) || task.recurring || ["completed", "canceled"].includes(task.status) || this.repo.file(this.daily.path(last))) continue;
+      if (!last || last >= today || last < week || present.has(task.id) || task.recurring || ["completed", "canceled", "blocked"].includes(task.status) || this.repo.file(this.daily.path(last))) continue;
       try {
         const event: Movement = { id: makeId(), kind: "forward", source: "automatic", from: last, to: today, at: new Date().toISOString() };
         const next = await this.recorded(task.id, changes, () => this.repo.update(task.id, t => ({ ...t, scheduled_dates: [...t.scheduled_dates.filter(day => day !== last), today], movement_history: [...t.movement_history, event] })));
