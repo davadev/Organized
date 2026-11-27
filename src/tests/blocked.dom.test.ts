@@ -130,6 +130,28 @@ describe('a blocked task resurfacing', () => {
     const early: any = await h.add(`Daily/${later(1)}.md`); await h.service.onDailyCreated(early); expect(h.texts.get(early.path)).not.toContain(task.id);
     const due: any = await h.add(`Daily/${later(2)}.md`); await h.service.onDailyCreated(due); expect(h.texts.get(due.path)).toContain(`- [B] Wait for Sam <!--organized:${task.id}-->`);
   });
+  it('resurfaces a blocked subtask in tomorrow’s note even when its parent is not there', async () => {
+    const h = harness(); const parent = await h.repo.create('Parent'); const child = await h.repo.create('Child');
+    await h.repo.update(parent.id, t => ({ ...t, subtasks: [`[[Child]]`] }));
+    await h.service.block(child.id, { ...SETUP, days: 1 });
+    const yesterday: any = await h.add(`Daily/${today()}.md`, `- [ ] Parent <!--organized:${parent.id}-->\n\t- [B] Child <!--organized:${child.id}-->`);
+    const tomorrow: any = await h.add(`Daily/${later(1)}.md`, '');
+    await h.service.onDailyCreated(tomorrow);
+    expect(h.texts.get(yesterday.path)).toContain(`- [B] Child <!--organized:${child.id}-->`);
+    expect(h.texts.get(tomorrow.path)).toContain(`- [B] Child <!--organized:${child.id}-->`);
+    expect((await h.repo.read(child.id)).blocked_next).toBe(later(2));
+  });
+  it('keeps a due blocked subtask under its due parent regardless of title order', async () => {
+    const h = harness(); const parent = await h.repo.create('Zeta parent'); const child = await h.repo.create('Alpha child');
+    await h.repo.update(parent.id, t => ({ ...t, subtasks: [`[[Alpha child]]`] }));
+    await h.service.block(parent.id, { ...SETUP, days: 1 });
+    await h.service.block(child.id, { ...SETUP, days: 1 });
+    const tomorrow: any = await h.add(`Daily/${later(1)}.md`, '');
+    await h.service.onDailyCreated(tomorrow);
+    const lines = parseTasks(h.texts.get(tomorrow.path)!);
+    expect(lines.map(t => [t.id, t.parent])).toEqual([[parent.id, null], [child.id, lines[0].line]]);
+    expect((await h.repo.read(child.id)).blocked_next).toBe(later(2));
+  });
   it('reminder mode writes the blocked todo once, keeps the task blocked and brings it back one interval later, not in the next note', async () => {
     const { h, task } = await blocked(SETUP, today()); const note: any = await h.add(`Daily/${today()}.md`); await h.service.onDailyCreated(note);
     expect(h.texts.get(note.path)).toContain(`- [B] Wait for Sam <!--organized:${task.id}-->`); expect(await h.repo.read(task.id)).toMatchObject({ status: 'blocked', blocked_next: later(3) });

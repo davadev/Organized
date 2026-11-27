@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Blocked subtasks return under their parent when both are due.** A reminder whose title sorted before its parent was written first and showed up as a separate top-level todo instead of beneath the parent; due parents now go first.
 - **A last day for a repeat.** The Repeat dialog has an optional *Last day*: the todo appears up to and including that day. The next day the repeat is switched off (with one Undo) and the task is an ordinary task; its status and todos stay. A day that is over, or that the rule never reaches, is refused. Update every device first: an older version ignores the last day and keeps repeating.
 - **A blocked todo shows the hourglass in Obsidian's own checkbox too.** Where Obsidian draws the checkbox itself (the line the cursor is on, or a theme that styles every custom marker alike), a `[B]` todo looked like a ticked one. The mark inside the box is now the hourglass.
 - **A blocked reminder comes back once per interval.** A blocked task set to remind was written into every new daily note after it was due, so it nagged daily. It now appears in one note and returns one interval later, until you change its status.
