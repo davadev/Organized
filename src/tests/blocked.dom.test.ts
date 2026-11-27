@@ -88,6 +88,28 @@ describe('planning time for a blocked task', () => {
     await h.service.changePlanned(task.id, block(), null).catch(() => undefined); expect((await h.repo.read(task.id)).status).toBe('blocked');
     const open = await h.repo.create('Open'); await h.service.addPlanned(open.id, block()); expect(Notice.instances.some(n => typeof n.message === 'string' && n.message.includes('no longer blocked'))).toBe(false);
   });
+  it('leaves a blocked task blocked when planning is rejected before a block is saved', async () => {
+    const h = harness(); const task = await h.repo.create('Waiting'); await h.service.block(task.id, { ...SETUP, days: 1 });
+    await expect(h.service.changePlanned(task.id, block(), block())).rejects.toThrow('no longer exists');
+    expect(await h.repo.read(task.id)).toMatchObject({ status: 'blocked', blocked_next: later(1), planned_sessions: [] });
+    const tooMany = Array.from({ length: 61 }, (_, n) => ({ date: later(n + 1), blocks: [block()] }));
+    await expect(h.service.saveSchedule(task.id, tooMany)).rejects.toThrow('at most');
+    expect(await h.repo.read(task.id)).toMatchObject({ status: 'blocked', blocked_next: later(1), planned_sessions: [] });
+    await h.add(`Daily/${later(1)}.md`);
+    vi.spyOn(h.service, 'insert').mockRejectedValueOnce(new Error('busy'));
+    await h.service.saveSchedule(task.id, [{ date: later(1), blocks: [block()] }]);
+    expect(await h.repo.read(task.id)).toMatchObject({ status: 'blocked', blocked_next: later(1), planned_sessions: [] });
+  });
+  it('leaves a blocked task blocked when adding planned time cannot be saved', async () => {
+    const h = harness(); const task = await h.repo.create('Waiting'); await h.service.block(task.id, { ...SETUP, days: 1 });
+    const update = h.repo.update.bind(h.repo);
+    vi.spyOn(h.repo, 'update').mockImplementation(async (id, mutate) => {
+      if (id === task.id && mutate(await h.repo.read(id)).planned_sessions.length) throw new Error('busy');
+      return update(id, mutate);
+    });
+    await expect(h.service.addPlanned(task.id, block())).rejects.toThrow('busy');
+    expect(await h.repo.read(task.id)).toMatchObject({ status: 'blocked', blocked_next: later(1), planned_sessions: [] });
+  });
   it('puts the todo in the note back to open, and Undo takes it back', async () => {
     const h = harness(); const task = await h.repo.create('Parked'); const file: any = await h.add(`Daily/${today()}.md`, `- [B] Parked <!--organized:${task.id}-->`); await h.service.block(task.id, SETUP);
     await h.service.addPlanned(task.id, block()); expect(h.texts.get(file.path)).toContain('- [ ] Parked');
@@ -191,6 +213,73 @@ describe('a blocked task resurfacing', () => {
   it('tries a todo that cannot be written again with the next note, and says nothing', async () => {
     const { h, task } = await blocked(SETUP, today()); const note: any = await h.add(`Daily/${today()}.md`); vi.spyOn(h.service, 'insert').mockRejectedValueOnce(new Error('busy'));
     await h.service.onDailyCreated(note); expect(h.texts.get(note.path)).not.toContain(task.id); await h.service.onDailyCreated(note); expect(h.texts.get(note.path)).toContain(task.id);
+  });
+  it('retries a due reminder on another same-day reconcile after a transient write conflict', async () => {
+    const { h, task } = await blocked({ ...SETUP, days: 1 }, today()); const other = await h.repo.create('Zeta');
+    await h.service.block(other.id, { ...SETUP, days: 1 }); await h.repo.update(other.id, t => ({ ...t, blocked_next: today() }));
+    const note: any = await h.add(`Daily/${today()}.md`);
+    const write = h.repo.write.bind(h.repo); let busy = true;
+    vi.spyOn(h.repo, 'write').mockImplementation((file, before, after) => {
+      if (file.path === note.path && busy) { busy = false; return Promise.reject(new Error('changed concurrently')); }
+      return write(file, before, after);
+    });
+    await h.service.reconcile(note); expect(h.texts.get(note.path)).not.toContain(task.id);
+    expect(h.texts.get(note.path)).toContain(other.id);
+    await h.service.reconcile(note); expect(h.texts.get(note.path)).toContain(`- [B] Wait for Sam <!--organized:${task.id}-->`);
+    await h.service.reconcile(note); expect(parseTasks(h.texts.get(note.path)!)).toHaveLength(2);
+    expect((await h.repo.read(task.id)).blocked_next).toBe(later(1));
+  });
+  it('keeps a due blocked subtask under its open parent carried from yesterday', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 10, 27, 12));
+    const h = harness(); const parent = await h.repo.create('Zeta parent'); const child = await h.repo.create('Alpha child');
+    await h.repo.update(parent.id, t => ({ ...t, subtasks: ['[[Alpha child]]'] }));
+    const yesterday = today(); await h.service.block(child.id, { ...SETUP, days: 1 });
+    await h.add(`Daily/${yesterday}.md`, `- [ ] Zeta parent <!--organized:${parent.id}-->\n\t- [B] Alpha child <!--organized:${child.id}-->`);
+    vi.setSystemTime(new Date(2026, 10, 28, 12));
+    const note: any = await h.add(`Daily/${today()}.md`); await h.service.reconcile(note);
+    const lines = parseTasks(h.texts.get(note.path)!);
+    expect(lines.find(t => t.id === child.id)?.parent).toBe(lines.find(t => t.id === parent.id)?.line);
+    expect((await h.repo.read(child.id)).blocked_next).toBe(later(1));
+  });
+  it('keeps the reminder nested when the new daily note is filled before it is opened', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 10, 27, 12));
+    const h = harness(); const parent = await h.repo.create('Zeta parent'); const child = await h.repo.create('Alpha child');
+    await h.repo.update(parent.id, t => ({ ...t, subtasks: ['[[Alpha child]]'] }));
+    const yesterday = today(); await h.service.block(child.id, { ...SETUP, days: 1 });
+    await h.add(`Daily/${yesterday}.md`, `- [ ] Zeta parent <!--organized:${parent.id}-->\n\t- [B] Alpha child <!--organized:${child.id}-->`);
+    vi.setSystemTime(new Date(2026, 10, 28, 12));
+    const note: any = await h.add(`Daily/${today()}.md`); await h.service.onDailyCreated(note); await h.service.reconcile(note);
+    const lines = parseTasks(h.texts.get(note.path)!);
+    expect(lines.find(t => t.id === child.id)?.parent).toBe(lines.find(t => t.id === parent.id)?.line);
+  });
+  it('keeps the reminder nested if tomorrow’s note existed before its parent was carried', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 10, 27, 12));
+    const h = harness(); const parent = await h.repo.create('Zeta parent'); const child = await h.repo.create('Alpha child');
+    await h.repo.update(parent.id, t => ({ ...t, subtasks: ['[[Alpha child]]'] }));
+    const yesterday = today(); await h.service.block(child.id, { ...SETUP, days: 1 });
+    await h.add(`Daily/${yesterday}.md`, `- [ ] Zeta parent <!--organized:${parent.id}-->\n\t- [B] Alpha child <!--organized:${child.id}-->`);
+    const note: any = await h.add(`Daily/${later(1)}.md`); await h.service.onDailyCreated(note);
+    vi.setSystemTime(new Date(2026, 10, 28, 12)); await h.service.reconcile(note);
+    const lines = parseTasks(h.texts.get(note.path)!);
+    expect(lines.find(t => t.id === child.id)?.parent).toBe(lines.find(t => t.id === parent.id)?.line);
+  });
+  it('does not move a blocked child already nested elsewhere in today’s note', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 10, 27, 12));
+    const h = harness(); const parent = await h.repo.create('Parent'); const other = await h.repo.create('Other'); const child = await h.repo.create('Child');
+    await h.repo.update(parent.id, t => ({ ...t, subtasks: ['[[Child]]'] }));
+    await h.service.block(child.id, { ...SETUP, days: 1 });
+    await h.add(`Daily/${today()}.md`, `- [ ] Parent <!--organized:${parent.id}-->\n\t- [B] Child <!--organized:${child.id}-->`);
+    vi.setSystemTime(new Date(2026, 10, 28, 12));
+    const note: any = await h.add(`Daily/${today()}.md`, `- [ ] Other <!--organized:${other.id}-->\n\t- [B] Child <!--organized:${child.id}-->`);
+    await h.service.reconcile(note);
+    const lines = parseTasks(h.texts.get(note.path)!);
+    expect(lines.find(t => t.id === child.id)?.parent).toBe(lines.find(t => t.id === other.id)?.line);
+  });
+  it('the explicit add-missing command does not carry unrelated unfinished tasks', async () => {
+    const h = harness(); const task = await h.repo.create('Left yesterday');
+    await h.add(`Daily/${later(-1)}.md`, `- [ ] Left yesterday <!--organized:${task.id}-->`);
+    expect(await h.service.catchUp(today())).toEqual([]);
+    expect(h.texts.get(`Daily/${today()}.md`)).not.toContain(task.id);
   });
 });
 

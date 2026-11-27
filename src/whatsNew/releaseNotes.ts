@@ -38,6 +38,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       { title: "A last day for a repeat", text: "The Repeat dialog (`[r]`, or the Recurring pill) has an optional Last day. The todo appears up to and including that day; the next day the repeat is switched off and the task is an ordinary one, with its status and todos as they were. A day that is over, or one the rule never reaches, is refused. Update every device first: an older version ignores the last day and keeps repeating." },
       { title: "Fewer lost todos and runaway timers", text: "Forwarding with `>` from a note of a later day goes to the day after that note. One task that cannot be written no longer keeps other timers running past their planned time, a timer left running for days stops at its block's end, and the panel's timer and subtask buttons no longer flip a status you had just changed in the note." },
       { title: "Blocked subtasks stay with due parents", text: "When a blocked parent and its subtask both resurface in a daily note, the subtask appears beneath its parent even when its title sorts first." },
+      { title: "Blocked reminders survive a busy note", text: "If a due reminder cannot be written while a daily note is changing, opening that note again retries it. A blocked subtask also stays beneath its open parent when that parent is carried in from yesterday, even if today's note was made ahead of time. A rejected change to planned time no longer opens the blocked task." },
     ],
   },
   {
