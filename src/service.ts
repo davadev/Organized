@@ -615,8 +615,12 @@ export class TaskService {
    */
   private async resurface(file: TFile, date: string, tasks: Task[]): Promise<void> {
     const present = new Set(parseTasks(await this.repo.readText(file)).map(t => t.id));
-    for (const task of tasks.filter(t => t.status === "blocked" && (t.blocked_next === null || t.blocked_next <= date)).sort((a, b) => a.title.localeCompare(b.title))) {
-      const reopen = (task.blocked_mode ?? this.repo.settings().blockedDefaultMode) === "reopen"; const parent = (await this.repo.parentOf(task.id))?.id ?? null;
+    const due = tasks.filter(t => t.status === "blocked" && (t.blocked_next === null || t.blocked_next <= date));
+    const parents = new Map<string, string | null>();
+    for (const task of due) parents.set(task.id, (await this.repo.parentOf(task.id))?.id ?? null);
+    const depth = (id: string) => { let n = 0; for (let up = parents.get(id); up && parents.has(up) && n < due.length; up = parents.get(up)) n++; return n; };
+    for (const task of due.sort((a, b) => depth(a.id) - depth(b.id) || a.title.localeCompare(b.title))) {
+      const reopen = (task.blocked_mode ?? this.repo.settings().blockedDefaultMode) === "reopen"; const parent = parents.get(task.id) ?? null;
       try {
         // The todo first: it can fail (the note is being typed in), and a task opened with no todo anywhere would never be seen again. A failure after it leaves the task due, so the next note tries again.
         if (!present.has(task.id)) await this.insert(file, task, reopen ? " " : "B", false, undefined, parent);
