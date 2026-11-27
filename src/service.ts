@@ -221,12 +221,13 @@ export class TaskService {
    * a removed day lets go of its todo. Each day's blocks become the draft's, except blocks that have begun, which are history and stay. A day whose note cannot be written is left as it was, and the notice names it.
    */
   async saveSchedule(id: string, draft: DraftDay[], context?: Context): Promise<void> {
-    if (draft.some(d => d.blocks.length)) await this.unblockForPlan(id);
     const before = await this.repo.read(id);
     if (before.recurring) throw new Error("A recurring task is planned by its repeating times; change them in Repeat.");
     if (new Set(draft.map(d => d.date)).size > MAX_DAYS) throw new Error(`A task can be scheduled for at most ${MAX_DAYS} days.`);
     const changes: Change[] = []; const failed: string[] = []; this.askOnce = { answer: null };
     try { await this.applySchedule(before, draft, context, changes, failed); } finally { this.askOnce = null; }
+    const saved = (await this.repo.read(id)).planned_sessions;
+    if (draft.some(d => d.blocks.some(b => saved.some(s => s.start === b.start && s.end === b.end)))) await this.unblockForPlan(id, changes);
     await this.syncTimes(id, changes); await this.planEdited(id, before, changes);
     const after = await this.repo.read(id); const now = Date.now(); const ahead = after.scheduled_dates.filter(day => day >= localDate());
     const planned = after.planned_sessions.filter(b => Date.parse(b.end) > now).reduce((sum, b) => sum + seconds(b), 0);
@@ -613,8 +614,9 @@ export class TaskService {
    * blocked todo and stays blocked: its next day moves a whole interval on, so it is gone from the notes after this one and comes back then (the next day's note does not carry it). A todo of the task
    * already in the note is left where it is.
    */
-  private async resurface(file: TFile, date: string, tasks: Task[]): Promise<void> {
+  private async resurface(file: TFile, date: string, tasks: Task[]): Promise<boolean> {
     const present = new Set(parseTasks(await this.repo.readText(file)).map(t => t.id));
+    let failed = false;
     const due = tasks.filter(t => t.status === "blocked" && (t.blocked_next === null || t.blocked_next <= date));
     const parents = new Map<string, string | null>();
     for (const task of due) parents.set(task.id, (await this.repo.parentOf(task.id))?.id ?? null);
@@ -626,10 +628,11 @@ export class TaskService {
         if (!present.has(task.id)) await this.insert(file, task, reopen ? " " : "B", false, undefined, parent);
         if (reopen) await this.applyStatus(task.id, "open");
         if (!reopen) await this.repo.update(task.id, t => ({ ...t, blocked_next: addDays(date, t.blocked_interval_days ?? this.repo.settings().blockedDefaultDays) }));
-      } catch { /* A todo that cannot be written now is tried again with the next note; the task stays as it is. */ }
+      } catch { failed = true; /* A todo that cannot be written now is tried again on the next check; the task stays as it is. */ }
     }
+    return !failed;
   }
-  async onDailyCreated(file: TFile): Promise<void> {
+  async onDailyCreated(file: TFile, carry = true): Promise<void> {
     const date = this.daily.date(file.path); if (!date || date < localDate()) return;
     const tasks = await this.repo.list(); const due = tasks.filter(t => repeatsOn(t, date)); let failed: Task[] = []; let reason = "";
     // Tasks scheduled for the day get their todo now: a later day's note is not made ahead of time (see `dayNote`). Parents go first, so a subtask can go under its parent.
@@ -642,14 +645,16 @@ export class TaskService {
     for (const task of all) { try { await add(task); } catch { failed.push(task); } }
     const again = failed; failed = [];
     for (const task of again) { try { await add(task); } catch (error) { failed.push(task); reason = error instanceof Error ? error.message : String(error); } }
-    await this.resurface(file, date, tasks);
+    // On today's new note, carry open parents first; then a due blocked child can be inserted beneath them.
+    if (carry && date === localDate() && this.repo.settings().autoForward) await this.reconcile(file);
+    else await this.resurface(file, date, tasks);
     this.changed();
     if (failed.length) throw new Error(`${plural(failed.length, failed.every(t => t.recurring) ? "recurring task" : "task")} (${failed.map(t => t.title).join(", ")}) could not be added to ${file.path}: ${reason}`);
   }
   /** Adds the recurring tasks and the tasks scheduled for `date` that are missing from its note (made while this plugin was not running, or filled on another device): the same fill a new note gets, run on request. Returns the titles it added. */
   async catchUp(date: string): Promise<string[]> {
     const file = await this.daily.ensure(date); const before = new Set(parseTasks(await this.repo.readText(file)).map(t => t.id));
-    await this.onDailyCreated(file);
+    await this.onDailyCreated(file, false);
     return parseTasks(await this.repo.readText(file)).filter(t => t.id && !before.has(t.id)).map(t => t.title);
   }
   /**
@@ -702,13 +707,15 @@ export class TaskService {
       await this.cleanupExpiredTasks(settings.taskRetentionDays, Date.now()); this.retentionReconciled = today;
     }
     if (this.repeatsEnded !== today) { this.repeatsEnded = today; await this.endRepeats(today); }
-    if (this.resurfaced !== today) { this.resurfaced = today; await this.resurface(file, today, await this.repo.list()); }
-    if (!settings.autoForward || this.reconciled === today) return;
+    const resurface = async () => {
+      if (this.resurfaced !== today && await this.resurface(file, today, await this.repo.list())) this.resurfaced = today;
+    };
+    if (!settings.autoForward || this.reconciled === today) { await resurface(); return; }
     const latest = new Map<string, { file: TFile; line: TaskLine; date: string }>();
     for (const daily of this.daily.files().filter(d => d.date < today).sort((a, b) => a.date.localeCompare(b.date))) {
       for (const line of parseTasks(await this.repo.readText(daily.file))) if (line.id) latest.set(line.id, { ...daily, line });
     }
-    const present = new Set(parseTasks(await this.repo.readText(file)).map(t => t.id)); const changes: Change[] = []; let skipped = 0;
+    const present = new Set(parseTasks(await this.repo.readText(file)).map(t => t.id)); const changes: Change[] = []; const carried = new Set<string>(); let skipped = 0;
     for (const [id, occurrence] of latest) {
        // The [r] marker is a recurrence instruction, not an unfinished task to carry forward.
        if (present.has(id) || ![" ", "/", ">", "<"].includes(occurrence.line.marker)) continue;
@@ -717,6 +724,7 @@ export class TaskService {
         // An unfinished todo always comes along, also when a later day is scheduled; one scheduled away (`<`, `>`) waits for its day while that is still ahead.
         if (task.recurring || ["completed", "canceled", "blocked"].includes(task.status) || ([">", "<"].includes(occurrence.line.marker) && task.scheduled && task.scheduled > today)) continue;
         await this.schedule({ file: occurrence.file, line: occurrence.line }, today, "forward", "automatic", changes);
+        carried.add(id);
         // Subtasks that travelled with their parent are in today's note now.
         for (const line of parseTasks(await this.repo.readText(file))) present.add(line.id);
       } catch { skipped++; }
@@ -731,9 +739,21 @@ export class TaskService {
         const event: Movement = { id: makeId(), kind: "forward", source: "automatic", from: last, to: today, at: new Date().toISOString() };
         const next = await this.recorded(task.id, changes, () => this.repo.update(task.id, t => ({ ...t, scheduled_dates: [...t.scheduled_dates.filter(day => day !== last), today], movement_history: [...t.movement_history, event] })));
         await this.insert(file, next, markerOf(next), false, changes, (await this.repo.parentOf(task.id))?.id ?? null); present.add(task.id);
+        carried.add(task.id);
       } catch { skipped++; }
     }
+    // A future note may already hold a blocked child before its open parent is carried into that day.
+    for (const id of carried) {
+      for (const child of await this.repo.subtasksOf(await this.repo.read(id))) {
+        if (child.status !== "blocked") continue;
+        const text = await this.repo.readText(file);
+        if (!parseTasks(text).some(line => line.id === child.id && line.marker === "B")) continue;
+        const nested = nestUnder(text, child.id, id, false, await this.repo.indentUnit());
+        if (nested !== null) await this.edit(file, text, nested, changes);
+      }
+    }
     this.reconciled = today;
+    await resurface();
     if (changes.length || skipped) this.summarize(changes, "Unfinished tasks carried to today", skipped ? `${skipped} conflict${skipped === 1 ? "" : "s"} skipped · previous line preserved.` : "");
   }
   private async cleanupExpiredTasks(days: number, now: number): Promise<void> {
@@ -825,20 +845,24 @@ export class TaskService {
   async setBudget(id: string, seconds: number | null): Promise<void> { await this.repo.update(id, t => ({ ...t, time_budget_seconds: seconds })); this.changed(); }
   /** Sets time aside for a task: a block that never counts as worked. A block the task already has is not added again. */
   async addPlanned(id: string, block: WorkSession, changes?: Change[]): Promise<void> {
-    const own = changes ?? []; await this.unblockForPlan(id, own); const before = await this.repo.read(id);
+    const own = changes ?? []; const before = await this.repo.read(id);
     await this.recorded(id, own, () => this.repo.update(id, t => t.planned_sessions.some(b => b.start === block.start && b.end === block.end) ? t : { ...t, planned_sessions: [...t.planned_sessions, block].slice(-MAX_PLANNED_SESSIONS) }));
-    await this.scheduleBlockDay(before, block, own);
+    await this.unblockForPlan(id, own);
+    await this.scheduleBlockDay(await this.repo.read(id), block, own);
     // Recorded with the rest, so Undo also takes back a timer this started (an Undo whose note changed after it was recorded would refuse).
     await this.syncTimes(id, own); await this.planEdited(id, before, own); this.changed();
   }
   /** Replaces one planned block, or removes it when `to` is null. A block moved to a later day schedules the task for that day (see `scheduleBlockDay`); the day it left stays scheduled. */
   async changePlanned(id: string, from: WorkSession, to: WorkSession | null): Promise<void> {
-    const own: Change[] = []; if (to) await this.unblockForPlan(id, own); const before = await this.repo.read(id);
+    const own: Change[] = []; const before = await this.repo.read(id);
     await this.recorded(id, own, () => this.repo.update(id, t => {
       const at = t.planned_sessions.findIndex(s => s.start === from.start && s.end === from.end); if (at < 0) throw new Error("That planned block no longer exists; it may have been changed elsewhere.");
       return { ...t, planned_sessions: to ? t.planned_sessions.map((s, n) => n === at ? to : s) : t.planned_sessions.filter((_s, n) => n !== at) };
     }));
-    if (to) await this.scheduleBlockDay(before, to, own);
+    if (to) {
+      await this.unblockForPlan(id, own);
+      await this.scheduleBlockDay(await this.repo.read(id), to, own);
+    }
     await this.syncTimes(id, own); await this.planEdited(id, before, own); this.changed();
   }
   /**

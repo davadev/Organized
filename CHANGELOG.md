@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Blocked reminders retry after a busy daily note.** If a note could not be written on the first check, opening it again that day tries the reminder again without duplicating ones already placed. An open parent and its blocked child stay together, even when tomorrow's note was made ahead of time.
+- **A rejected plan leaves a blocked task blocked.** A schedule with too many days or an edit to a missing planned block no longer clears its blocked status and reminder date before the save succeeds.
 - **Blocked subtasks return under their parent when both are due.** A reminder whose title sorted before its parent was written first and showed up as a separate top-level todo instead of beneath the parent; due parents now go first.
 - **A last day for a repeat.** The Repeat dialog has an optional *Last day*: the todo appears up to and including that day. The next day the repeat is switched off (with one Undo) and the task is an ordinary task; its status and todos stay. A day that is over, or that the rule never reaches, is refused. Update every device first: an older version ignores the last day and keeps repeating.
 - **A blocked todo shows the hourglass in Obsidian's own checkbox too.** Where Obsidian draws the checkbox itself (the line the cursor is on, or a theme that styles every custom marker alike), a `[B]` todo looked like a ticked one. The mark inside the box is now the hourglass.
